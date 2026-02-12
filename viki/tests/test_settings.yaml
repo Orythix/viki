@@ -1,0 +1,14 @@
+system:
+  log_level: "INFO"
+  data_dir: "./data"
+  workspace_dir: "./workspace"
+
+models_config: "./viki/tests/test_models.yaml"
+
+memory:
+  short_term_limit: 20
+  long_term_enabled: false
+
+skills:
+  auto_discover: true
+  registry_path: "./viki/skills/builtins"

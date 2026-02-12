@@ -1,0 +1,21 @@
+system:
+  log_level: "INFO"
+  data_dir: "./data"
+  workspace_dir: "./workspace"
+  
+  # Execution Mode: "live" = real actions, "shadow" = simulate only (safe for testing)
+  shadow_mode: false
+  
+  # Max reasoning steps per request
+  max_steps: 100
+
+models_config: "./viki/config/models.yaml"
+security_layer_path: "./viki/config/security_layer.md"
+
+memory:
+  short_term_limit: 20
+  long_term_enabled: false
+
+skills:
+  auto_discover: true
+  registry_path: "./viki/skills/builtins"

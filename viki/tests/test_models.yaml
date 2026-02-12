@@ -1,0 +1,27 @@
+models:
+  default: "default-mock"
+  
+  providers:
+    test_provider:
+      type: "mock"
+
+  profiles:
+    reasoning-mock:
+      provider: "test_provider"
+      model_name: "reasoning-v1"
+      capabilities: ["reasoning", "planning"]
+
+    coding-mock:
+      provider: "test_provider"
+      model_name: "coding-v1"
+      capabilities: ["coding"]
+      
+    fast-mock:
+      provider: "test_provider"
+      model_name: "fast-v1"
+      capabilities: ["fast_response"]
+
+    default-mock:
+      provider: "test_provider"
+      model_name: "default-v1"
+      capabilities: ["general"]

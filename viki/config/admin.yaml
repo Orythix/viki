@@ -1,0 +1,4 @@
+admin_id: "ADMIN_ALPHA_001"
+admin_secret: "CHANGE_THIS_SECRET_IMMEDIATELY_XYZ123"
+enabled: true
+logs_path: "./data/admin_logs.txt"

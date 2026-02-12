@@ -1,0 +1,113 @@
+models:
+  # Provider Definitions
+  providers:
+    ollama:
+      type: "local"
+      base_url: "http://127.0.0.1:11434"
+    
+    openai:
+      type: "api"
+      base_url: "https://api.openai.com/v1"
+      api_key_env: "OPENAI_API_KEY"
+    
+    mock:
+      type: "mock"
+  
+  # Default model to use (viki-evolved for personalized performance)
+  default: "viki-evolved"
+
+  # Routing Strategy:
+  #   priority: Higher = preferred when capabilities match (1=fallback, 2=good, 3=specialist)
+  #   capabilities: Tags that ModelRouter uses to match intent -> model
+  #   The router scores: sum(matched_capabilities) * priority + trust_score * 0.5
+
+  # Model Profiles
+  profiles:
+    # --- Default / Generalist ---
+    viki-evolved:
+      provider: "ollama"
+      model_name: "viki-born-again"
+      temperature: 0.6
+      priority: 3 # Increased to make it the clear primary specialist
+      capabilities: ["general", "reasoning", "coding", "analysis", "fast_response", "researching", "chatter", "tool_use"]
+      supports_native_tools: false # Disable native API calling for this model version
+      description: "VIKI's Self-Evolved Personality (Mistral-based) - Rebuilt with integrated long-term memory."
+
+    # --- Fast Models (SHALLOW / REFLEX) ---
+    phi3:
+      provider: "ollama"
+      model_name: "phi3:latest"
+      temperature: 0.1
+      priority: 1 # Lowered priority for phi3 (use only when necessary)
+      capabilities: ["reflex", "fast_response"]
+      description: "Phi-3 - Microsoft's compact model. Use for SHALLOW/REFLEX intent detection."
+
+    # --- Specialist: Coding ---
+    deepseek-coder:
+      provider: "ollama"
+      model_name: "deepseek-coder:latest"
+      temperature: 0.1
+      priority: 3
+      capabilities: ["coding", "debugging", "planning"]
+      description: "DeepSeek Coder - Specialized for code generation and debugging."
+
+    # --- Specialist: Reasoning ---
+    glm-4:
+      provider: "ollama"
+      model_name: "glm-4.7-flash:latest"
+      temperature: 0.1
+      priority: 2
+      capabilities: ["reasoning", "planning", "coding", "analysis", "multilingual", "tool_use"]
+      description: "GLM-4.7 Flash - High speed efficient model for complex reasoning."
+
+    deepseek-r1:
+      provider: "ollama"
+      model_name: "deepseek-r1:latest"
+      temperature: 0.6
+      priority: 4 # Highest local reasoning priority
+      capabilities: ["planning", "reasoning", "complex_task"]
+      description: "DeepSeek R1 - Advanced reasoning model for DEEP tasks."
+
+    # --- Specialist: Conversation ---
+    llama3:
+      provider: "ollama"
+      model_name: "llama3:latest"
+      temperature: 0.5
+      priority: 2
+      capabilities: ["chatter", "general", "analysis"]
+      description: "Llama 3 - Meta's flagship model for natural conversation."
+    
+    # --- Specialist: Vision ---
+    llava:
+      provider: "ollama"
+      model_name: "llava:latest"
+      temperature: 0.1
+      priority: 3
+      capabilities: ["vision", "analysis"]
+      description: "Llava - Local multimodal vision model for screenshots/images."
+
+    # --- External APIs ---
+    gpt-4o:
+      provider: "openai"
+      model_name: "gpt-4o"
+      temperature: 0.7
+      priority: 2
+      capabilities: ["reasoning", "planning", "coding", "analysis", "intelligence", "researching", "vision", "tool_use"]
+      description: "OpenAI GPT-4 Omni - State of the art intelligence."
+
+    gpt-4o-mini:
+      provider: "openai"
+      model_name: "gpt-4o-mini"
+      temperature: 0.3
+      priority: 2
+      capabilities: ["fast_response", "general", "coding", "researching", "vision", "tool_use"]
+      description: "OpenAI GPT-4o mini - Fast and cost-efficient."
+    
+    # --- Testing ---
+    mock-model:
+      provider: "mock"
+      model_name: "mock-local"
+      temperature: 0.0
+      priority: 0
+      capabilities: ["basic"]
+      description: "Mock LLM for testing without external dependencies."

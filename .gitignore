@@ -1,0 +1,41 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# VIKI-specific
+viki/data/
+data/
+*.log
+*.db
+viki/Modelfile.custom
+test_result.txt
+viki/config/candidate_prompt.yaml
+
+# Node modules (if UI is added later)
+node_modules/
+dist/
+build/
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
