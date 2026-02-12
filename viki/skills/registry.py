@@ -67,8 +67,8 @@ class SkillRegistry:
         latency = m["avg_latency"]
         
         status = ""
-        if rate < 50: status = "⚠️ UNSTABLE"
-        elif rate > 90: status = "✅ RELIABLE"
+        if rate < 50: status = "UNSTABLE"
+        elif rate > 90: status = "RELIABLE"
         
         return f"{rate:.0f}% Success ({latency:.2f}s) {status}"
 

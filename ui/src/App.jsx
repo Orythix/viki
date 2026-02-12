@@ -72,18 +72,18 @@ function App() {
         body: JSON.stringify({ message: input })
       })
       const data = await res.json()
-      
-      const vikiMessage = { 
-        role: 'assistant', 
-        content: data.response, 
-        timestamp: data.timestamp || new Date().toISOString() 
+
+      const vikiMessage = {
+        role: 'assistant',
+        content: data.response,
+        timestamp: data.timestamp || new Date().toISOString()
       }
       setMessages(prev => [...prev, vikiMessage])
     } catch (error) {
-      const errorMessage = { 
-        role: 'error', 
-        content: `Error: ${error.message}`, 
-        timestamp: new Date().toISOString() 
+      const errorMessage = {
+        role: 'error',
+        content: `Error: ${error.message}`,
+        timestamp: new Date().toISOString()
       }
       setMessages(prev => [...prev, errorMessage])
     } finally {
@@ -106,7 +106,7 @@ function App() {
       <header className="header glass">
         <div className="header-content">
           <div className="logo-section">
-            <div className="logo-icon">V</div>
+            <div className="logo-icon">VIKI</div>
             <div>
               <h1 className="text-gradient">{vikiInfo.name}</h1>
               <p className="version">v{vikiInfo.version}</p>
@@ -127,7 +127,6 @@ function App() {
             <div className="skills-list">
               {skills.map(skill => (
                 <div key={skill.name} className="skill-item">
-                  <div className="skill-icon">◆</div>
                   <div className="skill-info">
                     <div className="skill-name">{skill.name}</div>
                     <div className="skill-desc">{skill.description}</div>
@@ -154,7 +153,7 @@ function App() {
           </section>
 
           <button onClick={clearMemory} className="btn-clear">
-            <span>🗑</span> Clear Memory
+            Clear Memory
           </button>
         </aside>
 
@@ -200,7 +199,7 @@ function App() {
               disabled={isLoading}
             />
             <button type="submit" className="btn-send" disabled={isLoading || !input.trim()}>
-              <span>→</span>
+              <span>SEND</span>
             </button>
           </form>
         </main>

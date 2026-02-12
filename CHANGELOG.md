@@ -4,7 +4,7 @@ All notable changes to the VIKI Sovereign Intelligence project will be documente
 
 ## [2.3.0] - 2026-02-12 (Intelligence Governance)
 
-### ⚖️ The Governance Pillar
+### The Governance Pillar
 - **CapabilityRegistry**: Implemented a granular permission system. Skills like `filesystem_write` and `shell_exec` are now strictly gated behind capability checks.
 - **Judgment Engine v20**: Refined the cognitive triage (Reflex/Shallow/Deep) with post-judgment gates, ensuring required capabilities exist before deliberation begins.
 - **The Ollama Oven**: Created an automated model-forging pipeline. VIKI can now "bake" her learned wisdom directly into a custom **Mistral/DeepSeek** Modelfile, forging `viki-born-again`.
@@ -12,13 +12,15 @@ All notable changes to the VIKI Sovereign Intelligence project will be documente
 - **Dataset Extraction**: Integrated `scripts/export_viki_dataset.py` for training set generation in ALPACA and ShareGPT formats.
 - **Model Stability**: Standardized Mistral/Ollama instruction templates to eliminate "Schema Echo" errors and improve JSON compliance.
 
-### 🧪 Optimized
+### Optimized
 - **Cognitive Selectivity**: Large models (Mistral 7B) are now automatically escalated to the FULL response schema for better stability, while PHI-3 maintains the LITE schema for speed.
 - **Memory Forging**: Lessons from semantic memory are now formatted as structured "Wisdom Blocks" for better model comprehension during forging.
 
 ---
 
-### 🚀 Massive Upgrade
+## [2.2.0] - 2026-02-12 (Nexus Core)
+
+### Massive Upgrade
 - **OS Mastery**: Added `ClipboardSkill` (Copy/Paste), `WindowManagerSkill` (List/Focus/Minimize), `ShellSkill` (Sandbox Exec), and `NotificationSkill`.
 - **Long-Term Memory**: Replaced ephemeral list with **SQLite** persistent storage for conversation history and goals.
 - **Hybrid Intelligence**: Implemented **Multi-Model Routing** (Shallow/Deep) with priority weights and **Native Tool Calling** for high-speed actions.
@@ -27,7 +29,7 @@ All notable changes to the VIKI Sovereign Intelligence project will be documente
 - **Self-Evolution**: Added `ModelForgeSkill` for LoRA fine-tuning and `ReflectorModule` for self-correction.
 - **Visual Cortex**: Enabled `VisionSkill` to capture and analyze screen content within the ReAct loop.
 
-### 🐛 Fixed
+### Fixed
 - **Tool Use**: Standardized all skills with JSON schemas for reliable LLM function calling.
 - **Event Loop**: Fixed blocking calls in Telegram and Voice modules.
 
@@ -35,7 +37,7 @@ All notable changes to the VIKI Sovereign Intelligence project will be documente
 
 ## [7.0.0] - 2026-02-12 (The Cortex Upgrade)
 
-### 🧠 Added
+### Added
 - **Two-Brain Cognitive Architecture**: Split processing into a **Reflex Brain** (<200ms) for OS/Status and a **Thinker Brain** (Deep Reasoning).
 - **Global Interrupt Token**: Universal "Audio Brake" and task cancellation across Voice, Skills, and LLM processing.
 - **Intent Memory**: Replaced raw chat logs with **Active/Abandoned/Completed Goals**, reducing context noise and improving focus.
@@ -53,7 +55,7 @@ All notable changes to the VIKI Sovereign Intelligence project will be documente
 - **Model Specialization (Polymorphic Intelligence)**: Multi-model routing system uses DeepSeek for planning, LLaMA for conversation, and Phi for high-speed reflexes, ensuring optimal performance for every slice of cognition.
 - **CLI as Primary Brain Interface**: The Rich Dashboard is now the authoritative Command Center, surfacing deep internal metrics (Safety Tier, Model Role, Latency Budgets) with absolute clarity.
 
-### ⚡ Optimized
+### Optimized
 - **Perception Speed Layer**: reflex arcs for common chatter and status queries.
 - **VAD Dynamic Thresholding**: Ambient noise floor calibration to prevent false voice triggers.
 
@@ -61,20 +63,20 @@ All notable changes to the VIKI Sovereign Intelligence project will be documente
 
 ## [6.0.0] - 2026-02-12
 
-### 🚀 Added
+### Added
 - **Unified Messaging Nexus**: Asynchronous event loop bridging Terminal, Discord, and Telegram.
 - **Neural Forge**: Autonomous self-evolution pipeline using Unsloth LoRA fine-tuning.
 - **Desktop Agent**: Full OS control via `pyautogui` (Click, Type, Scroll).
 - **Proactive Wellness Pulse**: Background monitoring for user inactivity.
 - **Lazy Loading**: Major performance optimization for Torch, Unsloth, and Silero VAD.
 
-### 🐛 Fixed
+### Fixed
 - **Shutdown Crashes**: Resolved event loop termination issues in `viki/main.py`.
 - **JSON Parsing**: Added robust handling for local LLM markdown output.
 - **Watchdog Loop**: Fixed thread-safety in file monitoring.
 - **Reflector Path**: Corrected `FileNotFoundError` in self-correction module.
 
-### 🧹 Removed
+### Removed
 - Legacy entry points: `main.py` (root), `test_ollama.py`, `test_vision.py`.
 - Deprecated synchronous bridges.
 
