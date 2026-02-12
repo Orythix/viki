@@ -2,7 +2,21 @@
 
 All notable changes to the VIKI Sovereign Intelligence project will be documented in this file.
 
-## [2.2.0] - 2026-02-12 (Nexus Core)
+## [2.3.0] - 2026-02-12 (Intelligence Governance)
+
+### ⚖️ The Governance Pillar
+- **CapabilityRegistry**: Implemented a granular permission system. Skills like `filesystem_write` and `shell_exec` are now strictly gated behind capability checks.
+- **Judgment Engine v20**: Refined the cognitive triage (Reflex/Shallow/Deep) with post-judgment gates, ensuring required capabilities exist before deliberation begins.
+- **The Ollama Oven**: Created an automated model-forging pipeline. VIKI can now "bake" her learned wisdom directly into a custom **Mistral/DeepSeek** Modelfile, forging `viki-born-again`.
+- **Structured Auditing**: Added high-fidelity logging for every decision. Every action is now logged with its `CapabilityCheckResult` (Exists, Enabled, Allowed, Reason).
+- **Dataset Extraction**: Integrated `scripts/export_viki_dataset.py` for training set generation in ALPACA and ShareGPT formats.
+- **Model Stability**: Standardized Mistral/Ollama instruction templates to eliminate "Schema Echo" errors and improve JSON compliance.
+
+### 🧪 Optimized
+- **Cognitive Selectivity**: Large models (Mistral 7B) are now automatically escalated to the FULL response schema for better stability, while PHI-3 maintains the LITE schema for speed.
+- **Memory Forging**: Lessons from semantic memory are now formatted as structured "Wisdom Blocks" for better model comprehension during forging.
+
+---
 
 ### 🚀 Massive Upgrade
 - **OS Mastery**: Added `ClipboardSkill` (Copy/Paste), `WindowManagerSkill` (List/Focus/Minimize), `ShellSkill` (Sandbox Exec), and `NotificationSkill`.

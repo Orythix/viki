@@ -1,7 +1,9 @@
 {
-  "name": "ui",
+  "name": "viki-dashboard",
   "private": true,
-  "version": "0.0.0",
+  "version": "2.3.0",
+  "description": "VIKI Interface - Virtual Intelligence Knowledge Interface",
+  "author": "Sachin",
   "type": "module",
   "scripts": {
     "dev": "vite",
