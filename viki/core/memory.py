@@ -31,7 +31,9 @@ class Memory:
         # Initialize DB
         self.db = None
         if Database:
-            self.db = Database(self.db_path)
+            # v21: Explicitly handle multi-threading for web/async environments
+            conn = sqlite3.connect(self.db_path, check_same_thread=False)
+            self.db = Database(conn)
             self._init_tables()
         else:
             viki_logger.warning("sqlite-utils not installed. Memory will be ephemeral.")

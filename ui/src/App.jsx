@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import './App.css'
+import './index.css'
 
 const API_BASE = 'http://localhost:5000/api'
 
@@ -7,7 +7,7 @@ function App() {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [status, setStatus] = useState('offline')
-  const [vikiInfo, setVikiInfo] = useState({ name: 'VIKI', version: '...' })
+  const [vikiInfo, setVikiInfo] = useState({ name: 'VIKI', version: '2.3.0' })
   const [skills, setSkills] = useState([])
   const [models, setModels] = useState([])
   const [isLoading, setIsLoading] = useState(false)
@@ -17,7 +17,7 @@ function App() {
     fetchHealth()
     fetchSkills()
     fetchModels()
-    const interval = setInterval(fetchHealth, 30000)
+    const interval = setInterval(fetchHealth, 10000)
     return () => clearInterval(interval)
   }, [])
 
@@ -28,6 +28,7 @@ function App() {
   const fetchHealth = async () => {
     try {
       const res = await fetch(`${API_BASE}/health`)
+      if (!res.ok) throw new Error('Offline')
       const data = await res.json()
       setStatus('online')
       setVikiInfo(data)
@@ -60,7 +61,11 @@ function App() {
     e.preventDefault()
     if (!input.trim() || isLoading) return
 
-    const userMessage = { role: 'user', content: input, timestamp: new Date().toISOString() }
+    const userMessage = {
+      role: 'user',
+      content: input,
+      timestamp: new Date().toISOString()
+    }
     setMessages(prev => [...prev, userMessage])
     setInput('')
     setIsLoading(true)
@@ -73,6 +78,8 @@ function App() {
       })
       const data = await res.json()
 
+      if (data.error) throw new Error(data.error)
+
       const vikiMessage = {
         role: 'assistant',
         content: data.response,
@@ -81,8 +88,8 @@ function App() {
       setMessages(prev => [...prev, vikiMessage])
     } catch (error) {
       const errorMessage = {
-        role: 'error',
-        content: `Error: ${error.message}`,
+        role: 'assistant',
+        content: `CRITICAL SYSTEM ERROR: ${error.message}`,
         timestamp: new Date().toISOString()
       }
       setMessages(prev => [...prev, errorMessage])
@@ -91,119 +98,109 @@ function App() {
     }
   }
 
-  const clearMemory = async () => {
-    try {
-      await fetch(`${API_BASE}/memory`, { method: 'DELETE' })
-      setMessages([])
-    } catch (error) {
-      console.error('Failed to clear memory:', error)
-    }
-  }
-
   return (
     <div className="app">
-      {/* Header */}
-      <header className="header glass">
-        <div className="header-content">
-          <div className="logo-section">
-            <div className="logo-icon">VIKI</div>
-            <div>
-              <h1 className="text-gradient">{vikiInfo.name}</h1>
-              <p className="version">v{vikiInfo.version}</p>
-            </div>
-          </div>
-          <div className="status-section">
-            <div className={`status-indicator ${status}`}></div>
-            <span className="status-text">{status}</span>
+      <aside className="sidebar">
+        <div className="logo-container">
+          <div className="logo-orb">V</div>
+          <div className="logo-text">
+            <h1 className="text-gradient">{vikiInfo.name}</h1>
+            <p>Sovereign Intelligence</p>
           </div>
         </div>
-      </header>
 
-      <div className="main-container">
-        {/* Sidebar */}
-        <aside className="sidebar glass">
-          <section className="sidebar-section">
-            <h3>Active Skills</h3>
-            <div className="skills-list">
-              {skills.map(skill => (
-                <div key={skill.name} className="skill-item">
-                  <div className="skill-info">
-                    <div className="skill-name">{skill.name}</div>
-                    <div className="skill-desc">{skill.description}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
+        <div className="sidebar-section">
+          <h3>Core Diagnostics</h3>
+          <div className="model-pill">
+            <span>Status</span>
+            <span className={`status-badge ${status}`}>{status.toUpperCase()}</span>
+          </div>
+          <div className="model-pill">
+            <span>Kernel</span>
+            <span className="muted">v{vikiInfo.version}</span>
+          </div>
+        </div>
 
-          <section className="sidebar-section">
-            <h3>Models</h3>
-            <div className="models-list">
-              {models.map(model => (
-                <div key={model.name} className="model-item">
-                  <div className="model-name">{model.name}</div>
-                  <div className="model-capabilities">
-                    {model.capabilities.slice(0, 2).map(cap => (
-                      <span key={cap} className="capability-tag">{cap}</span>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <button onClick={clearMemory} className="btn-clear">
-            Clear Memory
-          </button>
-        </aside>
-
-        {/* Chat Area */}
-        <main className="chat-container">
-          <div className="messages-area">
-            {messages.length === 0 && (
-              <div className="welcome-message">
-                <h2 className="text-gradient">VIKI Interface</h2>
-                <p>Virtual Intelligence Knowledge Interface</p>
-                <p className="muted">Send a message to begin</p>
-              </div>
-            )}
-            {messages.map((msg, idx) => (
-              <div key={idx} className={`message message-${msg.role}`}>
-                <div className="message-header">
-                  <span className="message-role">{msg.role === 'user' ? 'YOU' : msg.role === 'assistant' ? 'VIKI' : 'SYSTEM'}</span>
-                  <span className="message-time">{new Date(msg.timestamp).toLocaleTimeString()}</span>
-                </div>
-                <div className="message-content">{msg.content}</div>
+        <div className="sidebar-section">
+          <h3>Neural Capabilities</h3>
+          <div className="skills-list">
+            {skills.map(skill => (
+              <div key={skill.name} className="skill-card">
+                <div className="skill-name">{skill.name}</div>
+                <div className="skill-desc">{skill.description}</div>
               </div>
             ))}
-            {isLoading && (
-              <div className="message message-loading">
-                <div className="message-header">
-                  <span className="message-role">VIKI</span>
-                </div>
-                <div className="message-content">
-                  <span className="loading-dots">Processing</span>
-                </div>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
           </div>
+        </div>
 
-          <form onSubmit={sendMessage} className="input-area glass">
+        <div className="sidebar-section">
+          <h3>Intelligence Tiers</h3>
+          {models.slice(0, 3).map(model => (
+            <div key={model.name} className="model-pill">
+              <span style={{ color: 'var(--accent-cyan)' }}>{model.name}</span>
+              <span className="muted">{model.provider}</span>
+            </div>
+          ))}
+        </div>
+      </aside>
+
+      <main className="main-view">
+        <div className="chat-scroller">
+          {messages.length === 0 && (
+            <div className="empty-state">
+              <h1 className="text-gradient">VIKI</h1>
+              <p className="muted">SOVEREIGN DIRECTIVE INTERFACE v2.3.0</p>
+              <div style={{ marginTop: '2rem', fontSize: '0.8rem', opacity: 0.3 }}>
+                Awaiting Initial Input ...
+              </div>
+            </div>
+          )}
+
+          {messages.map((msg, idx) => (
+            <div key={idx} className={`message-node ${msg.role}`}>
+              <div className="message-header">
+                <span>{msg.role.toUpperCase()}</span>
+                <span>{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+              </div>
+              <div className="message-bubble">
+                {msg.content.split('\n').map((line, i) => (
+                  <p key={i} style={{ marginBottom: '0.4rem' }}>
+                    {line}
+                  </p>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {isLoading && (
+            <div className="message-node assistant">
+              <div className="message-header"><span>DELIBERATING</span></div>
+              <div className="message-bubble loading-bubble">
+                <div className="loading-dot"></div>
+                <div className="loading-dot"></div>
+                <div className="loading-dot"></div>
+              </div>
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+
+        <div className="input-wrapper">
+          <form onSubmit={sendMessage} className="input-container">
             <input
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Send a directive to VIKI..."
-              className="message-input"
+              placeholder="Inject command string..."
               disabled={isLoading}
+              autoFocus
             />
             <button type="submit" className="btn-send" disabled={isLoading || !input.trim()}>
-              <span>SEND</span>
+              {isLoading ? '...' : 'EXECUTE'}
             </button>
           </form>
-        </main>
-      </div>
+        </div>
+      </main>
     </div>
   )
 }

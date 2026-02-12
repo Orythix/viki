@@ -11,7 +11,10 @@ class TimeTravelModule:
     """
     def __init__(self, data_dir: str):
         self.db_path = os.path.join(data_dir, "history.db")
-        self.db = sqlite_utils.Database(self.db_path)
+        # v21: Explicitly handle multi-threading
+        import sqlite3 as _sqlite3
+        conn = _sqlite3.connect(self.db_path, check_same_thread=False)
+        self.db = sqlite_utils.Database(conn)
         self.backup_dir = os.path.join(data_dir, "backups")
         os.makedirs(self.backup_dir, exist_ok=True)
         

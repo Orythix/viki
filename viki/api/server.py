@@ -4,6 +4,7 @@ Provides RESTful endpoints for the React dashboard
 """
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from datetime import datetime
 import sys
 import os
 
@@ -11,6 +12,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from viki.core.controller import VIKIController
+from viki.config.logger import viki_logger
 
 app = Flask(__name__)
 CORS(app)
@@ -23,7 +25,7 @@ settings_path = os.path.join(base_dir, "config", "settings.yaml")
 controller = VIKIController(settings_path=settings_path, soul_path=soul_path)
 
 @app.route('/api/health', methods=['GET'])
-def health():
+async def health():
     """Health check endpoint"""
     return jsonify({
         'status': 'online',
@@ -32,8 +34,8 @@ def health():
     })
 
 @app.route('/api/chat', methods=['POST'])
-def chat():
-    """Process chat messages"""
+async def chat():
+    """Process chat messages asynchronously"""
     data = request.json
     user_input = data.get('message', '')
     
@@ -41,43 +43,50 @@ def chat():
         return jsonify({'error': 'No message provided'}), 400
     
     try:
-        response = controller.process_request(user_input)
+        # v21: Explicitly await the async controller method
+        response = await controller.process_request(user_input)
         
         return jsonify({
             'response': response,
-            'timestamp': controller.memory.short_term_memory[-1]['timestamp'] if controller.memory.short_term_memory else None
+            'timestamp': datetime.now().isoformat()
         })
     except Exception as e:
+        viki_logger.error(f"API Chat Error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/memory', methods=['GET'])
-def get_memory():
+async def get_memory():
     """Retrieve conversation memory"""
+    # Use get_context to fetch latest messages from DB or ephemeral memory
+    messages = controller.memory.get_context()
     return jsonify({
-        'messages': controller.memory.short_term_memory,
+        'messages': messages,
         'limit': controller.memory.max_short_term
     })
 
 @app.route('/api/memory', methods=['DELETE'])
-def clear_memory():
+async def clear_memory():
     """Clear conversation memory"""
-    controller.memory.short_term_memory = []
+    if controller.memory.db:
+        controller.memory.db["messages"].delete_where()
+    else:
+        controller.memory.ephemeral_history = []
     return jsonify({'status': 'cleared'})
 
 @app.route('/api/skills', methods=['GET'])
-def get_skills():
+async def get_skills():
     """List all registered skills"""
     skills = []
     for name, skill in controller.skill_registry.skills.items():
         skills.append({
             'name': name,
-            'description': skill.description,
-            'triggers': skill.triggers
+            'description': skill.description if hasattr(skill, 'description') else "No description",
+            'triggers': skill.triggers if hasattr(skill, 'triggers') else []
         })
     return jsonify({'skills': skills})
 
 @app.route('/api/models', methods=['GET'])
-def get_models():
+async def get_models():
     """List available models"""
     models = []
     if hasattr(controller, 'model_router'):
@@ -91,7 +100,7 @@ def get_models():
     return jsonify({'models': models})
 
 @app.route('/api/soul', methods=['GET'])
-def get_soul():
+async def get_soul():
     """Get VIKI's persona configuration"""
     return jsonify({
         'name': controller.soul.name,
@@ -100,7 +109,8 @@ def get_soul():
     })
 
 if __name__ == '__main__':
-    print("Starting VIKI API Server...")
+    print("Starting VIKI API Server (ASYNCHRONOUS)...")
     print(f"VIKI Version: {controller.soul.config.get('version', 'Unknown')}")
     print("API available at: http://localhost:5000")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # Note: debug mode can sometimes interfere with async loops in some flask versions
+    app.run(debug=False, host='0.0.0.0', port=5000)

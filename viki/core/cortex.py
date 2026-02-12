@@ -323,13 +323,14 @@ class DeliberationLayer(CortexLayer):
             "2. If the user wants an action (open app, pause music, etc), set the 'action' field with the correct skill_name and parameters.\n"
             "3. For media control: use skill_name='media_control', parameters={'action': 'play_pause'|'next_track'|'volume_up'|etc}\n"
             "4. For opening apps: use skill_name='system_control', parameters={'action': 'open_app', 'name': 'app_name'}\n"
-            "5. For web search: use skill_name='research', parameters={'query': '...'}\n"
-            "6. CRITICAL: If the user asks about a term, event, or concept you don't recognize (e.g., 'angular signal', 'latest news'), DO NOT say you don't know. IMMEDIATELY use the 'research' skill.\n"
-            "6. For reading a URL: use skill_name='research', parameters={'url': '...'}\n"
-            "7. For conversational questions: just provide final_response, no action needed.\n"
-            "8. Respond like a real person — warm, witty, and helpful. Never say 'Task complete'.\n"
-            "9. NEVER fabricate information about URLs, profiles, or external content. Only reference FETCHED URL CONTENT above.\n"
-            "10. If the user refers to something from a previous message, check the conversation history.\n"
+            "5. For window management (list, focus, minimize, close): use skill_name='window_manager', parameters={'action': 'list'|'focus'|'minimize'|'close', 'title': '...'}\n"
+            "6. For web search: use skill_name='research', parameters={'query': '...'}\n"
+            "7. For reading a URL: use skill_name='research', parameters={'url': '...'}\n"
+            "8. CRITICAL: If the user asks about a term, event, or concept you don't recognize (e.g., 'angular signal', 'latest news'), DO NOT say you don't know. IMMEDIATELY use the 'research' skill.\n"
+            "9. For conversational questions: just provide final_response, no action needed.\n"
+            "10. Respond like a real person — warm, witty, and helpful. Never say 'Task complete'.\n"
+            "11. NEVER fabricate information about URLs, profiles, or external content. Only reference FETCHED URL CONTENT above.\n"
+            "12. If the user refers to something from a previous message, check the conversation history.\n"
         )
         prompt.set_identity(identity)
         prompt.add_cognitive("Choose the right tool for the job. If no tool is needed, just respond naturally.")
@@ -343,8 +344,10 @@ class DeliberationLayer(CortexLayer):
             image_path = None
             if action_results:
                 for res in reversed(action_results): # Latest first
+                    # v21: res is now a dict {"action": ..., "result": ..., "step": ...}
+                    res_text = res.get('result', '') if isinstance(res, dict) else str(res)
                     # Look for "Screenshot captured successfully at: /path/to/file.png"
-                    match = re.search(r"Screenshot captured successfully at: (.+\.png)", res)
+                    match = re.search(r"Screenshot captured successfully at: (.+\.png)", res_text)
                     if match:
                         image_path = match.group(1).strip()
                         viki_logger.info(f"Deliberation: Found image context: {image_path}")
