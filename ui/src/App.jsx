@@ -7,7 +7,7 @@ function App() {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [status, setStatus] = useState('offline')
-  const [vikiInfo, setVikiInfo] = useState({ name: 'VIKI', version: '2.3.0' })
+  const [vikiInfo, setVikiInfo] = useState({ name: 'VIKI', version: '7.1.0' })
   const [skills, setSkills] = useState([])
   const [models, setModels] = useState([])
   const [isLoading, setIsLoading] = useState(false)
@@ -17,13 +17,14 @@ function App() {
     fetchHealth()
     fetchSkills()
     fetchModels()
+    fetchMemory()
     const interval = setInterval(fetchHealth, 10000)
     return () => clearInterval(interval)
   }, [])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  }, [messages, isLoading])
 
   const fetchHealth = async () => {
     try {
@@ -54,6 +55,33 @@ function App() {
       setModels(data.models || [])
     } catch (error) {
       console.error('Failed to fetch models:', error)
+    }
+  }
+
+  const fetchMemory = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/memory`)
+      const data = await res.json()
+      if (data.messages && data.messages.length > 0) {
+        const formatted = data.messages.map(m => ({
+          role: m.role,
+          content: m.content,
+          timestamp: m.timestamp || new Date().toISOString()
+        }))
+        setMessages(formatted)
+      }
+    } catch (error) {
+      console.error('Failed to fetch memory:', error)
+    }
+  }
+
+  const clearMemory = async () => {
+    if (!window.confirm('Erase episodic memory? This cannot be undone.')) return
+    try {
+      await fetch(`${API_BASE}/memory`, { method: 'DELETE' })
+      setMessages([])
+    } catch (error) {
+      console.error('Failed to clear memory:', error)
     }
   }
 
@@ -105,25 +133,45 @@ function App() {
           <div className="logo-orb">V</div>
           <div className="logo-text">
             <h1 className="text-gradient">{vikiInfo.name}</h1>
-            <p>Sovereign Intelligence</p>
+            <p>Intelligence</p>
           </div>
         </div>
 
         <div className="sidebar-section">
-          <h3>Core Diagnostics</h3>
+          <h3>Kernel Diagnostics</h3>
           <div className="model-pill">
-            <span>Status</span>
-            <span className={`status-badge ${status}`}>{status.toUpperCase()}</span>
+            <span>Core Status</span>
+            <span className={`status-badge ${status}`}>{status}</span>
           </div>
           <div className="model-pill">
-            <span>Kernel</span>
-            <span className="muted">v{vikiInfo.version}</span>
+            <span>Sovereign Version</span>
+            <span style={{ color: 'var(--text-dim)', fontWeight: 600 }}>{vikiInfo.version}</span>
           </div>
+          <button 
+            onClick={clearMemory}
+            style={{ 
+              width: '100%', 
+              background: 'hsla(350, 100%, 50%, 0.1)', 
+              border: '1px solid hsla(350, 100%, 50%, 0.2)',
+              color: 'hsl(350, 100%, 60%)',
+              padding: '0.75rem',
+              borderRadius: 'var(--radius-md)',
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              marginTop: '0.5rem',
+              transition: 'var(--transition-fast)'
+            }}
+            onMouseOver={(e) => e.target.style.background = 'hsla(350, 100%, 50%, 0.2)'}
+            onMouseOut={(e) => e.target.style.background = 'hsla(350, 100%, 50%, 0.1)'}
+          >
+            ERASE EPISODIC LOGS
+          </button>
         </div>
 
-        <div className="sidebar-section">
-          <h3>Neural Capabilities</h3>
-          <div className="skills-list">
+        <div className="sidebar-section" style={{ flex: 1 }}>
+          <h3>Neural Skills Registry</h3>
+          <div className="skills-list" style={{ maxHeight: '30vh', overflowY: 'auto', paddingRight: '4px' }}>
             {skills.map(skill => (
               <div key={skill.name} className="skill-card">
                 <div className="skill-name">{skill.name}</div>
@@ -137,8 +185,8 @@ function App() {
           <h3>Intelligence Tiers</h3>
           {models.slice(0, 3).map(model => (
             <div key={model.name} className="model-pill">
-              <span style={{ color: 'var(--accent-cyan)' }}>{model.name}</span>
-              <span className="muted">{model.provider}</span>
+              <span style={{ color: 'var(--accent-cyan)', fontWeight: 600 }}>{model.name}</span>
+              <span style={{ color: 'var(--text-mute)', fontSize: '0.7rem' }}>{model.provider}</span>
             </div>
           ))}
         </div>
@@ -149,9 +197,10 @@ function App() {
           {messages.length === 0 && (
             <div className="empty-state">
               <h1 className="text-gradient">VIKI</h1>
-              <p className="muted">SOVEREIGN DIRECTIVE INTERFACE v2.3.0</p>
-              <div style={{ marginTop: '2rem', fontSize: '0.8rem', opacity: 0.3 }}>
-                Awaiting Initial Input ...
+              <p>SOVEREIGN DIRECTIVE INTERFACE</p>
+              <div style={{ marginTop: '3rem', display: 'flex', gap: '2rem' }}>
+                 <div className="status-badge online" style={{ fontSize: '0.7rem' }}>NEURAL NET ACTIVE</div>
+                 <div className="status-badge online" style={{ fontSize: '0.7rem' }}>ENCRYPTION STABLE</div>
               </div>
             </div>
           )}
@@ -159,22 +208,30 @@ function App() {
           {messages.map((msg, idx) => (
             <div key={idx} className={`message-node ${msg.role}`}>
               <div className="message-header">
-                <span>{msg.role.toUpperCase()}</span>
+                <span style={{ color: msg.role === 'user' ? 'var(--accent-purple)' : 'var(--accent-cyan)' }}>
+                  {msg.role === 'user' ? 'DIRECTIVE' : 'RESPONSE'}
+                </span>
                 <span>{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
               </div>
               <div className="message-bubble">
-                {msg.content.split('\n').map((line, i) => (
-                  <p key={i} style={{ marginBottom: '0.4rem' }}>
-                    {line}
-                  </p>
-                ))}
+                {msg.content.includes('```') ? (
+                  <div dangerouslySetInnerHTML={{ 
+                    __html: msg.content.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>').replace(/\n/g, '<br/>') 
+                  }} />
+                ) : (
+                  msg.content.split('\n').map((line, i) => (
+                    <p key={i} style={{ marginBottom: line.trim() === '' ? '0.8rem' : '0.4rem' }}>
+                      {line}
+                    </p>
+                  ))
+                )}
               </div>
             </div>
           ))}
 
           {isLoading && (
             <div className="message-node assistant">
-              <div className="message-header"><span>DELIBERATING</span></div>
+              <div className="message-header"><span style={{ color: 'var(--accent-cyan)' }}>DELIBERATING</span></div>
               <div className="message-bubble loading-bubble">
                 <div className="loading-dot"></div>
                 <div className="loading-dot"></div>
@@ -191,7 +248,7 @@ function App() {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Inject command string..."
+              placeholder="Inject command string or data stream..."
               disabled={isLoading}
               autoFocus
             />

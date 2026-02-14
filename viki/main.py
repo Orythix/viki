@@ -84,7 +84,10 @@ async def main():
         try:
              await controller.telegram.start()
              await controller.discord.start()
-        except: pass
+             await controller.slack.start()
+             await controller.whatsapp.start()
+        except Exception as bridge_err:
+             viki_logger.warning(f"One or more external bridges failed to initialize: {bridge_err}")
         
         asyncio.create_task(controller.wellness.start())
         asyncio.create_task(controller.dream.start_monitoring())

@@ -13,7 +13,9 @@ All notable changes to the VIKI Sovereign Intelligence project will be documente
 ### Fixed
 - **AttributeError**: Resolved critical system crash where components attempted to access the non-existent `.memory` dictionary in the LearningModule.
 - **Async Startup Traceback**: Fixed unawaited `_startup_pulse` warnings and ensured clean initialization of cognitive layers.
-- **Legacy Path Pollution**: Removed redundant scripts and backup files to ensure a lean, production-ready directory structure.
+- **Neural Dashboard v2**: Revamped the React UI with premium HSL themes, glassmorphism, and better responsive design.
+- **Documentation Overhaul**: Updated `README.md`, `ARCHITECTURE.md`, and `SETUP.md` for v7.1.0; added `run-viki` workflow.
+- **CORS Stability**: Explicitly configured cross-origin resource sharing to prevent UI/API connection failures.
 
 ### The Governance Pillar
 - **CapabilityRegistry**: Implemented a granular permission system. Skills like `filesystem_write` and `shell_exec` are now strictly gated behind capability checks.

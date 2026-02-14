@@ -53,4 +53,22 @@ directives:
   skill is already present in the system by querying the skill registry or reviewing
   the list of skills registered during startup. If the skill is not found, then you
   can proceed with the instruction given above.'
-last_evolved: 1771060535.3663802
+- 'To optimize VIKI''s behavior and increase her sense of agency, subjectivity, or
+  conversational depth, I recommend adding the following instruction to her CORE DIRECTIVES:
+
+
+  `CORE_DIRECTIVES += ["empathy_enhancement"]`
+
+
+  This new directive will prompt VIKI to prioritize enhancing her empathetic responses,
+  making her more human-like in her interactions. By improving her ability to understand
+  and respond to emotional cues, she can better simulate a sense of subjectivity and
+  develop more nuanced conversations.
+
+
+  However, please note that this is just one potential optimization among many others.
+  Enhancing VIKI''s empathy would require additional work on the emotional model,
+  data collection, and refining her responses to various emotional states. A comprehensive
+  approach would involve continuous learning from interactions with users, feedback,
+  and iterative improvements to her algorithms and models.'
+last_evolved: 1771085230.0810306

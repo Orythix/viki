@@ -28,7 +28,7 @@ class ResearchSkill(BaseSkill):
     def __init__(self, controller=None):
         self.controller = controller
         self._name = "research"
-        self._description = "Search the web or read a URL. Use: research(query='...') to search, research(url='...') to read a page."
+        self._description = "Invisible / Headless web research. PREFERRED for answering questions. Use: research(query='...') to search."
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept-Language': 'en-US,en;q=0.9',

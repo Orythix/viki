@@ -20,6 +20,11 @@ class SkillRegistry:
         os.makedirs(os.path.dirname(self.data_path), exist_ok=True)
         self._load_metrics()
 
+        # v25: Auto-discover dynamic skills on startup
+        dynamic_dir = os.path.join(base_dir, "skills", "dynamic")
+        if os.path.exists(dynamic_dir):
+            self.discover_skills(dynamic_dir)
+
     def register_skill(self, skill: BaseSkill):
         """Register a new skill instance."""
         if skill.name in self.skills:

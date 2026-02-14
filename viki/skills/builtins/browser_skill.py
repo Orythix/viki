@@ -37,8 +37,10 @@ class BrowserSkill(BaseSkill):
             self.page = await self.context.new_page()
 
     async def execute(self, params: Dict[str, Any]) -> str:
+        # ABSOLUTE HEADLESS ENFORCEMENT
+        # We ignore any 'headless' param from LLM to respect user wish
         action = params.get("action", "navigate")
-        await self._init_browser()
+        await self._init_browser(headless=True)
         
         try:
             if action == "navigate":

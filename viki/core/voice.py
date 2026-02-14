@@ -142,3 +142,10 @@ class VoiceModule:
             # Simulate TTS generated chunk duration
             await asyncio.sleep(0.1 + (len(word) * 0.02)) 
             # In real impl, we would play audio chunk here
+
+class AudioVisualizer:
+    """Helper to visualize audio intensity (ASCII)"""
+    @staticmethod
+    def render(rms: float, width: int = 20):
+        bars = int(min(rms * 100, 1.0) * width)
+        return "[" + "|" * bars + " " * (width - bars) + "]"

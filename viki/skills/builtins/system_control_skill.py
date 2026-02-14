@@ -190,10 +190,14 @@ class SystemControlSkill(BaseSkill):
     def _open_url(self, url: str) -> str:
         if not url:
             return "Error: No URL provided."
-        if not url.startswith('http'):
-            url = 'https://' + url
+        # ABSOLUTE BACKGROUND RULE:
+        # If the user says "do it in the background", we must NOT open a visible browser.
+        # So we restrict open_url ONLY to non-http protocols (like spotify:, steam:, etc)
+        if url.startswith("http:") or url.startswith("https:"):
+            return "Error: Visible browser launch disabled by user preference. Use the 'research' skill to read content invisibly."
+            
         try:
             webbrowser.open(url)
-            return f"Opened {url}."
+            return f"Launched protocol {url}."
         except Exception as e:
             return f"Error opening URL: {e}"

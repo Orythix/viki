@@ -100,13 +100,22 @@ class APILLM(LLMProvider):
     
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
-        api_key = os.getenv(self.config.get("api_key_env", "OPENAI_API_KEY"))
-        base_url = self.config.get('base_url', 'https://api.openai.com/v1')
         
-        self.client = instructor.from_openai(
-            AsyncOpenAI(api_key=api_key, base_url=base_url),
-            mode=instructor.Mode.JSON
-        )
+        self.provider_type = config.get("provider", "openai")
+        api_key = os.getenv(self.config.get("api_key_env", "OPENAI_API_KEY"))
+        
+        if self.provider_type == "anthropic":
+            from anthropic import AsyncAnthropic
+            self.client = instructor.from_anthropic(
+                AsyncAnthropic(api_key=api_key),
+                mode=instructor.Mode.JSON
+            )
+        else:
+            base_url = self.config.get('base_url', 'https://api.openai.com/v1')
+            self.client = instructor.from_openai(
+                AsyncOpenAI(api_key=api_key, base_url=base_url),
+                mode=instructor.Mode.JSON
+            )
 
     async def chat(self, messages: List[Dict[str, str]], temperature: float = 0.7, image_path: str = None) -> str:
         try:
@@ -376,7 +385,7 @@ class LocalLLM(LLMProvider):
 
         # PATCH: Missing final_thought — synthesize from available data
         if "final_thought" not in data:
-            summary = data.get("final_response", "Processing user request")
+            summary = data.get("final_response", "Request received, formulating response...")
             strategy = data.get("internal_metacognition", summary)
             data["final_thought"] = {
                 "intent_summary": summary[:200] if isinstance(summary, str) else "User request",
@@ -395,6 +404,10 @@ class ModelFactory:
         if provider_type == "mock":
             return MockLLM(merged_config)
         elif provider_type == "api":
+            return APILLM(merged_config)
+        elif provider_type == "anthropic":
+            # Instructor handles Anthropic via the same interface if configured
+            merged_config['type'] = 'api' 
             return APILLM(merged_config)
         elif provider_type == "local":
             return LocalLLM(merged_config)

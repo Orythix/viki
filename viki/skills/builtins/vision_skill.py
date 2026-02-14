@@ -30,6 +30,11 @@ class VisionSkill(BaseSkill):
                 "instruction": {
                     "type": "string",
                     "description": "What to look for or analyze in the screenshot (e.g., 'read the error message', 'describe the UI')."
+                },
+                "image_paths": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional: List of existing image paths to analyze instead of taking a new screenshot."
                 }
             },
             "required": ["instruction"]
@@ -37,19 +42,31 @@ class VisionSkill(BaseSkill):
 
     async def execute(self, params: Dict[str, Any]) -> str:
         instruction = params.get("instruction", "What's on the screen?")
+        image_lines = []
         
-        # 1. Take Screenshot
-        filename = f"screenshot_{secrets.token_hex(4)}.png"
-        import os
-        filepath = os.path.abspath(os.path.join(self.data_dir, filename))
+        # 1. Check for provided images
+        input_images = params.get("image_paths", [])
         
-        try:
-            viki_logger.info(f"Visualizing screen for instruction: {instruction}")
-            await asyncio.to_thread(pyautogui.screenshot, filepath)
-            
-            # Return a formatted string that the Cortex can parse to find image paths
-            return f"Screenshot captured successfully at: {filepath}\nInstruction: {instruction}"
-            
-        except Exception as e:
-            viki_logger.error(f"Vision error: {e}")
-            return f"Error capturing screen: {str(e)}"
+        if input_images:
+             for path in input_images:
+                  if os.path.exists(path):
+                       image_lines.append(f"Analyzing provided image: {path}")
+                  else:
+                       image_lines.append(f"Image not found: {path}")
+        else:
+             # 2. Take Screenshot if no images provided
+             filename = f"screenshot_{secrets.token_hex(4)}.png"
+             filepath = os.path.abspath(os.path.join(self.data_dir, filename))
+             
+             try:
+                 viki_logger.info(f"Visualizing screen for instruction: {instruction}")
+                 await asyncio.to_thread(pyautogui.screenshot, filepath)
+                 image_lines.append(f"Screenshot captured successfully at: {filepath}")
+             except Exception as e:
+                 viki_logger.error(f"Vision error: {e}")
+                 return f"Error capturing screen: {str(e)}"
+
+        # Return formatted context for Cortex
+        # The Cortex logic screens this string for "Screenshot captured successfully at:"
+        # We also want it to find provided images.
+        return "\n".join(image_lines) + f"\nInstruction: {instruction}"

@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VIKI Cognitive Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.6.2/axios.min.js"></script>
+    <style>
+        body {
+            background-color: #0f1115;
+            color: #e2e8f0;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .card {
+            background-color: #1a1d24;
+            border: 1px solid #2d3748;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+        }
+
+        .signal-bar {
+            height: 8px;
+            border-radius: 4px;
+            background: #2d3748;
+            overflow: hidden;
+        }
+
+        .signal-fill {
+            height: 100%;
+            transition: width 0.5s ease;
+        }
+
+        .animate-pulse-slow {
+            animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+    </style>
+</head>
+
+<body class="p-6">
+    <div class="max-w-7xl mx-auto space-y-6">
+
+        <!-- Header -->
+        <div class="flex justify-between items-center">
+            <h1 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">
+                VIKI <span class="text-xs text-gray-500 font-mono align-top">v25.0</span>
+            </h1>
+            <div class="flex space-x-4 text-sm font-mono">
+                <span id="status" class="text-green-400">● ONLINE</span>
+                <span id="uptime" class="text-gray-400">00:00:00</span>
+            </div>
+        </div>
+
+        <!-- Main Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+            <!-- Cognitive Load (Brain State) -->
+            <div class="card space-y-4">
+                <h2 class="text-sm font-bold text-gray-400 uppercase tracking-wider">Cognitive Signals</h2>
+                <div id="signals-container" class="space-y-3">
+                    <!-- Dynamic Signals -->
+                </div>
+            </div>
+
+            <!-- World Engine (Active Context) -->
+            <div class="card space-y-4">
+                <h2 class="text-sm font-bold text-gray-400 uppercase tracking-wider">World Engine Focus</h2>
+                <div id="world-focus" class="space-y-2 text-sm text-gray-300">
+                    <p class="italic text-gray-500">Scanning...</p>
+                </div>
+                <div class="mt-4 pt-4 border-t border-gray-700">
+                    <h3 class="text-xs font-semibold text-gray-500 mb-2">GRAPH STATS</h3>
+                    <div class="flex justify-between items-center text-xs">
+                        <span>Mapped Modules:</span>
+                        <span id="module-count" class="font-mono text-blue-400">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mission Control (Phase 6) -->
+            <div class="card space-y-4 md:col-span-1">
+                <h2 class="text-sm font-bold text-yellow-400 uppercase tracking-wider flex justify-between">
+                    Mission Control
+                    <span id="mission-count" class="text-xs bg-yellow-900 px-2 rounded-full text-yellow-200">0</span>
+                </h2>
+                <div id="missions-stream" class="space-y-2 text-xs h-64 overflow-y-auto custom-scrollbar">
+                    <div class="text-gray-500 italic text-center py-8">No active directives.</div>
+                </div>
+            </div>
+
+            <!-- Recent Thoughts (Trace) -->
+            <div class="card space-y-4 md:col-span-1">
+                <h2 class="text-sm font-bold text-gray-400 uppercase tracking-wider">Internal Monologue</h2>
+                <div id="thought-stream" class="space-y-3 text-xs font-mono h-64 overflow-y-auto pr-2 custom-scrollbar">
+                    <!-- Stream -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Interface -->
+        <div class="card mt-6">
+            <h2 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Direct Link</h2>
+            <div class="flex space-x-2">
+                <input type="text" id="user-input"
+                    class="flex-1 bg-gray-900 border border-gray-700 rounded p-3 text-sm focus:outline-none focus:border-blue-500"
+                    placeholder="Send a command to VIKI...">
+                <button onclick="sendMessage()"
+                    class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded text-sm font-semibold transition">SEND</button>
+            </div>
+            <div id="response-area" class="mt-4 p-4 bg-gray-900 rounded border border-gray-800 text-sm hidden"></div>
+        </div>
+
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:5000/api';
+
+        async function fetchBrain() {
+            try {
+                const res = await axios.get(`${API_URL}/brain`);
+                const data = res.data;
+
+                // Render Signals
+                const sigContainer = document.getElementById('signals-container');
+                sigContainer.innerHTML = '';
+                if (data.signals) {
+                    // This is modulation (verbosity, etc). We want raw signals if possible.
+                    // But current API implementation returns modulation dict.
+                    // Let's just display key-value pairs nicely
+                    for (const [key, value] of Object.entries(data.signals)) {
+                        const div = document.createElement('div');
+                        div.innerHTML = `
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="capitalize text-gray-400">${key.replace('_', ' ')}</span>
+                                <span class="text-blue-300">${value}</span>
+                            </div>
+                            <div class="signal-bar"><div class="signal-fill bg-blue-500" style="width: 100%"></div></div>
+                        `;
+                        sigContainer.appendChild(div);
+                    }
+                }
+
+                // Render Trace
+                const traceContainer = document.getElementById('thought-stream');
+                traceContainer.innerHTML = '';
+                (data.trace || []).forEach(t => {
+                    const div = document.createElement('div');
+                    div.className = "p-2 bg-gray-800 rounded border border-gray-700";
+                    div.innerHTML = `
+                        <div class="text-blue-400 font-bold mb-1">${t.strategy || 'Thinking...'}</div>
+                        <div class="text-gray-500 italic">${t.meta || ''}</div>
+                    `;
+                    traceContainer.appendChild(div);
+                });
+
+            } catch (e) {
+                console.error("Brain sync failed", e);
+            }
+        }
+
+        async function fetchWorld() {
+            try {
+                const res = await axios.get(`${API_URL}/world`);
+                const data = res.data;
+
+                // Focus
+                const focusContainer = document.getElementById('world-focus');
+                const active = data.active_context || [];
+
+                if (active.length === 0) {
+                    focusContainer.innerHTML = '<span class="text-gray-500">No active file context.</span>';
+                } else {
+                    focusContainer.innerHTML = active.map((f, i) =>
+                        `<div class="flex items-center space-x-2 ${i === 0 ? 'text-green-400 font-bold' : 'text-gray-400'}">
+                            <span>${i === 0 ? 'CURRENT:' : 'RECENT:'}</span>
+                            <span class="font-mono">${f}</span>
+                        </div>`
+                    ).join('');
+                }
+
+                document.getElementById('module-count').innerText = data.codebase_graph_summary?.count || 0;
+            } catch (e) {
+
+                console.error("World sync failed", e);
+            }
+        }
+
+        async function fetchMissions() {
+            try {
+                const res = await axios.get(`${API_URL}/missions`);
+                const { active, queue } = res.data;
+
+                document.getElementById('mission-count').innerText = active.length + queue.length;
+
+                const container = document.getElementById('missions-stream');
+
+                if (active.length === 0 && queue.length === 0) {
+                    container.innerHTML = '<div class="text-gray-500 italic text-center py-8">No active directives.</div>';
+                    return;
+                }
+
+                container.innerHTML = '';
+
+                // Show Active
+                active.forEach(m => {
+                    const div = document.createElement('div');
+                    div.className = "p-2 bg-yellow-900/20 border border-yellow-700/50 rounded animate-pulse-slow";
+                    div.innerHTML = `
+                         <div class="flex justify-between items-center mb-1">
+                             <span class="text-yellow-400 font-bold tracking-wide text-[10px]">ACTIVE [${m.id}]</span>
+                             <span class="text-xs text-yellow-200">${m.priority} PRI</span>
+                         </div>
+                         <div class="text-gray-300 font-medium">${m.description}</div>
+                         <div class="mt-2 w-full bg-gray-700 h-1 rounded-full overflow-hidden">
+                             <div class="bg-yellow-500 h-full" style="width: ${m.progress || 10}%"></div>
+                         </div>
+                    `;
+                    container.appendChild(div);
+                });
+
+                // Show Queue
+                queue.forEach(m => {
+                    const div = document.createElement('div');
+                    div.className = "p-2 bg-gray-800 border border-gray-700 rounded opacity-75";
+                    div.innerHTML = `
+                         <div class="flex justify-between items-center mb-1">
+                             <span class="text-gray-400 font-mono text-[10px]">PENDING [${m.id}]</span>
+                             <span class="text-xs text-gray-500">${m.priority} PRI</span>
+                         </div>
+                         <div class="text-gray-400">${m.description}</div>
+                    `;
+                    container.appendChild(div);
+                });
+
+            } catch (e) {
+                console.error("Mission sync failed", e);
+            }
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('user-input');
+            const respArea = document.getElementById('response-area');
+            const msg = input.value;
+            if (!msg) return;
+
+            respArea.classList.remove('hidden');
+            respArea.innerHTML = '<span class="animate-pulse text-gray-400">VIKI is thinking...</span>';
+
+            try {
+                const res = await axios.post(`${API_URL}/chat`, { message: msg });
+                respArea.innerText = res.data.response;
+                fetchBrain(); // Refresh state immediately
+                fetchWorld();
+            } catch (e) {
+                respArea.innerText = "Error: " + e.message;
+            }
+        }
+
+        // Loop
+        setInterval(() => {
+            fetchBrain();
+            fetchWorld();
+            fetchMissions();
+        }, 2000); // 2s polling
+
+        fetchBrain();
+        fetchWorld();
+        fetchMissions();
+    </script>
+</body>
+
+</html>

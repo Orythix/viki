@@ -39,6 +39,10 @@ class VIKIResponse(BaseModel):
     action: Optional[ActionCall] = Field(None)
     final_response: Optional[str] = Field(None)
     internal_metacognition: Optional[str] = Field(None, description="Layer 5: Reflection on the process")
+    ensemble_trace: Optional[Dict[str, str]] = Field(None, description="v24: Internal Specialist Ensemble perspectives")
+    sentiment: Optional[str] = Field(None, description="Detected human sentiment")
+    intent_type: Optional[str] = Field(None, description="Classified intent category")
+    needs_escalation: bool = Field(False, description="Flag to trigger deeper reasoning if audit fails")
 
 class VIKIResponseLite(BaseModel):
     """Lightweight response for SHALLOW reasoning.
@@ -74,6 +78,8 @@ class WorldState(BaseModel):
     user_habits: List[Dict[str, Any]] = Field(default_factory=list)
     safety_zones: Dict[str, str] = Field(default_factory=dict)
     semantic_paths: Dict[str, str] = Field(default_factory=dict) # Path -> Purpose/Label
+    codebase_graph: Dict[str, Dict[str, Any]] = Field(default_factory=dict) # v25: File -> {dependencies, signature_hash}
+    active_context: List[str] = Field(default_factory=list) # v25: List of recently hot files
     last_updated: float = Field(default_factory=time.time)
 
 class TaskProgress(BaseModel):

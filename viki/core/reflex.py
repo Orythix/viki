@@ -19,11 +19,13 @@ class ReflexBrain:
     def __init__(self, data_dir: str = None):
         self.intent_cache: Dict[str, str] = {}
         self.learned_patterns: Dict[str, Dict[str, Any]] = {}  # normalized_input -> {skill, params}
+        self.blacklist: set = set()
         self.data_dir = data_dir
         
-        # Load learned patterns from disk
+        # Load learned patterns and blacklist from disk
         if data_dir:
             self._load_learned()
+            self._load_blacklist()
         
         self.patterns = [
             # System Control - App Launching
@@ -36,9 +38,9 @@ class ReflexBrain:
             (r"^scroll\s+(?P<amount>-?\d+)$", "system_control", {"action": "scroll", "amount": "{amount}"}),
             (r"^press\s+(?P<key>\w+)$", "system_control", {"action": "press", "key": "{key}"}),
 
-            # Browser / Research
-            (r"^search\s+(?P<query>.+)$", "browser", {"action": "search", "query": "{query}"}),
-            (r"^google\s+(?P<query>.+)$", "browser", {"action": "search", "query": "{query}"}),
+            # Browser / Research (Redirected to Headless Research)
+            (r"^search\s+(?P<query>.+)$", "research", {"query": "{query}"}),
+            (r"^google\s+(?P<query>.+)$", "research", {"query": "{query}"}),
 
             # Media Control
             (r"^pause.*$", "media_control", {"action": "play_pause"}),
@@ -62,12 +64,26 @@ class ReflexBrain:
         """
         clean_input = user_input.lower().strip()
         
+        # 0. Safety Check: Questions MUST go to Deliberation Layer
+        # "If an input is a question, you must immediately defer to the Deliberation Layer."
+        if '?' in clean_input:
+            return None, None
+            
+        interrogatives = ['who', 'what', 'why', 'when', 'where', 'how']
+        if any(clean_input.startswith(w + " ") or clean_input == w for w in interrogatives):
+             return None, None
+
         # 1. Cache Check (learned from previous LLM responses)
-        if clean_input in self.intent_cache:
+        if clean_input in self.intent_cache and clean_input not in self.blacklist:
             return self.intent_cache[clean_input], None
 
         # 2. Learned Pattern Check (from MetaCognition auto-learn)
         normalized = ' '.join(clean_input.split())
+        
+        if normalized in self.blacklist:
+            # "Failed reflex patterns are forbidden from re-learning."
+            return None, None
+            
         if normalized in self.learned_patterns:
             pattern = self.learned_patterns[normalized]
             viki_logger.info(f"Reflex: Learned pattern match for '{normalized}' -> {pattern['skill']}")
@@ -103,7 +119,32 @@ class ReflexBrain:
     def learn_pattern(self, user_input: str, skill_name: str, params: dict):
         """Add a new learned pattern from MetaCognition's auto-learn.
         These persist across sessions."""
+        
         normalized = ' '.join(user_input.lower().strip().split())
+
+        # SAFEGUARD 1: Blacklist Check
+        if normalized in self.blacklist:
+            return
+
+        # SAFEGUARD 2: Question Check
+        # "Prohibited learning inputs: Any input that contains a question mark"
+        if '?' in user_input:
+            viki_logger.warning(f"Reflex: Refused to learn question pattern '{user_input}'")
+            return
+        
+        # SAFEGUARD 3: Interrogative Intent
+        # "Prohibited: Any interrogative intent such as who, what, why, when, where, how"
+        interrogatives = ['who', 'what', 'why', 'when', 'where', 'how']
+        if any(normalized.startswith(w + " ") or normalized == w for w in interrogatives):
+             viki_logger.warning(f"Reflex: Refused to learn interrogative pattern '{user_input}'")
+             return
+        
+        # SAFEGUARD 4: Length Check
+        # "Prohibited: Any input longer than five words"
+        if len(normalized.split()) > 5:
+            viki_logger.warning(f"Reflex: Refused to learn long pattern '{user_input}'")
+            return
+
         self.learned_patterns[normalized] = {
             "skill": skill_name,
             "params": params,
@@ -111,6 +152,23 @@ class ReflexBrain:
         }
         viki_logger.info(f"Reflex: Learned new pattern: '{normalized}' -> {skill_name}")
         self._save_learned()
+        
+    def report_failure(self, user_input: str):
+        """
+        Handling rules:
+        - Invalidate mapping immediately.
+        - Forbidden from re-learning.
+        """
+        normalized = ' '.join(user_input.lower().strip().split())
+        
+        if normalized in self.learned_patterns:
+            del self.learned_patterns[normalized]
+            viki_logger.warning(f"Reflex: Invalidated failed pattern '{normalized}'")
+            self._save_learned()
+            
+        self.blacklist.add(normalized)
+        self._save_blacklist()
+        viki_logger.info(f"Reflex: Blacklisted pattern '{normalized}' due to failure.")
     
     def get_learned_count(self) -> int:
         """Returns number of learned patterns."""
@@ -139,6 +197,15 @@ class ReflexBrain:
                 json.dump(self.learned_patterns, f, indent=2)
         except Exception as e:
             viki_logger.warning(f"Failed to save learned patterns: {e}")
+            
+    def _save_blacklist(self):
+        """Persist blacklist to disk."""
+        if not self.data_dir: return
+        path = os.path.join(self.data_dir, "reflex_blacklist.json")
+        try:
+            with open(path, 'w') as f:
+                json.dump(list(self.blacklist), f)
+        except: pass
     
     def _load_learned(self):
         """Load learned patterns from disk."""
@@ -153,3 +220,12 @@ class ReflexBrain:
             except Exception as e:
                 viki_logger.warning(f"Failed to load learned patterns: {e}")
                 self.learned_patterns = {}
+                
+    def _load_blacklist(self):
+        if not self.data_dir: return
+        path = os.path.join(self.data_dir, "reflex_blacklist.json")
+        if os.path.exists(path):
+            try:
+                with open(path, 'r') as f:
+                    self.blacklist = set(json.load(f))
+            except: pass

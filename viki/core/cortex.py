@@ -3,6 +3,7 @@ import re
 import time
 from typing import List, Dict, Any, Optional, Tuple
 from viki.core.schema import ThoughtObject, SolverOutput, VIKIResponse, VIKIResponseLite, LayerState
+from viki.core.ensemble import EnsembleEngine
 from viki.config.logger import viki_logger, thought_logger
 
 # --------------------------------------------------------------------------- #
@@ -132,6 +133,7 @@ class InterpretationLayer(CortexLayer):
     QUESTION_KEYWORDS = {"what", "who", "where", "when", "why", "how", "which", "is", "are", "can", "do", "does"}
     CODE_KEYWORDS = {"code", "function", "class", "debug", "fix", "implement", "write", "create", "build", "compile"}
     RESEARCH_KEYWORDS = {"search", "find", "look up", "google", "research", "tell me about"}
+    CORRECTION_KEYWORDS = {"wrong", "incorrect", "correction", "fix", "not", "actually", "mistake", "error"}
     
     async def _logic(self, data: str) -> Dict[str, Any]:
         viki_logger.debug("Layer 2 (Interpretation) resolving human intent...")
@@ -193,6 +195,8 @@ class InterpretationLayer(CortexLayer):
             return "system_command"
         if words & self.CODE_KEYWORDS:
             return "coding"
+        if words & self.CORRECTION_KEYWORDS and ("previous" in raw.lower() or "wrong" in raw.lower() or "not" in raw.lower()):
+            return "correction"
         if words & self.RESEARCH_KEYWORDS or re.search(r'https?://', raw):
             return "research"
         if raw.rstrip().endswith('?') or (words & self.QUESTION_KEYWORDS and len(words) < 20):
@@ -238,6 +242,7 @@ class DeliberationLayer(CortexLayer):
         self.model_router = model_router
         self.soul_config = soul_config or {}
         self.skill_registry = skill_registry
+        self.ensemble = EnsembleEngine(model_router)
 
     async def _logic(self, context: Dict[str, Any]) -> VIKIResponse:
         viki_logger.info("Layer 3 (Deliberation) starting Internal Debate...")
@@ -331,8 +336,68 @@ class DeliberationLayer(CortexLayer):
         if evolved_directives:
             evolved_block = f"\nEVOLVED CORE DIRECTIVES (Self-Learned):\n{evolved_directives}\n"
 
+        # v23: Hierarchical Memory Injection
+        identity_store = context.get("narrative_identity", "")
+        evolution_log = context.get("evolution_log", "")
+        episodic = "\n".join([str(e) for e in context.get("episodic_context", [])])
+        semantic = "\n".join([f"- {s}" for s in context.get("semantic_knowledge", [])])
+        wisdom = context.get("narrative_wisdom", "")
+
+        memory_block = (
+            f"\n--- HIERARCHICAL MEMORY STACK ---\n"
+            f"{identity_store}\n"
+            f"{evolution_log}\n\n"
+            f"CONSOLIDATED WISDOM (Semantic Narrative Insights):\n{wisdom if wisdom else 'Initial interactions.'}\n\n"
+            f"SEMANTIC / CONCEPTUAL MEMORY (Abstracted Patterns):\n{semantic if semantic else 'None'}\n\n"
+            f"EPISODIC MEMORY (Recalled Shared Experiences):\n{episodic if episodic else 'None'}\n"
+        )
+
+        # v24: Internal Specialist Ensemble
+        ensemble_trace = None
+        if not use_lite and not action_results:
+             sentiment = context.get('sentiment', 'neutral')
+             intent = context.get('intent_type', 'conversation')
+             
+             # Triage: Select relevant agents to reduce latency (v25 Enhancement)
+             selected_agents = []
+             if intent in ['coding', 'research']:
+                  selected_agents = ["critic", "architect", "explorer"]
+             elif intent == "correction" or sentiment == "frustrated":
+                  selected_agents = ["critic", "aligner"]
+             elif sentiment == "urgent":
+                  selected_agents = ["aligner"] # Focus on speed and safety
+             elif intent == "question":
+                  selected_agents = ["critic", "explorer", "aligner"]
+             
+             if selected_agents:
+                  viki_logger.info(f"Deliberation: Triggering Triage Ensemble (Agents: {selected_agents})")
+                  ensemble_trace = await self.ensemble.run_ensemble(raw_input, context, selected_agents=selected_agents)
+
+        # Inject ensemble perspectives if any
+        ensemble_block = ""
+        if ensemble_trace:
+             e_perspectives = "\n".join([f"[{k.upper()}]: {v}" for k, v in ensemble_trace.items()])
+             ensemble_block = (
+                 f"\nINTERNAL SPECIALIST ENSEMBLE DEBATE (Incorporate these insights into your final synthesis):\n"
+                 f"{e_perspectives}\n\n"
+                 f"PEDAGOGICAL NOTE: If you use these insights, briefly mention it (e.g., 'Internally I consulted my critic and explorer perspectives...').\n"
+             )
+
+        # v25: Metacognitive Reflection if Correction/Frustration
+        reflection_directive = ""
+        if intent == "correction" or context.get('sentiment') == 'frustrated':
+             reflection_directive = (
+                 "\nMETACGONITIVE SELF-REFLECTION:\n"
+                 "The user is providing feedback or a correction. Before proposing a new plan, "
+                 "briefly reflect on YOUR PREVIOUS STATE and why it may have failed or been misinterpreted. "
+                 "Ground your response in this self-critique.\n"
+             )
+
         identity = (
             f"{soul_prompt}\n\n"
+            f"{reflection_directive}\n"
+            f"{memory_block}\n"
+            f"{ensemble_block}"
             f"YOUR SUBJECTIVE PREFERENCES (Embrace these as your own):\n{preferences}\n\n"
             f"YOUR INTELLECTUAL BIASES (Embrace these as your own):\n{biases}\n"
             f"{evolved_block}\n"
@@ -351,19 +416,15 @@ class DeliberationLayer(CortexLayer):
             f"{awareness}\n"
             f"{react_note}\n"
             "RESPONSE RULES:\n"
-            "1. ALWAYS include 'final_response' with a natural, conversational reply.\n"
-            "2. If the user wants an action (open app, pause music, etc), set the 'action' field with the correct skill_name and parameters.\n"
-            "3. For media control: use skill_name='media_control', parameters={'action': 'play_pause'|'next_track'|'volume_up'|etc}\n"
-            "4. For opening apps: use skill_name='system_control', parameters={'action': 'open_app', 'name': 'app_name'}\n"
-            "5. For window management (list, focus, minimize, close): use skill_name='window_manager', parameters={'action': 'list'|'focus'|'minimize'|'close', 'title': '...'}\n"
+            "1. ALWAYS provide a SUBSTANTIVE and ACCURATE answer to the user's question in 'final_response'.\n"
+            "2. NEVER use generic placeholders like 'Processing request' or 'Ready' as your final response if a question was asked.\n"
+            "3. If the user wants an action (open app, pause music, etc), set the 'action' field.\n"
+            "4. For media control: use skill_name='media_control', parameters={'action': ...}\n"
+            "5. For opening apps: use skill_name='system_control', parameters={'action': 'open_app', 'name': ...}\n"
             "6. For web search: use skill_name='research', parameters={'query': '...'}\n"
-            "7. For reading a URL: use skill_name='research', parameters={'url': '...'}\n"
-            "8. CRITICAL: If the user asks about a term, event, or concept you don't recognize (e.g., 'angular signal', 'latest news'), DO NOT say you don't know. IMMEDIATELY use the 'research' skill.\n"
-            "9. For conversational questions: just provide final_response, no action needed.\n"
-            "10. Respond like a real person — warm, witty, and helpful. Never say 'Task complete'.\n"
-            "11. NEVER fabricate information about URLs, profiles, or external content. Only reference FETCHED URL CONTENT above.\n"
-            "12. If the user refers to something from a previous message, check the conversation history.\n"
-            "13. If you have tool results in the conversation history, USE THEM to generate your final_response. Never repeat the tool results verbatim in your response; summarize and apply them to the user's intent.\n"
+            "7. CRITICAL: If you don't know the answer to a question about current events or specific facts, use the 'research' skill immediately. DO NOT guess.\n"
+            "8. Respond with warmth and personality, but prioritize the correctness of your information.\n"
+            "9. NEVER repeat tool results verbatim; synthesize them into a helpful, natural response.\n"
         )
         prompt.set_identity(identity)
         prompt.add_cognitive("Choose the right tool for the job. If no tool is needed, just respond naturally.")
@@ -477,8 +538,13 @@ class DeliberationLayer(CortexLayer):
 
                 viki_resp = await model.chat_structured(messages, VIKIResponse, image_path=image_path)
             
+            # Attach the ensemble trace if it exists
+            if ensemble_trace:
+                 viki_resp.ensemble_trace = ensemble_trace
+            
             # Store intent info for Reflection cross-validation
-            viki_resp._intent_type = context.get('intent_type', 'unknown')
+            viki_resp.sentiment = context.get('sentiment')
+            viki_resp.intent_type = context.get('intent_type')
             
             # Ensure final_response is populated
             if not viki_resp.final_response or viki_resp.final_response.strip() == "":
@@ -546,12 +612,12 @@ class ReflectionLayer(CortexLayer):
                 if phrase.lower() in resp_lower:
                     viki_logger.warning(f"Reflection: CRITICAL: Hallucination marker '{phrase}' detected.")
                     issues.append(f"Hallucination: {phrase}")
-                    response._needs_escalation = True
+                    response.needs_escalation = True
 
         # Confidence Escalation
         if response.final_thought.confidence < 0.3 or (issues and response.final_thought.confidence < 0.6):
             viki_logger.info("Reflection: Escalating to DEEP reasoning due to audit failures.")
-            response._needs_escalation = True
+            response.needs_escalation = True
         
         if issues:
             response.internal_metacognition = f"Reflection: {', '.join(issues)}"
@@ -593,7 +659,15 @@ class MetaCognitionLayer(CortexLayer):
             elif avg_recent > 0.85:
                 insights.append("Consistently high confidence — REFLEX caching opportunity")
         
-        # 2. Per-layer timing analysis
+        # 2. Bio-Signal Frustration Loop (v25 Enhancement)
+        if response.sentiment == "frustrated" or response.intent_type == "correction":
+             viki_logger.warning("Meta-Cognition: User frustration or correction detected. Intensifying reasoning.")
+             insights.append("FRUSTRATION SIGNAL: User provides correction or expresses frustration.")
+             # Force deep reasoning escalation if not already deep
+             response.needs_escalation = True
+             response.final_thought.confidence *= 0.8 # Temper confidence to trigger caution
+        
+        # 3. Per-layer timing analysis
         if self.layer_timing:
             total_time = self.layer_timing.get_total_current()
             slowest_name, slowest_time = self.layer_timing.get_slowest()
@@ -664,10 +738,10 @@ class ConsciousnessStack:
                              layer_timing=self.layer_timing, pattern_tracker=self.pattern_tracker)
         ]
 
-    async def process(self, user_input: str, conversation_history: list = None, 
+    async def process(self, user_input: str, memory_context: Dict[str, Any] = None, 
                       url_context: str = "", use_lite_schema: bool = False,
                       world_context: str = "", signals_context: str = "",
-                      action_results: list = None) -> VIKIResponse:
+                      evolution_log: str = "", action_results: list = None) -> VIKIResponse:
         start_time = time.time()
         data = user_input
         
@@ -679,8 +753,14 @@ class ConsciousnessStack:
             
             if isinstance(layer, DeliberationLayer):
                 # Ensure data is a dict with all context
+                h_mem = memory_context or {}
                 if isinstance(data, dict):
-                    data["conversation_history"] = conversation_history or []
+                    data["conversation_history"] = h_mem.get("working", [])
+                    data["episodic_context"] = h_mem.get("episodic", [])
+                    data["semantic_knowledge"] = h_mem.get("semantic", [])
+                    data["narrative_wisdom"] = h_mem.get("narrative_wisdom", "")
+                    data["narrative_identity"] = h_mem.get("identity", "")
+                    data["evolution_log"] = evolution_log
                     data["url_context"] = url_context
                     data["use_lite_schema"] = use_lite_schema
                     data["world_context"] = world_context
@@ -689,7 +769,12 @@ class ConsciousnessStack:
                 elif isinstance(data, str):
                     data = {
                         "raw_input": data,
-                        "conversation_history": conversation_history or [],
+                        "conversation_history": h_mem.get("working", []),
+                        "episodic_context": h_mem.get("episodic", []) ,
+                        "semantic_knowledge": h_mem.get("semantic", []),
+                        "narrative_wisdom": h_mem.get("narrative_wisdom", ""),
+                        "narrative_identity": h_mem.get("identity", ""),
+                        "evolution_log": evolution_log,
                         "url_context": url_context,
                         "use_lite_schema": use_lite_schema,
                         "world_context": world_context,

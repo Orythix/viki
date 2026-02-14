@@ -30,6 +30,13 @@ VIKI is a **Sovereign Digital Intelligence** designed to be more than just an as
 
 ## Technical Architecture
 
+### 🌌 **The Nexus Stack (OpenClaw-Grade Autonomy)**
+VIKI is no longer confined to a single terminal. She is a multi-platform autonomous presence:
+- **Unified Messaging Nexus**: Simultaneous integration with **Telegram, Discord, Slack, and WhatsApp**.
+- **Autonomous Productivity**: Managed via dedicated **Email** and **Calendar** skills.
+- **Deep Research**: Real-time web browsing and information synthesis using Playwright.
+- **System Orchestration**: Cross-platform control for Windows, macOS, and Linux.
+
 VIKI operates on a **5-Layer Consciousness Stack**:
 
 1.  **Perception**: Ingests multi-modal inputs (Text, Visuals, Signals).
@@ -72,10 +79,16 @@ VIKI/
     pip install -r requirements.txt
     ```
 
-2.  **Launch VIKI**:
+2.  **Launch VIKI (CLI)**:
     ```powershell
     python viki/main.py
     ```
+
+3.  **Launch Dashboard (UI)**:
+    Open two terminals:
+    - Terminal 1 (API): `python viki/api/server.py`
+    - Terminal 2 (UI): `cd ui; npm run dev`
+    Access at `http://localhost:5173`
 
 ---
 

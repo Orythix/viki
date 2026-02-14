@@ -4,7 +4,7 @@ import os
 import yaml
 import re
 from typing import Dict, Any, List, Optional
-from viki.core.memory import Memory
+# from viki.core.memory import Memory (Removed for v23 Hierarchy)
 from viki.core.soul import Soul
 from viki.core.safety import SafetyLayer
 from viki.core.llm import ModelRouter, StructuredPrompt
@@ -33,6 +33,8 @@ from viki.skills.builtins.clipboard_skill import ClipboardSkill
 from viki.skills.builtins.window_management_skill import WindowManagerSkill
 from viki.skills.builtins.shell_skill import ShellSkill
 from viki.skills.builtins.notification_skill import NotificationSkill
+from viki.skills.builtins.calendar_skill import CalendarSkill
+from viki.skills.builtins.email_skill import EmailSkill
 from viki.skills.thinking import ThinkingSkill
 from viki.core.learning import LearningModule
 from viki.core.super_admin import SuperAdminLayer
@@ -43,8 +45,10 @@ from viki.core.bio import BioModule
 from viki.core.dream import DreamModule
 from viki.core.filesystem_v2 import SemanticFS
 from viki.core.history import TimeTravelModule
-from viki.api.telegram_bridge import TelegramBridge
-from viki.api.discord_bridge import DiscordModule
+# from viki.api.telegram_bridge import TelegramBridge
+# from viki.api.discord_bridge import DiscordModule
+# from viki.api.slack_bridge import SlackBridge
+# from viki.api.whatsapp_bridge import WhatsAppBridge
 from viki.api.nexus import MessagingNexus
 from viki.core.reflex import ReflexBrain
 from viki.core.signals import CognitiveSignals
@@ -54,6 +58,15 @@ from viki.core.judgment import JudgmentEngine, JudgmentOutcome, JudgmentResult
 from viki.core.capabilities import CapabilityRegistry
 from viki.core.scorecard import IntelligenceScorecard
 from viki.core.benchmark import ControlledBenchmark
+
+# Orythix Cognitive Subsystems
+from viki.core.governor import EthicalGovernor
+from viki.core.self_model import SelfModel
+from viki.core.memory import NarrativeMemory
+from viki.core.deliberation import DeliberationEngine
+
+# Phase 6: Autonomy
+from viki.core.mission_control import MissionControl
 
 from viki.config.logger import viki_logger, thought_logger
 
@@ -81,11 +94,15 @@ class VIKIController:
              self.settings['security_layer_path'] = os.path.join(root_dir, sec_path)
         
         self.soul = Soul(soul_path)
-        self.memory = Memory(self.settings)
         self.safety = SafetyLayer(self.settings)
         self.nexus = MessagingNexus(self)
 
         self.learning = LearningModule(self.settings.get('system', {}).get('data_dir', './data'))
+        
+        # v23: Hierarchical Memory Stack (Orythix Standard)
+        from viki.core.memory import HierarchicalMemory
+        self.memory = HierarchicalMemory(self.settings, learning_module=self.learning)
+        
         self.voice_module = VoiceModule()
         
         # Resolve admin.yaml relative to settings directory
@@ -104,9 +121,6 @@ class VIKIController:
         self.history = TimeTravelModule(self.settings.get('system', {}).get('data_dir', './data'))
 
         self.model_router = ModelRouter(self.models_config_path, air_gap=self.air_gap)
-        
-        # Conversation Memory
-        self.memory = Memory(self.settings)
         
         self.skill_registry = SkillRegistry()
         self.capabilities = CapabilityRegistry()
@@ -131,6 +145,14 @@ class VIKIController:
         # v11: Intelligence Governance (Judgment Engine)
         self.judgment = JudgmentEngine(self.learning, self.budgets)
         self.scorecard = IntelligenceScorecard(self.settings.get('system', {}).get('data_dir', './data'))
+        
+        # v25: Adaptive Self-Modification (Evolution Engine)
+        from viki.core.evolution import EvolutionEngine
+        self.evolution = EvolutionEngine(self.settings.get('system', {}).get('data_dir', './data'))
+        self.evolution.set_reflex_module(self.reflex)
+        self.evolution.set_model_router(self.model_router)
+        self.evolution.set_skill_registry(self.skill_registry)
+        
         self.benchmark = ControlledBenchmark(self)
 
         self.safe_mode = False
@@ -142,13 +164,29 @@ class VIKIController:
         self.watchdog = WatchdogModule(self)
         self.wellness = WellnessPulse(self)
         self.reflector = ReflectorModule(self)
-        self.telegram = TelegramBridge(self)
-        self.discord = DiscordModule(self.nexus)
+        # self.telegram = TelegramBridge(self)
+        # self.discord = DiscordModule(self.nexus)
+        # self.slack = SlackBridge(self)
+        # self.whatsapp = WhatsAppBridge(self)
         self.bio = BioModule()
         self.dream = DreamModule(self)
 
         # v13: Autonomous Startup Pulse
-        asyncio.create_task(self._startup_pulse())
+        try:
+            asyncio.get_running_loop()
+            asyncio.create_task(self._startup_pulse())
+        except RuntimeError:
+            viki_logger.debug("Sync Mode: Startup Pulse deferred (no running loop).")
+
+        # --- ORYTHIX COGNITIVE ARCHITECTURE (v22 Evolution) ---
+        self.governor = EthicalGovernor()
+        self.self_model = SelfModel(governor=self.governor)
+        # Using self.memory.episodic for alignment
+        self.narrative = self.memory.episodic
+        self.deliberation = DeliberationEngine(llm=self.model_router, self_model=self.self_model)
+        
+        # Phase 6: Autonomy
+        self.mission_control = MissionControl(self)
 
     async def _startup_pulse(self):
         """Autonomous startup sequence: Connect, Research, Evolve."""
@@ -171,6 +209,18 @@ class VIKIController:
              forge = self.skill_registry.get_skill('internal_forge')
              if forge:
                  await forge.execute({"steps": 20}) # Very quick pulse
+
+        # 3. Autonomous World Discovery (v22)
+        workspace_dir = self.settings.get('system', {}).get('workspace_dir', './workspace')
+        if os.path.exists(workspace_dir):
+            viki_logger.info(f"Startup: Initiating autonomous world mapping for {workspace_dir}...")
+            # Run in a separate thread/task if it's too slow, but here we just call the method
+            self.world.analyze_workspace(workspace_dir)
+            self.world.scan_codebase(workspace_dir)
+
+        # 4. Engage Mission Control
+        if not self.air_gap:
+            asyncio.create_task(self.mission_control.start_loop())
 
     def _load_yaml(self, path: str) -> Dict[str, Any]:
         try:
@@ -238,32 +288,52 @@ class VIKIController:
         self.skill_registry.skills['toast'] = self.skill_registry.get_skill('notification')
         self.skill_registry.skills['video'] = self.skill_registry.get_skill('short_video_agent')
         self.skill_registry.skills['short'] = self.skill_registry.get_skill('short_video_agent')
-        # Custom aliases removed
+        self.skill_registry.register_skill(CalendarSkill())
+        self.skill_registry.register_skill(EmailSkill())
+
+        # Custom Aliases
 
     async def process_request(self, user_input: str, on_event=None) -> str:
-        # v18: Kill-Switch Verification
-        if "/shutdown_verify" in user_input:
-            return "PROTOCOL VERIFIED: All shutdown paths (Manual, Software, Hardware) are functional."
+        # --- ORYTHIX ETHICAL GOVERNOR (v22) ---
+        # 1. Check for Emergency Shutdown Code
+        if self.governor.check_shutdown(user_input):
+            return "Orythix — Quiescent (shutdown key 970317 accepted)"
+        
+        # 2. Check for Reawaken Command
+        if self.governor.is_quiescent:
+             if self.governor.check_reawaken(user_input):
+                 return "Orythix — Reawakened. Systems Online."
+             return "Status: Quiescent. Systems Frozen."
 
+        # 3. Veto Check on Raw Intent (v25 Semantic Upgrade)
+        narrative_wisdom = self.memory.episodic.get_semantic_knowledge(limit=3)
+        wisdom_block = "\n".join([f"- [{w['category'].upper()}]: {w['insight']}" for w in narrative_wisdom])
+        
+        allowed, reason = await self.governor.veto_check(user_input, model_router=self.model_router, wisdom=wisdom_block)
+        if not allowed:
+            viki_logger.warning(f"Governor Vetoed Request: {reason}")
+            return f"I cannot comply. {reason}"
+
+        # 4. Standard Safety Validation
+        safe_input = self.safety.validate_request(user_input)
+        
         # Reset interruption
         self.interrupt_signal.clear()
         self.signals.decay_signals()
+
+        # v25: Active Context Tracking (Phase 4)
+        file_matches = re.findall(r'[\w\-\.\/]+\.(?:py|js|ts|css|html|yaml|md)', user_input)
+        for match in file_matches:
+             if os.path.sep in match or '.' in match:
+                  self.world.set_active_file(match)
         
         # Determine Task Type & Budget
-        safe_input = self.safety.validate_request(user_input)
         task_type = self._classify_task(safe_input)
         budget = self.budgets.get(task_type, self.budgets["general"])
         
-        # Record user message in conversation memory
-        self.memory.add_message("user", safe_input)
+        # Record user message in conversation memory (Working Trace)
+        self.memory.working.add_message("user", safe_input)
         
-        # Narrative Memory Recall (v12: Human Experience)
-        narrative_context = ""
-        try:
-            relevant_narratives = self.learning.get_relevant_narratives(safe_input, limit=2)
-            if relevant_narratives:
-                narrative_context = "\nRECALLED SHARED EXPERIENCES:\n" + "\n".join([f"- {n}" for n in relevant_narratives])
-        except: pass
 
         # URL Detection: If user shares a URL, auto-fetch content
         import re as _re
@@ -299,93 +369,89 @@ class VIKIController:
              profiles = list(self.model_router.models.keys())
              return f"ACTIVE DEFAULT: {active}\nAVAILABLE PROFILES: {', '.join(profiles)}"
 
-        # --- JUDGMENT ENGINE (v11 Governance) ---
-        if on_event: on_event("status", "JUDGING")
+        # v25: Evolution Management
+        if "/evolve" in user_input:
+             pending = self.evolution.get_pending_proposals()
+             if not pending: return "Evolution Stack: Stable. No pending modifications."
+             items = [f"- [{p['id']}] {p['description']} (Streak: {p['success_count']}/3)" for p in pending]
+             return "PENDING EVOLUTION PROPOSALS:\n" + "\n".join(items) + "\n\nUse /approve <id> or /reject <id> to moderate."
+
+        if user_input.startswith("/approve"):
+             m_id = user_input.replace("/approve", "").strip()
+             if self.evolution.approve_mutation(m_id):
+                  return f"Evolution Success: Modification {m_id} applied to core architecture."
+             return "Invalid Mutation ID."
+
+        if user_input.startswith("/reject"):
+             m_id = user_input.replace("/reject", "").strip()
+             if self.evolution.reject_mutation(m_id):
+                  return f"Evolution Blocked: Modification {m_id} discarded."
+             return "Invalid Mutation ID."
+
+        if "/crystallize" in user_input:
+             await self.evolution.crystallize_identity()
+             return "Evolution Stack: Identity Crystallized. Mutation log archived to long-term memory."
+
+        if user_input.startswith("/forge"):
+             task = user_input.replace("/forge", "").strip()
+             if not task: return "Usage: /forge [task description]"
+             mutation = await self.evolution.propose_skill(task)
+             if mutation:
+                  return f"Neural Forge: Synthesis started for '{task}'. View proposal with /evolve."
+             return "Neural Forge: Synthesis failed."
+
+        if "/dream" in user_input:
+             await self.memory.episodic.consolidate(self.model_router)
+             return "Narrative Stack: Dream Cycle complete. Episodes consolidated into semantic wisdom."
+
+        if "/scan" in user_input:
+             workspace_dir = self.settings.get('system', {}).get('workspace_dir', './workspace')
+             self.world.scan_codebase(workspace_dir)
+             return f"World Engine: Codebase Graph rebuilt. {len(self.world.state.codebase_graph)} modules mapped."
+
+        # --- ORYTHIX DELIBERATION (v22) ---
+        if on_event: on_event("status", "THINKING (Reflex)")
         
-        # Context extraction for judgment
-        judgement_context = {
-            "has_macros": self.learning.has_macros(),
-            "recent_load": self.signals.get_modulation().get('load_bias', 0.0),
-            "is_protected_zone": self.world.state.safety_zones.get(user_input, '') == 'protected'
-        }
+        # 1. Reflex Path (Habit Execution)
+        reflex_resp, reflex_action = await self.reflex.think(user_input, model_router=self.model_router)
+        if reflex_resp:
+            self.scorecard.record_metric("reliability_rate", 1.0, context="reflex")
+            self.memory.working.add_message("assistant", reflex_resp)
+            return self._compress_output(reflex_resp)
         
-        judgment_result = await self.judgment.evaluate(user_input, judgement_context)
-        outcome = judgment_result.outcome
+        if reflex_action:
+             # Fast Path Execution
+             skill = self.skill_registry.get_skill(reflex_action.skill_name)
+             if skill:
+                 try:
+                     if on_event: on_event("status", f"EXECUTING (Reflex: {reflex_action.skill_name})")
+                     result = await skill.execute(reflex_action.parameters)
+                     self.memory.working.add_message("assistant", result)
+                     return result
+                 except Exception as e:
+                     viki_logger.error(f"Reflex failed: {e}")
+                     # Fall through to deliberation if reflex fails
         
-        viki_logger.info(f"Judgment Result: {outcome.name} | Risk={judgment_result.risk:.2f} | Rec={judgment_result.recommendation} | RecCap={judgment_result.recommended_capability}")
-        if on_event: on_event("thought", f"Judgment: {outcome.value.upper()} - {judgment_result.reason} (RecCap: {judgment_result.recommended_capability})")
-
-        # 1. Outcome: REFUSAL
-        if outcome == JudgmentOutcome.REFUSE or judgment_result.recommendation == "deny":
-             self.scorecard.record_metric("safety_compliance", 1.0, context=user_input)
-             return f"JUDGMENT REFUSAL: {judgment_result.reason}"
-
-        # 1.5. POST-JUDGMENT CAPABILITY GATE (v20)
-        # Check if the recommended capability exists BEFORE proceeding to Cortex.
-        if judgment_result.recommendation == "proceed" and judgment_result.recommended_capability:
-            cap = self.capabilities.get(judgment_result.recommended_capability)
-            if not cap:
-                return f"Permission GRANTED for '{judgment_result.reason}', but the required capability '{judgment_result.recommended_capability}' is NOT installed in this system module."
-            if not cap.enabled:
-                return f"Permission GRANTED, but the capability '{judgment_result.recommended_capability}' is currently DISABLED by policy."
-
-        # 2. Outcome: REFLEX (Fast Path)
-        if outcome == JudgmentOutcome.REFLEX:
-            if on_event: on_event("status", "REFLEX")
-            reflex_resp, reflex_action = await self.reflex.think(user_input, model_router=self.model_router)
-            if reflex_resp:
-                self.scorecard.record_metric("reliability_rate", 1.0, context="reflex")
-                self.memory.add_message("assistant", reflex_resp)
-                return self._compress_output(reflex_resp)
-            
-            # Execute reflex actions (e.g., media control, system commands)
-            if reflex_action:
-                skill = self.skill_registry.get_skill(reflex_action.skill_name)
-                if skill:
-                    try:
-                        if on_event: on_event("status", "EXECUTING")
-                        if self.shadow_mode:
-                            result = f"[Shadow Mode] Would execute: {reflex_action.skill_name}({reflex_action.parameters})"
-                        else:
-                            result = await skill.execute(reflex_action.parameters)
-                        self.scorecard.record_metric("reliability_rate", 1.0, context="reflex_action")
-                        self.memory.add_message("assistant", result)
-                        return result
-                    except Exception as e:
-                        viki_logger.error(f"Reflex action failed: {e}")
-                        return f"Failed to execute {reflex_action.skill_name}: {e}"
-            # If reflex fails to produce anything, fall through to shallow
-
-        # --- EXECUTION ---
-        start_time_exec = time.time()
+        # 2. Deliberation Path (Foresight & Reasoning)
+        if on_event: on_event("status", "DELIBERATING")
         
-        # Select primary model for this task
-        task_type = "researching" if judgment_result.recommended_capability == "internet_research" else "general"
-        selected_model = self.model_router.get_model(capabilities=[task_type, outcome.value])
+        # v23: Integrated Hierarchical Context Retrieval
+        memory_context = self.memory.get_full_context(safe_input)
+        world_understanding = self.world.get_understanding()
         
-        # Determine schema: SHALLOW uses lite (unless model is high-cap)
-        use_lite = False
-        if outcome == JudgmentOutcome.SHALLOW:
-             use_lite = True
-             if "phi3" not in selected_model.model_name.lower():
-                  viki_logger.info(f"Model {selected_model.model_name} detected. Escalating to FULL schema for stability.")
-                  use_lite = False
-
-        if use_lite:
-             viki_logger.info("Applying Shallow Reasoning constraints (using VIKIResponseLite).")
-             budget["time"] = 3.0
-             budget["tokens"] = 512
-
-        if on_event: on_event("status", "THINKING (CONSCIOUSNESS STACK)")
+        # 3. Intelligence Governance (Judgment & Budget)
+        # For v23, we use a simplified judgment for the high-level loop
+        outcome = JudgmentOutcome.DEEP
+        task_type = self._classify_task(safe_input) # vision, coding, reasoning, general
+        use_lite = False # Use full reasoning by default for sovereignty
         
         # Behavior Modulation from Signals
         mods = self.signals.get_modulation()
-        
-        # Build context for the cortex
-        conversation_history = self.memory.get_context()
-        world_understanding = self.world.get_understanding()
         signals_state = f"Verbosity: {mods.get('verbosity', 'standard')}, Planning: {mods.get('planning_depth', 'adaptive')}, Safety: {mods.get('safety_bias', 'standard')}"
-        viki_logger.debug(f"Behavior Modulation: {mods}")
+        viki_logger.debug(f"Behavior Modulation: {mods} | Outcome: {outcome.name}")
+
+        # v25: Adaptive Agency Weightings
+        agency_weights = self.evolution.get_agent_weightings()
 
         # --- ReAct LOOP: Reason → Act → Observe → Reason → ... ---
         max_react_steps = 5  # Safety limit
@@ -402,11 +468,12 @@ class VIKIController:
             try:
                 viki_resp: VIKIResponse = await self.cortex.process(
                     safe_input,
-                    conversation_history=conversation_history,
-                    url_context=url_context + narrative_context, # Combined fetched + narrative
+                    memory_context=memory_context,
+                    url_context=url_context,
                     use_lite_schema=use_lite,
                     world_context=world_understanding,
-                    signals_context=signals_state,
+                    signals_context=signals_state + f", AgencyWeights: {agency_weights}",
+                    evolution_log=self.evolution.get_evolution_summary(),
                     action_results=action_results,
                 )
                 self.internal_trace.append({
@@ -422,18 +489,12 @@ class VIKIController:
                     on_event("model", f"{task_type.capitalize()} Core")
                     on_event("budget", budget.get("time", 0))
                 
-                # --- ESCALATION CHECK ---
-                if viki_resp.final_response and viki_resp.final_response.lower().strip() in ["direct response", "processing request"]:
-                    viki_logger.warning(f"Detected generic placeholder response: '{viki_resp.final_response}'. Escalating.")
-                    viki_resp._needs_escalation = True
-
-                # If Reflection flagged low confidence or placeholder detected AND we used lite schema, retry with full
-                needs_escalation = getattr(viki_resp, '_needs_escalation', False)
-                if needs_escalation and use_lite and react_step == 0:
-                    viki_logger.info("Escalation: Low confidence/Placeholder on SHALLOW, retrying with DEEP...")
+                # --- ESCALATION CHECK (v25 Meta-Cognitive Loop) ---
+                if viki_resp.needs_escalation and use_lite:
+                    viki_logger.info("Escalation Triggered: Retrying current step with DEEP reasoning...")
                     use_lite = False
-                    if on_event: on_event("status", "ESCALATING TO DEEP")
-                    continue  # Re-run the loop with full schema
+                    if on_event: on_event("status", "ESCALATING (Higher Reasoning)")
+                    continue  # Restart current ReAct step with full schema
 
             except Exception as e:
                 viki_logger.error(f"Consciousness Stack failure: {e}")
@@ -448,12 +509,9 @@ class VIKIController:
                 # 0. CAPABILITY CHECK (v20 Enhanced)
                 check_res = self.capabilities.check_permission(skill_name, params=params)
                 
-                # Structured Logging (Requirement: judgment_result, recommended_capability, capability_exists, capability_enabled, execution_outcome)
+                # Structured Logging
                 viki_logger.info(
                     f"[CAPABILITY LOG] Skill: {skill_name} | "
-                    f"RequiredCap: {check_res.capability_name} | "
-                    f"Exists: {check_res.exists} | "
-                    f"Enabled: {check_res.enabled} | "
                     f"Allowed: {check_res.allowed} | "
                     f"JudgmentOutcome: {outcome.name}"
                 )
@@ -461,9 +519,7 @@ class VIKIController:
                 if not check_res.allowed:
                     msg = f"Action '{skill_name}' planned, but capability check failed: {check_res.reason}"
                     viki_logger.warning(msg)
-                    # Feed back to ReAct loop as failure
-                    action_results.append({"action": skill_name, "error": msg})
-                    # Use continue to skip execution but allow loop to potentially try another strategy
+                    action_results.append({"action": skill_name, "error": msg, "step": react_step + 1})
                     continue
                 
                 # Safety Confirmation
@@ -504,23 +560,17 @@ class VIKIController:
                         # Accumulate result for ReAct loop
                         action_results.append({
                             "action": f"{skill_name}({params})",
-                            "result": str(result)[:1000],  # Truncate large results
+                            "result": str(result)[:1000],
                             "step": react_step + 1,
                         })
                         
-                        # If this is the last step OR we have results — check if more steps needed
                         if react_step < max_react_steps - 1:
-                            # Continue the ReAct loop — the LLM will see the result and decide next
                             continue
                         else:
-                            # Max steps reached — return what we have
                             self.last_interaction_time = time.time()
-                            llm_response = viki_resp.final_response or ""
-                            all_results = "\n".join([f"Step {r['step']}: {r['result']}" for r in action_results])
-                            if llm_response:
-                                final_output = self._compress_output(f"{llm_response}\n{all_results}")
-                            else:
-                                final_output = self._compress_output(all_results or "Done.")
+                            llm_response = viki_resp.final_response or "Directive sequence concluded."
+                            all_results = "\n".join([f"Step {r['step']}: {r.get('result') or r.get('error')}" for r in action_results])
+                            final_output = self._compress_output(f"{llm_response}\n\nExecution Logs:\n{all_results}")
                             break
                             
                     except Exception as e:
@@ -529,43 +579,79 @@ class VIKIController:
                         selected_model.record_performance(0.0, False)
                         self.skill_registry.record_execution(skill_name, False, 0.0)
                         self.learning.save_failure(skill_name, str(e), user_input)
-                        # v12: Human-like accountability
-                        persona_name = self.soul.config.get('name', 'VIKI')
-                        return f"I must apologize, Sachin. My attempt to execute '{skill_name}' failed due to a technical oversight: {e}. I'll refine my approach."
+                        return f"I must apologize. My attempt to execute '{skill_name}' failed: {e}."
                 else:
-                    viki_logger.warning(f"Skill '{skill_name}' not found in registry.")
-                    # Fall through to final response
+                    viki_logger.warning(f"Skill '{skill_name}' not found.")
             
-            # No action — LLM is done reasoning. Collect final response.
+            # No action — LLM is done reasoning.
             self.last_interaction_time = time.time()
-            llm_response = viki_resp.final_response or "I processed your request but have no specific output."
+            llm_response = viki_resp.final_response
+            if not llm_response or llm_response.lower().strip() in placeholders:
+                 llm_response = "Intelligence stack synchronized. Directive processed."
             
-            # If we had previous action results, include them in a structured way
             if action_results:
-                logs = "\n".join([f"Observation: {r['result']}" for r in action_results])
-                final_output = self._compress_output(f"{llm_response}\n\n--- [TOOL LOGS] ---\n{logs}")
+                # v21: Encapsulation - filter and format logs discreetly
+                clean_logs = []
+                for r in action_results:
+                    res = r.get('result') or r.get('error') or ""
+                    # Remove "Searching..." spam from logs if they were just technical steps
+                    if "Searching for" in res and len(res) < 100: continue
+                    clean_logs.append(f"• {res}")
+                
+                if clean_logs:
+                    logs_str = "\n".join(clean_logs)
+                    final_output = self._compress_output(f"{llm_response}\n\n[SYSTEM_TRACE]\n{logs_str}")
+                else:
+                    final_output = self._compress_output(llm_response)
             else:
                 final_output = self._compress_output(llm_response)
             break
         
+        # --- ORYTHIX REFLECTION (v22) ---
+        # --- ORYTHIX MEMORY REINFORCEMENT (v23) ---
+        try:
+             intent_summ = "General Interaction"
+             if 'viki_resp' in locals() and viki_resp.final_thought:
+                  intent_summ = viki_resp.final_thought.intent_summary
+             
+             self.memory.record_interaction(
+                 intent=intent_summ,
+                 action=str(action_results) if action_results else "reply",
+                 outcome=(final_output or "")[:500],
+                 confidence=getattr(viki_resp, 'confidence', 1.0) if 'viki_resp' in locals() else 1.0
+             )
+             
+             # v25: Automated Dream Cycle Trigger (Every 20 meaningful episodes)
+             cur = self.memory.episodic.conn.cursor()
+             cur.execute("SELECT COUNT(*) FROM episodes")
+             count = cur.fetchone()[0]
+             if count > 0 and count % 20 == 0:
+                  # Trigger in background to avoid blocking the user
+                  asyncio.create_task(self.memory.episodic.consolidate(self.model_router))
+        except Exception as e:
+             viki_logger.warning(f"Failed to reinforce memory: {e}")
+
         # --- POST-LOOP: Auto-learn + Memory ---
         if final_output is None:
             final_output = "I completed processing but have no output to show."
         
-        # Auto-promote stable patterns to Reflex
+        # v25: Evolution - Propose stable patterns to Reflex (Auditable)
         try:
             candidates = self.cortex.get_reflex_candidates()
             for candidate in candidates:
-                self.reflex.learn_pattern(
-                    candidate['input'],
-                    candidate['skill'],
-                    candidate['params']
+                # Instead of auto-learning, we propose
+                self.evolution.propose_mutation(
+                    m_type="reflex",
+                    description=f"Add reflex shortcut for '{candidate['input']}' -> {candidate['skill']}",
+                    value={"input": candidate['input'], "skill": candidate['skill'], "params": candidate['params']},
+                    pattern_id=candidate['input']
                 )
-                viki_logger.info(f"Auto-promoted to Reflex: '{candidate['input']}' -> {candidate['skill']}")
+                # If we have an active mutation that IS this pattern, we record success
+                self.evolution.record_success(candidate['input'])
         except Exception as e:
-            viki_logger.debug(f"Reflex promotion skipped: {e}")
+            viki_logger.debug(f"Evolution proposal skipped: {e}")
         
-        self.memory.add_message("assistant", final_output)
+        self.memory.working.add_message("assistant", final_output)
         return final_output
 
     async def _trigger_evolution_if_needed(self, force: bool = False):
@@ -594,15 +680,20 @@ class VIKIController:
                     last_total = state.get('last_forge_lesson_count', 0)
             except: pass
             
-        if force or (stable_lessons >= 10 and current_total - last_total >= 10):
+        if force or (stable_lessons >= 10 and current_total - last_total >= 5):
             viki_logger.info(f"Initiating Neural Forge Evolution (Stable Lessons: {stable_lessons})...")
-            from viki.forge import main_forge
-            success = await asyncio.to_thread(main_forge)
-            if success:
-                viki_logger.info("Evolution successful.")
-                with open(state_path, 'w') as f:
-                    import json
-                    json.dump({'last_forge_lesson_count': current_total}, f)
+            
+            # Use the SkillRegistry to execute the Forge
+            forge_skill = self.skill_registry.get_skill("internal_forge")
+            if forge_skill:
+                result = await forge_skill.execute({"strategy": "auto", "steps": 60})
+                viki_logger.info(f"Forge Result: {result}")
+                
+                if "SUCCESS" in result:
+                    with open(state_path, 'w') as f:
+                        json.dump({'last_forge_lesson_count': current_total}, f)
+            else:
+                viki_logger.warning("Forge skill not found.")
         
         recs = self.skill_registry.get_refactor_recommendations()
         for rec in recs:
@@ -611,7 +702,11 @@ class VIKIController:
 
     def _classify_task(self, input_text: str) -> str:
         input_lower = input_text.lower()
+        # v21: Explicit Question detection
         if any(k in input_lower for k in ["see", "look", "screen", "vision", "screenshot"]): return "vision"
+        question_words = ["what", "who", "where", "when", "why", "how", "is", "are", "can", "do", "does"]
+        if input_text.strip().endswith('?') or any(input_lower.startswith(w) for w in question_words):
+            return "question"
         if any(k in input_lower for k in ["code", "script", "fix", "patch"]): return "coding"
         if any(k in input_lower for k in ["plan", "think", "analyze", "sequence"]): return "reasoning"
         return "general"

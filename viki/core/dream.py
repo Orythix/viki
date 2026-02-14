@@ -52,6 +52,9 @@ class DreamModule:
         # 5. Self-Patching (Reflection)
         await self.controller.reflector.reflect_on_logs()
 
+        # 6. Architectural Audit (Self-Refactoring v23)
+        await self.controller.reflector.analyze_bottlenecks()
+
     async def _spontaneous_cognition(self):
         """VIKI generates her own thoughts and reflections when idle."""
         viki_logger.info("Dreaming: Engaging in spontaneous cognition...")

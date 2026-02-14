@@ -99,6 +99,14 @@ class JudgmentEngine:
                  recommended_capability=recommended_cap
              )
 
+        # Rule: Questions require DEEP reasoning for accuracy
+        if context.get("task_type") == "question":
+             return JudgmentResult(
+                 outcome=JudgmentOutcome.DEEP, clarity=clarity, risk=risk, novelty=novelty,
+                 recommendation="proceed", reason="Inquisitive intent detected. Routing to Deliberation Layer.",
+                 recommended_capability=recommended_cap
+             )
+
         # Rule: Bias toward simplicity (Model Agnostic Thrift)
         if novelty < self.reflex_threshold and risk < 0.1 and clarity > 0.8:
             return JudgmentResult(

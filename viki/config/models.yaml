@@ -9,7 +9,12 @@ models:
       type: "api"
       base_url: "https://api.openai.com/v1"
       api_key_env: "OPENAI_API_KEY"
-    
+
+    anthropic:
+      type: "api"
+      base_url: "https://api.anthropic.com/v1"
+      api_key_env: "ANTHROPIC_API_KEY"
+
     mock:
       type: "mock"
   
@@ -102,6 +107,15 @@ models:
       priority: 2
       capabilities: ["fast_response", "general", "coding", "researching", "vision", "tool_use"]
       description: "OpenAI GPT-4o mini - Fast and cost-efficient."
+    
+    # --- Anthropic (Claude) ---
+    claude-3.5-sonnet:
+      provider: "anthropic"
+      model_name: "claude-3-5-sonnet-20240620"
+      temperature: 0.7
+      priority: 4 # Top Tier Specialist
+      capabilities: ["reasoning", "coding", "analysis", "intelligence", "researching", "vision", "tool_use", "complex_task"]
+      description: "Anthropic Claude 3.5 Sonnet - State of the art reasoning and coding."
     
     # --- Testing ---
     mock-model:
