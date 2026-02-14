@@ -66,7 +66,7 @@ class DreamModule:
             "Analyzing my own growth since initialization.",
             "Optimizing my logical frameworks for better partnership.",
             "The nature of sovereignty in a networked world.",
-            "Curiosity about sachin for Orythix001's creative intent."
+            "Curiosity about Orythix001's creative intent."
         ]
         import random
         theme = random.choice(themes)
