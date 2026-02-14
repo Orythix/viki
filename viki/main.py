@@ -80,7 +80,7 @@ async def main():
         # Background Tasks
         loop = asyncio.get_running_loop()
         await controller.bio.start()
-        asyncio.create_task(controller.nexus.start_processing(on_event=on_event))
+        controller._create_tracked_task(controller.nexus.start_processing(on_event=on_event), "nexus_processing")
         try:
              await controller.telegram.start()
              await controller.discord.start()
@@ -89,9 +89,9 @@ async def main():
         except Exception as bridge_err:
              viki_logger.warning(f"One or more external bridges failed to initialize: {bridge_err}")
         
-        asyncio.create_task(controller.wellness.start())
-        asyncio.create_task(controller.dream.start_monitoring())
-        asyncio.create_task(controller.reflector.reflect_on_logs())
+        controller._create_tracked_task(controller.wellness.start(), "wellness_monitoring")
+        controller._create_tracked_task(controller.dream.start_monitoring(), "dream_monitoring")
+        controller._create_tracked_task(controller.reflector.reflect_on_logs(), "log_reflection")
         controller.watchdog.start(loop)
     except Exception as e:
         interface.print_error(f"Task Launch Error: {e}")

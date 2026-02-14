@@ -29,8 +29,9 @@ class DreamModule:
         try:
             import win32api
             return (win32api.GetTickCount() - win32api.GetLastInputInfo()) / 1000.0
-        except:
-            # Fallback placeholder
+        except (ImportError, AttributeError) as e:
+            # Fallback placeholder when win32api not available
+            viki_logger.debug(f"win32api not available for idle time detection: {e}")
             return 0
 
     async def enter_dream_mode(self):

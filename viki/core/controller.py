@@ -82,11 +82,15 @@ class VIKIController:
         # Global Interrupt Token (Shared Presence)
         self.interrupt_signal = asyncio.Event()
         
+        # Task tracking for proper cleanup
+        self._background_tasks = set()
+        
         root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         
         models_conf_rel = self.settings.get('models_config', 'viki/config/models.yaml')
         if models_conf_rel.startswith('./'): models_conf_rel = models_conf_rel[2:]
         self.models_config_path = os.path.join(root_dir, models_conf_rel)
+        self.models_config = self._load_yaml(self.models_config_path)
         
         if 'security_layer_path' in self.settings:
              sec_path = self.settings['security_layer_path']
@@ -174,7 +178,7 @@ class VIKIController:
         # v13: Autonomous Startup Pulse
         try:
             asyncio.get_running_loop()
-            asyncio.create_task(self._startup_pulse())
+            self._create_tracked_task(self._startup_pulse(), "startup_pulse")
         except RuntimeError:
             viki_logger.debug("Sync Mode: Startup Pulse deferred (no running loop).")
 
@@ -200,7 +204,8 @@ class VIKIController:
                 if research_skill:
                     viki_logger.info("Startup: Checking web for latest digital trends...")
                     await research_skill.execute({"query": "latest tech and ai news today", "num_results": 2})
-            except: pass
+            except Exception as e:
+                viki_logger.debug(f"Startup research pulse failed: {e}")
             
         # 2. Check for pending evolution
         new_lessons = self.learning.get_total_lesson_count()
@@ -220,13 +225,32 @@ class VIKIController:
 
         # 4. Engage Mission Control
         if not self.air_gap:
-            asyncio.create_task(self.mission_control.start_loop())
+            self._create_tracked_task(self.mission_control.start_loop(), "mission_control")
 
+    def _create_tracked_task(self, coro, name: str = "unnamed"):
+        """Create a background task with proper tracking and error handling."""
+        task = asyncio.create_task(coro)
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
+        task.add_done_callback(lambda t: self._handle_task_exception(t, name))
+        viki_logger.debug(f"Created tracked background task: {name}")
+        return task
+    
+    def _handle_task_exception(self, task: asyncio.Task, name: str):
+        """Handle exceptions from background tasks."""
+        try:
+            task.result()
+        except asyncio.CancelledError:
+            viki_logger.debug(f"Background task '{name}' was cancelled")
+        except Exception as e:
+            viki_logger.error(f"Background task '{name}' failed with exception: {e}", exc_info=True)
+    
     def _load_yaml(self, path: str) -> Dict[str, Any]:
         try:
             with open(path, 'r') as f:
                 return yaml.safe_load(f)
-        except:
+        except (yaml.YAMLError, IOError, FileNotFoundError) as e:
+            viki_logger.warning(f"Failed to load YAML config from {path}: {e}")
             return {}
 
     def _register_default_skills(self):
@@ -294,6 +318,8 @@ class VIKIController:
         # Custom Aliases
 
     async def process_request(self, user_input: str, on_event=None) -> str:
+        placeholders = ["processing...", "executing", "thinking", "one moment", "working on it"]
+        
         # --- ORYTHIX ETHICAL GOVERNOR (v22) ---
         # 1. Check for Emergency Shutdown Code
         if self.governor.check_shutdown(user_input):
@@ -356,7 +382,7 @@ class VIKIController:
              budget["time"] *= 2 # Double time for research
         
         if "/benchmark" in user_input:
-             asyncio.create_task(self.benchmark.run_suite("Current-VIKI"))
+             self._create_tracked_task(self.benchmark.run_suite("Current-VIKI"), "benchmark")
              return "BENCHMARK SUITE INITIATED. Judgment validation in progress."
         
         if "/scorecard" in user_input:
@@ -611,14 +637,17 @@ class VIKIController:
         # --- ORYTHIX MEMORY REINFORCEMENT (v23) ---
         try:
              intent_summ = "General Interaction"
-             if 'viki_resp' in locals() and viki_resp.final_thought:
-                  intent_summ = viki_resp.final_thought.intent_summary
+             confidence = 1.0
+             if 'viki_resp' in locals() and viki_resp:
+                  if viki_resp.final_thought:
+                       intent_summ = viki_resp.final_thought.intent_summary
+                  confidence = getattr(viki_resp, 'confidence', 1.0)
              
              self.memory.record_interaction(
                  intent=intent_summ,
                  action=str(action_results) if action_results else "reply",
                  outcome=(final_output or "")[:500],
-                 confidence=getattr(viki_resp, 'confidence', 1.0) if 'viki_resp' in locals() else 1.0
+                 confidence=confidence
              )
              
              # v25: Automated Dream Cycle Trigger (Every 20 meaningful episodes)
@@ -627,7 +656,7 @@ class VIKIController:
              count = cur.fetchone()[0]
              if count > 0 and count % 20 == 0:
                   # Trigger in background to avoid blocking the user
-                  asyncio.create_task(self.memory.episodic.consolidate(self.model_router))
+                  self._create_tracked_task(self.memory.episodic.consolidate(self.model_router), "memory_consolidation")
         except Exception as e:
              viki_logger.warning(f"Failed to reinforce memory: {e}")
 
@@ -637,17 +666,18 @@ class VIKIController:
         
         # v25: Evolution - Propose stable patterns to Reflex (Auditable)
         try:
-            candidates = self.cortex.get_reflex_candidates()
-            for candidate in candidates:
-                # Instead of auto-learning, we propose
-                self.evolution.propose_mutation(
-                    m_type="reflex",
-                    description=f"Add reflex shortcut for '{candidate['input']}' -> {candidate['skill']}",
-                    value={"input": candidate['input'], "skill": candidate['skill'], "params": candidate['params']},
-                    pattern_id=candidate['input']
-                )
-                # If we have an active mutation that IS this pattern, we record success
-                self.evolution.record_success(candidate['input'])
+            if hasattr(self.cortex, 'get_reflex_candidates'):
+                candidates = self.cortex.get_reflex_candidates()
+                for candidate in candidates:
+                    # Instead of auto-learning, we propose
+                    self.evolution.propose_mutation(
+                        m_type="reflex",
+                        description=f"Add reflex shortcut for '{candidate['input']}' -> {candidate['skill']}",
+                        value={"input": candidate['input'], "skill": candidate['skill'], "params": candidate['params']},
+                        pattern_id=candidate['input']
+                    )
+                    # If we have an active mutation that IS this pattern, we record success
+                    self.evolution.record_success(candidate['input'])
         except Exception as e:
             viki_logger.debug(f"Evolution proposal skipped: {e}")
         
@@ -734,11 +764,20 @@ class VIKIController:
     async def shutdown(self):
         viki_logger.info("Shutting down...")
         
+        # Cancel all background tasks
+        if self._background_tasks:
+            viki_logger.info(f"Cancelling {len(self._background_tasks)} background tasks...")
+            for task in self._background_tasks:
+                task.cancel()
+            # Wait for all tasks to complete cancellation
+            await asyncio.gather(*self._background_tasks, return_exceptions=True)
+            viki_logger.info("All background tasks cancelled")
+        
         # v12: Session Narrative Synthesis
         try:
-            if len(self.memory.get_context()) > 4: # Only record meaningful sessions
+            if len(self.memory.working.get_trace()) > 4: # Only record meaningful sessions
                 viki_logger.info("Synthesizing session narrative...")
-                context = self.memory.get_context()
+                context = self.memory.working.get_trace()
                 # Create a simple summary of the interaction
                 user_msg_count = sum(1 for m in context if m['role'] == 'user')
                 summary = f"Had a session with Sachin involving {user_msg_count} exchanges. "

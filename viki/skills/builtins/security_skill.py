@@ -62,8 +62,8 @@ class SecuritySkill(BaseSkill):
                             results.append(f"[CRITICAL] Exposed file found: {url}")
                         else:
                             results.append(f"[INFO] {path}: Not found ({resp.status_code})")
-                    except:
-                        results.append(f"[ERROR] {path}: Connection failed")
+                    except (requests.RequestException, requests.Timeout) as e:
+                        results.append(f"[ERROR] {path}: Connection failed ({e})")
                 return "\n".join(results)
 
             elif action == "sniffer":
