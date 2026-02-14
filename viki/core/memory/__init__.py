@@ -97,10 +97,12 @@ class HierarchicalMemory:
         self.identity = NarrativeIdentity(data_dir)
         self.semantic = learning_module # Shared with LearningModule
 
-    def get_full_context(self, current_input: str) -> Dict[str, Any]:
+    def get_full_context(self, current_input: str, narrative_wisdom: List[Dict] = None) -> Dict[str, Any]:
         """Synthesizes context across all layers for the Deliberation layer."""
-        # v25: Pull high-level semantic insights from narrative Dream Cycles
-        narrative_wisdom = self.episodic.get_semantic_knowledge(limit=3)
+        # v25: Accept pre-fetched narrative wisdom to avoid duplicate queries
+        if narrative_wisdom is None:
+            narrative_wisdom = self.episodic.get_semantic_knowledge(limit=3)
+        
         wisdom_block = "\n".join([f"- [{w['category'].upper()}]: {w['insight']}" for w in narrative_wisdom])
 
         return {

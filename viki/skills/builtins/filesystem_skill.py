@@ -3,13 +3,28 @@ from typing import Dict, Any
 from viki.skills.base import BaseSkill
 
 class FileSystemSkill(BaseSkill):
+    def __init__(self):
+        super().__init__()
+        # Define allowed base directories (sandbox)
+        self.allowed_roots = [
+            os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data")),
+            os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "workspace")),
+            os.path.expanduser("~/Documents"),
+            os.path.expanduser("~/Desktop"),
+        ]
+        # Blocked paths (system directories)
+        self.blocked_paths = [
+            "C:\\Windows", "C:\\Program Files", "C:\\Program Files (x86)",
+            "/etc", "/usr", "/bin", "/sbin", "/boot", "/sys", "/proc"
+        ]
+    
     @property
     def name(self) -> str:
         return "filesystem_skill"
 
     @property
     def description(self) -> str:
-        return "Performs file operations. Actions: list_dir, read_file, write_file."
+        return "Performs file operations within allowed directories. Actions: list_dir, read_file, write_file."
 
     @property
     def schema(self) -> dict:
@@ -32,6 +47,27 @@ class FileSystemSkill(BaseSkill):
             },
             "required": ["action", "path"]
         }
+    
+    def _validate_path(self, path: str) -> tuple[bool, str]:
+        """Validate path is within allowed directories and not blocked."""
+        try:
+            # Normalize and resolve the path
+            real_path = os.path.realpath(os.path.abspath(path))
+            
+            # Check if path starts with any blocked directory
+            for blocked in self.blocked_paths:
+                if real_path.startswith(os.path.realpath(blocked)):
+                    return False, f"Access denied: {path} is in a protected system directory"
+            
+            # Check if path is within allowed roots
+            for allowed_root in self.allowed_roots:
+                if real_path.startswith(os.path.realpath(allowed_root)):
+                    return True, real_path
+            
+            return False, f"Access denied: {path} is outside allowed directories"
+        
+        except Exception as e:
+            return False, f"Path validation error: {str(e)}"
 
     async def execute(self, params: Dict[str, Any]) -> str:
         action = params.get("action")
@@ -39,24 +75,32 @@ class FileSystemSkill(BaseSkill):
         
         if not action or not path:
             return "Error: strict parameters 'action' and 'path' required."
+        
+        # Validate path before any operation
+        is_valid, validated_path = self._validate_path(path)
+        if not is_valid:
+            return validated_path  # Returns error message
 
         try:
             if action == "list_dir":
-                items = os.listdir(path)
-                return f"Contents of {path}: {', '.join(items)}"
+                items = os.listdir(validated_path)
+                return f"Contents of {validated_path}: {', '.join(items[:50])}"  # Limit output
             
             elif action == "read_file":
-                with open(path, 'r', encoding='utf-8') as f:
-                    # Non-blocking read would be nicer but os.read is fine for small files in this context
-                    content = f.read(2048) # Limit read size
+                with open(validated_path, 'r', encoding='utf-8') as f:
+                    content = f.read(2048)  # Limit read size
                 return content
 
             elif action == "write_file":
                 content = params.get("content")
-                if not content: return "Error: No content provided."
-                with open(path, "w", encoding='utf-8') as f:
+                if not content: 
+                    return "Error: No content provided."
+                # Additional length check to prevent abuse
+                if len(content) > 100000:  # 100KB limit
+                    return "Error: Content too large (max 100KB)"
+                with open(validated_path, "w", encoding='utf-8') as f:
                     f.write(content)
-                return f"File written successfully to {path}"
+                return f"File written successfully to {validated_path}"
                 
             return f"Error: Unknown action '{action}'"
             

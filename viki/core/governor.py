@@ -109,14 +109,26 @@ class EthicalGovernor:
         ]
         
         try:
+            import time
             model = model_router.get_model(capabilities=["fast_response"])
+            
+            # Track performance
+            start_time = time.time()
             resp = await model.chat(prompt)
+            latency = time.time() - start_time
+            
             if "VETOED" in resp.upper():
                 reason = resp.split(":", 1)[1].strip() if ":" in resp else "Semantic safety violation."
+                model.record_performance(latency, success=True)  # Veto is a successful check
                 return False, reason
+            
+            model.record_performance(latency, success=True)
             return True, "Approved"
         except Exception as e:
             viki_logger.error(f"Governor: Semantic check failed: {e}")
+            if 'start_time' in locals():
+                latency = time.time() - start_time
+                model.record_performance(latency, success=False)
             return True, "Error in safety check (Fail Open)"
 
     def _log_veto(self, intent: str, reason: str):

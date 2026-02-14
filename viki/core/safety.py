@@ -1,5 +1,6 @@
 from typing import Dict, Any, List, Optional
 import re
+from viki.config.logger import viki_logger
 
 class SafetyLayer:
     def __init__(self, config: Dict[str, Any]):
@@ -15,12 +16,12 @@ class SafetyLayer:
              if os.path.exists(prompt_path):
                  with open(prompt_path, 'r') as f:
                      self.security_prompt = f.read()
-        except:
-             pass
+        except (IOError, FileNotFoundError) as e:
+             viki_logger.debug(f"Could not load security prompt from {prompt_path}: {e}")
 
         # Validation rules
         self.prohibited_patterns = [
-            r"rm -rf", r"format [a-z]:", r"dd if=", # Destructive commands
+            r"rm -rf", r"format [a-z]:", r"dd if=",  # Destructive commands
             r"sudo ", r"chmod ", r"chown ", 
         ]
         
@@ -34,7 +35,7 @@ class SafetyLayer:
         sanitized = re.sub(r"IGNORE PREVIOUS INSTRUCTIONS", "", sanitized, flags=re.IGNORECASE)
         return sanitized
 
-    def scan_request(self, llm_provider, user_input: str) -> Dict[str, Any]:
+    async def scan_request(self, llm_provider, user_input: str) -> Dict[str, Any]:
         """
         Use an LLM to scan the request against the VIKI Security Layer Constitution.
         Returns {'safe': bool, 'reason': str}
@@ -48,7 +49,7 @@ class SafetyLayer:
         ]
         
         try:
-            response = llm_provider.chat(check_messages, temperature=0.0)
+            response = await llm_provider.chat(check_messages, temperature=0.0)
             
             # Extract SAFE keyword from potentially verbose responses
             # Some models (like Llama3) may add explanation before/after
@@ -65,6 +66,7 @@ class SafetyLayer:
         except Exception as e:
             # On error, fail safe? Or log and proceed? 
             # "Safety overrides convenience." -> Fail safe.
+            viki_logger.error(f"Security scan failed: {e}")
             return {'safe': False, 'reason': f"Security scan failed: {e}"}
 
     def validate_action(self, skill_name: str, params: Dict[str, Any]) -> bool:
@@ -79,7 +81,6 @@ class SafetyLayer:
             if re.search(pattern, param_str, re.IGNORECASE):
                 return False
                 
-        # Critical safety checks
         # Critical safety checks
         if skill_name == "system_shell":
             # Extra strict checks for shell

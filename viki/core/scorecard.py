@@ -4,6 +4,7 @@ import time
 from typing import Dict, Any, List, Optional
 from pydantic import BaseModel, Field
 from viki.config.logger import viki_logger
+from viki.core.utils.debouncer import SyncDebouncer
 
 class MetricEntry(BaseModel):
     timestamp: float = Field(default_factory=time.time)
@@ -19,6 +20,8 @@ class IntelligenceScorecard:
     def __init__(self, data_dir: str):
         self.path = os.path.join(data_dir, "viki_scorecard.json")
         self.metrics = self._load()
+        # Debounce saves: wait 5s between saves, max 30s total
+        self._debouncer = SyncDebouncer(delay=5.0, max_delay=30.0)
 
     def _load(self) -> Dict[str, List[MetricEntry]]:
         if os.path.exists(self.path):
@@ -37,10 +40,20 @@ class IntelligenceScorecard:
             "confidence_calibration": []  # Confidence score vs true success
         }
 
-    def save(self):
+    def _do_save(self):
+        """Internal save method called by debouncer."""
         with open(self.path, 'w') as f:
             raw = {k: [e.model_dump() for e in v] for k, v in self.metrics.items()}
             json.dump(raw, f, indent=4)
+    
+    def save(self):
+        """Debounced save - actual write happens after delay."""
+        self._debouncer.mark_dirty()
+        self._debouncer.execute(self._do_save)
+    
+    def flush(self):
+        """Force immediate save (call on shutdown)."""
+        self._debouncer.flush(self._do_save)
 
     def record_metric(self, name: str, value: float, context: str = None):
         if name in self.metrics:

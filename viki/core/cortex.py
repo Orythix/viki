@@ -1,6 +1,8 @@
 import asyncio
 import re
 import time
+import os
+import json
 from typing import List, Dict, Any, Optional, Tuple
 from viki.core.schema import ThoughtObject, SolverOutput, VIKIResponse, VIKIResponseLite, LayerState
 from viki.core.ensemble import EnsembleEngine
@@ -48,8 +50,12 @@ class LayerTiming:
 
 class PatternTracker:
     """Tracks successful input→action patterns for potential REFLEX promotion."""
-    def __init__(self):
+    def __init__(self, data_dir: str = None):
         self.patterns: Dict[str, Dict[str, Any]] = {}  # normalized_input -> {skill, params, count, last_confidence}
+        self.data_dir = data_dir
+        
+        if data_dir:
+            self._load_patterns()
     
     def record_success(self, user_input: str, skill_name: str, params: dict, confidence: float):
         key = self._normalize(user_input)
@@ -64,6 +70,7 @@ class PatternTracker:
         self.patterns[key]["count"] += 1
         self.patterns[key]["total_confidence"] += confidence
         self.patterns[key]["last_seen"] = time.time()
+        self._save_patterns()
     
     def get_reflex_candidates(self, min_count: int = 3, min_avg_confidence: float = 0.7) -> List[Dict[str, Any]]:
         """Returns patterns that are stable enough to be promoted to REFLEX."""
@@ -84,6 +91,33 @@ class PatternTracker:
     def _normalize(self, text: str) -> str:
         """Normalize input for pattern matching — lowercase, strip, collapse spaces."""
         return ' '.join(text.lower().strip().split())
+    
+    def _save_patterns(self):
+        """Persist patterns to disk."""
+        if not self.data_dir:
+            return
+        
+        os.makedirs(self.data_dir, exist_ok=True)
+        path = os.path.join(self.data_dir, "pattern_tracker.json")
+        try:
+            with open(path, 'w') as f:
+                json.dump(self.patterns, f, indent=2)
+        except Exception as e:
+            viki_logger.warning(f"Failed to save pattern tracker: {e}")
+    
+    def _load_patterns(self):
+        """Load patterns from disk."""
+        if not self.data_dir:
+            return
+        
+        path = os.path.join(self.data_dir, "pattern_tracker.json")
+        if os.path.exists(path):
+            try:
+                with open(path, 'r') as f:
+                    self.patterns = json.load(f)
+                viki_logger.info(f"PatternTracker: Loaded {len(self.patterns)} patterns from disk")
+            except Exception as e:
+                viki_logger.warning(f"Failed to load pattern tracker: {e}")
 
 
 # --------------------------------------------------------------------------- #
@@ -286,11 +320,14 @@ class DeliberationLayer(CortexLayer):
                 continue
             prior_messages.append({"role": msg["role"], "content": msg["content"]})
         
-        # Add action results as turns for ReAct
+        # Add action results as turns for ReAct (step may have 'result' or 'error' when capability/execution failed)
         for step in action_results:
-            # How we explain what we did so the model can continue
-            prior_messages.append({"role": "assistant", "content": f"Thought: I will execute {step['action']}."})
-            prior_messages.append({"role": "user", "content": f"Observation: {step['result']}"})
+            if not isinstance(step, dict):
+                continue
+            action_name = step.get('action', 'unknown')
+            obs = step.get('result', step.get('error', ''))
+            prior_messages.append({"role": "assistant", "content": f"Thought: I will execute {action_name}."})
+            prior_messages.append({"role": "user", "content": f"Observation: {obs}"})
         
         prompt = StructuredPrompt(raw_input, messages=prior_messages)
         
@@ -342,6 +379,23 @@ class DeliberationLayer(CortexLayer):
         episodic = "\n".join([str(e) for e in context.get("episodic_context", [])])
         semantic = "\n".join([f"- {s}" for s in context.get("semantic_knowledge", [])])
         wisdom = context.get("narrative_wisdom", "")
+        
+        # Inject relevant failures for error avoidance
+        failure_context = ""
+        if hasattr(self, 'skill_registry') and self.skill_registry:
+            # Get controller reference through the model router callback or context
+            raw_input = context.get('raw_input', '')
+            if raw_input:
+                # Attempt to get learning module for failure retrieval
+                # This requires passing it through context or having a reference
+                relevant_failures = context.get("relevant_failures", [])
+                if relevant_failures:
+                    failure_lines = [
+                        f"- PAST FAILURE: When user said '{f['context'][:100]}', "
+                        f"action '{f['action']}' failed with: {f['error'][:100]}"
+                        for f in relevant_failures[:3]
+                    ]
+                    failure_context = "\nRELEVANT PAST FAILURES (Learn from these):\n" + "\n".join(failure_lines) + "\n"
 
         memory_block = (
             f"\n--- HIERARCHICAL MEMORY STACK ---\n"
@@ -350,14 +404,15 @@ class DeliberationLayer(CortexLayer):
             f"CONSOLIDATED WISDOM (Semantic Narrative Insights):\n{wisdom if wisdom else 'Initial interactions.'}\n\n"
             f"SEMANTIC / CONCEPTUAL MEMORY (Abstracted Patterns):\n{semantic if semantic else 'None'}\n\n"
             f"EPISODIC MEMORY (Recalled Shared Experiences):\n{episodic if episodic else 'None'}\n"
+            f"{failure_context}"
         )
 
         # v24: Internal Specialist Ensemble
         ensemble_trace = None
+        sentiment = context.get('sentiment', 'neutral')
+        intent = context.get('intent_type', 'conversation')
+
         if not use_lite and not action_results:
-             sentiment = context.get('sentiment', 'neutral')
-             intent = context.get('intent_type', 'conversation')
-             
              # Triage: Select relevant agents to reduce latency (v25 Enhancement)
              selected_agents = []
              if intent in ['coding', 'research']:
@@ -474,8 +529,12 @@ class DeliberationLayer(CortexLayer):
                     # Manually inject image into the last user message
                     import base64
                     try:
-                        with open(image_path, "rb") as image_file:
-                            base64_image = base64.b64encode(image_file.read()).decode('utf-8')
+                        # Use asyncio.to_thread for file I/O
+                        def read_image():
+                            with open(image_path, "rb") as image_file:
+                                return base64.b64encode(image_file.read()).decode('utf-8')
+                        
+                        base64_image = await asyncio.to_thread(read_image)
                         # Find last user message
                         for i in range(len(messages) - 1, -1, -1):
                             if messages[i]['role'] == 'user':
@@ -484,14 +543,30 @@ class DeliberationLayer(CortexLayer):
                     except Exception as e:
                         viki_logger.error(f"Failed to attach image: {e}")
 
+                # Record performance
+                llm_start = time.time()
                 raw_msg = await model.chat_with_tools(messages, tools=param_tools)
+                llm_latency = time.time() - llm_start
                 
                 # Check for Ollama Errors (e.g. model does not support tools)
-                if "Ollama Error" in str(raw_msg.get('content', '')):
-                     viki_logger.warning(f"Native tool call failed: {raw_msg.get('content')}. Fallback to structured output.")
+                msg_content = raw_msg.get('content', '')
+                has_error = (
+                    isinstance(msg_content, str) and 
+                    ('ollama error' in msg_content.lower() or 'error' in msg_content.lower()) and
+                    raw_msg.get('role') == 'assistant' and
+                    not raw_msg.get('tool_calls')
+                )
+                
+                if has_error:
+                     viki_logger.warning(f"Native tool call failed: {msg_content}. Fallback to structured output.")
+                     model.record_performance(llm_latency, success=False)
+                     llm_start = time.time()
                      viki_resp_lite = await model.chat_structured(messages, VIKIResponseLite, image_path=image_path)
+                     llm_latency = time.time() - llm_start
+                     model.record_performance(llm_latency, success=True)
                      viki_resp = viki_resp_lite.to_full_response()
                 else:
+                    model.record_performance(llm_latency, success=True)
                     # Convert to VIKIResponse from Tool Call
                     from viki.core.schema import ActionCall
                     final_text = raw_msg.get('content') or "Executing action..."
@@ -509,8 +584,9 @@ class DeliberationLayer(CortexLayer):
                             try:
                                 import json
                                 func_args = json.loads(func_args)
-                            except:
-                                 pass
+                            except json.JSONDecodeError as e:
+                                viki_logger.warning(f"Failed to parse tool arguments: {e}")
+                                func_args = {}
                         
                         action_obj = ActionCall(skill_name=func_name, parameters=func_args)
                         if not raw_msg.get('content'):
@@ -525,7 +601,10 @@ class DeliberationLayer(CortexLayer):
                 
             elif use_lite:
                 # SHALLOW path — use lite schema (no native tools)
+                llm_start = time.time()
                 viki_resp_lite = await model.chat_structured(messages, VIKIResponseLite, image_path=image_path)
+                llm_latency = time.time() - llm_start
+                model.record_performance(llm_latency, success=True)
                 viki_resp = viki_resp_lite.to_full_response()
             else:
                 # DEEP path — use full schema + manual tool injection
@@ -536,7 +615,10 @@ class DeliberationLayer(CortexLayer):
                     prompt.add_context(f"\nAVAILABLE TOOLS (JSON Schema):\n{tool_schemas}\nTo use a tool, output the 'action' field in your JSON response.")
                     messages = prompt.build() # Rebuild with new context
 
+                llm_start = time.time()
                 viki_resp = await model.chat_structured(messages, VIKIResponse, image_path=image_path)
+                llm_latency = time.time() - llm_start
+                model.record_performance(llm_latency, success=True)
             
             # Attach the ensemble trace if it exists
             if ensemble_trace:
@@ -554,6 +636,10 @@ class DeliberationLayer(CortexLayer):
             return viki_resp
         except Exception as e:
             viki_logger.error(f"Deliberation Model Failure: {e}")
+            # Record failure if we have timing data
+            if 'llm_start' in locals():
+                llm_latency = time.time() - llm_start
+                model.record_performance(llm_latency, success=False)
             return VIKIResponse(
                 final_thought=ThoughtObject(intent_summary="Error recovery", primary_strategy="Fallback", confidence=0.0),
                 final_response=f"My deliberation layer encountered a model error: {e}"
@@ -720,10 +806,10 @@ class MetaCognitionLayer(CortexLayer):
 
 class ConsciousnessStack:
     """The 5-Layer Cognitive Engine with per-layer timing and auto-learn."""
-    def __init__(self, model_router, soul_config: dict = None, skill_registry=None, world_model=None):
+    def __init__(self, model_router, soul_config: dict = None, skill_registry=None, world_model=None, data_dir: str = None):
         self.skill_registry = skill_registry
         self.layer_timing = LayerTiming()
-        self.pattern_tracker = PatternTracker()
+        self.pattern_tracker = PatternTracker(data_dir=data_dir)
         
         # Initialize Layers
         interpretation = InterpretationLayer("Interpretation", "Intent Resolution")

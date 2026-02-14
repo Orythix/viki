@@ -29,8 +29,9 @@ class DreamModule:
         try:
             import win32api
             return (win32api.GetTickCount() - win32api.GetLastInputInfo()) / 1000.0
-        except:
-            # Fallback placeholder
+        except (ImportError, AttributeError) as e:
+            # Fallback placeholder when win32api not available
+            viki_logger.debug(f"win32api not available for idle time detection: {e}")
             return 0
 
     async def enter_dream_mode(self):
@@ -91,30 +92,47 @@ class DreamModule:
 
     async def _consolidate_memories(self):
         viki_logger.info("Dreaming: Merging duplicate neural traces...")
-        await asyncio.sleep(2)
+        try:
+            await self.controller.memory.episodic.consolidate(
+                self.controller.model_router
+            )
+            viki_logger.info("Dream: Narrative consolidation complete")
+        except Exception as e:
+            viki_logger.error(f"Dream consolidation failed: {e}")
 
     async def _autonomous_research(self):
-        """VIKI browses the web autonomously based on her curiosities or knowledge gaps."""
+        """VIKI browses the web autonomously based on knowledge gaps."""
         viki_logger.info("Dreaming: Initiating autonomous curiosity loop...")
         
-        # Determine a topic to research
-        # 1. Topic of the day (e.g., latest in AI/Tech)
-        # 2. Gaps in recent conversations
-        topics = ["latest AI breakthroughs 2026", "advanced cyber security bypasses", "quantum computing status", "new python frameworks 2026"]
-        import random
-        topic = random.choice(topics)
+        # Get research topics from knowledge gap detector
+        topics = self.controller.knowledge_gaps.get_research_topics(limit=3)
         
-        viki_logger.info(f"Dreaming: Autonomously researching '{topic}'...")
+        # If no gaps detected, use default topics
+        if not topics:
+            import random
+            topics = random.sample([
+                "latest AI breakthroughs 2026",
+                "advanced cyber security 2026",
+                "quantum computing status 2026",
+                "new python frameworks 2026",
+                "machine learning best practices 2026"
+            ], k=2)
+            viki_logger.info("Dreaming: No knowledge gaps detected, using default topics")
+        else:
+            viki_logger.info(f"Dreaming: Researching {len(topics)} knowledge gaps")
         
-        try:
-            research_skill = self.controller.skill_registry.get_skill('research')
-            if research_skill:
-                # Run research - this will automatically trigger lessons extraction in the skill's logic
-                # For dream mode, we use a broader search
-                results = await research_skill.execute({"query": f"{topic} overview and latest facts", "num_results": 5})
-                viki_logger.info(f"Dreaming: Research complete. Extracted new knowledge for {topic}.")
-        except Exception as e:
-            viki_logger.error(f"Dream Research Fail: {e}")
+        # Research each topic
+        for topic in topics:
+            viki_logger.info(f"Dreaming: Autonomously researching '{topic}'...")
+            
+            try:
+                research_skill = self.controller.skill_registry.get_skill('research')
+                if research_skill:
+                    # Run research - this will automatically trigger lessons extraction
+                    results = await research_skill.execute({"query": f"{topic} overview and latest facts", "num_results": 5})
+                    viki_logger.info(f"Dreaming: Research complete for '{topic}'")
+            except Exception as e:
+                viki_logger.error(f"Dream Research Fail: {e}")
 
     async def _trigger_self_evolution(self):
         """Automatically calls the forge to fine-tune on new knowledge if threshold is met."""

@@ -1,11 +1,11 @@
 # VIKI: Sovereign Digital Intelligence
-> **Virtual Intelligence Knowledge Interface | Version 7.1.0 Nexus Core**
+> **Virtual Intelligence Knowledge Interface | Version 7.2.0 Nexus Core**
 
 <div align="center">
 
 **Polymorphic Intelligence | Recursive Governance | Autonomous Self-Forging**
 
-[![Version](https://img.shields.io/badge/version-7.1.0-blue.svg)](./CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-7.2.0-blue.svg)](./CHANGELOG.md)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Ollama](https://img.shields.io/badge/Ollama-Local_LLM-orange.svg)](https://ollama.ai)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](./LICENSE)
@@ -18,7 +18,7 @@
 
 VIKI is a **Sovereign Digital Intelligence** designed to be more than just an assistant—she is a partner that evolves alongside your workflow. Built on a foundation of **local-first privacy** and **deterministic governance**, VIKI balances the raw power of LLMs with the safety of a modular, capability-aware architecture.
 
-### Core Pillars (v7.1.0)
+### Core Pillars (v7.2.0)
 
 *   **Intelligence Governance**: Powered by the **Judgment Engine**. Every directive is filtered through a cognitive triage (Reflex, Shallow, Deep) to ensure the right model is used for the right task while maintaining absolute safety.
 *   **The Neural Forge**: A integrated pipeline in the core kernel. VIKI extracts "Wisdom" from her SQLite-backed semantic memory and automatically forges new, project-aware model variants (e.g., `viki-evolved`) based on **Phi-3**, **Mistral**, and **DeepSeek-R1**.
@@ -79,14 +79,31 @@ VIKI/
     pip install -r requirements.txt
     ```
 
-2.  **Launch VIKI (CLI)**:
+2.  **Set Security Variables** (required for API; optional for CLI):
+    ```powershell
+    $env:VIKI_API_KEY = (python -c "import secrets; print(secrets.token_urlsafe(32))")
+    $env:VIKI_ADMIN_SECRET = (python -c "import secrets; print(secrets.token_urlsafe(32))")
+    ```
+    See [viki/SECURITY_SETUP.md](viki/SECURITY_SETUP.md) for full details.
+
+3.  **Launch VIKI (CLI)**:
     ```powershell
     python viki/main.py
     ```
 
-3.  **Launch Dashboard (UI)**:
+4.  **Launch with Hologram Face UI** (talk to VIKI with voice):
+    ```powershell
+    # Terminal 1: start the UI
+    cd ui && npm run dev
+
+    # Terminal 2: start VIKI with API and open browser to the hologram
+    python viki/main.py --ui
+    ```
+    The app opens at `http://localhost:5173` with the **Hologram** view by default: a hologram-style face and voice conversation (browser speech-to-text and text-to-speech). Use **Full dashboard** to switch to the text chat view. The UI requires the same API key: set `VITE_VIKI_API_KEY` in `ui/.env` (or in your shell when building) to match `VIKI_API_KEY`. See [viki/SECURITY_SETUP.md](viki/SECURITY_SETUP.md).
+
+5.  **Launch Dashboard (UI) only**:
     Open two terminals:
-    - Terminal 1 (API): `python viki/api/server.py`
+    - Terminal 1 (API): `python viki/api/server.py` — API requires `Authorization: Bearer $VIKI_API_KEY` for all requests.
     - Terminal 2 (UI): `cd ui; npm run dev`
     Access at `http://localhost:5173`
 
@@ -104,9 +121,25 @@ Unlike static bots, VIKI grows. Every 10 stable lessons learned, she initiates a
 ---
 
 ## Security & Ethics
+*   **API Authentication**: All API endpoints require `VIKI_API_KEY`. Set via environment variable; see [viki/SECURITY_SETUP.md](viki/SECURITY_SETUP.md).
+*   **Admin Commands**: Super-admin uses `VIKI_ADMIN_SECRET` (env). Never commit secrets; use env or a secrets manager.
 *   **Privacy**: 100% Local. No telemetry. No external API calls unless explicitly configured for internet research.
-*   **Control**: Every terminal command and filesystem modification is logged and gated.
-*   **Audit**: Check `logs/viki.log` for a transparent record of all capability checks.
+*   **Control**: Every terminal command and filesystem modification is logged and gated. File operations are sandboxed.
+*   **Audit**: Check `logs/viki.log` and `viki/SECURITY_SETUP.md` for capability checks and setup.
+
+## Documentation
+| Document | Description |
+|----------|--------------|
+| [SETUP.md](SETUP.md) | Installation and environment |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | System design and data flow |
+| [CHANGELOG.md](CHANGELOG.md) | Version history |
+| [viki/DOCS_INDEX.md](viki/DOCS_INDEX.md) | Index of all viki documentation |
+| [viki/SECURITY_SETUP.md](viki/SECURITY_SETUP.md) | Security configuration |
+| [viki/IMPLEMENTATION_SUMMARY.md](viki/IMPLEMENTATION_SUMMARY.md) | Security & stability fixes |
+| [viki/MODEL_ENHANCEMENT_SUMMARY.md](viki/MODEL_ENHANCEMENT_SUMMARY.md) | Model improvement system |
+| [viki/ARCHITECTURE_REFACTOR.md](viki/ARCHITECTURE_REFACTOR.md) | Future refactoring roadmap |
+| [viki/OBSERVABILITY.md](viki/OBSERVABILITY.md) | Logging and metrics plan |
+| [viki/PERFORMANCE_NOTES.md](viki/PERFORMANCE_NOTES.md) | Performance optimization notes |
 
 ---
 

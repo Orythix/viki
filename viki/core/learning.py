@@ -30,7 +30,9 @@ class LearningModule:
         try:
             from sentence_transformers import SentenceTransformer, util
             HAS_SEMANTIC = True
-            self.encoder = SentenceTransformer('all-MiniLM-L6-v2')
+            # Use CPU by default to avoid high GPU usage; set VIKI_EMBED_GPU=1 to use GPU
+            _device = "cuda" if (os.getenv("VIKI_EMBED_GPU", "").lower() in ("1", "true", "yes")) else "cpu"
+            self.encoder = SentenceTransformer("all-MiniLM-L6-v2", device=_device)
         except Exception as e:
             viki_logger.warning(f"Semantic Engine restricted ({e}). Using keyword proximity.")
 
@@ -302,7 +304,7 @@ class LearningModule:
                          (action, error, context, time.time()))
         self.conn.commit()
 
-    def get_relevant_failures(self, context: str) -> List[str]:
+    def get_relevant_failures(self, context: str, limit: int = 3) -> List[str]:
         cur = self.conn.cursor()
         now = time.time()
         max_age = 7 * 24 * 60 * 60
@@ -314,7 +316,7 @@ class LearningModule:
         for r in rows:
             if any(word in context_lower for word in r['action'].lower().split() if len(word) > 3):
                 relevant.append(f"PAST FAILURE: Tried '{r['action']}' but got '{r['error']}'")
-        return relevant[-3:]
+        return relevant[-limit:]
 
     def get_stable_lesson_count(self) -> int:
         cur = self.conn.cursor()

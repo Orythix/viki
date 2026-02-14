@@ -35,11 +35,18 @@ class VoiceModule:
 
     def _load_model(self):
         import torch
-        self.model, self.utils = torch.hub.load(repo_or_dir='snakers4/silero-vad',
-                                                model='silero_vad',
-                                                force_reload=False)
+        # Use CPU by default to avoid GPU usage; set VIKI_VAD_GPU=1 to use GPU
+        device = "cuda" if (__import__("os").getenv("VIKI_VAD_GPU", "").lower() in ("1", "true", "yes")) else "cpu"
+        self.model, self.utils = torch.hub.load(
+            repo_or_dir="snakers4/silero-vad",
+            model="silero_vad",
+            force_reload=False,
+            trust_repo=True,
+        )
+        self.model = self.model.to(device)
         (self.get_speech_timestamps, _, self.read_audio, _, _) = self.utils
-        viki_logger.info("Silero VAD model loaded successfully.")
+        self._vad_device = device
+        viki_logger.info("Silero VAD model loaded successfully (device=%s).", device)
 
     async def start_sonar(self):
         """
@@ -84,9 +91,8 @@ class VoiceModule:
         threshold = getattr(self, 'vad_threshold', 0.5)
         
         import torch
-        # Silero expects float32 tensor
-        tensor_audio = torch.from_numpy(audio_chunk).float()
-        
+        device = getattr(self, "_vad_device", "cpu")
+        tensor_audio = torch.from_numpy(audio_chunk).float().to(device)
         with torch.no_grad():
             speech_prob = self.model(tensor_audio, self.sampling_rate).item()
             
