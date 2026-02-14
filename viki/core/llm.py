@@ -108,7 +108,7 @@ class APILLM(LLMProvider):
             from anthropic import AsyncAnthropic
             self.client = instructor.from_anthropic(
                 AsyncAnthropic(api_key=api_key),
-                mode=instructor.Mode.JSON
+                mode=instructor.Mode.ANTHROPIC_JSON
             )
         else:
             base_url = self.config.get('base_url', 'https://api.openai.com/v1')
@@ -231,7 +231,8 @@ class LocalLLM(LLMProvider):
                     
                     try:
                         resp_json = await resp.json()
-                    except:
+                    except (aiohttp.ContentTypeError, json.JSONDecodeError) as e:
+                        viki_logger.error(f"Failed to parse Ollama response: {e}")
                         raise ValueError(f"Invalid JSON response from Ollama: {resp.status}")
 
                     if 'error' in resp_json:
@@ -260,8 +261,8 @@ class LocalLLM(LLMProvider):
             )
             
             messages.append({"role": "system", "content": instruction})
-        except:
-            pass
+        except Exception as e:
+            viki_logger.debug(f"Failed to inject schema: {e}")
 
         # 1. Get raw JSON from model
         content = await self.chat(messages, temperature=temperature, format="json", image_path=image_path)
@@ -327,8 +328,8 @@ class LocalLLM(LLMProvider):
                 for key in ["final_response", "response", "message", "text", "content", "answer"]:
                     if key in raw and isinstance(raw[key], str):
                         return raw[key]
-        except:
-            pass
+        except (json.JSONDecodeError, TypeError) as e:
+            viki_logger.debug(f"Failed to extract text from content: {e}")
         return fallback
 
     def _patch_viki_response(self, data: dict) -> dict:
@@ -444,8 +445,8 @@ class ModelRouter:
             else:
                  self.default_model = MockLLM({'model_name': 'fallback-mock'})
                  
-        except Exception as e:
-            print(f"Failed to load model config: {e}")
+        except (yaml.YAMLError, IOError, FileNotFoundError, KeyError) as e:
+            viki_logger.error(f"Failed to load model config from {path}: {e}")
             self.default_model = MockLLM({'model_name': 'error-fallback'})
 
     def get_model(self, capabilities: List[str] = None) -> LLMProvider:

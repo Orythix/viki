@@ -1,8 +1,10 @@
 from typing import Dict, Any
 import os
 import platform
+import sys
+from viki.skills.base import BaseSkill
 
-class SystemInfoSkill(viki.skills.base.BaseSkill):
+class SystemInfoSkill(BaseSkill):
     name = "system_info"
     description = "Returns the current system platform and Python version."
     schema = {}

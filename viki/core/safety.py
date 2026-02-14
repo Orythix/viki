@@ -15,8 +15,8 @@ class SafetyLayer:
              if os.path.exists(prompt_path):
                  with open(prompt_path, 'r') as f:
                      self.security_prompt = f.read()
-        except:
-             pass
+        except (IOError, FileNotFoundError) as e:
+             viki_logger.debug(f"Could not load security prompt from {prompt_path}: {e}")
 
         # Validation rules
         self.prohibited_patterns = [

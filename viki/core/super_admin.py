@@ -45,5 +45,5 @@ class SuperAdminLayer:
             os.makedirs(os.path.dirname(log_path), exist_ok=True)
             with open(log_path, 'a') as f:
                 f.write(f"[{datetime.datetime.now().isoformat()}] {message}\n")
-        except:
-            pass
+        except (IOError, OSError) as e:
+            viki_logger.warning(f"Failed to write admin log: {e}")

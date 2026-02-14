@@ -354,10 +354,10 @@ class DeliberationLayer(CortexLayer):
 
         # v24: Internal Specialist Ensemble
         ensemble_trace = None
+        sentiment = context.get('sentiment', 'neutral')
+        intent = context.get('intent_type', 'conversation')
+
         if not use_lite and not action_results:
-             sentiment = context.get('sentiment', 'neutral')
-             intent = context.get('intent_type', 'conversation')
-             
              # Triage: Select relevant agents to reduce latency (v25 Enhancement)
              selected_agents = []
              if intent in ['coding', 'research']:
@@ -509,8 +509,9 @@ class DeliberationLayer(CortexLayer):
                             try:
                                 import json
                                 func_args = json.loads(func_args)
-                            except:
-                                 pass
+                            except json.JSONDecodeError as e:
+                                viki_logger.warning(f"Failed to parse tool arguments: {e}")
+                                func_args = {}
                         
                         action_obj = ActionCall(skill_name=func_name, parameters=func_args)
                         if not raw_msg.get('content'):
