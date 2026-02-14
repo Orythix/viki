@@ -10,7 +10,7 @@ class RecallSkill(BaseSkill):
     def __init__(self, controller):
         self.controller = controller
         self._name = "recall"
-        self._description = "Perform a targeted search of your own long-term memory for specific facts. Usage: recall(query='What did Sachin say about Python?')"
+        self._description = "Perform a targeted search of your own long-term memory for specific facts. Usage: recall(query='What was discussed about Python?')"
 
     @property
     def name(self) -> str:
