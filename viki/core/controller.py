@@ -872,7 +872,7 @@ class VIKIController:
                 context = self.memory.working.get_trace()
                 # Create a simple summary of the interaction
                 user_msg_count = sum(1 for m in context if m['role'] == 'user')
-                summary = f"Had a session with Sachin involving {user_msg_count} exchanges. "
+                summary = f"Had a session with the User involving {user_msg_count} exchanges. "
                 if any(m['role'] == 'assistant' and 'error' in m['content'].lower() for m in context):
                      summary += "We encountered some technical hurdles but optimized through them."
                 else:

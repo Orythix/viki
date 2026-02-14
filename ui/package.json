@@ -3,7 +3,7 @@
   "private": true,
   "version": "2.3.0",
   "description": "VIKI Interface - Virtual Intelligence Knowledge Interface",
-  "author": "Sachin",
+  "author": "Orythix",
   "type": "module",
   "scripts": {
     "dev": "vite",

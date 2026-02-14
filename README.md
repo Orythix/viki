@@ -150,4 +150,4 @@ Unlike static bots, VIKI grows. Every 10 stable lessons learned, she initiates a
 ---
 
 **VIKI: Virtual Intelligence, Real Evolution.**
-Designed by Sachin. 2026.
+Designed by Orythix. 2026.
