@@ -21,8 +21,8 @@ class WorldModel:
                 with open(self.path, 'r') as f:
                     data = json.load(f)
                     return WorldState(**data)
-            except:
-                pass
+            except (json.JSONDecodeError, IOError, TypeError) as e:
+                viki_logger.warning(f"Failed to load world state from {self.path}: {e}")
         return WorldState()
 
     def save(self):
