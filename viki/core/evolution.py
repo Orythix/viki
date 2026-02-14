@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import ast
 from typing import List, Dict, Any, Optional
 from viki.config.logger import viki_logger
 
@@ -39,8 +40,8 @@ class EvolutionEngine:
             try:
                 with open(self.state_file, 'r') as f:
                     return json.load(f)
-            except:
-                pass
+            except (json.JSONDecodeError, IOError) as e:
+                viki_logger.warning(f"Failed to load mutations from {self.state_file}: {e}")
         return {
             "applied": [], # List of applied mutations
             "pending": [], # List of proposed mutations waiting for approval or success streak
@@ -216,13 +217,14 @@ class EvolutionEngine:
         prompt = [
             {"role": "system", "content": (
                 "You are the VIKI Neural Forge. Your goal is to write a high-quality Python skill for the VIKI framework.\n"
-                "The skill must inherit from `viki.skills.base.BaseSkill`. \n"
+                "The skill must inherit from `BaseSkill` which must be imported as `from viki.skills.base import BaseSkill`. \n"
                 "Structure:\n"
                 "- name: Short unique string (snake_case)\n"
                 "- description: What it does\n"
                 "- schema: Dict for input parameters\n"
                 "- execute: Async method that returns a string result.\n\n"
-                "Ensure imports are correct and types are handled. Output ONLY the code in a markdown block."
+                "Ensure ALL necessary imports are included (e.g., `import sys`, `import json`, `from viki.skills.base import BaseSkill`).\n"
+                "Output ONLY the code in a markdown block."
             )},
             {"role": "user", "content": f"TASK: {task_description}\nHINT: {code_hint}"}
         ]
@@ -249,17 +251,74 @@ class EvolutionEngine:
             viki_logger.error(f"Evolution: Skill synthesis failed: {e}")
             return None
 
+    def _validate_skill_code(self, code: str) -> tuple[bool, str]:
+        """Validate dynamically generated skill code for security issues."""
+        try:
+            # Parse the code into an AST
+            tree = ast.parse(code)
+        except SyntaxError as e:
+            return False, f"Syntax error in generated code: {e}"
+        
+        # Dangerous patterns to detect
+        dangerous_imports = {'os.system', 'subprocess', 'eval', 'exec', '__import__', 'compile'}
+        dangerous_calls = {'eval', 'exec', 'compile', '__import__'}
+        
+        for node in ast.walk(tree):
+            # Check for dangerous imports
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if any(danger in alias.name for danger in ['subprocess', 'os.system']):
+                        return False, f"Dangerous import detected: {alias.name}"
+            
+            if isinstance(node, ast.ImportFrom):
+                if node.module and any(danger in node.module for danger in ['subprocess', 'os']):
+                    for alias in node.names:
+                        if alias.name in ['system', 'popen', 'spawn']:
+                            return False, f"Dangerous import detected: from {node.module} import {alias.name}"
+            
+            # Check for dangerous function calls
+            if isinstance(node, ast.Call):
+                if isinstance(node.func, ast.Name) and node.func.id in dangerous_calls:
+                    return False, f"Dangerous function call detected: {node.func.id}()"
+        
+        # Verify BaseSkill inheritance
+        has_base_skill = False
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef):
+                for base in node.bases:
+                    if isinstance(base, ast.Name) and base.id == 'BaseSkill':
+                        has_base_skill = True
+                        break
+        
+        if not has_base_skill:
+            return False, "Generated code does not inherit from BaseSkill"
+        
+        return True, "Code validation passed"
+    
     def _apply_skill_mutation(self, mutation: Dict[str, Any]):
-        """Writes and registers a synthesized skill."""
+        """Writes and registers a synthesized skill after security validation."""
         val = mutation["value"]
         code = val["code"]
         skill_name = val["skill_name"]
+        
+        # Security validation
+        is_valid, validation_msg = self._validate_skill_code(code)
+        if not is_valid:
+            viki_logger.error(f"Evolution: Skill mutation rejected - {validation_msg}")
+            viki_logger.error(f"Rejected code:\n{code[:500]}")
+            return
+        
+        viki_logger.info(f"Evolution: Skill code validated successfully - {validation_msg}")
         
         file_path = os.path.join(self.dynamic_skills_dir, f"{skill_name}.py")
         try:
             with open(file_path, 'w') as f:
                 f.write(code)
             viki_logger.info(f"Evolution: Skill code written to {file_path}")
+            
+            # Log full audit trail
+            viki_logger.info(f"Evolution Audit: Skill '{skill_name}' created at {time.time()}")
+            viki_logger.debug(f"Evolution Audit: Code preview:\n{code[:200]}...")
             
             if self.skill_registry:
                 # Hot-load the new module

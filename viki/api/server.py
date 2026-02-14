@@ -7,6 +7,8 @@ from flask_cors import CORS
 from datetime import datetime
 import sys
 import os
+import asyncio
+from functools import wraps
 
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -25,6 +27,13 @@ settings_path = os.path.join(base_dir, "config", "settings.yaml")
 
 controller = VIKIController(settings_path=settings_path, soul_path=soul_path)
 
+def async_route(f):
+    """Decorator to properly handle async routes in Flask."""
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        return asyncio.run(f(*args, **kwargs))
+    return wrapper
+
 @app.route('/ping', methods=['GET'])
 def ping():
     return "pong"
@@ -38,58 +47,58 @@ def health():
             'name': controller.soul.config.get('name', 'VIKI')
         })
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        print(f"HEALTH ERROR: {e}", flush=True)
+        viki_logger.error(f"Health check error: {e}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/chat', methods=['POST'])
+@async_route
 async def chat():
     """Process chat messages asynchronously"""
     try:
-        print("API: Chat request received...")
+        viki_logger.info("API: Chat request received")
         data = request.json
         user_input = data.get('message', '')
         
         if not user_input:
             return jsonify({'error': 'No message provided'}), 400
         
-        print(f"API: Processing '{user_input}'...")
-        # v21: Explicitly await the async controller method
+        viki_logger.info(f"API: Processing user input: '{user_input[:100]}'...")
         response = await controller.process_request(user_input)
-        print("API: Response generated.")
+        viki_logger.info("API: Response generated successfully")
         
         return jsonify({
             'response': response,
             'timestamp': datetime.now().isoformat()
         })
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        print(f"API CHAT ERROR: {e}", flush=True)
+        viki_logger.error(f"API chat error: {e}", exc_info=True)
         return jsonify({'error': f"Internal Server Error: {str(e)}"}), 500
 
 @app.route('/api/memory', methods=['GET'])
-async def get_memory():
+def get_memory():
     """Retrieve conversation memory"""
-    # Use get_context to fetch latest messages from DB or ephemeral memory
-    messages = controller.memory.get_context()
-    return jsonify({
-        'messages': messages,
-        'limit': controller.memory.max_short_term
-    })
+    try:
+        # Use get_context to fetch latest messages from DB or ephemeral memory
+        messages = controller.memory.working.get_trace()
+        return jsonify({
+            'messages': messages,
+            'limit': controller.memory.working.max_turns
+        })
+    except Exception as e:
+        viki_logger.error(f"Memory retrieval error: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/memory', methods=['DELETE'])
-async def clear_memory():
+def clear_memory():
     """Clear conversation memory"""
-    if controller.memory.db:
-        controller.memory.db["messages"].delete_where()
+    if controller.memory.working.db:
+        controller.memory.working.db["messages"].delete_where()
     else:
-        controller.memory.ephemeral_history = []
+        controller.memory.working.ephemeral_history = []
     return jsonify({'status': 'cleared'})
 
 @app.route('/api/skills', methods=['GET'])
-async def get_skills():
+def get_skills():
     """List all registered skills"""
     skills = []
     for name, skill in controller.skill_registry.skills.items():
@@ -101,7 +110,7 @@ async def get_skills():
     return jsonify({'skills': skills})
 
 @app.route('/api/models', methods=['GET'])
-async def get_models():
+def get_models():
     """List available models"""
     models = []
     if hasattr(controller, 'model_router'):
@@ -150,8 +159,8 @@ def get_missions():
     return jsonify({'queue': [], 'active': []})
 
 if __name__ == '__main__':
-    print("Starting VIKI API Server (ASYNCHRONOUS)...")
-    print(f"VIKI Version: {controller.soul.config.get('version', 'Unknown')}")
-    print("API available at: http://localhost:5000")
+    viki_logger.info("Starting VIKI API Server (ASYNCHRONOUS)...")
+    viki_logger.info(f"VIKI Version: {controller.soul.config.get('version', 'Unknown')}")
+    viki_logger.info("API available at: http://localhost:5000")
     # Note: debug mode can sometimes interfere with async loops in some flask versions
     app.run(debug=True, host='0.0.0.0', port=5000)

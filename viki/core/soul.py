@@ -13,7 +13,9 @@ class Soul:
             with open(path, 'r') as f:
                 return yaml.safe_load(f)
         except Exception as e:
-            print(f"Error loading SOUL config: {e}")
+            import logging
+            logger = logging.getLogger('viki.soul')
+            logger.error(f"Error loading SOUL config: {e}")
             return {}
 
     def get_system_prompt(self) -> str:
