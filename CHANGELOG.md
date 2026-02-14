@@ -2,7 +2,18 @@
 
 All notable changes to the VIKI Sovereign Intelligence project will be documented in this file.
 
-## [2.3.0] - 2026-02-12 (Intelligence Governance)
+## [7.1.0] - 2026-02-14 (Stability & Persistence Persistence)
+
+### Added
+- **SQLite v3 Migration**: Fully decommissioned legacy `lessons_semantic.json` and moved all long-term knowledge to a relational SQLite database.
+- **Unified Learning API**: Replaced all direct `.memory` attribute calls with structured `LearningModule` methods (`save_lesson`, `get_total_lesson_count`, etc.).
+- **Integrated Forge 2.0**: Merged standalone model-forging scripts into the core kernel (`viki/forge.py`), enabling seamless autonomous evolution.
+- **Refactored Skill Registry**: Skills now correctly register their requirements during initialization, eliminating `TypeError` during ReAct loops.
+
+### Fixed
+- **AttributeError**: Resolved critical system crash where components attempted to access the non-existent `.memory` dictionary in the LearningModule.
+- **Async Startup Traceback**: Fixed unawaited `_startup_pulse` warnings and ensured clean initialization of cognitive layers.
+- **Legacy Path Pollution**: Removed redundant scripts and backup files to ensure a lean, production-ready directory structure.
 
 ### The Governance Pillar
 - **CapabilityRegistry**: Implemented a granular permission system. Skills like `filesystem_write` and `shell_exec` are now strictly gated behind capability checks.

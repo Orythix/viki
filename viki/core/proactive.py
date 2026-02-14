@@ -54,11 +54,8 @@ class WellnessPulse:
                 continue
 
             # 2. Pattern Awareness (Confidence Check)
-            suggestions = []
-            for i, lesson in enumerate(self.controller.learning.memory.get('lessons', [])):
-                meta = self.controller.learning.memory['metadata'][i]
-                if meta.get('count', 1) >= 3 and lesson not in self.dismissed_patterns:
-                    suggestions.append(lesson)
+            frequent = self.controller.learning.get_frequent_lessons(3)
+            suggestions = [l for l in frequent if l not in self.dismissed_patterns]
 
             if suggestions:
                 best_suggestion = suggestions[best_suggestion_idx if 'best_suggestion_idx' in locals() else 0] if 'best_suggestion' in locals() else suggestions[0]

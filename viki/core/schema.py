@@ -70,9 +70,10 @@ class LayerState(BaseModel):
 class WorldState(BaseModel):
     """v10: Long-term persistent world model."""
     apps: Dict[str, Any] = Field(default_factory=dict)
-    workflows: List[str] = Field(default_factory=list)
-    user_habits: List[str] = Field(default_factory=list)
+    workflows: Dict[str, Any] = Field(default_factory=dict)
+    user_habits: List[Dict[str, Any]] = Field(default_factory=list)
     safety_zones: Dict[str, str] = Field(default_factory=dict)
+    semantic_paths: Dict[str, str] = Field(default_factory=dict) # Path -> Purpose/Label
     last_updated: float = Field(default_factory=time.time)
 
 class TaskProgress(BaseModel):

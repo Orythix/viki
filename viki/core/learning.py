@@ -2,6 +2,8 @@ import asyncio
 import json
 import os
 import time
+import hashlib
+import sqlite3
 import numpy as np
 from typing import List, Dict, Any, Optional
 from viki.config.logger import viki_logger
@@ -13,12 +15,15 @@ util = None
 
 class LearningModule:
     """
-    Semantic Memory 2.0: Now with Relationship Tracking (Pseudo-Graph).
+    Semantic Memory 3.0: High-performance SQLite backend with automatic JSON migration.
+    Supports structured knowledge, narrative experiences, and automated failure tracking.
     """
     def __init__(self, data_dir: str):
         self.data_dir = data_dir
         os.makedirs(self.data_dir, exist_ok=True)
-        self.lessons_file = os.path.join(self.data_dir, "lessons_semantic.json")
+        self.db_path = os.path.join(self.data_dir, "viki_knowledge.db")
+        self.legacy_file = os.path.join(self.data_dir, "lessons_semantic.json")
+        
         self.encoder = None
         global HAS_SEMANTIC, SentenceTransformer, util
         
@@ -27,140 +32,297 @@ class LearningModule:
             HAS_SEMANTIC = True
             self.encoder = SentenceTransformer('all-MiniLM-L6-v2')
         except Exception as e:
-            viki_logger.warning(f"Semantic Engine unavailable ({e}). Falling back to keyword matching.")
+            viki_logger.warning(f"Semantic Engine restricted ({e}). Using keyword proximity.")
 
-                
-        self.memory = self._load_memory()
+        self._init_db()
+        self._migrate_if_needed()
 
-    def _load_memory(self) -> Dict[str, Any]:
-        default_struct = {'lessons': [], 'embeddings': [], 'relationships': [], 'macros': [], 'failures': [], 'metadata': []}
-        if os.path.exists(self.lessons_file):
-            try:
-                with open(self.lessons_file, 'r') as f:
-                    data = json.load(f)
-                    # Support legacy and fill missing keys
-                    for key in default_struct:
-                        if key not in data: data[key] = default_struct[key]
-                    return data
-            except:
-                return default_struct
-        return default_struct
-
-    def save_failure(self, action: str, error: str, context: str):
-        """Records a failed attempt to prevent repetition."""
-        if 'failures' not in self.memory: self.memory['failures'] = []
+    def _init_db(self):
+        """Initialize SQLite schema for all knowledge types."""
+        self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        self.conn.row_factory = sqlite3.Row
+        cur = self.conn.cursor()
         
-        failure_entry = {
-            'action': action,
-            'error': error,
-            'context': context,
-            'timestamp': time.time()
-        }
-        self.memory['failures'].append(failure_entry)
+        # Lessons & Facts
+        cur.execute('''CREATE TABLE IF NOT EXISTS lessons (
+            id TEXT PRIMARY KEY,
+            content TEXT,
+            text_representation TEXT,
+            embedding TEXT,
+            created_at REAL,
+            last_accessed REAL,
+            access_count INTEGER DEFAULT 1,
+            author TEXT,
+            source_task TEXT,
+            reliability REAL
+        )''')
         
-        # Limit failure memory size to most recent 50 to avoid bloat
-        if len(self.memory['failures']) > 50:
-            self.memory['failures'] = self.memory['failures'][-50:]
-            
-        self._save_memory()
-        viki_logger.warning(f"Failure Recorded: {action} -> {error}")
-
-    def get_relevant_failures(self, current_context: str, days_threshold: int = 7) -> List[str]:
-        """
-        Retrieves past failures with Decay logic:
-        - Older than 'days_threshold' are ignored.
-        - Matches based on intent similarity.
-        """
-        if not self.memory.get('failures'): return []
+        # Relationships (Knowledge Graph)
+        cur.execute('''CREATE TABLE IF NOT EXISTS relationships (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lesson_id TEXT,
+            subj TEXT,
+            pred TEXT,
+            obj TEXT,
+            FOREIGN KEY(lesson_id) REFERENCES lessons(id)
+        )''')
         
-        now = time.time()
-        max_age = days_threshold * 24 * 60 * 60
-        relevant = []
+        # Narratives (Episodic Experience)
+        cur.execute('''CREATE TABLE IF NOT EXISTS narratives (
+            id TEXT PRIMARY KEY,
+            event TEXT,
+            significance REAL,
+            mood TEXT,
+            timestamp REAL
+        )''')
         
-        # 1. Temporal Decay Filter
-        active_failures = [f for f in self.memory['failures'] if (now - f.get('timestamp', 0)) < max_age]
+        # Failures (Negative Knowledge)
+        cur.execute('''CREATE TABLE IF NOT EXISTS failures (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            action TEXT,
+            error TEXT,
+            context TEXT,
+            timestamp REAL
+        )''')
         
-        if not active_failures: return []
-
-        # 2. Context Matching
-        current_lower = current_context.lower()
+        # Macros (Procedural Workflows)
+        cur.execute('''CREATE TABLE IF NOT EXISTS macros (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            trigger_condition TEXT,
+            steps TEXT,
+            success_count INTEGER DEFAULT 1,
+            created_at REAL
+        )''')
         
-        # Try semantic matching if available
-        if self.encoder and active_failures:
-            try:
-                fail_contexts = [f['context'] for f in active_failures]
-                query_emb = self.encoder.encode(current_context, convert_to_tensor=True)
-                fail_embs = self.encoder.encode(fail_contexts, convert_to_tensor=True)
-                results = util.semantic_search(query_emb, fail_embs, top_k=3)
-                
-                for hit in results[0]:
-                    if hit['score'] > 0.4: # Higher threshold for failures
-                        f = active_failures[hit['corpus_id']]
-                        relevant.append(f"PAST FAILURE (Sim: {hit['score']:.2f}): Tried '{f['action']}' in similar context and got '{f['error']}'")
-            except Exception as e:
-                viki_logger.warning(f"Semantic failure matching failed: {e}")
-
-        # Fallback to simple keyword matching if semantic didn't fill it
-        if not relevant:
-            for f in active_failures:
-                if any(word in current_lower for word in f['action'].lower().split() if len(word) > 3):
-                    relevant.append(f"PAST FAILURE: Tried '{f['action']}' but got '{f['error']}'")
+        # Indices for speed
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_lessons_accessed ON lessons(last_accessed)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_narratives_time ON narratives(timestamp)")
         
-        return relevant[-3:]
+        self.conn.commit()
 
     def save_macro(self, trigger_condition: str, action_sequence: List[Dict[str, Any]]):
         """Saves a procedural workflow/macro."""
-        if 'macros' not in self.memory: self.memory['macros'] = []
-        
-        self.memory['macros'].append({
-            'trigger': trigger_condition,
-            'steps': action_sequence,
-            'success_count': 1,
-            'created_at': time.time()
-        })
-        self._save_memory()
+        self.conn.execute('''INSERT INTO macros (trigger_condition, steps, created_at)
+            VALUES (?, ?, ?)''', (trigger_condition, json.dumps(action_sequence), time.time()))
+        self.conn.commit()
         viki_logger.info(f"Macro Learned: {trigger_condition}")
 
-    def _save_memory(self):
-        with open(self.lessons_file, 'w') as f:
-            json.dump(self.memory, f)
+    def _migrate_if_needed(self):
+        """One-way migration from legacy JSON memory to SQLite."""
+        if not os.path.exists(self.legacy_file):
+            return
+            
+        try:
+            viki_logger.info("MIGRATION: Moving legacy JSON memory to SQLite...")
+            with open(self.legacy_file, 'r') as f:
+                data = json.load(f)
+            
+            lessons = data.get('lessons', [])
+            embeddings = data.get('embeddings', [])
+            metadata = data.get('metadata', [])
+            narratives = data.get('narratives', [])
+            failures = data.get('failures', [])
+            
+            # Migrate lessons
+            for i, lesson in enumerate(lessons):
+                meta = metadata[i] if i < len(metadata) else {}
+                emb = embeddings[i] if i < len(embeddings) else []
+                
+                text_rep = str(lesson)
+                if isinstance(lesson, dict):
+                    text_rep = f"{lesson.get('trigger', '')}: {lesson.get('fact', '')}"
+                
+                lid = hashlib.md5(text_rep.encode()).hexdigest()[:12]
+                
+                self.conn.execute('''INSERT OR IGNORE INTO lessons 
+                    (id, content, text_representation, embedding, created_at, last_accessed, access_count, author, source_task, reliability)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                    (lid, json.dumps(lesson), text_rep, json.dumps(emb), 
+                     meta.get('created_at', time.time()), meta.get('last_accessed', time.time()),
+                     meta.get('count', 1), meta.get('author', 'Legacy'), 
+                     meta.get('source_task', 'Migration'), meta.get('reliability', 1.0))
+                )
+            
+            # Migrate Narratives
+            for n in narratives:
+                nid = n.get('id', hashlib.md5(n['event'].encode()).hexdigest()[:8])
+                self.conn.execute('''INSERT OR IGNORE INTO narratives 
+                    (id, event, significance, mood, timestamp)
+                    VALUES (?, ?, ?, ?, ?)''',
+                    (nid, n['event'], n['significance'], n.get('mood', 'neutral'), n['timestamp']))
+            
+            # Migrate Failures
+            for f in failures:
+                self.conn.execute('''INSERT INTO failures (action, error, context, timestamp)
+                    VALUES (?, ?, ?, ?)''', (f['action'], f['error'], f['context'], f['timestamp']))
 
-    def save_lesson(self, lesson: str, relationship: Optional[Dict[str, str]] = None, author: str = "Self", source_task: str = "Unknown"):
-        if not lesson or len(lesson) < 5:
+            self.conn.commit()
+            
+            # Rename legacy file to avoid re-migration
+            os.rename(self.legacy_file, self.legacy_file + ".bak")
+            viki_logger.info("MIGRATION COMPLETE. JSON memory archived.")
+        except Exception as e:
+            viki_logger.error(f"Migration Failed: {e}")
+
+    def save_lesson(self, lesson: str = None, relationship: Optional[Dict[str, str]] = None, author: str = "Self", source_task: str = "Unknown", **kwargs):
+        """Saves a lesson, generates embeddings, and creates a unique knowledge trace."""
+        if not lesson and 'fact' in kwargs:
+            trigger = kwargs.get('trigger', 'Knowledge Acquisition')
+            fact = kwargs['fact']
+            lesson_obj = {"trigger": trigger, "fact": fact}
+            lesson_str = f"{trigger}: {fact}"
+        else:
+            lesson_obj = lesson
+            lesson_str = lesson
+
+        if not lesson_str or (isinstance(lesson_str, str) and len(lesson_str) < 5):
             return
 
-        # Check for duplicates in text lessons
-        if lesson in self.memory['lessons']:
-            # Maybe update metadata instead of skipping?
-            idx = self.memory['lessons'].index(lesson)
-            self.memory['metadata'][idx]['last_accessed'] = time.time()
-            self.memory['metadata'][idx]['count'] = self.memory['metadata'][idx].get('count', 1) + 1
-            self._save_memory()
+        lid = hashlib.md5(lesson_str.encode()).hexdigest()[:12]
+        
+        # Update if exists
+        cur = self.conn.cursor()
+        cur.execute("SELECT id, access_count FROM lessons WHERE id = ?", (lid,))
+        row = cur.fetchone()
+        
+        if row:
+            cur.execute("UPDATE lessons SET last_accessed = ?, access_count = access_count + 1 WHERE id = ?", 
+                       (time.time(), lid))
+            self.conn.commit()
             return
 
+        # New lesson - embedding
         embedding = []
         if self.encoder:
-            enc = self.encoder.encode(lesson, convert_to_tensor=False)
-            embedding = enc.tolist() if isinstance(enc, np.ndarray) else enc
-            
-        self.memory['lessons'].append(lesson)
-        self.memory['embeddings'].append(embedding)
-        
-        # v10: Knowledge Provenance Metadata
-        self.memory['metadata'].append({
-            'created_at': time.time(),
-            'last_accessed': time.time(),
-            'author': author,
-            'source_task': source_task,
-            'count': 1,
-            'type': 'fact' if not relationship else 'relationship',
-            'reliability': 1.0 if author == "User" else 0.8
-        })
+            try:
+                enc = self.encoder.encode(lesson_str, convert_to_tensor=False)
+                embedding = enc.tolist() if isinstance(enc, np.ndarray) else enc
+            except: pass
 
-        if relationship:
-            self.memory['relationships'].append(relationship)
+        cur.execute('''INSERT INTO lessons 
+            (id, content, text_representation, embedding, created_at, last_accessed, access_count, author, source_task, reliability)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            (lid, json.dumps(lesson_obj), lesson_str, json.dumps(embedding), 
+             time.time(), time.time(), 1, author, source_task, kwargs.get('reliability', 0.8)))
         
-        self._save_memory()
+        if relationship:
+            cur.execute("INSERT INTO relationships (lesson_id, subj, pred, obj) VALUES (?, ?, ?, ?)",
+                       (lid, relationship.get('subject'), relationship.get('predicate'), relationship.get('object')))
+        
+        self.conn.commit()
+
+    def get_frequent_lessons(self, min_count: int = 3) -> List[str]:
+        """Returns lessons that have been reinforced (access_count >= min_count)."""
+        cur = self.conn.cursor()
+        cur.execute("SELECT text_representation FROM lessons WHERE access_count >= ?", (min_count,))
+        return [r['text_representation'] for r in cur.fetchall()]
+
+    def get_all_lessons(self) -> List[Dict[str, Any]]:
+        """Returns all lessons as a list of dicts for the Forge/Training."""
+        cur = self.conn.cursor()
+        cur.execute("SELECT content FROM lessons")
+        return [json.loads(r['content']) for r in cur.fetchall()]
+
+    def get_total_lesson_count(self) -> int:
+        """Returns the total number of unique lessons in the DB."""
+        cur = self.conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM lessons")
+        return cur.fetchone()[0]
+
+    def get_relevant_lessons(self, context: str, limit: int = 5) -> List[str]:
+        """Performs semantic or lexical search over the knowledge base."""
+        cur = self.conn.cursor()
+        cur.execute("SELECT id, content, text_representation, embedding FROM lessons")
+        rows = cur.fetchall()
+        
+        if not rows: return []
+        
+        if self.encoder:
+            try:
+                contents = [r['text_representation'] for r in rows]
+                embeddings = [json.loads(r['embedding']) for r in rows]
+                
+                # Check if we have valid embeddings
+                if not any(embeddings):
+                    return contents[-limit:]
+
+                query_emb = self.encoder.encode(context, convert_to_tensor=True)
+                corpus_embs = self.encoder.encode(contents, convert_to_tensor=True)
+                results = util.semantic_search(query_emb, corpus_embs, top_k=limit)
+                
+                relevant = []
+                for hit in results[0]:
+                    if hit['score'] > 0.25:
+                        idx = hit['corpus_id']
+                        relevant.append(contents[idx])
+                        # Async update access metadata? For now, sync.
+                        lid = rows[idx]['id']
+                        cur.execute("UPDATE lessons SET last_accessed = ? WHERE id = ?", (time.time(), lid))
+                
+                self.conn.commit()
+                return relevant if relevant else contents[-3:]
+            except: pass
+            
+        # Fallback to recent retrieval from the already fetched rows
+        return [r['text_representation'] for r in rows[-limit:]]
+
+    def has_macros(self) -> bool:
+        """Checks if any procedural macros are learned."""
+        cur = self.conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM macros")
+        return cur.fetchone()[0] > 0
+
+    def save_narrative(self, event: str, significance: float = 0.5, mood: str = "neutral"):
+        """Saves a shared experience moment."""
+        nid = hashlib.md5(event.encode()).hexdigest()[:8]
+        self.conn.execute('''INSERT OR REPLACE INTO narratives (id, event, significance, mood, timestamp)
+            VALUES (?, ?, ?, ?, ?)''', (nid, event, significance, mood, time.time()))
+        self.conn.commit()
+        viki_logger.info(f"Narrative Logged: {event[:40]}...")
+
+    def get_relevant_narratives(self, query: str = None, limit: int = 2) -> List[str]:
+        """Recalls past experiences based on keyword matching (fast)."""
+        cur = self.conn.cursor()
+        if not query:
+            cur.execute("SELECT event FROM narratives ORDER BY timestamp DESC LIMIT ?", (limit,))
+        else:
+            # Simple keyword match for narratives
+            words = [w.lower() for w in query.split() if len(w) > 3]
+            if not words:
+                cur.execute("SELECT event FROM narratives ORDER BY timestamp DESC LIMIT ?", (limit,))
+            else:
+                clauses = " OR ".join(["event LIKE ?" for _ in words])
+                params = [f"%{w}%" for w in words] + [limit]
+                cur.execute(f"SELECT event FROM narratives WHERE {clauses} ORDER BY significance DESC, timestamp DESC LIMIT ?", params)
+        
+        return [r['event'] for r in cur.fetchall()]
+
+    def save_failure(self, action: str, error: str, context: str):
+        self.conn.execute("INSERT INTO failures (action, error, context, timestamp) VALUES (?, ?, ?, ?)",
+                         (action, error, context, time.time()))
+        self.conn.commit()
+
+    def get_relevant_failures(self, context: str) -> List[str]:
+        cur = self.conn.cursor()
+        now = time.time()
+        max_age = 7 * 24 * 60 * 60
+        cur.execute("SELECT action, error FROM failures WHERE timestamp > ? ORDER BY timestamp DESC LIMIT 50", (now - max_age,))
+        rows = cur.fetchall()
+        
+        relevant = []
+        context_lower = context.lower()
+        for r in rows:
+            if any(word in context_lower for word in r['action'].lower().split() if len(word) > 3):
+                relevant.append(f"PAST FAILURE: Tried '{r['action']}' but got '{r['error']}'")
+        return relevant[-3:]
+
+    def get_stable_lesson_count(self) -> int:
+        cur = self.conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM lessons WHERE access_count > 1")
+        return cur.fetchone()[0]
+
+    def close(self):
+        self.conn.close()
 
     async def analyze_session(self, model, trace: List[Dict[str, str]], outcome: str):
         """
@@ -214,60 +376,12 @@ class LearningModule:
         except Exception as e:
             viki_logger.error(f"Memory analysis error: {e}")
 
-    def get_stable_lesson_count(self) -> int:
-        """Count lessons that have been reinforced (count > 1)."""
-        count = 0
-        for meta in self.memory.get('metadata', []):
-            if meta.get('count', 1) > 1:
-                count += 1
-        return count
-
-    def get_relevant_lessons(self, context: str) -> List[str]:
-        if not self.memory['lessons']: return []
-        if not self.encoder or not self.memory['embeddings'] or not self.memory['embeddings'][0]:
-            return self.memory['lessons'][-5:]
-
-        try:
-            query_embedding = self.encoder.encode(context, convert_to_tensor=True)
-            corpus_embeddings = self.encoder.encode(self.memory['lessons'], convert_to_tensor=True) 
-            results = util.semantic_search(query_embedding, corpus_embeddings, top_k=5)
-            top_hits = results[0]
-            
-            relevant = []
-            for hit in top_hits:
-                if hit['score'] > 0.25:
-                    idx = hit['corpus_id']
-                    relevant.append(self.memory['lessons'][idx])
-                    # Update usage metadata
-                    self.memory['metadata'][idx]['last_accessed'] = time.time()
-            
-            return relevant if relevant else self.memory['lessons'][-3:]
-        except Exception:
-            return self.memory['lessons'][-5:]
-
     def prune_old_lessons(self, days: int = 30):
         """Removes lessons that haven't been accessed in X days."""
         now = time.time()
         max_age = days * 24 * 60 * 60
         
-        indices_to_keep = []
-        for i, meta in enumerate(self.memory.get('metadata', [])):
-            if now - meta.get('last_accessed', 0) < max_age:
-                indices_to_keep.append(i)
-        
-        if len(indices_to_keep) == len(self.memory['lessons']):
-            return
-
-        new_lessons = [self.memory['lessons'][i] for i in indices_to_keep]
-        new_embeddings = [self.memory['embeddings'][i] for i in indices_to_keep]
-        new_metadata = [self.memory['metadata'][i] for i in indices_to_keep]
-        
-        # Relationships are harder to index if they don't map 1:1, 
-        # but in our current save_lesson they do map 1:1 if present.
-        # Actually, let's keep relationships simple for now or filter them too.
-        
-        self.memory['lessons'] = new_lessons
-        self.memory['embeddings'] = new_embeddings
-        self.memory['metadata'] = new_metadata
-        self._save_memory()
-        viki_logger.info(f"Pruned {len(indices_to_keep) - len(new_lessons)} old memories.")
+        cur = self.conn.cursor()
+        cur.execute("DELETE FROM lessons WHERE last_accessed < ?", (now - max_age,))
+        self.conn.commit()
+        viki_logger.info(f"Pruned old memories (older than {days} days).")

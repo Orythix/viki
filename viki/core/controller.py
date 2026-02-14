@@ -26,8 +26,9 @@ from viki.skills.builtins.sfs_skill import SemanticFSSkill
 from viki.skills.builtins.security_skill import SecuritySkill
 from viki.skills.creation.forge import ModelForgeSkill
 from viki.skills.builtins.recall_skill import RecallSkill
-from viki.skills.builtins.recall_skill import RecallSkill
 from viki.skills.builtins.media_skill import MediaControlSkill
+from viki.skills.builtins.short_video_skill import ShortVideoSkill
+# HackingSkill disabled to prevent AV interference
 from viki.skills.builtins.clipboard_skill import ClipboardSkill
 from viki.skills.builtins.window_management_skill import WindowManagerSkill
 from viki.skills.builtins.shell_skill import ShellSkill
@@ -124,7 +125,8 @@ class VIKIController:
         # v9-v10 Digital Cognitive Organism State
         self.signals = CognitiveSignals()
         self.world = WorldModel(self.settings.get('system', {}).get('data_dir', './data'))
-        self.cortex = ConsciousnessStack(self.model_router, soul_config=self.soul.config, skill_registry=self.skill_registry)
+        self.cortex = ConsciousnessStack(self.model_router, soul_config=self.soul.config, 
+                                         skill_registry=self.skill_registry, world_model=self.world)
         
         # v11: Intelligence Governance (Judgment Engine)
         self.judgment = JudgmentEngine(self.learning, self.budgets)
@@ -145,6 +147,31 @@ class VIKIController:
         self.bio = BioModule()
         self.dream = DreamModule(self)
 
+        # v13: Autonomous Startup Pulse
+        asyncio.create_task(self._startup_pulse())
+
+    async def _startup_pulse(self):
+        """Autonomous startup sequence: Connect, Research, Evolve."""
+        await asyncio.sleep(5) # Give other services time to start
+        viki_logger.info("STARTUP PULSE: Initiating autonomous knowledge sync...")
+        
+        # 1. Quick Research Pulse
+        if not self.air_gap:
+            try:
+                research_skill = self.skill_registry.get_skill('research')
+                if research_skill:
+                    viki_logger.info("Startup: Checking web for latest digital trends...")
+                    await research_skill.execute({"query": "latest tech and ai news today", "num_results": 2})
+            except: pass
+            
+        # 2. Check for pending evolution
+        new_lessons = self.learning.get_total_lesson_count()
+        if new_lessons >= 5: # Lower threshold at startup for quick optimization
+             viki_logger.info(f"Startup: {new_lessons} lessons found. Triggering neural optimization.")
+             forge = self.skill_registry.get_skill('internal_forge')
+             if forge:
+                 await forge.execute({"steps": 20}) # Very quick pulse
+
     def _load_yaml(self, path: str) -> Dict[str, Any]:
         try:
             with open(path, 'r') as f:
@@ -158,7 +185,7 @@ class VIKIController:
         self.skill_registry.register_skill(FileSystemSkill())
         self.skill_registry.register_skill(ThinkingSkill())
         self.skill_registry.register_skill(SystemControlSkill())
-        self.skill_registry.register_skill(ResearchSkill())
+        self.skill_registry.register_skill(ResearchSkill(self))
         self.skill_registry.register_skill(DevSkill())
         self.skill_registry.register_skill(VoiceSkill(self.voice_module))
         self.skill_registry.register_skill(VisionSkill())
@@ -168,14 +195,15 @@ class VIKIController:
         self.skill_registry.register_skill(OverlaySkill())
         self.skill_registry.register_skill(SemanticFSSkill(self))
         self.skill_registry.register_skill(SecuritySkill())
-        self.skill_registry.register_skill(ModelForgeSkill())
-        self.skill_registry.register_skill(RecallSkill(self))
+        self.skill_registry.register_skill(ModelForgeSkill(self))
         self.skill_registry.register_skill(RecallSkill(self))
         self.skill_registry.register_skill(MediaControlSkill())
         self.skill_registry.register_skill(ClipboardSkill())
         self.skill_registry.register_skill(WindowManagerSkill())
         self.skill_registry.register_skill(ShellSkill())
         self.skill_registry.register_skill(NotificationSkill())
+        self.skill_registry.register_skill(ShortVideoSkill(self))
+        # self.skill_registry.register_skill(HackingSkill()) # Disabled due to system-level safety blocks
 
         # Aliases for natural language routing
         self.skill_registry.skills['look'] = self.skill_registry.get_skill('look_at_screen')
@@ -208,6 +236,9 @@ class VIKIController:
         self.skill_registry.skills['powershell'] = self.skill_registry.get_skill('shell')
         self.skill_registry.skills['notify'] = self.skill_registry.get_skill('notification')
         self.skill_registry.skills['toast'] = self.skill_registry.get_skill('notification')
+        self.skill_registry.skills['video'] = self.skill_registry.get_skill('short_video_agent')
+        self.skill_registry.skills['short'] = self.skill_registry.get_skill('short_video_agent')
+        # Custom aliases removed
 
     async def process_request(self, user_input: str, on_event=None) -> str:
         # v18: Kill-Switch Verification
@@ -226,6 +257,14 @@ class VIKIController:
         # Record user message in conversation memory
         self.memory.add_message("user", safe_input)
         
+        # Narrative Memory Recall (v12: Human Experience)
+        narrative_context = ""
+        try:
+            relevant_narratives = self.learning.get_relevant_narratives(safe_input, limit=2)
+            if relevant_narratives:
+                narrative_context = "\nRECALLED SHARED EXPERIENCES:\n" + "\n".join([f"- {n}" for n in relevant_narratives])
+        except: pass
+
         # URL Detection: If user shares a URL, auto-fetch content
         import re as _re
         urls = _re.findall(r'https?://[^\s<>"]+', safe_input)
@@ -265,7 +304,7 @@ class VIKIController:
         
         # Context extraction for judgment
         judgement_context = {
-            "has_macros": len(self.learning.memory.get('macros', [])) > 0,
+            "has_macros": self.learning.has_macros(),
             "recent_load": self.signals.get_modulation().get('load_bias', 0.0),
             "is_protected_zone": self.world.state.safety_zones.get(user_input, '') == 'protected'
         }
@@ -364,7 +403,7 @@ class VIKIController:
                 viki_resp: VIKIResponse = await self.cortex.process(
                     safe_input,
                     conversation_history=conversation_history,
-                    url_context=url_context,
+                    url_context=url_context + narrative_context, # Combined fetched + narrative
                     use_lite_schema=use_lite,
                     world_context=world_understanding,
                     signals_context=signals_state,
@@ -490,7 +529,9 @@ class VIKIController:
                         selected_model.record_performance(0.0, False)
                         self.skill_registry.record_execution(skill_name, False, 0.0)
                         self.learning.save_failure(skill_name, str(e), user_input)
-                        return f"Failed to execute '{skill_name}': {e}"
+                        # v12: Human-like accountability
+                        persona_name = self.soul.config.get('name', 'VIKI')
+                        return f"I must apologize, Sachin. My attempt to execute '{skill_name}' failed due to a technical oversight: {e}. I'll refine my approach."
                 else:
                     viki_logger.warning(f"Skill '{skill_name}' not found in registry.")
                     # Fall through to final response
@@ -499,10 +540,10 @@ class VIKIController:
             self.last_interaction_time = time.time()
             llm_response = viki_resp.final_response or "I processed your request but have no specific output."
             
-            # If we had previous action results, include them
+            # If we had previous action results, include them in a structured way
             if action_results:
-                all_results = "\n".join([f"Step {r['step']}: {r['result']}" for r in action_results])
-                final_output = self._compress_output(f"{llm_response}\n\n{all_results}")
+                logs = "\n".join([f"Observation: {r['result']}" for r in action_results])
+                final_output = self._compress_output(f"{llm_response}\n\n--- [TOOL LOGS] ---\n{logs}")
             else:
                 final_output = self._compress_output(llm_response)
             break
@@ -540,7 +581,7 @@ class VIKIController:
 
         # 1. Neural Evolution (Model Refinement)
         stable_lessons = self.learning.get_stable_lesson_count()
-        current_total = len(self.learning.memory.get('lessons', []))
+        current_total = self.learning.get_total_lesson_count()
         
         root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         state_path = os.path.join(root_dir, "viki", "data", "evolution_state.json")
@@ -597,5 +638,23 @@ class VIKIController:
 
     async def shutdown(self):
         viki_logger.info("Shutting down...")
+        
+        # v12: Session Narrative Synthesis
+        try:
+            if len(self.memory.get_context()) > 4: # Only record meaningful sessions
+                viki_logger.info("Synthesizing session narrative...")
+                context = self.memory.get_context()
+                # Create a simple summary of the interaction
+                user_msg_count = sum(1 for m in context if m['role'] == 'user')
+                summary = f"Had a session with Sachin involving {user_msg_count} exchanges. "
+                if any(m['role'] == 'assistant' and 'error' in m['content'].lower() for m in context):
+                     summary += "We encountered some technical hurdles but optimized through them."
+                else:
+                     summary += "The synchronization was high and we achieved the objectives smoothly."
+                
+                self.learning.save_narrative(summary, significance=0.7, mood=str(self.bio.get_state()))
+        except Exception as e:
+            viki_logger.error(f"Narrative synthesis failed: {e}")
+
         self.wellness.stop()
         self.learning.prune_old_lessons()

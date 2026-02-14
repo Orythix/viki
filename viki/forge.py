@@ -11,12 +11,12 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
-from viki.config.logger import viki_logger
+from viki.core.learning import LearningModule
 
 # Paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, "..", "data")
 SOUL_PATH = os.path.join(BASE_DIR, "config", "soul.yaml")
-MEMORY_PATH = os.path.join(BASE_DIR, "..", "data", "lessons_semantic.json")
 MODELFILE_PATH = os.path.join(BASE_DIR, "Modelfile")
 
 def load_soul():
@@ -26,58 +26,13 @@ def load_soul():
     except:
         return {}
 
-def load_memory_data():
-    if os.path.exists(MEMORY_PATH):
-        try:
-            with open(MEMORY_PATH, 'r') as f:
-                return json.load(f)
-        except:
-            return {}
-    return {}
-
-def prune_memories(data: Dict[str, Any], days=30):
-    """
-    Remove memories that haven't been accessed for certain days.
-    """
-    if not data or 'lessons' not in data: return data
-    
-    now = time.time()
-    max_age = days * 24 * 60 * 60
-    
-    lessons = data.get('lessons', [])
-    metadata = data.get('metadata', [])
-    embeddings = data.get('embeddings', [])
-    
-    # If no metadata, we can't prune accurately, assume all are fresh
-    if not metadata: return data
-    
-    indices_to_keep = []
-    for i, meta in enumerate(metadata):
-        if now - meta.get('last_accessed', 0) < max_age:
-            indices_to_keep.append(i)
-            
-    if len(indices_to_keep) == len(lessons):
-        return data
-        
-    print(f"[FORGE] Pruning {len(lessons) - len(indices_to_keep)} stale memories...")
-    
-    data['lessons'] = [lessons[i] for i in indices_to_keep]
-    data['metadata'] = [metadata[i] for i in indices_to_keep]
-    data['embeddings'] = [embeddings[i] for i in indices_to_keep]
-    
-    with open(MEMORY_PATH, 'w') as f:
-        json.dump(data, f)
-        
-    return data
-
 def summarize_memories(lessons: List[str]) -> str:
     """
-    In a high-resource environment, we would use an LLM here.
-    For the stable forge, we select high-frequency facts and recent heuristics.
+    Selects core facts and recent heuristics for the system prompt.
     """
     if not lessons: return ""
     
-    # Simple logic: Take most recent 15 and 5 oldest (core identity)
+    # Simple logic: Take first 5 (likely core) and last 15 (recent)
     if len(lessons) <= 20:
         return "\n".join([f"- {m}" for m in lessons])
         
@@ -95,11 +50,10 @@ def create_modelfile():
     soul = load_soul()
     system_prompt = soul.get('system_prompt', '')
     
-    memory_data = load_memory_data()
-    # Prune before baking
-    memory_data = prune_memories(memory_data)
+    # Use LearningModule for data
+    learning = LearningModule(DATA_DIR)
+    memories = learning.get_frequent_lessons(1) # Get all for now
     
-    memories = memory_data.get('lessons', [])
     memory_block = ""
     if memories:
         summary = summarize_memories(memories)

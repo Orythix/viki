@@ -43,10 +43,34 @@ class WorldModel:
         self.state.safety_zones[path] = tier
         self.save()
 
+    def map_path(self, path: str, purpose: str):
+        """Maps a physical path to a semantic purpose (e.g. 'Project VIKI')."""
+        self.state.semantic_paths[path] = purpose
+        self.save()
+
+    def add_habit(self, pattern: str, frequency: str = "occasional"):
+        """Records a recurring user behavior for context injection."""
+        self.state.user_habits.append({
+            "pattern": pattern,
+            "frequency": frequency,
+            "recorded_at": time.time()
+        })
+        # Keep only latest 10 habits
+        if len(self.state.user_habits) > 10:
+            self.state.user_habits.pop(0)
+        self.save()
+
     def get_understanding(self) -> str:
         """Returns a summarized textual prompt of the current world understanding."""
-        apps = ", ".join(list(self.state.apps.keys())[:10])
-        zones = ", ".join([f"{k}({v})" for k, v in self.state.safety_zones.items()])
+        apps = ", ".join(list(self.state.apps.keys())[:5])
+        zones = ", ".join([f"{k}({v})" for k, v in list(self.state.safety_zones.items())[:3]])
+        paths = ", ".join([f"{v}" for v in list(self.state.semantic_paths.values())[:5]])
+        habits = ", ".join([h['pattern'] for h in self.state.user_habits[-3:]])
         
-        return (f"WORLD MODEL: I know about {len(self.state.apps)} apps ({apps}). "
-                f"Safety zones: {zones}. Habits: {len(self.state.user_habits)} patterns detected.")
+        understanding = f"WORLD MODEL AWARENESS:\n"
+        if apps: understanding += f"- Identified Apps: {apps}\n"
+        if paths: understanding += f"- Known Projects/Zones: {paths}\n"
+        if habits: understanding += f"- Personal Habits: {habits}\n"
+        if zones: understanding += f"- Safety Rules: {zones}\n"
+        
+        return understanding

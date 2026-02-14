@@ -25,7 +25,8 @@ class ResearchSkill(BaseSkill):
     Advanced internet research capability with Async support.
     Supports web search (via DuckDuckGo) and page reading (via aiohttp + BeautifulSoup).
     """
-    def __init__(self):
+    def __init__(self, controller=None):
+        self.controller = controller
         self._name = "research"
         self._description = "Search the web or read a URL. Use: research(query='...') to search, research(url='...') to read a page."
         self.headers = {
@@ -84,6 +85,10 @@ class ResearchSkill(BaseSkill):
             if not results:
                 return f"No results found for '{query}'."
             
+            # --- Knowledge Extraction Bridge ---
+            if self.controller:
+                 self._extract_knowledge_from_results(query, results)
+
             formatted = [f"--- SEARCH RESULTS for '{query}' ---"]
             for i, r in enumerate(results, 1):
                 title = r.get('title', 'No title')
@@ -95,6 +100,21 @@ class ResearchSkill(BaseSkill):
         except Exception as e:
             viki_logger.error(f"Search error: {e}")
             return f"Search error: {str(e)}"
+
+    def _extract_knowledge_from_results(self, query: str, results: List[dict]):
+        """Distills snippets into trigger/fact pairs for LearningModule."""
+        if not self.controller or not hasattr(self.controller, 'learning'): return
+        
+        viki_logger.info(f"Research: Extracting autonomous knowledge from '{query}'")
+        for r in results[:3]: # Only top 3 for quality
+            body = r.get('body', r.get('snippet', ''))
+            if len(body) > 30:
+                # Store as a lesson
+                self.controller.learning.save_lesson(
+                    trigger=f"Tell me about {query} ({r.get('title', '')})",
+                    fact=body,
+                    source=r.get('href', 'web')
+                )
 
     async def _read_page(self, url: str) -> str:
         try:

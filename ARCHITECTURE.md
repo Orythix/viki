@@ -1,4 +1,4 @@
-# VIKI Architecture (v7.0.0 Cortex)
+# VIKI Architecture (v7.1.0 Cortex)
 
 ## Core Philosophy
 Following the **Cortex Upgrade**, VIKI follows a "Professional Intelligence" design pattern:
@@ -25,8 +25,8 @@ Following the **Cortex Upgrade**, VIKI follows a "Professional Intelligence" des
 *   **Function**: Classifies tool calls based on risk. Intercepts "Medium" and "Destructive" actions for mandatory user confirmation (`/confirm`).
 
 ### 4. Learning & Failure Memory (`viki/core/learning.py`)
-*   **Role**: Long-Term Stability.
-*   **Function**: Houses both **Semantic Lessons** (facts) and **Failure Logs**. Uses semantic search to retrieve relevant past errors before planning new actions.
+*   **Role**: Long-Term Stability (SQLite v3).
+*   **Function**: Houses both **Semantic Lessons** (facts) and **Failure Logs** in a unified SQLite database. Uses semantic search to retrieve relevant past errors before planning new actions. Replaces legacy JSON-based memory with an optimized relational structure.
 
 ## Cognitive Data Flow
 ```mermaid

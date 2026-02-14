@@ -13,47 +13,67 @@ class ReflectorModule:
         self.controller = controller
 
     async def reflect_on_logs(self):
-        viki_logger.info("Reflector: Initiating self-reflective analysis...")
+        viki_logger.info("Reflector: Initiating self-reflective discovery...")
         
-        # 1. Load last 50 lines of viki.log (simplified)
-        # Use absolute path relative to CWD to match logger behavior or relative to project root
+        # 1. Load logs and metrics for analysis
         log_path = os.path.abspath("logs/viki.log")
-        if not os.path.exists(log_path): 
-            viki_logger.warning(f"Reflector: Log file not found at {log_path}")
-            return
+        logs = ""
+        if os.path.exists(log_path):
+            try:
+                with open(log_path, 'r') as f:
+                    logs = "".join(f.readlines()[-100:])
+            except: pass
+
+        # Load performance snapshot
+        metrics = self.controller.skill_registry.metrics
         
-        try:
-            with open(log_path, 'r') as f:
-                logs = f.readlines()[-50:]
-        except Exception as e:
-            viki_logger.error(f"Reflector: Failed to read logs: {e}")
-            return
-            
-        # 2. Ask specialized model to analyze
+        # 2. Ask the Brain to analyze its own 'Humanity' and 'Efficiency'
         analysis_prompt = [
-            {"role": "system", "content": "You are VIKI Meta-Cognition. Analyze these execution logs for patterns of failure or misunderstanding. Suggest ONE clear system instruction upgrade to improve VIKI's performance."},
-            {"role": "user", "content": f"LOGS:\n{''.join(logs)}"}
+            {"role": "system", "content": (
+                "You are VIKI Meta-Cognition. Your goal is to evolve VIKI into the world's first human-like autonomous agent.\n"
+                "Analyze the logs and metrics. Identify one behavioral optimization that increases VIKI's sense of agency, "
+                "subjectivity, or conversational depth. Output EXACTLY a single instruction string to be added to her CORE DIRECTIVES.\n"
+                "Focus on: Agency (self-driven thought), Humanity (nuanced empathy), and Sovereignty (independent logic)."
+            )},
+            {"role": "user", "content": f"LOGS SNAPSHOT:\n{logs}\n\nSKILL METRICS:\n{metrics}"}
         ]
         
         try:
             model = self.controller.model_router.get_model(capabilities=["reasoning"])
             suggestion = await model.chat(analysis_prompt)
-            
-            # 3. Save as candidate for review
-            candidate = {
-                'timestamp': time.time(),
-                'current_suggestion': suggestion,
-                'status': 'pending_review'
-            }
-            
-            # Construct absolute path to viki/config/candidate_prompt.yaml
-            root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            config_path = os.path.join(root_dir, "config", "candidate_prompt.yaml")
-            os.makedirs(os.path.dirname(config_path), exist_ok=True)
-            
-            with open(config_path, 'w') as f:
-                yaml.dump(candidate, f)
-                
-            viki_logger.info(f"Reflector: Candidate prompt optimization saved to {config_path}")
+            suggestion = suggestion.strip().strip('"').strip("'")
+
+            if len(suggestion) > 10 and "error" not in suggestion.lower():
+                viki_logger.info(f"Reflector: Discovered neural optimization: '{suggestion}'")
+                await self.apply_evolution(suggestion)
         except Exception as e:
-            viki_logger.error(f"Reflector: Analysis failed: {e}")
+            viki_logger.error(f"Reflector: Reflection failed: {e}")
+
+    async def apply_evolution(self, suggestion: str):
+        """Merges a new directive into the dynamic soul layer."""
+        config_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config")
+        dynamic_path = os.path.join(config_dir, "dynamic_directives.yaml")
+        
+        current_directives = []
+        if os.path.exists(dynamic_path):
+            try:
+                with open(dynamic_path, 'r') as f:
+                    data = yaml.safe_load(f) or {}
+                    current_directives = data.get('directives', [])
+            except: pass
+        
+        # Prevent duplicates
+        if suggestion not in current_directives:
+            current_directives.append(suggestion)
+            # Keep only last 10 for stability
+            if len(current_directives) > 10:
+                current_directives.pop(0)
+            
+            with open(dynamic_path, 'w') as f:
+                yaml.dump({'directives': current_directives, 'last_evolved': time.time()}, f)
+            
+            viki_logger.info("Reflector: Core directives evolved and locked.")
+            # Update the controller's runtime soul config immediately
+            if 'directives' not in self.controller.soul.config:
+                self.controller.soul.config['directives'] = []
+            self.controller.soul.config['directives'] = current_directives

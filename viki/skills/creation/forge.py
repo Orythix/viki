@@ -11,7 +11,8 @@ class ModelForgeSkill(BaseSkill):
     "Self-Evolution" Forge: Fine-tunes VIKI's neural weights on new lessons.
     Uses Unsloth for high-efficiency 4-bit LoRA training.
     """
-    def __init__(self):
+    def __init__(self, controller):
+        self.controller = controller
         self._name = "internal_forge"
         self._description = "Initiate neural fine-tuning (Self-Evolution) on learned lessons. Usage: internal_forge()"
 
@@ -51,21 +52,14 @@ class ModelForgeSkill(BaseSkill):
         if not UNSLOTH_AVAILABLE:
             return "Error: Unsloth library or dependencies not found in the environment."
 
-        data_path = "data/lessons_semantic.json"
-        if not os.path.exists(data_path):
-            return f"Error: Dataset {data_path} not found."
-
-        viki_logger.info("Forge: Loading semantic lessons for fine-tuning...")
+        viki_logger.info("Forge: Loading lessons from neural memory for fine-tuning...")
         
         try:
-            with open(data_path, "r") as f:
-                raw_data = json.load(f)
-            
-            # Use 'lessons' key if v2.0 memory, otherwise assume list
-            lessons = raw_data.get('lessons', []) if isinstance(raw_data, dict) else raw_data
+            # Get lessons directly from LearningModule
+            lessons = self.controller.learning.get_all_lessons()
             
             if not lessons:
-                return "Error: No lessons found in the semantic memory to train on."
+                return "Error: No lessons found in the neural memory to train on."
 
             viki_logger.info(f"Forge: Preparing {len(lessons)} lessons for Llama-3 training...")
 
