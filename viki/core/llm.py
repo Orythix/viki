@@ -55,6 +55,7 @@ class LLMProvider(ABC):
         self.error_count = 0
         self.avg_latency = 0.0
         self.call_count = 0
+        self.available = True
 
     def record_performance(self, latency: float, success: bool):
         self.call_count += 1
@@ -104,25 +105,41 @@ class APILLM(LLMProvider):
         self.provider_type = config.get("provider", "openai")
         api_key = os.getenv(self.config.get("api_key_env", "OPENAI_API_KEY"))
         
-        if self.provider_type == "anthropic":
-            from anthropic import AsyncAnthropic
-            self.client = instructor.from_anthropic(
-                AsyncAnthropic(api_key=api_key),
-                mode=instructor.Mode.JSON
-            )
-        else:
-            base_url = self.config.get('base_url', 'https://api.openai.com/v1')
-            self.client = instructor.from_openai(
-                AsyncOpenAI(api_key=api_key, base_url=base_url),
-                mode=instructor.Mode.JSON
-            )
+        try:
+            if self.provider_type == "anthropic":
+                from anthropic import AsyncAnthropic
+                if not api_key:
+                    raise ValueError(f"API key for Anthropic is missing ({self.config.get('api_key_env')})")
+                self.client = instructor.from_anthropic(
+                    AsyncAnthropic(api_key=api_key),
+                    mode=instructor.Mode.ANTHROPIC_JSON
+                )
+            else:
+                base_url = self.config.get('base_url', 'https://api.openai.com/v1')
+                if not api_key and "openai.com" in base_url:
+                     raise ValueError(f"API key for OpenAI is missing ({self.config.get('api_key_env')})")
+                
+                self.client = instructor.from_openai(
+                    AsyncOpenAI(api_key=api_key, base_url=base_url),
+                    mode=instructor.Mode.JSON
+                )
+        except Exception as e:
+            viki_logger.warning(f"Model '{self.model_name}' (provider: {self.provider_type}) disabled: {e}")
+            self.client = None
+            self.available = False
 
     async def chat(self, messages: List[Dict[str, str]], temperature: float = 0.7, image_path: str = None) -> str:
+        if not self.available:
+            return f"Error: Model '{self.model_name}' is unavailable (likely due to missing API key)."
         try:
             if image_path:
                 import base64
-                with open(image_path, "rb") as image_file:
-                    base64_image = base64.b64encode(image_file.read()).decode('utf-8')
+                # Use asyncio.to_thread for file I/O
+                def read_image():
+                    with open(image_path, "rb") as image_file:
+                        return base64.b64encode(image_file.read()).decode('utf-8')
+                
+                base64_image = await asyncio.to_thread(read_image)
                 
                 for i in range(len(messages) - 1, -1, -1):
                     if messages[i]['role'] == 'user':
@@ -143,10 +160,16 @@ class APILLM(LLMProvider):
             return f"Error calling API Model: {str(e)}"
 
     async def chat_structured(self, messages: List[Dict[str, str]], response_model: Type[T], temperature: float = 0.0, image_path: str = None) -> T:
+        if not self.available:
+             raise ValueError(f"Model '{self.model_name}' is unavailable.")
         if image_path:
             import base64
-            with open(image_path, "rb") as image_file:
-                base64_image = base64.b64encode(image_file.read()).decode('utf-8')
+            # Use asyncio.to_thread for file I/O
+            def read_image():
+                with open(image_path, "rb") as image_file:
+                    return base64.b64encode(image_file.read()).decode('utf-8')
+            
+            base64_image = await asyncio.to_thread(read_image)
             
             for i in range(len(messages) - 1, -1, -1):
                 if messages[i]['role'] == 'user':
@@ -189,8 +212,12 @@ class LocalLLM(LLMProvider):
         
         if image_path:
             import base64
-            with open(image_path, "rb") as image_file:
-                base64_image = base64.b64encode(image_file.read()).decode('utf-8')
+            # Use asyncio.to_thread for file I/O
+            def read_image():
+                with open(image_path, "rb") as image_file:
+                    return base64.b64encode(image_file.read()).decode('utf-8')
+            
+            base64_image = await asyncio.to_thread(read_image)
             for i in range(len(messages) - 1, -1, -1):
                 if messages[i]['role'] == 'user':
                     messages[i]["images"] = [base64_image]
@@ -231,7 +258,8 @@ class LocalLLM(LLMProvider):
                     
                     try:
                         resp_json = await resp.json()
-                    except:
+                    except (aiohttp.ContentTypeError, json.JSONDecodeError) as e:
+                        viki_logger.error(f"Failed to parse Ollama response: {e}")
                         raise ValueError(f"Invalid JSON response from Ollama: {resp.status}")
 
                     if 'error' in resp_json:
@@ -260,8 +288,8 @@ class LocalLLM(LLMProvider):
             )
             
             messages.append({"role": "system", "content": instruction})
-        except:
-            pass
+        except Exception as e:
+            viki_logger.debug(f"Failed to inject schema: {e}")
 
         # 1. Get raw JSON from model
         content = await self.chat(messages, temperature=temperature, format="json", image_path=image_path)
@@ -327,8 +355,8 @@ class LocalLLM(LLMProvider):
                 for key in ["final_response", "response", "message", "text", "content", "answer"]:
                     if key in raw and isinstance(raw[key], str):
                         return raw[key]
-        except:
-            pass
+        except (json.JSONDecodeError, TypeError) as e:
+            viki_logger.debug(f"Failed to extract text from content: {e}")
         return fallback
 
     def _patch_viki_response(self, data: dict) -> dict:
@@ -444,8 +472,8 @@ class ModelRouter:
             else:
                  self.default_model = MockLLM({'model_name': 'fallback-mock'})
                  
-        except Exception as e:
-            print(f"Failed to load model config: {e}")
+        except (yaml.YAMLError, IOError, FileNotFoundError, KeyError) as e:
+            viki_logger.error(f"Failed to load model config from {path}: {e}")
             self.default_model = MockLLM({'model_name': 'error-fallback'})
 
     def get_model(self, capabilities: List[str] = None) -> LLMProvider:
@@ -456,13 +484,32 @@ class ModelRouter:
         best_score = -1
         
         for model in self.models.values():
+            if not model.available:
+                continue
             if self.air_gap and not isinstance(model, LocalLLM):
                 continue # Skip non-local if in air-gap mode
 
             model_caps = model.config.get('capabilities', [])
-            score = sum(1 for cap in capabilities if cap in model_caps)
-            # Add trust multiplier
-            score += model.trust_score * 0.5 
+            
+            # 1. Capability matching
+            matched_caps = sum(1 for cap in capabilities if cap in model_caps)
+            
+            # 2. Priority from config (1-4, higher is better)
+            priority = model.config.get('priority', 2)
+            
+            # 3. Calculate base score
+            score = (matched_caps * priority) + (model.trust_score * 0.5)
+            
+            # 4. Penalize high latency for fast_response capability
+            if 'fast_response' in capabilities and model.avg_latency > 0:
+                latency_penalty = model.avg_latency / 10.0
+                score -= latency_penalty
+            
+            # 5. Penalize high error rate
+            if model.call_count > 10:
+                error_rate = model.error_count / model.call_count
+                error_penalty = error_rate * 5.0
+                score -= error_penalty
             
             if score > best_score:
                 best_score = score

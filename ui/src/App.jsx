@@ -1,9 +1,19 @@
 import { useState, useEffect, useRef } from 'react'
 import './index.css'
+import HologramFace from './HologramFace'
 
-const API_BASE = 'http://localhost:5000/api'
+const API_BASE = import.meta.env.VITE_VIKI_API_BASE || 'http://localhost:5000/api'
+
+function getApiHeaders() {
+  const key = import.meta.env.VITE_VIKI_API_KEY
+  const base = import.meta.env.VITE_VIKI_API_BASE
+  console.log(`[VIKI DEBUG] API_BASE: ${base}, Has Key: ${!!key}`)
+  if (!key) return {}
+  return { Authorization: `Bearer ${key}` }
+}
 
 function App() {
+  const [view, setView] = useState('hologram') // 'hologram' | 'dashboard' (default: hologram)
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [status, setStatus] = useState('offline')
@@ -28,7 +38,7 @@ function App() {
 
   const fetchHealth = async () => {
     try {
-      const res = await fetch(`${API_BASE}/health`)
+      const res = await fetch(`${API_BASE}/health`, { headers: getApiHeaders() })
       if (!res.ok) throw new Error('Offline')
       const data = await res.json()
       setStatus('online')
@@ -40,7 +50,7 @@ function App() {
 
   const fetchSkills = async () => {
     try {
-      const res = await fetch(`${API_BASE}/skills`)
+      const res = await fetch(`${API_BASE}/skills`, { headers: getApiHeaders() })
       const data = await res.json()
       setSkills(data.skills || [])
     } catch (error) {
@@ -50,7 +60,7 @@ function App() {
 
   const fetchModels = async () => {
     try {
-      const res = await fetch(`${API_BASE}/models`)
+      const res = await fetch(`${API_BASE}/models`, { headers: getApiHeaders() })
       const data = await res.json()
       setModels(data.models || [])
     } catch (error) {
@@ -60,7 +70,7 @@ function App() {
 
   const fetchMemory = async () => {
     try {
-      const res = await fetch(`${API_BASE}/memory`)
+      const res = await fetch(`${API_BASE}/memory`, { headers: getApiHeaders() })
       const data = await res.json()
       if (data.messages && data.messages.length > 0) {
         const formatted = data.messages.map(m => ({
@@ -78,7 +88,7 @@ function App() {
   const clearMemory = async () => {
     if (!window.confirm('Erase episodic memory? This cannot be undone.')) return
     try {
-      await fetch(`${API_BASE}/memory`, { method: 'DELETE' })
+      await fetch(`${API_BASE}/memory`, { method: 'DELETE', headers: getApiHeaders() })
       setMessages([])
     } catch (error) {
       console.error('Failed to clear memory:', error)
@@ -101,7 +111,7 @@ function App() {
     try {
       const res = await fetch(`${API_BASE}/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getApiHeaders() },
         body: JSON.stringify({ message: input })
       })
       const data = await res.json()
@@ -126,6 +136,38 @@ function App() {
     }
   }
 
+  if (view === 'hologram') {
+    return (
+      <div className="app app-hologram">
+        <aside className="sidebar sidebar-compact">
+          <div className="logo-container">
+            <div className="logo-orb">V</div>
+            <div className="logo-text">
+              <h1 className="text-gradient">{vikiInfo.name}</h1>
+              <p>Intelligence</p>
+            </div>
+          </div>
+          <div className="sidebar-section">
+            <div className="model-pill">
+              <span>Status</span>
+              <span className={`status-badge ${status}`}>{status}</span>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="view-switch-btn"
+            onClick={() => setView('dashboard')}
+          >
+            Dashboard
+          </button>
+        </aside>
+        <main className="main-view main-view-hologram">
+          <HologramFace apiBase={API_BASE} getApiHeaders={getApiHeaders} status={status} />
+        </main>
+      </div>
+    )
+  }
+
   return (
     <div className="app">
       <aside className="sidebar">
@@ -136,7 +178,15 @@ function App() {
             <p>Intelligence</p>
           </div>
         </div>
-
+        <div className="sidebar-section">
+          <button
+            type="button"
+            className="view-switch-btn view-switch-inline"
+            onClick={() => setView('hologram')}
+          >
+            Hologram
+          </button>
+        </div>
         <div className="sidebar-section">
           <h3>Kernel Diagnostics</h3>
           <div className="model-pill">
@@ -145,27 +195,10 @@ function App() {
           </div>
           <div className="model-pill">
             <span>Sovereign Version</span>
-            <span style={{ color: 'var(--text-dim)', fontWeight: 600 }}>{vikiInfo.version}</span>
+            <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{vikiInfo.version}</span>
           </div>
-          <button 
-            onClick={clearMemory}
-            style={{ 
-              width: '100%', 
-              background: 'hsla(350, 100%, 50%, 0.1)', 
-              border: '1px solid hsla(350, 100%, 50%, 0.2)',
-              color: 'hsl(350, 100%, 60%)',
-              padding: '0.75rem',
-              borderRadius: 'var(--radius-md)',
-              fontSize: '0.75rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-              marginTop: '0.5rem',
-              transition: 'var(--transition-fast)'
-            }}
-            onMouseOver={(e) => e.target.style.background = 'hsla(350, 100%, 50%, 0.2)'}
-            onMouseOut={(e) => e.target.style.background = 'hsla(350, 100%, 50%, 0.1)'}
-          >
-            ERASE EPISODIC LOGS
+          <button type="button" className="btn-danger" onClick={clearMemory}>
+            Erase episodic logs
           </button>
         </div>
 
@@ -185,8 +218,8 @@ function App() {
           <h3>Intelligence Tiers</h3>
           {models.slice(0, 3).map(model => (
             <div key={model.name} className="model-pill">
-              <span style={{ color: 'var(--accent-cyan)', fontWeight: 600 }}>{model.name}</span>
-              <span style={{ color: 'var(--text-mute)', fontSize: '0.7rem' }}>{model.provider}</span>
+              <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{model.name}</span>
+              <span style={{ color: 'var(--text-tertiary)', fontSize: 'var(--text-xs)' }}>{model.provider}</span>
             </div>
           ))}
         </div>
@@ -197,10 +230,10 @@ function App() {
           {messages.length === 0 && (
             <div className="empty-state">
               <h1 className="text-gradient">VIKI</h1>
-              <p>SOVEREIGN DIRECTIVE INTERFACE</p>
-              <div style={{ marginTop: '3rem', display: 'flex', gap: '2rem' }}>
-                 <div className="status-badge online" style={{ fontSize: '0.7rem' }}>NEURAL NET ACTIVE</div>
-                 <div className="status-badge online" style={{ fontSize: '0.7rem' }}>ENCRYPTION STABLE</div>
+              <p>Sovereign intelligence interface</p>
+              <div style={{ marginTop: 'var(--space-8)', display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap', justifyContent: 'center' }}>
+                <span className="status-badge online">Online</span>
+                <span className="status-badge online">Secure</span>
               </div>
             </div>
           )}
@@ -208,15 +241,15 @@ function App() {
           {messages.map((msg, idx) => (
             <div key={idx} className={`message-node ${msg.role}`}>
               <div className="message-header">
-                <span style={{ color: msg.role === 'user' ? 'var(--accent-purple)' : 'var(--accent-cyan)' }}>
-                  {msg.role === 'user' ? 'DIRECTIVE' : 'RESPONSE'}
+                <span style={{ color: msg.role === 'user' ? 'var(--accent-alt)' : 'var(--accent)' }}>
+                  {msg.role === 'user' ? 'You' : 'VIKI'}
                 </span>
                 <span>{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
               </div>
               <div className="message-bubble">
                 {msg.content.includes('```') ? (
-                  <div dangerouslySetInnerHTML={{ 
-                    __html: msg.content.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>').replace(/\n/g, '<br/>') 
+                  <div dangerouslySetInnerHTML={{
+                    __html: msg.content.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>').replace(/\n/g, '<br/>')
                   }} />
                 ) : (
                   msg.content.split('\n').map((line, i) => (
@@ -231,7 +264,7 @@ function App() {
 
           {isLoading && (
             <div className="message-node assistant">
-              <div className="message-header"><span style={{ color: 'var(--accent-cyan)' }}>DELIBERATING</span></div>
+              <div className="message-header"><span style={{ color: 'var(--accent)' }}>Thinking</span></div>
               <div className="message-bubble loading-bubble">
                 <div className="loading-dot"></div>
                 <div className="loading-dot"></div>
@@ -248,12 +281,12 @@ function App() {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Inject command string or data stream..."
+              placeholder="Message VIKI..."
               disabled={isLoading}
               autoFocus
             />
             <button type="submit" className="btn-send" disabled={isLoading || !input.trim()}>
-              {isLoading ? '...' : 'EXECUTE'}
+              {isLoading ? '…' : 'Send'}
             </button>
           </form>
         </div>

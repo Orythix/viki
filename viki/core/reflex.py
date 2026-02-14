@@ -5,6 +5,7 @@ import os
 from typing import Optional, Tuple, Dict, Any, List
 from viki.core.schema import ActionCall
 from viki.config.logger import viki_logger
+from viki.core.utils.debouncer import SyncDebouncer
 
 class ReflexBrain:
     """
@@ -21,6 +22,10 @@ class ReflexBrain:
         self.learned_patterns: Dict[str, Dict[str, Any]] = {}  # normalized_input -> {skill, params}
         self.blacklist: set = set()
         self.data_dir = data_dir
+        
+        # Debounce saves
+        self._learned_debouncer = SyncDebouncer(delay=5.0, max_delay=30.0)
+        self._blacklist_debouncer = SyncDebouncer(delay=5.0, max_delay=30.0)
         
         # Load learned patterns and blacklist from disk
         if data_dir:
@@ -186,8 +191,8 @@ class ReflexBrain:
             })
         return result
 
-    def _save_learned(self):
-        """Persist learned patterns to disk."""
+    def _do_save_learned(self):
+        """Internal method to actually save learned patterns."""
         if not self.data_dir:
             return
         os.makedirs(self.data_dir, exist_ok=True)
@@ -197,15 +202,34 @@ class ReflexBrain:
                 json.dump(self.learned_patterns, f, indent=2)
         except Exception as e:
             viki_logger.warning(f"Failed to save learned patterns: {e}")
-            
-    def _save_blacklist(self):
-        """Persist blacklist to disk."""
-        if not self.data_dir: return
+    
+    def _save_learned(self):
+        """Debounced save for learned patterns."""
+        self._learned_debouncer.mark_dirty()
+        self._learned_debouncer.execute(self._do_save_learned)
+    
+    def flush_learned(self):
+        """Force immediate save of learned patterns."""
+        self._learned_debouncer.flush(self._do_save_learned)
+    
+    def _do_save_blacklist(self):
+        """Internal method to actually save blacklist."""
+        if not self.data_dir:
+            return
         path = os.path.join(self.data_dir, "reflex_blacklist.json")
         try:
             with open(path, 'w') as f:
                 json.dump(list(self.blacklist), f)
         except: pass
+            
+    def _save_blacklist(self):
+        """Debounced save for blacklist."""
+        self._blacklist_debouncer.mark_dirty()
+        self._blacklist_debouncer.execute(self._do_save_blacklist)
+    
+    def flush_blacklist(self):
+        """Force immediate save of blacklist."""
+        self._blacklist_debouncer.flush(self._do_save_blacklist)
     
     def _load_learned(self):
         """Load learned patterns from disk."""

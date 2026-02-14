@@ -39,16 +39,24 @@ class NotificationSkill(BaseSkill):
         if not message:
             return "Error: Message required."
 
-        # Reliable BalloonTip method
+        # Escape single quotes and backticks for PowerShell
+        def escape_powershell(text: str) -> str:
+            """Escape special characters for PowerShell string literals."""
+            return text.replace("'", "''").replace("`", "``").replace("$", "`$")
+        
+        title_escaped = escape_powershell(title)
+        message_escaped = escape_powershell(message)
+
+        # Reliable BalloonTip method using single-quoted strings (safer)
         ps_script = f"""
         Add-Type -AssemblyName System.Windows.Forms
         $notify = New-Object System.Windows.Forms.NotifyIcon
         $notify.Icon = [System.Drawing.SystemIcons]::Information
-        $notify.BalloonTipTitle = "{title}"
-        $notify.BalloonTipText = "{message}"
+        $notify.BalloonTipTitle = '{title_escaped}'
+        $notify.BalloonTipText = '{message_escaped}'
         $notify.Visible = $True
         $notify.ShowBalloonTip(5000)
-        Start-Sleep -Seconds 1 # Ensure icon stays momentarily
+        Start-Sleep -Seconds 1
         $notify.Dispose()
         """
         

@@ -1,4 +1,4 @@
-# Setting Up VIKI (v7.1.0 Sovereign)
+# Setting Up VIKI (v7.2.0 Sovereign)
 
 ## 📦 Prerequisites
 
@@ -30,25 +30,41 @@
     ```
 
 4.  **Set Up Environment Variables**:
-    Create a `.env` file in the root directory:
+    Create a `.env` file in the root directory (or set in your shell):
     ```env
+    # Required for API server: all endpoints require this key
+    VIKI_API_KEY=your_api_key_here
+
+    # Required for super-admin / admin commands
+    VIKI_ADMIN_SECRET=your_admin_secret_here
+
     # Optional: For high-intelligence reasoning fallbacks
     OPENAI_API_KEY=your_key_here
-    
+
     # Optional: For Nexus Connectivity
     DISCORD_TOKEN=your_discord_token
     TELEGRAM_TOKEN=your_telegram_token
     ```
+    **Security**: Generate strong values; never commit them. See [viki/SECURITY_SETUP.md](viki/SECURITY_SETUP.md) for details.
 
 ## 🚀 Running VIKI
 
-To start the **Sovereign Intelligence Core**:
+To start the **Sovereign Intelligence Core** (CLI):
 
 ```powershell
 python viki/main.py
 ```
 
 VIKI will initialize her **Nexus** and begin listening on all channels.
+
+### Running with the Hologram Face UI
+
+To show the **hologram face** and **talk to VIKI** with voice:
+
+1. In one terminal, start the React UI: `cd ui && npm run dev`
+2. In another terminal, run: `python viki/main.py --ui`
+
+The `--ui` flag starts the API server and opens your browser to `http://localhost:5173`. The default view is the **Hologram** (voice conversation); switch to **Full dashboard** for text chat. The UI needs the API key: create `ui/.env` with `VITE_VIKI_API_KEY=<same value as VIKI_API_KEY>` so the dashboard and hologram view can authenticate. See [viki/SECURITY_SETUP.md](viki/SECURITY_SETUP.md).
 
 ## 🧪 Testing
 

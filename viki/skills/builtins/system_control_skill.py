@@ -145,6 +145,10 @@ class SystemControlSkill(BaseSkill):
         if not app_name:
             return "Error: No app name provided."
         
+        # Validate app_name to prevent injection
+        if any(char in app_name for char in [';', '&', '|', '>', '<', '$', '`']):
+            return "Error: Invalid characters in app name."
+        
         app_clean = app_name.lower().strip()
         
         # 1. Check whitelist
@@ -154,7 +158,8 @@ class SystemControlSkill(BaseSkill):
                 if target.startswith('ms-settings:'):
                     os.startfile(target)
                 else:
-                    subprocess.Popen(target, shell=True)
+                    # Use explicit process creation without shell
+                    subprocess.Popen([target], shell=False)
                 return f"Launched {app_name}."
             except Exception as e:
                 return f"Error launching {app_name}: {e}"
@@ -163,14 +168,17 @@ class SystemControlSkill(BaseSkill):
         exe_name = app_clean if app_clean.endswith('.exe') else f"{app_clean}.exe"
         if shutil.which(exe_name):
             try:
-                subprocess.Popen(exe_name, shell=True)
+                # Use explicit process creation without shell
+                subprocess.Popen([exe_name], shell=False)
                 return f"Launched {app_name}."
             except Exception as e:
                 return f"Error launching {app_name}: {e}"
         
-        # 3. Try Windows Start Menu search via shell
+        # 3. Try Windows Start Menu search via cmd /c start
+        # This is safer than direct shell=True as we explicitly control the command
         try:
-            subprocess.Popen(f'start "" "{app_name}"', shell=True)
+            # Use cmd /c start with explicit arguments
+            subprocess.Popen(['cmd', '/c', 'start', '', app_name], shell=False)
             return f"Attempted to launch {app_name} via Windows search."
         except Exception as e:
             return f"Could not find or launch '{app_name}': {e}"

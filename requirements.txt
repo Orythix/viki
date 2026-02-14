@@ -12,6 +12,7 @@ sqlite-utils
 # LLM & AI
 openai
 instructor
+anthropic
 ollama
 sentence-transformers
 duckduckgo-search

@@ -12,6 +12,7 @@ parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
 from viki.core.learning import LearningModule
+from viki.config.logger import viki_logger
 
 # Paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -23,7 +24,10 @@ def load_soul():
     try:
         with open(SOUL_PATH, 'r') as f:
             return yaml.safe_load(f)
-    except:
+    except (yaml.YAMLError, IOError, FileNotFoundError) as e:
+        import logging
+        logger = logging.getLogger('viki.forge')
+        logger.warning(f"Failed to load soul config: {e}")
         return {}
 
 def summarize_memories(lessons: List[str]) -> str:
@@ -82,7 +86,9 @@ def build_model():
     modelfile = create_modelfile()
     model_name = "viki-evolved"
     
-    print(f"[FORGE] Building evolved core: {model_name}...")
+    import logging
+    logger = logging.getLogger('viki.forge')
+    logger.info(f"[FORGE] Building evolved core: {model_name}...")
     try:
         result = subprocess.run(["ollama", "create", model_name, "-f", modelfile], capture_output=True, text=True)
         if result.returncode == 0:
@@ -96,12 +102,14 @@ def build_model():
         return False
 
 def main_forge():
-    print("--- VIKI NEURAL FORGE 2.0 ---")
+    import logging
+    logger = logging.getLogger('viki.forge')
+    logger.info("--- VIKI NEURAL FORGE 2.0 ---")
     success = build_model()
     if success:
-        print("--- FORGE SUCCESSFUL ---")
+        logger.info("--- FORGE SUCCESSFUL ---")
     else:
-        print("--- FORGE FAILED ---")
+        logger.error("--- FORGE FAILED ---")
     return success
 
 if __name__ == "__main__":

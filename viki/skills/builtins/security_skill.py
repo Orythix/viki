@@ -1,6 +1,7 @@
 import os
 import subprocess
 import json
+import asyncio
 from typing import Dict, Any, List
 from viki.skills.base import BaseSkill
 from viki.config.logger import viki_logger
@@ -46,24 +47,36 @@ class SecuritySkill(BaseSkill):
             if action == "net_scan":
                 scan_type = params.get("type", "-F") # Fast scan by default
                 viki_logger.info(f"Security: Running nmap {scan_type} on {target}")
-                # We assume nmap is installed on the system path
-                result = subprocess.run(['nmap', scan_type, target], capture_output=True, text=True, timeout=60)
+                # Run nmap in thread pool to avoid blocking event loop
+                result = await asyncio.to_thread(
+                    subprocess.run,
+                    ['nmap', scan_type, target],
+                    capture_output=True,
+                    text=True,
+                    timeout=60
+                )
                 return f"NMAP SCAN RESULTS FOR {target}:\n{result.stdout}"
 
             elif action == "web_audit":
                 viki_logger.info(f"Security: Auditing {target} for sensitive files")
                 results = []
                 paths = [".env", ".git/config", "backup.sql", "config.php.bak", ".ssh/id_rsa"]
-                for path in paths:
+                
+                # Run all HTTP requests concurrently using asyncio
+                async def check_path(path: str) -> str:
                     url = f"{target.rstrip('/')}/{path}"
                     try:
-                        resp = requests.get(url, timeout=5)
+                        # Run requests.get in thread pool
+                        resp = await asyncio.to_thread(requests.get, url, timeout=5)
                         if resp.status_code == 200:
-                            results.append(f"[CRITICAL] Exposed file found: {url}")
+                            return f"[CRITICAL] Exposed file found: {url}"
                         else:
-                            results.append(f"[INFO] {path}: Not found ({resp.status_code})")
-                    except:
-                        results.append(f"[ERROR] {path}: Connection failed")
+                            return f"[INFO] {path}: Not found ({resp.status_code})"
+                    except (requests.RequestException, requests.Timeout) as e:
+                        return f"[ERROR] {path}: Connection failed ({e})"
+                
+                # Check all paths concurrently
+                results = await asyncio.gather(*[check_path(path) for path in paths])
                 return "\n".join(results)
 
             elif action == "sniffer":
@@ -71,8 +84,13 @@ class SecuritySkill(BaseSkill):
                 viki_logger.info(f"Security: Sniffing {count} packets...")
                 # Note: This usually requires Admin/Root
                 from scapy.all import sniff
-                packets = sniff(count=count)
-                summary = packets.summary()
+                
+                # Run sniffing in thread pool to avoid blocking
+                def do_sniff():
+                    packets = sniff(count=count)
+                    return packets.summary()
+                
+                summary = await asyncio.to_thread(do_sniff)
                 return f"PACKET SNIFFER SUMMARY ({count} packets):\n{summary}"
 
             return f"Error: Unknown security action '{action}'"

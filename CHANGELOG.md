@@ -2,6 +2,37 @@
 
 All notable changes to the VIKI Sovereign Intelligence project will be documented in this file.
 
+## [7.2.0] - 2026-02-14 (Security, Model Enhancement & Docs)
+
+### Added
+- **API Authentication**: All API endpoints require `VIKI_API_KEY` (env). Server binds to `127.0.0.1` by default.
+- **Admin Secret**: Super-admin and admin config use `VIKI_ADMIN_SECRET` from environment.
+- **Model Performance API**: `GET /api/models/performance` returns trust scores, latency, call/error counts per model (API-key protected).
+- **Model Enhancement System**: Priority-based model routing with latency/error-rate penalties; performance recorded for all LLM calls (cortex, governor, narrative).
+- **Dream Consolidation**: Dream module now calls `memory.episodic.consolidate(model_router)` instead of a sleep stub.
+- **User Corrections**: Corrections and frustrated sentiment save lessons via `learning.save_lesson(..., source="user_correction")`.
+- **Pattern Persistence**: `PatternTracker` save/load to disk; patterns survive restarts.
+- **Reflex Failure Reporting**: Reflex execution failures call `reflex.report_failure(user_input)`.
+- **Relevant Failures in Context**: `relevant_failures` from learning injected into deliberation as "RELEVANT PAST FAILURES".
+- **Session Analysis**: `learning.analyze_session(session_trace, session_outcome, model_router)` wired into controller shutdown.
+- **Knowledge Gaps**: `KnowledgeGapDetector` records low-confidence responses; dream autonomous research uses `get_research_topics()`.
+- **LoRA Training**: Real Unsloth LoRA fine-tuning in ModelForgeSkill (dataset from lessons, adapter saved to `./data/viki-lora-adapter`).
+- **Dataset Export**: `LearningModule.export_training_dataset(output_path, format)` for `jsonl`, `alpaca`, `openai`.
+- **A/B Testing**: `ModelABTest` framework for comparing models (quick validation, default prompts, scoring).
+- **Continuous Learning**: `ContinuousLearner` runs periodic training cycles (configurable schedule, min lessons, validation).
+- **Documentation**: `SECURITY_SETUP.md`, `IMPLEMENTATION_SUMMARY.md`, `MODEL_ENHANCEMENT_SUMMARY.md`, `OBSERVABILITY.md`, `ARCHITECTURE_REFACTOR.md`, `PERFORMANCE_NOTES.md`; README docs table and version bump to 7.2.0.
+
+### Fixed
+- **Security**: PowerShell injection in notification skill; path sandboxing in filesystem skill; SSRF/SSL in research skill; removed `shell=True` and validated input in system control skill; reflex path runs full security pipeline.
+- **Blocking I/O**: Security skill and image loading wrapped in `asyncio.to_thread()`; research `save_lesson` made async.
+- **Duplicate DB Work**: Removed duplicate `get_semantic_knowledge` by passing pre-fetched `narrative_wisdom` into `get_full_context()`.
+- **Debounced Persistence**: WorldModel, Scorecard, Reflex, Evolution use debounced saves and `flush()` for clean shutdown.
+
+### References
+- Implementation details: `viki/IMPLEMENTATION_SUMMARY.md`, `viki/MODEL_ENHANCEMENT_SUMMARY.md`, `viki/SECURITY_SETUP.md`.
+
+---
+
 ## [7.1.0] - 2026-02-14 (Stability & Persistence Persistence)
 
 ### Added

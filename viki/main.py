@@ -2,6 +2,9 @@ import os
 import sys
 import asyncio
 import time
+import argparse
+import subprocess
+import webbrowser
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -80,7 +83,7 @@ async def main():
         # Background Tasks
         loop = asyncio.get_running_loop()
         await controller.bio.start()
-        asyncio.create_task(controller.nexus.start_processing(on_event=on_event))
+        controller._create_tracked_task(controller.nexus.start_processing(on_event=on_event), "nexus_processing")
         try:
              await controller.telegram.start()
              await controller.discord.start()
@@ -89,9 +92,9 @@ async def main():
         except Exception as bridge_err:
              viki_logger.warning(f"One or more external bridges failed to initialize: {bridge_err}")
         
-        asyncio.create_task(controller.wellness.start())
-        asyncio.create_task(controller.dream.start_monitoring())
-        asyncio.create_task(controller.reflector.reflect_on_logs())
+        controller._create_tracked_task(controller.wellness.start(), "wellness_monitoring")
+        controller._create_tracked_task(controller.dream.start_monitoring(), "dream_monitoring")
+        controller._create_tracked_task(controller.reflector.reflect_on_logs(), "log_reflection")
         controller.watchdog.start(loop)
     except Exception as e:
         interface.print_error(f"Task Launch Error: {e}")
@@ -111,7 +114,8 @@ async def main():
                 try: 
                     await controller.discord.stop()
                     await controller.telegram.stop() 
-                except: pass
+                except Exception as e:
+                    viki_logger.debug(f"Error stopping bridges: {e}")
                 await controller.shutdown()
                 break
             
@@ -166,7 +170,36 @@ async def main():
             interface.print_error(str(e))
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="VIKI Sovereign Intelligence")
+    parser.add_argument("--ui", "--face-ui", dest="ui", action="store_true", help="Start API server and open hologram face UI in browser")
+    args = parser.parse_args()
+
+    api_process = None
+    if args.ui:
+        # Start Flask API server in background so the UI can talk to VIKI
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        parent_dir = os.path.dirname(script_dir)
+        server_script = os.path.join(script_dir, "api", "server.py")
+        try:
+            api_process = subprocess.Popen(
+                [sys.executable, server_script],
+                cwd=parent_dir,
+                env=os.environ.copy(),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+            )
+            time.sleep(2.5)
+            webbrowser.open("http://localhost:5173")
+            console.print("[dim]API server started. Hologram UI: http://localhost:5173[/]")
+            console.print("[dim]Start the UI with: cd ui && npm run dev[/]\n")
+        except Exception as e:
+            viki_logger.warning(f"Could not start API server or open browser: {e}")
+
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
         pass
+    finally:
+        if api_process is not None and api_process.poll() is None:
+            api_process.terminate()
+            api_process.wait(timeout=5)

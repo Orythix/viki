@@ -5,7 +5,7 @@ description: Running VIKI Services and Dashboard
 This workflow guides you through launching the backend API services and the modern React dashboard for VIKI.
 
 ### 1. Start the Backend API Server
-The API server acts as the bridge between the VIKI Core and the UI. It handles authentication, memory retrieval, and LLM processing.
+The API server acts as the bridge between the VIKI Core and the UI. It handles authentication, memory retrieval, and LLM processing. All endpoints require `VIKI_API_KEY` (set in environment).
 
 **Open a new terminal window** and run:
 ```powershell

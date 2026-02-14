@@ -5,6 +5,7 @@ import ast
 from typing import Dict, Any, List
 from viki.core.schema import WorldState
 from viki.config.logger import viki_logger
+from viki.core.utils.debouncer import SyncDebouncer
 
 class WorldModel:
     """
@@ -14,6 +15,8 @@ class WorldModel:
     def __init__(self, data_path: str):
         self.path = os.path.join(data_path, "world_state.json")
         self.state = self._load()
+        # Debounce saves: wait 5s between saves, max 30s total
+        self._debouncer = SyncDebouncer(delay=5.0, max_delay=30.0)
 
     def _load(self) -> WorldState:
         if os.path.exists(self.path):
@@ -21,14 +24,24 @@ class WorldModel:
                 with open(self.path, 'r') as f:
                     data = json.load(f)
                     return WorldState(**data)
-            except:
-                pass
+            except (json.JSONDecodeError, IOError, TypeError) as e:
+                viki_logger.warning(f"Failed to load world state from {self.path}: {e}")
         return WorldState()
 
-    def save(self):
+    def _do_save(self):
+        """Internal save method called by debouncer."""
         self.state.last_updated = time.time()
         with open(self.path, 'w') as f:
             json.dump(self.state.model_dump(), f, indent=4)
+    
+    def save(self):
+        """Debounced save - actual write happens after delay."""
+        self._debouncer.mark_dirty()
+        self._debouncer.execute(self._do_save)
+    
+    def flush(self):
+        """Force immediate save (call on shutdown)."""
+        self._debouncer.flush(self._do_save)
 
     def track_app_usage(self, app_name: str, status: str = "known"):
         """Records installed apps and common statuses."""
@@ -144,7 +157,8 @@ class WorldModel:
                             "last_scan": time.time()
                         }
                     except Exception as e:
-                        viki_logger.warning(f"WorldModel: Failed to parse {rel_path}: {e}")
+                        viki_logger.debug(f"WorldModel: Failed to parse {rel_path}: {e}")
+                        # Continue processing other files even if one fails
         
         self.state.codebase_graph = graph
         viki_logger.info(f"WorldModel: Codebase Graph complete. {len(graph)} modules mapped.")

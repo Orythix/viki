@@ -2,6 +2,8 @@ import asyncio
 import aiohttp
 from bs4 import BeautifulSoup
 from typing import Dict, Any, List
+from urllib.parse import urlparse
+import ipaddress
 from viki.skills.base import BaseSkill
 from viki.config.logger import viki_logger
 
@@ -87,7 +89,7 @@ class ResearchSkill(BaseSkill):
             
             # --- Knowledge Extraction Bridge ---
             if self.controller:
-                 self._extract_knowledge_from_results(query, results)
+                 await self._extract_knowledge_from_results(query, results)
 
             formatted = [f"--- SEARCH RESULTS for '{query}' ---"]
             for i, r in enumerate(results, 1):
@@ -101,7 +103,7 @@ class ResearchSkill(BaseSkill):
             viki_logger.error(f"Search error: {e}")
             return f"Search error: {str(e)}"
 
-    def _extract_knowledge_from_results(self, query: str, results: List[dict]):
+    async def _extract_knowledge_from_results(self, query: str, results: List[dict]):
         """Distills snippets into trigger/fact pairs for LearningModule."""
         if not self.controller or not hasattr(self.controller, 'learning'): return
         
@@ -109,21 +111,69 @@ class ResearchSkill(BaseSkill):
         for r in results[:3]: # Only top 3 for quality
             body = r.get('body', r.get('snippet', ''))
             if len(body) > 30:
-                # Store as a lesson
-                self.controller.learning.save_lesson(
+                # Store as a lesson using thread pool to avoid blocking
+                await asyncio.to_thread(
+                    self.controller.learning.save_lesson,
                     trigger=f"Tell me about {query} ({r.get('title', '')})",
                     fact=body,
                     source=r.get('href', 'web')
                 )
 
+    def _validate_url(self, url: str) -> tuple[bool, str]:
+        """Validate URL to prevent SSRF attacks."""
+        try:
+            parsed = urlparse(url)
+            
+            # Only allow http and https
+            if parsed.scheme not in ['http', 'https']:
+                return False, f"Protocol '{parsed.scheme}' not allowed"
+            
+            # Get hostname
+            hostname = parsed.hostname
+            if not hostname:
+                return False, "Invalid hostname"
+            
+            # Try to resolve to IP and check if it's private
+            try:
+                import socket
+                ip_str = socket.gethostbyname(hostname)
+                ip = ipaddress.ip_address(ip_str)
+                
+                # Block private/local IPs (SSRF protection)
+                if ip.is_private or ip.is_loopback or ip.is_link_local:
+                    return False, f"Access to private IP addresses not allowed: {ip_str}"
+                
+                # Block cloud metadata endpoints
+                if ip_str.startswith('169.254'):
+                    return False, "Access to cloud metadata endpoints not allowed"
+                    
+            except (socket.gaierror, ValueError):
+                # If we can't resolve, allow it (might be blocked by network anyway)
+                pass
+            
+            # Block localhost variations
+            if hostname.lower() in ['localhost', '127.0.0.1', '0.0.0.0', '::1']:
+                return False, "Access to localhost not allowed"
+            
+            return True, url
+            
+        except Exception as e:
+            return False, f"URL validation error: {str(e)}"
+    
     async def _read_page(self, url: str) -> str:
         try:
             if not url.startswith('http'):
                 url = 'https://' + url
             
+            # Validate URL to prevent SSRF
+            is_valid, result = self._validate_url(url)
+            if not is_valid:
+                return f"URL validation failed: {result}"
+            
             timeout = aiohttp.ClientTimeout(total=15)
             async with aiohttp.ClientSession(headers=self.headers, timeout=timeout) as session:
-                async with session.get(url, allow_redirects=True, ssl=False) as response:
+                # Re-enable SSL verification for security
+                async with session.get(url, allow_redirects=True, ssl=True) as response:
                     if response.status != 200:
                         return f"Error: HTTP {response.status} when fetching {url}"
                     

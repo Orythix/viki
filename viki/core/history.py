@@ -1,6 +1,7 @@
 import sqlite_utils
 import datetime
 import os
+import json
 import shutil
 from typing import Dict, Any, List
 from viki.config.logger import viki_logger
@@ -36,7 +37,7 @@ class TimeTravelModule:
             "timestamp": timestamp,
             "event_type": event_type,
             "description": description,
-            "metadata": os.path.json.dumps(state) if hasattr(os, 'json') else str(state)
+            "metadata": json.dumps(state)
         })
 
     def backup_file(self, file_path: str):

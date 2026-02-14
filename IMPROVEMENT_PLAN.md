@@ -1,6 +1,10 @@
 # VIKI Improvement Plan — Brain, Skills & Architecture
 ## Generated: 2026-02-12 | Based on full codebase audit
-## Last Updated: 2026-02-12 10:58 IST
+## Last Updated: 2026-02-14
+
+**Note:** Many items from this plan have been implemented. See:
+- **[viki/IMPLEMENTATION_SUMMARY.md](viki/IMPLEMENTATION_SUMMARY.md)** — Security fixes, runtime bugs, blocking I/O, DB/performance, debounced persistence, tests, observability.
+- **[viki/MODEL_ENHANCEMENT_SUMMARY.md](viki/MODEL_ENHANCEMENT_SUMMARY.md)** — Model routing, dream consolidation, corrections, pattern persistence, reflex failures, session analysis, knowledge gaps, LoRA, dataset export, A/B testing, performance API, continuous learning.
 
 ---
 

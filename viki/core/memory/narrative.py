@@ -27,7 +27,8 @@ class NarrativeMemory:
         self.encoder = None
         if HAS_SEMANTIC:
             try:
-                self.encoder = SentenceTransformer('all-MiniLM-L6-v2')
+                _device = "cuda" if (os.getenv("VIKI_EMBED_GPU", "").lower() in ("1", "true", "yes")) else "cpu"
+                self.encoder = SentenceTransformer("all-MiniLM-L6-v2", device=_device)
             except Exception as e:
                 viki_logger.warning(f"Narrative Semantic Engine restricted: {e}")
 

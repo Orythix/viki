@@ -3,6 +3,7 @@ import time
 import os
 import yaml
 import re
+import json
 from typing import Dict, Any, List, Optional
 # from viki.core.memory import Memory (Removed for v23 Hierarchy)
 from viki.core.soul import Soul
@@ -45,6 +46,9 @@ from viki.core.bio import BioModule
 from viki.core.dream import DreamModule
 from viki.core.filesystem_v2 import SemanticFS
 from viki.core.history import TimeTravelModule
+from viki.core.knowledge_gaps import KnowledgeGapDetector
+from viki.core.continuous_learning import ContinuousLearner
+from viki.core.ab_testing import ModelABTest
 # from viki.api.telegram_bridge import TelegramBridge
 # from viki.api.discord_bridge import DiscordModule
 # from viki.api.slack_bridge import SlackBridge
@@ -82,11 +86,15 @@ class VIKIController:
         # Global Interrupt Token (Shared Presence)
         self.interrupt_signal = asyncio.Event()
         
+        # Task tracking for proper cleanup
+        self._background_tasks = set()
+        
         root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         
         models_conf_rel = self.settings.get('models_config', 'viki/config/models.yaml')
         if models_conf_rel.startswith('./'): models_conf_rel = models_conf_rel[2:]
         self.models_config_path = os.path.join(root_dir, models_conf_rel)
+        self.models_config = self._load_yaml(self.models_config_path)
         
         if 'security_layer_path' in self.settings:
              sec_path = self.settings['security_layer_path']
@@ -98,6 +106,13 @@ class VIKIController:
         self.nexus = MessagingNexus(self)
 
         self.learning = LearningModule(self.settings.get('system', {}).get('data_dir', './data'))
+        
+        # v25: Knowledge Gap Detection
+        self.knowledge_gaps = KnowledgeGapDetector(self.learning)
+        
+        # v25: A/B Testing and Continuous Learning
+        self.ab_tester = ModelABTest(self)
+        self.continuous_learner = ContinuousLearner(self)
         
         # v23: Hierarchical Memory Stack (Orythix Standard)
         from viki.core.memory import HierarchicalMemory
@@ -140,7 +155,8 @@ class VIKIController:
         self.signals = CognitiveSignals()
         self.world = WorldModel(self.settings.get('system', {}).get('data_dir', './data'))
         self.cortex = ConsciousnessStack(self.model_router, soul_config=self.soul.config, 
-                                         skill_registry=self.skill_registry, world_model=self.world)
+                                         skill_registry=self.skill_registry, world_model=self.world,
+                                         data_dir=self.settings.get('system', {}).get('data_dir', './data'))
         
         # v11: Intelligence Governance (Judgment Engine)
         self.judgment = JudgmentEngine(self.learning, self.budgets)
@@ -174,7 +190,7 @@ class VIKIController:
         # v13: Autonomous Startup Pulse
         try:
             asyncio.get_running_loop()
-            asyncio.create_task(self._startup_pulse())
+            self._create_tracked_task(self._startup_pulse(), "startup_pulse")
         except RuntimeError:
             viki_logger.debug("Sync Mode: Startup Pulse deferred (no running loop).")
 
@@ -200,7 +216,8 @@ class VIKIController:
                 if research_skill:
                     viki_logger.info("Startup: Checking web for latest digital trends...")
                     await research_skill.execute({"query": "latest tech and ai news today", "num_results": 2})
-            except: pass
+            except Exception as e:
+                viki_logger.debug(f"Startup research pulse failed: {e}")
             
         # 2. Check for pending evolution
         new_lessons = self.learning.get_total_lesson_count()
@@ -220,13 +237,49 @@ class VIKIController:
 
         # 4. Engage Mission Control
         if not self.air_gap:
-            asyncio.create_task(self.mission_control.start_loop())
+            self._create_tracked_task(self.mission_control.start_loop(), "mission_control")
+        
+        # 5. Start Continuous Learning Monitor (checks periodically for training)
+        self._create_tracked_task(self._continuous_learning_loop(), "continuous_learning")
 
+    def _create_tracked_task(self, coro, name: str = "unnamed"):
+        """Create a background task with proper tracking and error handling."""
+        task = asyncio.create_task(coro)
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
+        task.add_done_callback(lambda t: self._handle_task_exception(t, name))
+        viki_logger.debug(f"Created tracked background task: {name}")
+        return task
+    
+    def _handle_task_exception(self, task: asyncio.Task, name: str):
+        """Handle exceptions from background tasks."""
+        try:
+            task.result()
+        except asyncio.CancelledError:
+            viki_logger.debug(f"Background task '{name}' was cancelled")
+        except Exception as e:
+            viki_logger.error(f"Background task '{name}' failed with exception: {e}", exc_info=True)
+    
+    async def _continuous_learning_loop(self):
+        """Background loop for continuous learning checks."""
+        # Wait for system to stabilize before starting
+        await asyncio.sleep(300)  # 5 minutes
+        
+        while True:
+            try:
+                await self.continuous_learner.check_and_train()
+            except Exception as e:
+                viki_logger.error(f"Continuous learning check failed: {e}")
+            
+            # Check every 6 hours
+            await asyncio.sleep(21600)
+    
     def _load_yaml(self, path: str) -> Dict[str, Any]:
         try:
             with open(path, 'r') as f:
                 return yaml.safe_load(f)
-        except:
+        except (yaml.YAMLError, IOError, FileNotFoundError) as e:
+            viki_logger.warning(f"Failed to load YAML config from {path}: {e}")
             return {}
 
     def _register_default_skills(self):
@@ -294,6 +347,8 @@ class VIKIController:
         # Custom Aliases
 
     async def process_request(self, user_input: str, on_event=None) -> str:
+        placeholders = ["processing...", "executing", "thinking", "one moment", "working on it"]
+        
         # --- ORYTHIX ETHICAL GOVERNOR (v22) ---
         # 1. Check for Emergency Shutdown Code
         if self.governor.check_shutdown(user_input):
@@ -306,6 +361,7 @@ class VIKIController:
              return "Status: Quiescent. Systems Frozen."
 
         # 3. Veto Check on Raw Intent (v25 Semantic Upgrade)
+        # Fetch narrative wisdom once and reuse it
         narrative_wisdom = self.memory.episodic.get_semantic_knowledge(limit=3)
         wisdom_block = "\n".join([f"- [{w['category'].upper()}]: {w['insight']}" for w in narrative_wisdom])
         
@@ -356,7 +412,7 @@ class VIKIController:
              budget["time"] *= 2 # Double time for research
         
         if "/benchmark" in user_input:
-             asyncio.create_task(self.benchmark.run_suite("Current-VIKI"))
+             self._create_tracked_task(self.benchmark.run_suite("Current-VIKI"), "benchmark")
              return "BENCHMARK SUITE INITIATED. Judgment validation in progress."
         
         if "/scorecard" in user_input:
@@ -420,23 +476,54 @@ class VIKIController:
             return self._compress_output(reflex_resp)
         
         if reflex_action:
-             # Fast Path Execution
-             skill = self.skill_registry.get_skill(reflex_action.skill_name)
+             # Fast Path Execution with Security Checks
+             skill_name = reflex_action.skill_name
+             params = reflex_action.parameters
+             
+             # 0. CAPABILITY CHECK (same as deliberation path)
+             check_res = self.capabilities.check_permission(skill_name, params=params)
+             if not check_res.allowed:
+                 viki_logger.warning(f"Reflex action '{skill_name}' blocked: {check_res.reason}")
+                 # Fall through to deliberation for safer handling
+                 return await self.process_request(user_input, on_event=on_event)
+             
+             # 1. SAFETY VALIDATION
+             if not self.safety.validate_action(skill_name, params):
+                 viki_logger.warning(f"Reflex action '{skill_name}' failed safety check")
+                 return "Safety Check: This reflex action is not permitted."
+             
+             # 2. SHADOW MODE GATE
+             if self.shadow_mode:
+                 viki_logger.info(f"Shadow Mode: Simulating reflex {skill_name}({params})")
+                 return f"[Shadow Mode] Would execute reflex: {skill_name}({params})"
+             
+             # 3. EXECUTE
+             skill = self.skill_registry.get_skill(skill_name)
              if skill:
                  try:
-                     if on_event: on_event("status", f"EXECUTING (Reflex: {reflex_action.skill_name})")
-                     result = await skill.execute(reflex_action.parameters)
+                     if on_event: on_event("status", f"EXECUTING (Reflex: {skill_name})")
+                     result = await skill.execute(params)
                      self.memory.working.add_message("assistant", result)
                      return result
                  except Exception as e:
                      viki_logger.error(f"Reflex failed: {e}")
+                     
+                     # Report failure to reflex brain for blacklisting
+                     self.reflex.report_failure(user_input)
+                     
                      # Fall through to deliberation if reflex fails
         
         # 2. Deliberation Path (Foresight & Reasoning)
         if on_event: on_event("status", "DELIBERATING")
         
         # v23: Integrated Hierarchical Context Retrieval
-        memory_context = self.memory.get_full_context(safe_input)
+        # Pass pre-fetched narrative_wisdom to avoid duplicate query
+        memory_context = self.memory.get_full_context(safe_input, narrative_wisdom=narrative_wisdom)
+        
+        # Add relevant failures to context for error avoidance
+        relevant_failures = self.learning.get_relevant_failures(safe_input, limit=3)
+        memory_context['relevant_failures'] = relevant_failures
+        
         world_understanding = self.world.get_understanding()
         
         # 3. Intelligence Governance (Judgment & Budget)
@@ -483,6 +570,30 @@ class VIKIController:
                 })
                 if len(self.internal_trace) > 10: self.internal_trace.pop(0)
                 
+                # Capture user corrections and frustration as lessons
+                if viki_resp.intent_type == "correction" or viki_resp.sentiment == "frustrated":
+                    # Get last assistant response for context
+                    trace = self.memory.working.get_trace()
+                    if len(trace) >= 2:
+                        prev_messages = trace[-3:] if len(trace) >= 3 else trace
+                        prev_response = next((m['content'] for m in reversed(prev_messages) 
+                                            if m['role'] == 'assistant'), None)
+                        
+                        if prev_response:
+                            # Save correction as lesson
+                            self.learning.save_lesson(
+                                trigger=f"CORRECTION: {user_input[:100]}",
+                                fact=f"When I said '{prev_response[:200]}', user corrected/expressed frustration: {user_input}",
+                                source="user_correction"
+                            )
+                            viki_logger.info("Learning: Captured user correction as lesson")
+                
+                # Track low confidence for knowledge gap detection
+                if hasattr(viki_resp, 'final_thought') and viki_resp.final_thought:
+                    confidence = viki_resp.final_thought.confidence
+                    if confidence < 0.4:
+                        self.knowledge_gaps.record_low_confidence(user_input, confidence)
+                
                 # Cognitive Telemetry
                 if on_event:
                     on_event("thought", viki_resp.final_thought.intent_summary)
@@ -526,7 +637,10 @@ class VIKIController:
                 severity = self.safety.get_action_severity(skill_name, params)
                 if severity in ["medium", "destructive"]:
                     self.pending_action = viki_resp.action
-                    return f"Safety Check: This is a {severity} action. Confirm to proceed."
+                    reply = (viki_resp.final_response or "").strip()
+                    if not reply or reply.lower() in placeholders:
+                        reply = "I understand. I have an action ready that needs your confirmation."
+                    return f"{reply}\n\nSafety Check: This is a {severity} action. Confirm to proceed."
 
                 # World Model Protection Zone Check
                 if self.world.state.safety_zones.get(params.get('path', '')) == 'protected':
@@ -611,23 +725,29 @@ class VIKIController:
         # --- ORYTHIX MEMORY REINFORCEMENT (v23) ---
         try:
              intent_summ = "General Interaction"
-             if 'viki_resp' in locals() and viki_resp.final_thought:
-                  intent_summ = viki_resp.final_thought.intent_summary
+             confidence = 1.0
+             if 'viki_resp' in locals() and viki_resp:
+                  if viki_resp.final_thought:
+                       intent_summ = viki_resp.final_thought.intent_summary
+                  confidence = getattr(viki_resp, 'confidence', 1.0)
              
              self.memory.record_interaction(
                  intent=intent_summ,
                  action=str(action_results) if action_results else "reply",
                  outcome=(final_output or "")[:500],
-                 confidence=getattr(viki_resp, 'confidence', 1.0) if 'viki_resp' in locals() else 1.0
+                 confidence=confidence
              )
              
              # v25: Automated Dream Cycle Trigger (Every 20 meaningful episodes)
-             cur = self.memory.episodic.conn.cursor()
-             cur.execute("SELECT COUNT(*) FROM episodes")
-             count = cur.fetchone()[0]
-             if count > 0 and count % 20 == 0:
-                  # Trigger in background to avoid blocking the user
-                  asyncio.create_task(self.memory.episodic.consolidate(self.model_router))
+             try:
+                 cur = self.memory.episodic.conn.cursor()
+                 cur.execute("SELECT COUNT(*) FROM episodes")
+                 count = cur.fetchone()[0]
+                 if count > 0 and count % 20 == 0:
+                      # Trigger in background to avoid blocking the user
+                      self._create_tracked_task(self.memory.episodic.consolidate(self.model_router), "memory_consolidation")
+             except Exception as db_err:
+                 viki_logger.debug(f"Dream cycle trigger check failed: {db_err}")
         except Exception as e:
              viki_logger.warning(f"Failed to reinforce memory: {e}")
 
@@ -637,17 +757,18 @@ class VIKIController:
         
         # v25: Evolution - Propose stable patterns to Reflex (Auditable)
         try:
-            candidates = self.cortex.get_reflex_candidates()
-            for candidate in candidates:
-                # Instead of auto-learning, we propose
-                self.evolution.propose_mutation(
-                    m_type="reflex",
-                    description=f"Add reflex shortcut for '{candidate['input']}' -> {candidate['skill']}",
-                    value={"input": candidate['input'], "skill": candidate['skill'], "params": candidate['params']},
-                    pattern_id=candidate['input']
-                )
-                # If we have an active mutation that IS this pattern, we record success
-                self.evolution.record_success(candidate['input'])
+            if hasattr(self.cortex, 'get_reflex_candidates'):
+                candidates = self.cortex.get_reflex_candidates()
+                for candidate in candidates:
+                    # Instead of auto-learning, we propose
+                    self.evolution.propose_mutation(
+                        m_type="reflex",
+                        description=f"Add reflex shortcut for '{candidate['input']}' -> {candidate['skill']}",
+                        value={"input": candidate['input'], "skill": candidate['skill'], "params": candidate['params']},
+                        pattern_id=candidate['input']
+                    )
+                    # If we have an active mutation that IS this pattern, we record success
+                    self.evolution.record_success(candidate['input'])
         except Exception as e:
             viki_logger.debug(f"Evolution proposal skipped: {e}")
         
@@ -678,7 +799,8 @@ class VIKIController:
                 with open(state_path, 'r') as f:
                     state = yaml.safe_load(f)
                     last_total = state.get('last_forge_lesson_count', 0)
-            except: pass
+            except Exception as e:
+                viki_logger.debug(f"Could not load evolution state: {e}")
             
         if force or (stable_lessons >= 10 and current_total - last_total >= 5):
             viki_logger.info(f"Initiating Neural Forge Evolution (Stable Lessons: {stable_lessons})...")
@@ -734,11 +856,20 @@ class VIKIController:
     async def shutdown(self):
         viki_logger.info("Shutting down...")
         
+        # Cancel all background tasks
+        if self._background_tasks:
+            viki_logger.info(f"Cancelling {len(self._background_tasks)} background tasks...")
+            for task in self._background_tasks:
+                task.cancel()
+            # Wait for all tasks to complete cancellation
+            await asyncio.gather(*self._background_tasks, return_exceptions=True)
+            viki_logger.info("All background tasks cancelled")
+        
         # v12: Session Narrative Synthesis
         try:
-            if len(self.memory.get_context()) > 4: # Only record meaningful sessions
+            if len(self.memory.working.get_trace()) > 4: # Only record meaningful sessions
                 viki_logger.info("Synthesizing session narrative...")
-                context = self.memory.get_context()
+                context = self.memory.working.get_trace()
                 # Create a simple summary of the interaction
                 user_msg_count = sum(1 for m in context if m['role'] == 'user')
                 summary = f"Had a session with Sachin involving {user_msg_count} exchanges. "
@@ -748,6 +879,15 @@ class VIKIController:
                      summary += "The synchronization was high and we achieved the objectives smoothly."
                 
                 self.learning.save_narrative(summary, significance=0.7, mood=str(self.bio.get_state()))
+                
+                # Extract structured facts from session
+                viki_logger.info("Analyzing session for knowledge extraction...")
+                facts = await self.learning.analyze_session(
+                    session_trace=context,
+                    session_outcome=summary,
+                    model_router=self.model_router
+                )
+                viki_logger.info(f"Session analysis extracted {len(facts)} facts")
         except Exception as e:
             viki_logger.error(f"Narrative synthesis failed: {e}")
 

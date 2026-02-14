@@ -1,6 +1,7 @@
 import yaml
 import os
 import datetime
+import secrets
 from viki.config.logger import viki_logger
 
 class SuperAdminLayer:
@@ -9,6 +10,17 @@ class SuperAdminLayer:
         self.config_path = config_path
         self._load_config()
         self.shutdown_triggered = False
+        
+        # Load admin_secret from environment variable (more secure)
+        self.admin_secret = os.getenv('VIKI_ADMIN_SECRET')
+        if not self.admin_secret:
+            # Fallback to config file (deprecated)
+            self.admin_secret = self.config.get("admin_secret", "")
+            if not self.admin_secret or self.admin_secret == "CHANGE_THIS_SECRET_IMMEDIATELY_XYZ123":
+                # Generate a secure random secret
+                self.admin_secret = secrets.token_urlsafe(32)
+                viki_logger.warning(f"No VIKI_ADMIN_SECRET set. Generated temporary admin secret: {self.admin_secret}")
+                viki_logger.warning("Set VIKI_ADMIN_SECRET environment variable for persistent admin access.")
 
     def _load_config(self):
         try:
@@ -27,7 +39,7 @@ class SuperAdminLayer:
             
         admin_id, secret, command = parts[1], parts[2], parts[3].upper()
         
-        if admin_id == self.config.get("admin_id") and secret == self.config.get("admin_secret"):
+        if admin_id == self.config.get("admin_id") and secret == self.admin_secret:
             self._execute_kill_switch(command)
             return True
         return False
@@ -45,5 +57,5 @@ class SuperAdminLayer:
             os.makedirs(os.path.dirname(log_path), exist_ok=True)
             with open(log_path, 'a') as f:
                 f.write(f"[{datetime.datetime.now().isoformat()}] {message}\n")
-        except:
-            pass
+        except (IOError, OSError) as e:
+            viki_logger.warning(f"Failed to write admin log: {e}")
