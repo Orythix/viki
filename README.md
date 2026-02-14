@@ -1,5 +1,5 @@
 # VIKI: Sovereign Digital Intelligence
-> **Virtual Intelligence Knowledge Interface | Version 7.2.0 Nexus Core**
+> **Autonomous AI Agent System | Orythix Cognitive Architecture | Virtual Intelligence Knowledge Interface**
 
 <div align="center">
 
@@ -9,6 +9,12 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Ollama](https://img.shields.io/badge/Ollama-Local_LLM-orange.svg)](https://ollama.ai)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](./LICENSE)
+
+---
+
+**VIKI** is the world's first **Sovereign Digital Intelligence** built for absolute privacy and local-first autonomy. Unlike standard chatbots, VIKI utilizes the **Orythix Cognitive Architecture** to perform deep reasoning, multi-tool orchestration, and recursive self-improvement without ever leaking your data to the cloud.
+
+[Features](#core-pillars-v720) • [Architecture](#technical-architecture) • [Quick Start](#quick-start) • [Security](#security--ethics)
 
 </div>
 
