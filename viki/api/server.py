@@ -25,13 +25,12 @@ CORS(app)
 
 @app.after_request
 def add_cors_headers(response):
-    print(f"DEBUG: Adding CORS headers to {request.method} {request.path}")
     response.headers['Access-Control-Allow-Origin'] = '*'
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
     return response
 
-print("DEBUG: API Server Initialized")
+
 
 
 # Initialize VIKI Controller

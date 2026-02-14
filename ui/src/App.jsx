@@ -6,8 +6,6 @@ const API_BASE = import.meta.env.VITE_VIKI_API_BASE || 'http://localhost:5000/ap
 
 function getApiHeaders() {
   const key = import.meta.env.VITE_VIKI_API_KEY
-  const base = import.meta.env.VITE_VIKI_API_BASE
-  console.log(`[VIKI DEBUG] API_BASE: ${base}, Has Key: ${!!key}`)
   if (!key) return {}
   return { Authorization: `Bearer ${key}` }
 }
