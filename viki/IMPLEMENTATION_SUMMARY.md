@@ -1,9 +1,11 @@
 # VIKI Implementation Summary
 
-**Last updated:** 2026-02-14
+**Last updated:** 2026-02-17
 
 ## Overview
 This document summarizes the comprehensive improvements made to the VIKI codebase based on the analysis plan. All critical bugs, security vulnerabilities, and performance issues have been addressed. For model-side improvements (routing, dream, corrections, LoRA, continuous learning), see [MODEL_ENHANCEMENT_SUMMARY.md](MODEL_ENHANCEMENT_SUMMARY.md).
+
+**Security Focus (2026-02-17):** Additional hardening was implemented: `validate_action` before every skill run; path sandbox for dev_tools and read-path validation for whisper, PDF, and data_analysis; secret redaction in output and logs; prompt injection blocklist in `validate_request`; shell command chaining treated as destructive; optional `security_scan_requests`; filesystem_skill roots from settings. See [SECURITY_SETUP.md](SECURITY_SETUP.md) and CHANGELOG 7.3.0.
 
 ---
 

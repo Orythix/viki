@@ -4,6 +4,7 @@ import re
 from typing import Dict, Any
 from viki.skills.base import BaseSkill
 from viki.config.logger import viki_logger
+from viki.core.safety import safe_for_log
 
 class ShellSkill(BaseSkill):
     """
@@ -143,12 +144,13 @@ class ShellSkill(BaseSkill):
     def _classify_command(self, command: str) -> str:
         """Classify command as 'safe', 'destructive', or 'forbidden'."""
         command_lower = command.lower()
-        
-        # Check forbidden patterns first
+        # Check forbidden patterns first (e.g. "x; rm -rf /" must stay forbidden)
         for pattern in self.FORBIDDEN_PATTERNS:
             if re.search(pattern, command_lower, re.IGNORECASE):
                 return "forbidden"
-        
+        # Command chaining can combine safe + destructive; treat as at least destructive (requires confirmation)
+        if ";" in command or "&&" in command or "||" in command or (command.strip() and "|" in command):
+            return "destructive"
         # Check if command matches safe patterns
         for pattern in self.SAFE_PATTERNS:
             if re.search(pattern, command, re.IGNORECASE):
@@ -174,20 +176,20 @@ class ShellSkill(BaseSkill):
         classification = self._classify_command(command)
         
         if classification == "forbidden":
-            viki_logger.warning(f"Shell: Blocked forbidden command pattern: {command[:50]}...")
+            viki_logger.warning(f"Shell: Blocked forbidden command pattern: {safe_for_log(command)}")
             return "Safety Block: Command matches forbidden pattern and cannot be executed."
         
         if classification == "destructive" and not skip_confirmation:
-            viki_logger.warning(f"Shell: Destructive command requires confirmation: {command[:50]}...")
+            viki_logger.warning(f"Shell: Destructive command requires confirmation: {safe_for_log(command)}")
             return (
                 f"SAFETY CONFIRMATION REQUIRED: This command appears to be destructive.\n"
-                f"Command: {command}\n"
+                f"Command: {safe_for_log(command, max_len=200)}\n"
                 f"Classification: {classification}\n"
                 f"To proceed, the controller must explicitly approve this action."
             )
         
         # Log all shell executions
-        viki_logger.info(f"Shell: Executing {classification} command: {command[:100]}...")
+        viki_logger.info(f"Shell: Executing {classification} command: {safe_for_log(command)}")
 
         try:
             # Construct the shell invocation

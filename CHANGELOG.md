@@ -2,6 +2,23 @@
 
 All notable changes to the VIKI Sovereign Intelligence project will be documented in this file.
 
+## [7.3.0] - 2026-02-17 (Security Focus)
+
+### Added
+- **validate_action before every skill run:** All skill executions (confirm path and ReAct path) now call `safety.validate_action(skill_name, params)` after capability check. Blocked actions return "Action blocked by safety policy."
+- **Path sandbox for dev_tools:** DevSkill validates all file paths with `path_sandbox.validate_output_path` against allowed roots (workspace_dir, data_dir).
+- **Read-path validation:** Whisper, PDF, and data_analysis skills validate file paths against allowed roots before reading; controller is injected and paths outside workspace/data are rejected.
+- **Secret redaction:** `safety.sanitize_output()` redacts API keys and tokens (e.g. `sk-...`, Bearer JWT, `xoxb-`, `ghp_`). New helpers `redact_secrets()` and `safe_for_log()` used in controller, API server, shell_skill, and history for logs and summaries.
+- **Prompt injection blocklist:** `validate_request()` strips or replaces blocklisted phrases (jailbreak-style instructions); list is in `safety.injection_blocklist`.
+- **Shell command chaining:** Commands containing `;`, `&&`, `||`, or `|` are classified as at least destructive (require confirmation) to prevent chaining bypass.
+- **Optional LLM security scan:** Setting `system.security_scan_requests: true` in settings runs `safety.scan_request()` before deliberation; refusal stops the request.
+- **Filesystem_skill roots from settings:** When controller provides `system.workspace_dir` or `system.data_dir`, FileSystemSkill uses those as allowed roots (aligned with path_sandbox); otherwise falls back to existing roots.
+
+### References
+- Security details: `viki/SECURITY_SETUP.md`, security focus plan in `plans/`.
+
+---
+
 ## [7.2.0] - 2026-02-14 (Security, Model Enhancement & Docs)
 
 ### Added

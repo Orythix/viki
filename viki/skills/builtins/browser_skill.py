@@ -41,11 +41,15 @@ class BrowserSkill(BaseSkill):
         # We ignore any 'headless' param from LLM to respect user wish
         action = params.get("action", "navigate")
         await self._init_browser(headless=True)
-        
+
         try:
             if action == "navigate":
                 url = params.get("url")
-                if not url.startswith("http"): url = "https://" + url
+                if not url or not str(url).strip():
+                    return "Provide url= for navigate action."
+                url = str(url).strip()
+                if not url.startswith("http"):
+                    url = "https://" + url
                 await self.page.goto(url)
                 title = await self.page.title()
                 return f"Navigated to {url}. Title: {title}"
@@ -71,10 +75,25 @@ class BrowserSkill(BaseSkill):
                 return f"Page content captured (truncated): {content[:2000]}..."
 
             return f"Error: Unknown browser action '{action}'"
-            
+
         except Exception as e:
             viki_logger.error(f"Browser action failed: {e}")
             return f"Browser Error: {str(e)}"
+        finally:
+            if self.browser:
+                try:
+                    await self.browser.close()
+                except Exception as e:
+                    viki_logger.debug(f"Browser close: {e}")
+                self.browser = None
+                self.context = None
+                self.page = None
+            if self.playwright:
+                try:
+                    await self.playwright.stop()
+                except Exception as e:
+                    viki_logger.debug(f"Playwright stop: {e}")
+                self.playwright = None
 
     async def shutdown(self):
         if self.browser:

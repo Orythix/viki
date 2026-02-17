@@ -3,7 +3,9 @@
 **Audit Date:** 2026-02-15  
 **Version Audited:** 7.2.0 (per README.md)  
 **Auditor:** Kilo Code Architect Mode  
-**Status:** FIXES IMPLEMENTED
+**Status:** FIXES IMPLEMENTED  
+
+**Note (2026-02-17):** Additional security focus implemented in 7.3.0: validate_action before every skill run, path sandbox for dev_tools/whisper/PDF/data_analysis, secret redaction, prompt injection blocklist, shell chaining as destructive, optional scan_request, filesystem_skill roots from settings. See CHANGELOG 7.3.0 and viki/SECURITY_SETUP.md.
 
 ---
 

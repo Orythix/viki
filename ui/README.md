@@ -1,6 +1,6 @@
 # VIKI Dashboard (React)
 
-Modern, premium dashboard for interacting with VIKI (Virtual Intelligence Knowledge Interface).
+Modern, premium dashboard for interacting with VIKI (Virtual Intelligence Knowledge Interface). Compatible with VIKI 7.3.0+.
 
 ## Features
 

@@ -3,6 +3,9 @@ system:
   data_dir: "./data"
   workspace_dir: "./workspace"
   
+  # Persona: sovereign (full), dev, research, home. Override with env VIKI_PERSONA.
+  persona: sovereign
+  
   # Execution Mode: "live" = real actions, "shadow" = simulate only (safe for testing)
   shadow_mode: false
   
@@ -11,6 +14,25 @@ system:
   
   # Request timeout in seconds (0 = no limit). Prevents runaway requests.
   request_timeout_seconds: 300
+
+  # When true, run LLM security scan (scan_request) before deliberation. Adds latency and an extra LLM call per request.
+  security_scan_requests: false
+
+  # When true, run internal specialist ensemble (critic/explorer/aligner) for complex intents. Set false for maximum speed.
+  use_ensemble: true
+
+  # When true, run a quick web research pulse at startup. Set false to avoid competing with first user request.
+  startup_research: false
+
+  # At startup, log warnings if critical skills (email, calendar, research) are misconfigured.
+  skill_health_check: true
+
+  # What makes VIKI specific (surfaced in API and CLI)
+  differentiators:
+    - Local Neural Forge
+    - Orythix governance
+    - Reflex layer
+    - Air-gap capable
 
 models_config: "./viki/config/models.yaml"
 security_layer_path: "./viki/config/security_layer.md"
@@ -22,3 +44,30 @@ memory:
 skills:
   auto_discover: true
   registry_path: "./viki/skills/builtins"
+  python_interpreter:
+    timeout_seconds: 30  # max 120; or set VIKI_INTERPRETER_TIMEOUT
+
+# Optional integrations (Phase 1: Molty-style). Credentials via env or path.
+# Gmail: set VIKI_GMAIL_CREDENTIALS_PATH to JSON key file; token saved to data_dir.
+# Calendar: same or VIKI_GOOGLE_CALENDAR_CREDENTIALS_PATH. See viki/SECURITY_SETUP.md.
+integrations:
+  gmail:
+    enabled: false
+    credentials_path: ""  # or env VIKI_GMAIL_CREDENTIALS_PATH
+  google_calendar:
+    enabled: false
+    credentials_path: ""  # or env VIKI_GOOGLE_CALENDAR_CREDENTIALS_PATH
+    default_calendar_id: "primary"
+
+# Voice: pyttsx3 (default) or elevenlabs. Set VIKI_ELEVENLABS_API_KEY for ElevenLabs.
+voice:
+  backend: "pyttsx3"  # or elevenlabs
+  voice_id: ""        # ElevenLabs voice ID (optional)
+
+# Obsidian vault path for obsidian skill
+obsidian:
+  vault_path: ""      # or env VIKI_OBSIDIAN_VAULT
+
+# Tasks: file (data_dir/tasks.json) or things3 (macOS)
+tasks:
+  provider: "file"    # file | things3

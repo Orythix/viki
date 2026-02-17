@@ -26,6 +26,7 @@ sys.path.append(parent_dir)
 
 from viki.core.controller import VIKIController
 from viki.config.logger import viki_logger
+from viki.config.resolve import get_soul_path
 
 console = Console()
 
@@ -34,8 +35,13 @@ class SimpleInterface:
         self.console = Console()
         self.status_spinner = None
         
-    def welcome(self):
+    def welcome(self, controller=None):
         self.console.print("[bold magenta]VIKI v7.0[/] [dim]System Online[/]")
+        if controller is not None:
+            persona = getattr(controller, "persona", "sovereign")
+            diff = controller.get_differentiators() if hasattr(controller, "get_differentiators") else []
+            first_diff = diff[0] if diff else "Orythix"
+            self.console.print(f"[dim]Persona: {persona} | {first_diff}[/]")
         self.console.print("[dim]Type 'exit' to quit.[/]\n")
 
     def print_user(self, text):
@@ -54,19 +60,19 @@ class SimpleInterface:
     def print_action(self, text):
         self.console.print(f"[yellow]   Action: {text}[/]")
 
-async def main():
+async def main(workspace_path=None):
     interface = SimpleInterface()
-    interface.welcome()
-    
     script_dir = os.path.dirname(os.path.abspath(__file__))
     settings_path = os.path.join(script_dir, "config", "settings.yaml")
-    soul_path = os.path.join(script_dir, "config", "soul.yaml")
-    
+    soul_path = get_soul_path(settings_path)
+
     try:
-        controller = VIKIController(settings_path, soul_path)
+        controller = VIKIController(settings_path, soul_path, workspace_override=workspace_path)
     except Exception as e:
         interface.print_error(f"Initialization Failed: {e}")
         return
+    controller.check_skill_health()
+    interface.welcome(controller)
 
     # Event Handler for linear logging
     def on_event(event_type, data):
@@ -85,10 +91,10 @@ async def main():
         await controller.bio.start()
         controller._create_tracked_task(controller.nexus.start_processing(on_event=on_event), "nexus_processing")
         try:
-             await controller.telegram.start()
-             await controller.discord.start()
-             await controller.slack.start()
-             await controller.whatsapp.start()
+             for bridge_name in ("telegram", "discord", "slack", "whatsapp"):
+                 bridge = getattr(controller, bridge_name, None)
+                 if bridge is not None and hasattr(bridge, "start"):
+                     await bridge.start()
         except Exception as bridge_err:
              viki_logger.warning(f"One or more external bridges failed to initialize: {bridge_err}")
         
@@ -111,9 +117,11 @@ async def main():
                 controller.watchdog.stop()
                 controller.bio.stop()
                 controller.nexus.stop()
-                try: 
-                    await controller.discord.stop()
-                    await controller.telegram.stop() 
+                try:
+                    for bridge_name in ("discord", "telegram", "slack", "whatsapp"):
+                        bridge = getattr(controller, bridge_name, None)
+                        if bridge is not None and hasattr(bridge, "stop"):
+                            await bridge.stop()
                 except Exception as e:
                     viki_logger.debug(f"Error stopping bridges: {e}")
                 await controller.shutdown()
@@ -127,6 +135,12 @@ async def main():
                 interface.console.print("  [green]/shadow[/]   — Toggle shadow mode (simulate vs real execution)")
                 interface.console.print("  [green]/debug[/]    — Toggle debug logging")
                 interface.console.print("  [green]/exit[/]     — Shutdown VIKI")
+                interface.console.print("  [green]/confirm[/]  — Confirm pending action (or reply yes/confirm)")
+                interface.console.print("  [green]/reject[/]    — Cancel pending action (or reply no/reject)")
+                interface.console.print("  [green]/scan[/]     — Re-scan workspace codebase (use in chat)")
+                interface.console.print("  [green]/restore[/]  — List checkpoints; /restore <id> to revert files")
+                interface.console.print("  [green]/save[/]     — Save session: /save <name>")
+                interface.console.print("  [green]/load[/]     — Load session: /load <name>")
                 continue
             
             if user_input.lower() == "/skills":
@@ -169,10 +183,18 @@ async def main():
         except Exception as e:
             interface.print_error(str(e))
 
-if __name__ == "__main__":
+def run():
+    """Synchronous entry point for the `viki` console script."""
     parser = argparse.ArgumentParser(description="VIKI Sovereign Intelligence")
+    parser.add_argument("path", nargs="?", default=".", help="Project directory to use as workspace (default: current directory)")
     parser.add_argument("--ui", "--face-ui", dest="ui", action="store_true", help="Start API server and open hologram face UI in browser")
     args = parser.parse_args()
+
+    workspace_path = None
+    if args.path:
+        resolved = os.path.abspath(os.path.expanduser(args.path))
+        if os.path.isdir(resolved):
+            workspace_path = resolved
 
     api_process = None
     if args.ui:
@@ -189,17 +211,24 @@ if __name__ == "__main__":
                 stderr=subprocess.PIPE,
             )
             time.sleep(2.5)
-            webbrowser.open("http://localhost:5173")
             console.print("[dim]API server started. Hologram UI: http://localhost:5173[/]")
             console.print("[dim]Start the UI with: cd ui && npm run dev[/]\n")
+            try:
+                webbrowser.open("http://localhost:5173")
+            except Exception as e:
+                viki_logger.debug("Open browser: %s", e)
         except Exception as e:
             viki_logger.warning(f"Could not start API server or open browser: {e}")
 
     try:
-        asyncio.run(main())
+        asyncio.run(main(workspace_path=workspace_path))
     except KeyboardInterrupt:
         pass
     finally:
         if api_process is not None and api_process.poll() is None:
             api_process.terminate()
             api_process.wait(timeout=5)
+
+
+if __name__ == "__main__":
+    run()

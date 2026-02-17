@@ -1,4 +1,4 @@
-# Setting Up VIKI (v7.2.0 Sovereign)
+# Setting Up VIKI (v7.3.0 Sovereign)
 
 ## 📦 Prerequisites
 

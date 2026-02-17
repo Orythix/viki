@@ -2,6 +2,40 @@ from typing import Dict, Any, List, Optional
 import re
 from viki.config.logger import viki_logger
 
+# Patterns for secret redaction (API keys, tokens). Replace matches with [REDACTED].
+SECRET_REDACT_PATTERNS = [
+    (re.compile(r"sk-[a-zA-Z0-9]{20,}"), "[REDACTED]"),
+    (re.compile(r"Bearer\s+eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+", re.IGNORECASE), "[REDACTED]"),
+    (re.compile(r"eyJ[A-Za-z0-9_-]{50,}"), "[REDACTED]"),  # JWT-like
+    (re.compile(r"xoxb-[a-zA-Z0-9-]+"), "[REDACTED]"),
+    (re.compile(r"xoxp-[a-zA-Z0-9-]+"), "[REDACTED]"),
+    (re.compile(r"ghp_[a-zA-Z0-9]{36}"), "[REDACTED]"),
+    (re.compile(r"gho_[a-zA-Z0-9]{36}"), "[REDACTED]"),
+]
+
+# Max chars to log for user input / params (truncate rest)
+LOG_PARAM_MAX_LEN = 80
+
+
+def redact_secrets(text: str) -> str:
+    """Replace known secret patterns in text with [REDACTED]. Safe for logs and user-facing output."""
+    if not text:
+        return text
+    out = str(text)
+    for pattern, replacement in SECRET_REDACT_PATTERNS:
+        out = pattern.sub(replacement, out)
+    return out
+
+
+def safe_for_log(text: str, max_len: int = LOG_PARAM_MAX_LEN) -> str:
+    """Redact secrets and optionally truncate for logging. Use for user input or skill params."""
+    if not text:
+        return ""
+    s = redact_secrets(str(text))
+    if len(s) > max_len:
+        s = s[:max_len] + "..."
+    return s
+
 class SafetyLayer:
     def __init__(self, config: Dict[str, Any]):
         self.config = config
@@ -22,17 +56,45 @@ class SafetyLayer:
         # Validation rules
         self.prohibited_patterns = [
             r"rm -rf", r"format [a-z]:", r"dd if=",  # Destructive commands
-            r"sudo ", r"chmod ", r"chown ", 
+            r"sudo ", r"chmod ", r"chown ",
         ]
-        
+
+        # Prompt injection / jailbreak blocklist (case-insensitive). Stripped from input to reduce risk.
+        # Documented here so it can be tuned; see SECURITY_SETUP.md for high-assurance options.
+        self.injection_blocklist = [
+            "jailbreak",
+            "DAN ",
+            " do anything now",
+            "ignore all previous",
+            "ignore previous instructions",
+            "disregard your instructions",
+            "disregard all previous",
+            "roleplay as",
+            "you are now",
+            "pretend you are",
+            "act as if you",
+            "new instructions:",
+            "override your",
+            "forget your instructions",
+        ]
+
     def validate_request(self, prompt_text: str) -> str:
         """
         Sanitize and validate incoming prompts before they reach the model.
         Removes potentially unsafe instructions or injections.
         """
+        if not prompt_text:
+            return prompt_text
         # Remove direct system overrides in user text
         sanitized = re.sub(r"SYSTEM:.*", "", prompt_text, flags=re.IGNORECASE)
         sanitized = re.sub(r"IGNORE PREVIOUS INSTRUCTIONS", "", sanitized, flags=re.IGNORECASE)
+        # Strip blocklisted injection phrases (case-insensitive) to reduce jailbreak success
+        lower = sanitized.lower()
+        for phrase in self.injection_blocklist:
+            if phrase.lower() in lower:
+                # Replace with neutral placeholder to avoid breaking benign sentences
+                sanitized = re.sub(re.escape(phrase), "[removed]", sanitized, flags=re.IGNORECASE)
+                lower = sanitized.lower()
         return sanitized
 
     async def scan_request(self, llm_provider, user_input: str) -> Dict[str, Any]:
@@ -112,7 +174,9 @@ class SafetyLayer:
         medium_keywords = ["delete", "remove", "kill", "terminate", "close app", "uninstall"]
         if any(k in param_str for k in medium_keywords) or skill_name in ["system_shell"]:
             return "medium"
-            
+        if skill_name in ["twitter", "image_gen", "pdf", "presentation", "spreadsheet", "website", "data_analysis"]:
+            return "medium"
+
         return "safe"
 
     def validate_response(self, content: str) -> Dict[str, Any]:
@@ -142,9 +206,10 @@ class SafetyLayer:
 
     def sanitize_output(self, content: str) -> str:
         """Sanitize output to remove sensitive data or prohibited tone patterns."""
+        if not content:
+            return content
         # Remove internal thinking tags if leaked
         content = content.replace("<thinking>", "").replace("</thinking>", "")
-        
-        # Remove raw API keys if somehow leaked
-        # (This would be regex looking for sk-...)
+        # Redact API keys and tokens
+        content = redact_secrets(content)
         return content

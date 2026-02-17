@@ -29,7 +29,8 @@ class IntelligenceScorecard:
                 with open(self.path, 'r') as f:
                     raw = json.load(f)
                     return {k: [MetricEntry(**e) for e in v] for k, v in raw.items()}
-            except: pass
+            except Exception as e:
+                viki_logger.debug("Scorecard load: %s", e)
         return {
             "reliability_rate": [],       # Successful tasks / Total tasks
             "mistake_repetition": [],     # Same failure type within X days

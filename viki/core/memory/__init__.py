@@ -94,7 +94,23 @@ class WorkingMemory:
                 rows = list(self.db["messages"].rows_where(order_by="timestamp ASC", limit=self.max_turns))
                 return [{"role": r["role"], "content": r["content"]} for r in rows]
             return self.ephemeral_history.copy()
-    
+
+    def replace_trace(self, messages: List[Dict[str, str]]) -> None:
+        """Replace current conversation with a saved session (for /load)."""
+        with self._lock:
+            if self.db:
+                self.db["messages"].delete_where("session_id = ?", [self.session_id])
+                for m in messages[-self.max_turns:]:
+                    role = m.get("role", "user")
+                    content = m.get("content", "")
+                    self.db["messages"].insert({
+                        "id": str(uuid.uuid4()), "role": role, "content": content,
+                        "timestamp": datetime.now().isoformat(), "session_id": self.session_id,
+                        "metadata": "{}"
+                    })
+            else:
+                self.ephemeral_history = [{"role": m.get("role", "user"), "content": m.get("content", "")} for m in messages[-self.max_turns:]]
+
     def get_last_thought(self) -> str:
         """Get the last assistant message for context."""
         with self._lock:
@@ -116,6 +132,13 @@ class HierarchicalMemory:
         self.episodic = EpisodicMemory(data_dir)
         self.identity = NarrativeIdentity(data_dir)
         self.semantic = learning_module # Shared with LearningModule
+
+    def get_context(self, current_input: str = "", limit: int = 20) -> Dict[str, Any]:
+        """Legacy alias: returns working trace and episodic context. Prefer get_full_context for full stack."""
+        return {
+            "working": self.working.get_trace(),
+            "episodic": self.episodic.retrieve_context(current_input, limit=min(limit, 5)),
+        }
 
     def get_full_context(self, current_input: str, narrative_wisdom: List[Dict] = None) -> Dict[str, Any]:
         """Synthesizes context across all layers for the Deliberation layer."""

@@ -109,7 +109,8 @@ class ReflexBrain:
                         if val.isdigit(): val = int(val)
                         params[k] = val
                     return None, ActionCall(skill_name=skill_name, parameters=params)
-                except Exception: pass
+                except Exception as e:
+                    viki_logger.debug("Reflex pattern match: %s", e)
 
         # No match — let the LLM handle it naturally
         return None, None
@@ -220,7 +221,8 @@ class ReflexBrain:
         try:
             with open(path, 'w') as f:
                 json.dump(list(self.blacklist), f)
-        except: pass
+        except Exception as e:
+            viki_logger.debug("Reflex save blacklist: %s", e)
             
     def _save_blacklist(self):
         """Debounced save for blacklist."""
@@ -252,4 +254,5 @@ class ReflexBrain:
             try:
                 with open(path, 'r') as f:
                     self.blacklist = set(json.load(f))
-            except: pass
+            except Exception as e:
+                viki_logger.debug("Reflex load blacklist: %s", e)
