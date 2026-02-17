@@ -11,6 +11,8 @@ import asyncio
 from functools import wraps
 import secrets
 from dotenv import load_dotenv
+import threading
+import time
 
 load_dotenv()
 
@@ -20,40 +22,120 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 from viki.core.controller import VIKIController
 from viki.config.logger import viki_logger
 
-app = Flask(__name__)
-CORS(app)
-
-@app.after_request
-def add_cors_headers(response):
-    response.headers['Access-Control-Allow-Origin'] = '*'
-    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-    return response
-
-
-
-
-# Initialize VIKI Controller
 base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 soul_path = os.path.join(base_dir, "config", "soul.yaml")
 settings_path = os.path.join(base_dir, "config", "settings.yaml")
 
 controller = VIKIController(settings_path=settings_path, soul_path=soul_path)
 
-# API Key Authentication
+app = Flask(__name__)
+
+# --- SECURITY FIX: HIGH-004 - Require API key in production ---
 API_KEY = os.getenv('VIKI_API_KEY')
 if not API_KEY:
-    # Generate a random API key if not set (for development)
-    API_KEY = secrets.token_urlsafe(32)
-    viki_logger.warning(f"No VIKI_API_KEY set. Generated temporary key: {API_KEY}")
-    viki_logger.warning("Set VIKI_API_KEY environment variable for production use.")
+    debug_mode = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
+    if debug_mode:
+        # Only allow fallback in debug mode for development
+        API_KEY = "dev-key-for-testing-only"
+        viki_logger.warning("Using development API key. NOT FOR PRODUCTION USE.")
+        viki_logger.warning("Set VIKI_API_KEY environment variable for secure operation.")
+    else:
+        # In production, fail fast if no API key is configured
+        raise RuntimeError(
+            "VIKI_API_KEY environment variable must be set for production use. "
+            "Generate a secure key with: python -c \"import secrets; print(secrets.token_urlsafe(32))\""
+        )
+
+# --- SECURITY FIX: CRIT-002 - Explicit CORS origin allowlist ---
+# Configure allowed origins explicitly instead of wildcard
+ALLOWED_ORIGINS = [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:5000',
+    'http://127.0.0.1:5000',
+]
+
+# Add any custom origins from environment
+custom_origins = os.getenv('VIKI_CORS_ORIGINS', '')
+if custom_origins:
+    ALLOWED_ORIGINS.extend([o.strip() for o in custom_origins.split(',') if o.strip()])
+
+CORS(app, origins=ALLOWED_ORIGINS)
+
+@app.after_request
+def add_cors_headers(response):
+    """Security-hardened CORS headers - only allow explicit origins."""
+    origin = request.headers.get('Origin')
+    if origin in ALLOWED_ORIGINS:
+        response.headers['Access-Control-Allow-Origin'] = origin
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    return response
+
+# --- SECURITY FIX: HIGH-001 - Rate limiting implementation ---
+# Simple in-memory rate limiter (for production, use Redis or flask-limiter)
+class RateLimiter:
+    def __init__(self, max_requests: int = 100, window_seconds: int = 60):
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self._requests = {}  # {ip: [(timestamp, ...)]}
+        self._lock = threading.Lock()
+    
+    def is_allowed(self, client_ip: str) -> tuple[bool, int]:
+        """Check if request is allowed. Returns (allowed, remaining_requests)."""
+        current_time = time.time()
+        
+        with self._lock:
+            # Clean old requests
+            if client_ip in self._requests:
+                self._requests[client_ip] = [
+                    t for t in self._requests[client_ip]
+                    if current_time - t < self.window_seconds
+                ]
+            else:
+                self._requests[client_ip] = []
+            
+            # Check limit
+            request_count = len(self._requests[client_ip])
+            if request_count >= self.max_requests:
+                return False, 0
+            
+            # Record this request
+            self._requests[client_ip].append(current_time)
+            return True, self.max_requests - request_count - 1
+
+# Create rate limiters for different endpoint types
+general_limiter = RateLimiter(max_requests=100, window_seconds=60)  # 100 req/min
+chat_limiter = RateLimiter(max_requests=20, window_seconds=60)     # 20 req/min for chat
+
+@app.before_request
+def check_rate_limit():
+    """Apply rate limiting to all API requests."""
+    if request.path.startswith('/api/'):
+        client_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+        
+        # Use stricter limiter for chat endpoint
+        if request.path == '/api/chat':
+            limiter = chat_limiter
+        else:
+            limiter = general_limiter
+        
+        allowed, remaining = limiter.is_allowed(client_ip)
+        if not allowed:
+            return jsonify({
+                'error': 'Rate limit exceeded',
+                'retry_after': 60
+            }), 429
 
 @app.before_request
 def log_request_info():
     viki_logger.debug(f"Request: {request.method} {request.url}")
     if request.path.startswith('/api/'):
         auth = request.headers.get('Authorization', 'Missing')
-        viki_logger.debug(f"Auth Header: {auth[:15]}...")
+        viki_logger.debug(f"Auth Header: {auth[:15] if len(auth) > 15 else auth}...")
 
 def require_api_key(f):
     """Decorator to require API key authentication."""
@@ -83,6 +165,35 @@ def async_route(f):
         return asyncio.run(f(*args, **kwargs))
     return wrapper
 
+# --- SECURITY FIX: MED-003 - Input validation ---
+MAX_MESSAGE_LENGTH = 10000  # Maximum message length in characters
+MIN_MESSAGE_LENGTH = 1      # Minimum message length
+
+def validate_message(message: str) -> tuple[bool, str]:
+    """Validate user input message.
+    
+    Returns: (is_valid, error_message)
+    """
+    if not message:
+        return False, "Message cannot be empty"
+    
+    if not isinstance(message, str):
+        return False, "Message must be a string"
+    
+    # Strip whitespace for length check
+    stripped = message.strip()
+    if len(stripped) < MIN_MESSAGE_LENGTH:
+        return False, "Message cannot be empty or whitespace only"
+    
+    if len(message) > MAX_MESSAGE_LENGTH:
+        return False, f"Message exceeds maximum length of {MAX_MESSAGE_LENGTH} characters"
+    
+    # Check for null bytes (potential injection)
+    if '\x00' in message:
+        return False, "Message contains invalid characters"
+    
+    return True, ""
+
 @app.route('/ping', methods=['GET'])
 def ping():
     viki_logger.info("PING HIT")
@@ -109,13 +220,27 @@ async def chat():
     try:
         viki_logger.info("API: Chat request received")
         data = request.json
+        
+        if not data:
+            return jsonify({'error': 'Invalid JSON body'}), 400
+        
         user_input = data.get('message', '')
         
-        if not user_input:
-            return jsonify({'error': 'No message provided'}), 400
+        # --- SECURITY FIX: MED-003 - Input validation ---
+        is_valid, error_msg = validate_message(user_input)
+        if not is_valid:
+            return jsonify({'error': error_msg}), 400
         
         viki_logger.info(f"API: Processing user input: '{user_input[:100]}'...")
-        response = await controller.process_request(user_input)
+        timeout_sec = controller.settings.get('system', {}).get('request_timeout_seconds', 0)
+        if timeout_sec > 0:
+            try:
+                response = await asyncio.wait_for(controller.process_request(user_input), timeout=float(timeout_sec))
+            except asyncio.TimeoutError:
+                viki_logger.warning(f"API: Request timed out after {timeout_sec}s")
+                return jsonify({'error': 'Request timed out. Try a shorter or simpler request.'}), 504
+        else:
+            response = await controller.process_request(user_input)
         viki_logger.info("API: Response generated successfully")
         
         return jsonify({
@@ -263,7 +388,10 @@ if __name__ == '__main__':
     viki_logger.info("Starting VIKI API Server (ASYNCHRONOUS)...")
     viki_logger.info(f"VIKI Version: {controller.soul.config.get('version', 'Unknown')}")
     viki_logger.info("API available at: http://localhost:5000")
-    viki_logger.info(f"API Key required for authentication. Current key: {API_KEY[:10]}...")
+    # SECURITY: Don't log any part of the API key
+    viki_logger.info("API Key required for authentication. Key configured: Yes")
     # Disable debug mode in production for security
     debug_mode = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
-    app.run(debug=debug_mode, host='0.0.0.0', port=5000)
+    # SECURITY FIX: CRIT-001 - Bind to localhost only, not all interfaces
+    # Use 127.0.0.1 instead of 0.0.0.0 to prevent network exposure
+    app.run(debug=debug_mode, host='127.0.0.1', port=5000)

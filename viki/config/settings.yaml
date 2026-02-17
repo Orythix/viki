@@ -8,6 +8,9 @@ system:
   
   # Max reasoning steps per request
   max_steps: 100
+  
+  # Request timeout in seconds (0 = no limit). Prevents runaway requests.
+  request_timeout_seconds: 300
 
 models_config: "./viki/config/models.yaml"
 security_layer_path: "./viki/config/security_layer.md"

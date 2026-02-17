@@ -180,6 +180,9 @@ class LearningModule:
         if not lesson_str or (isinstance(lesson_str, str) and len(lesson_str) < 5):
             return
 
+        # Allow callers to pass source= or source_task= (e.g. "user_correction", "web")
+        effective_source = kwargs.get('source', kwargs.get('source_task', source_task))
+
         lid = hashlib.md5(lesson_str.encode()).hexdigest()[:12]
         
         # Update if exists
@@ -205,7 +208,7 @@ class LearningModule:
             (id, content, text_representation, embedding, created_at, last_accessed, access_count, author, source_task, reliability)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
             (lid, json.dumps(lesson_obj), lesson_str, json.dumps(embedding), 
-             time.time(), time.time(), 1, author, source_task, kwargs.get('reliability', 0.8)))
+             time.time(), time.time(), 1, author, effective_source, kwargs.get('reliability', 0.8)))
         
         if relationship:
             cur.execute("INSERT INTO relationships (lesson_id, subj, pred, obj) VALUES (?, ?, ?, ?)",

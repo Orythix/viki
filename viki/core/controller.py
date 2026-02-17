@@ -66,7 +66,7 @@ from viki.core.benchmark import ControlledBenchmark
 # Orythix Cognitive Subsystems
 from viki.core.governor import EthicalGovernor
 from viki.core.self_model import SelfModel
-from viki.core.memory import NarrativeMemory
+from viki.core.memory import HierarchicalMemory
 from viki.core.deliberation import DeliberationEngine
 
 # Phase 6: Autonomy
@@ -88,6 +88,10 @@ class VIKIController:
         
         # Task tracking for proper cleanup
         self._background_tasks = set()
+        
+        # --- SECURITY FIX: HIGH-005 - Recursion depth tracking ---
+        self._reflex_recursion_depth = 0
+        self._max_reflex_recursion = 3
         
         root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         
@@ -115,7 +119,6 @@ class VIKIController:
         self.continuous_learner = ContinuousLearner(self)
         
         # v23: Hierarchical Memory Stack (Orythix Standard)
-        from viki.core.memory import HierarchicalMemory
         self.memory = HierarchicalMemory(self.settings, learning_module=self.learning)
         
         self.voice_module = VoiceModule()
@@ -273,7 +276,7 @@ class VIKIController:
             
             # Check every 6 hours
             await asyncio.sleep(21600)
-    
+
     def _load_yaml(self, path: str) -> Dict[str, Any]:
         try:
             with open(path, 'r') as f:
@@ -349,11 +352,17 @@ class VIKIController:
     async def process_request(self, user_input: str, on_event=None) -> str:
         placeholders = ["processing...", "executing", "thinking", "one moment", "working on it"]
         
+        # Normalize input for robustness
+        if user_input is None:
+            user_input = ""
+        if not isinstance(user_input, str):
+            user_input = str(user_input).strip() or ""
+        
         # --- ORYTHIX ETHICAL GOVERNOR (v22) ---
         # 1. Check for Emergency Shutdown Code
         if self.governor.check_shutdown(user_input):
             return "Orythix — Quiescent (shutdown key 970317 accepted)"
-        
+
         # 2. Check for Reawaken Command
         if self.governor.is_quiescent:
              if self.governor.check_reawaken(user_input):
@@ -363,7 +372,10 @@ class VIKIController:
         # 3. Veto Check on Raw Intent (v25 Semantic Upgrade)
         # Fetch narrative wisdom once and reuse it
         narrative_wisdom = self.memory.episodic.get_semantic_knowledge(limit=3)
-        wisdom_block = "\n".join([f"- [{w['category'].upper()}]: {w['insight']}" for w in narrative_wisdom])
+        wisdom_block = "\n".join([
+            f"- [{(w.get('category') or 'general').upper()}]: {w.get('insight', '')}"
+            for w in (narrative_wisdom if isinstance(narrative_wisdom, list) else [])
+        ])
         
         allowed, reason = await self.governor.veto_check(user_input, model_router=self.model_router, wisdom=wisdom_block)
         if not allowed:
@@ -389,9 +401,9 @@ class VIKIController:
         
         # Record user message in conversation memory (Working Trace)
         self.memory.working.add_message("user", safe_input)
-        
 
-        # URL Detection: If user shares a URL, auto-fetch content
+
+        # URL Detection: If user shares a URL, auto-fetch content (with timeout)
         import re as _re
         urls = _re.findall(r'https?://[^\s<>"]+', safe_input)
         url_context = ""
@@ -399,9 +411,18 @@ class VIKIController:
             try:
                 research_skill = self.skill_registry.get_skill('research')
                 if research_skill:
-                    for url in urls[:2]:  # Max 2 URLs
-                        page_content = await research_skill.execute({'url': url})
-                        url_context += f"\n{page_content}\n"
+                    # Cap total URL fetch time so slow pages don't block the agent
+                    url_content = await asyncio.wait_for(
+                        asyncio.gather(*[research_skill.execute({'url': u}) for u in urls[:2]], return_exceptions=True),
+                        timeout=35.0
+                    )
+                    for i, res in enumerate(url_content):
+                        if isinstance(res, str) and res:
+                            url_context += f"\n{res}\n"
+                        elif isinstance(res, Exception):
+                            viki_logger.debug(f"URL fetch failed for {urls[i] if i < len(urls) else '?'}: {res}")
+            except asyncio.TimeoutError:
+                viki_logger.warning("URL fetch timed out (35s); continuing without page content.")
             except Exception as e:
                 viki_logger.warning(f"URL fetch failed: {e}")
         
@@ -410,11 +431,11 @@ class VIKIController:
         if is_research: 
              viki_logger.info("Entering Research Mode: Exploratory & Verbose.")
              budget["time"] *= 2 # Double time for research
-        
+
         if "/benchmark" in user_input:
              self._create_tracked_task(self.benchmark.run_suite("Current-VIKI"), "benchmark")
              return "BENCHMARK SUITE INITIATED. Judgment validation in progress."
-        
+
         if "/scorecard" in user_input:
              summary = self.scorecard.get_summary()
              stats = "\n".join([f"- {k}: {v:.2f}" for k, v in summary.items()])
@@ -466,56 +487,8 @@ class VIKIController:
              return f"World Engine: Codebase Graph rebuilt. {len(self.world.state.codebase_graph)} modules mapped."
 
         # --- ORYTHIX DELIBERATION (v22) ---
-        if on_event: on_event("status", "THINKING (Reflex)")
-        
-        # 1. Reflex Path (Habit Execution)
-        reflex_resp, reflex_action = await self.reflex.think(user_input, model_router=self.model_router)
-        if reflex_resp:
-            self.scorecard.record_metric("reliability_rate", 1.0, context="reflex")
-            self.memory.working.add_message("assistant", reflex_resp)
-            return self._compress_output(reflex_resp)
-        
-        if reflex_action:
-             # Fast Path Execution with Security Checks
-             skill_name = reflex_action.skill_name
-             params = reflex_action.parameters
-             
-             # 0. CAPABILITY CHECK (same as deliberation path)
-             check_res = self.capabilities.check_permission(skill_name, params=params)
-             if not check_res.allowed:
-                 viki_logger.warning(f"Reflex action '{skill_name}' blocked: {check_res.reason}")
-                 # Fall through to deliberation for safer handling
-                 return await self.process_request(user_input, on_event=on_event)
-             
-             # 1. SAFETY VALIDATION
-             if not self.safety.validate_action(skill_name, params):
-                 viki_logger.warning(f"Reflex action '{skill_name}' failed safety check")
-                 return "Safety Check: This reflex action is not permitted."
-             
-             # 2. SHADOW MODE GATE
-             if self.shadow_mode:
-                 viki_logger.info(f"Shadow Mode: Simulating reflex {skill_name}({params})")
-                 return f"[Shadow Mode] Would execute reflex: {skill_name}({params})"
-             
-             # 3. EXECUTE
-             skill = self.skill_registry.get_skill(skill_name)
-             if skill:
-                 try:
-                     if on_event: on_event("status", f"EXECUTING (Reflex: {skill_name})")
-                     result = await skill.execute(params)
-                     self.memory.working.add_message("assistant", result)
-                     return result
-                 except Exception as e:
-                     viki_logger.error(f"Reflex failed: {e}")
-                     
-                     # Report failure to reflex brain for blacklisting
-                     self.reflex.report_failure(user_input)
-                     
-                     # Fall through to deliberation if reflex fails
-        
-        # 2. Deliberation Path (Foresight & Reasoning)
         if on_event: on_event("status", "DELIBERATING")
-        
+
         # v23: Integrated Hierarchical Context Retrieval
         # Pass pre-fetched narrative_wisdom to avoid duplicate query
         memory_context = self.memory.get_full_context(safe_input, narrative_wisdom=narrative_wisdom)
@@ -523,15 +496,16 @@ class VIKIController:
         # Add relevant failures to context for error avoidance
         relevant_failures = self.learning.get_relevant_failures(safe_input, limit=3)
         memory_context['relevant_failures'] = relevant_failures
-        
+
         world_understanding = self.world.get_understanding()
+
         
         # 3. Intelligence Governance (Judgment & Budget)
         # For v23, we use a simplified judgment for the high-level loop
         outcome = JudgmentOutcome.DEEP
         task_type = self._classify_task(safe_input) # vision, coding, reasoning, general
         use_lite = False # Use full reasoning by default for sovereignty
-        
+
         # Behavior Modulation from Signals
         mods = self.signals.get_modulation()
         signals_state = f"Verbosity: {mods.get('verbosity', 'standard')}, Planning: {mods.get('planning_depth', 'adaptive')}, Safety: {mods.get('safety_bias', 'standard')}"
@@ -544,13 +518,19 @@ class VIKIController:
         max_react_steps = 5  # Safety limit
         action_results = []  # Accumulated results from previous steps
         final_output = None
-        
+
         for react_step in range(max_react_steps):
             step_label = f"[ReAct Step {react_step + 1}/{max_react_steps}]" if react_step > 0 else ""
             if step_label:
                 viki_logger.info(f"{step_label} Continuing multi-step reasoning...")
                 if on_event: on_event("status", f"THINKING {step_label}")
             
+            self._reflex_recursion_depth += 1
+            if self._reflex_recursion_depth > self._max_reflex_recursion:
+                 viki_logger.error(f"Reflex recursion depth exceeded ({self._max_reflex_recursion})")
+                 self._reflex_recursion_depth = 0
+                 return "Safety: Maximum reflex retry depth exceeded. Please rephrase your request."
+
             # --- COGNITIVE LAYER (5-Layer Stack) ---
             try:
                 viki_resp: VIKIResponse = await self.cortex.process(
@@ -584,10 +564,10 @@ class VIKIController:
                             self.learning.save_lesson(
                                 trigger=f"CORRECTION: {user_input[:100]}",
                                 fact=f"When I said '{prev_response[:200]}', user corrected/expressed frustration: {user_input}",
-                                source="user_correction"
+                                source_task="user_correction"
                             )
                             viki_logger.info("Learning: Captured user correction as lesson")
-                
+
                 # Track low confidence for knowledge gap detection
                 if hasattr(viki_resp, 'final_thought') and viki_resp.final_thought:
                     confidence = viki_resp.final_thought.confidence
@@ -599,23 +579,27 @@ class VIKIController:
                     on_event("thought", viki_resp.final_thought.intent_summary)
                     on_event("model", f"{task_type.capitalize()} Core")
                     on_event("budget", budget.get("time", 0))
-                
+
                 # --- ESCALATION CHECK (v25 Meta-Cognitive Loop) ---
                 if viki_resp.needs_escalation and use_lite:
                     viki_logger.info("Escalation Triggered: Retrying current step with DEEP reasoning...")
                     use_lite = False
                     if on_event: on_event("status", "ESCALATING (Higher Reasoning)")
                     continue  # Restart current ReAct step with full schema
-
             except Exception as e:
                 viki_logger.error(f"Consciousness Stack failure: {e}")
                 self.signals.update_signal("frustration", 0.2)
+                self._reflex_recursion_depth = 0
                 return f"My deliberation layer encountered an error: {e}"
+            finally:
+                self._reflex_recursion_depth -= 1
+                if self._reflex_recursion_depth < 0:
+                     self._reflex_recursion_depth = 0
 
             # --- ACTION EXECUTION ---
             if viki_resp.action:
                 skill_name = viki_resp.action.skill_name
-                params = viki_resp.action.parameters
+                params = (viki_resp.action.parameters or {}).copy()
                 
                 # 0. CAPABILITY CHECK (v20 Enhanced)
                 check_res = self.capabilities.check_permission(skill_name, params=params)
@@ -659,8 +643,9 @@ class VIKIController:
                     self.history.take_snapshot("ACTION_START", f"Executing {skill_name}", {"params": params})
                     
                     start_exec = time.time()
+                    skill_timeout = min(120, max(30, (budget.get("time") or 5) * 12))
                     try:
-                        result = await skill.execute(params)
+                        result = await asyncio.wait_for(skill.execute(params), timeout=skill_timeout)
                         latency = time.time() - start_exec
                         
                         # Record performance
@@ -686,7 +671,14 @@ class VIKIController:
                             all_results = "\n".join([f"Step {r['step']}: {r.get('result') or r.get('error')}" for r in action_results])
                             final_output = self._compress_output(f"{llm_response}\n\nExecution Logs:\n{all_results}")
                             break
-                            
+                
+                    except asyncio.TimeoutError:
+                        self.signals.update_signal("frustration", 0.3)
+                        selected_model = self.model_router.get_model(capabilities=[task_type])
+                        selected_model.record_performance(0.0, False)
+                        self.skill_registry.record_execution(skill_name, False, 0.0)
+                        self.learning.save_failure(skill_name, "Execution timed out", user_input)
+                        return f"I couldn't complete '{skill_name}' in time (limit {skill_timeout}s). Try a simpler request or retry."
                     except Exception as e:
                         self.signals.update_signal("frustration", 0.3)
                         selected_model = self.model_router.get_model(capabilities=[task_type])
@@ -696,13 +688,16 @@ class VIKIController:
                         return f"I must apologize. My attempt to execute '{skill_name}' failed: {e}."
                 else:
                     viki_logger.warning(f"Skill '{skill_name}' not found.")
-            
+
+                self._reflex_recursion_depth = 0
+                continue
+
             # No action — LLM is done reasoning.
             self.last_interaction_time = time.time()
             llm_response = viki_resp.final_response
             if not llm_response or llm_response.lower().strip() in placeholders:
                  llm_response = "Intelligence stack synchronized. Directive processed."
-            
+
             if action_results:
                 # v21: Encapsulation - filter and format logs discreetly
                 clean_logs = []
@@ -720,7 +715,7 @@ class VIKIController:
             else:
                 final_output = self._compress_output(llm_response)
             break
-        
+
         # --- ORYTHIX REFLECTION (v22) ---
         # --- ORYTHIX MEMORY REINFORCEMENT (v23) ---
         try:
@@ -728,7 +723,7 @@ class VIKIController:
              confidence = 1.0
              if 'viki_resp' in locals() and viki_resp:
                   if viki_resp.final_thought:
-                       intent_summ = viki_resp.final_thought.intent_summary
+                       intent_summ = getattr(viki_resp.final_thought, 'intent_summary', None) or intent_summ
                   confidence = getattr(viki_resp, 'confidence', 1.0)
              
              self.memory.record_interaction(
@@ -754,7 +749,7 @@ class VIKIController:
         # --- POST-LOOP: Auto-learn + Memory ---
         if final_output is None:
             final_output = "I completed processing but have no output to show."
-        
+
         # v25: Evolution - Propose stable patterns to Reflex (Auditable)
         try:
             if hasattr(self.cortex, 'get_reflex_candidates'):
@@ -797,7 +792,7 @@ class VIKIController:
         if os.path.exists(state_path):
             try:
                 with open(state_path, 'r') as f:
-                    state = yaml.safe_load(f)
+                    state = json.load(f)
                     last_total = state.get('last_forge_lesson_count', 0)
             except Exception as e:
                 viki_logger.debug(f"Could not load evolution state: {e}")
@@ -816,7 +811,7 @@ class VIKIController:
                         json.dump({'last_forge_lesson_count': current_total}, f)
             else:
                 viki_logger.warning("Forge skill not found.")
-        
+
         recs = self.skill_registry.get_refactor_recommendations()
         for rec in recs:
             viki_logger.warning(f"Self-Awareness Alert: {rec}")
@@ -828,7 +823,7 @@ class VIKIController:
         if any(k in input_lower for k in ["see", "look", "screen", "vision", "screenshot"]): return "vision"
         question_words = ["what", "who", "where", "when", "why", "how", "is", "are", "can", "do", "does"]
         if input_text.strip().endswith('?') or any(input_lower.startswith(w) for w in question_words):
-            return "question"
+            return "reasoning"  # questions use reasoning budget (no separate "question" key in budgets)
         if any(k in input_lower for k in ["code", "script", "fix", "patch"]): return "coding"
         if any(k in input_lower for k in ["plan", "think", "analyze", "sequence"]): return "reasoning"
         return "general"
@@ -842,8 +837,7 @@ class VIKIController:
 
     def _compress_output(self, text: str) -> str:
         if not text: return text
-        fillers = [
-            "I will now", "I am going to", "Let me see", "Starting the process of",
+        fillers = ["I will now", "I am going to", "Let me see", "Starting the process of",
             "Confirmed.", "Okay,", "Certainly.", "Processing...", "Executing command:"
         ]
         cleaned = text
@@ -855,6 +849,12 @@ class VIKIController:
 
     async def shutdown(self):
         viki_logger.info("Shutting down...")
+        
+        # Flush debounced state (evolution, etc.) before exit
+        try:
+            self.evolution.flush()
+        except Exception as e:
+            viki_logger.debug(f"Evolution flush on shutdown: {e}")
         
         # Cancel all background tasks
         if self._background_tasks:

@@ -120,7 +120,13 @@ class ResearchSkill(BaseSkill):
                 )
 
     def _validate_url(self, url: str) -> tuple[bool, str]:
-        """Validate URL to prevent SSRF attacks."""
+        """Validate URL to prevent SSRF attacks.
+        
+        SECURITY FIX: HIGH-002 - Enhanced SSRF protection including:
+        - IPv6 loopback and private addresses
+        - DNS rebinding protection
+        - Additional bypass vectors
+        """
         try:
             parsed = urlparse(url)
             
@@ -133,6 +139,28 @@ class ResearchSkill(BaseSkill):
             if not hostname:
                 return False, "Invalid hostname"
             
+            # Block localhost variations (including IPv6)
+            localhost_variants = [
+                'localhost', '127.0.0.1', '0.0.0.0', '::1', 
+                '[::1]', '0:0:0:0:0:0:0:1', '0:0:0:0:0:0:0:0',
+                '127.0.0.0', '127.255.255.255',  # Loopback range
+            ]
+            if hostname.lower() in localhost_variants:
+                return False, "Access to localhost not allowed"
+            
+            # Block hostname that starts with common internal prefixes
+            if hostname.lower().startswith(('127.', '192.168.', '10.', '172.')):
+                # Additional check for 172.16.0.0 - 172.31.255.255 range
+                try:
+                    parts = hostname.split('.')
+                    if len(parts) == 4:
+                        first = int(parts[0])
+                        second = int(parts[1])
+                        if first == 172 and 16 <= second <= 31:
+                            return False, "Access to private IP range not allowed"
+                except (ValueError, IndexError):
+                    pass
+            
             # Try to resolve to IP and check if it's private
             try:
                 import socket
@@ -143,17 +171,40 @@ class ResearchSkill(BaseSkill):
                 if ip.is_private or ip.is_loopback or ip.is_link_local:
                     return False, f"Access to private IP addresses not allowed: {ip_str}"
                 
-                # Block cloud metadata endpoints
-                if ip_str.startswith('169.254'):
+                # Block cloud metadata endpoints (169.254.169.254 and IPv6 equivalent)
+                if ip_str == '169.254.169.254':
                     return False, "Access to cloud metadata endpoints not allowed"
-                    
-            except (socket.gaierror, ValueError):
+                
+                # Block IPv6 private/link-local/multicast ranges
+                if ip.version == 6:
+                    if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast:
+                        return False, f"Access to restricted IPv6 addresses not allowed"
+                    # Block AWS IPv6 metadata endpoint
+                    if str(ip).startswith('fd00:ec2:'):
+                        return False, "Access to cloud metadata endpoints not allowed"
+                        
+            except (socket.gaierror, ValueError) as e:
                 # If we can't resolve, allow it (might be blocked by network anyway)
+                # But log for monitoring
+                viki_logger.debug(f"Could not resolve hostname {hostname}: {e}")
                 pass
             
-            # Block localhost variations
-            if hostname.lower() in ['localhost', '127.0.0.1', '0.0.0.0', '::1']:
-                return False, "Access to localhost not allowed"
+            # Block URL-encoded variations of localhost
+            import urllib.parse
+            try:
+                decoded_hostname = urllib.parse.unquote(hostname)
+                if decoded_hostname != hostname:
+                    # Recursively validate decoded version
+                    return self._validate_url(url.replace(hostname, decoded_hostname))
+            except Exception:
+                pass
+            
+            # Block suspicious TLDs that might be used for DNS rebinding
+            # (This is a heuristic - not foolproof)
+            suspicious_tlds = ['.local', '.internal', '.localhost', '.localdomain']
+            for tld in suspicious_tlds:
+                if hostname.lower().endswith(tld):
+                    return False, f"Access to internal hostname not allowed: {hostname}"
             
             return True, url
             
@@ -170,10 +221,31 @@ class ResearchSkill(BaseSkill):
             if not is_valid:
                 return f"URL validation failed: {result}"
             
+            # SECURITY FIX: DNS rebinding protection
+            # Store the resolved IP and verify it doesn't change during request
+            import socket
+            try:
+                hostname = urlparse(url).hostname
+                resolved_ip = socket.gethostbyname(hostname)
+            except:
+                resolved_ip = None
+            
             timeout = aiohttp.ClientTimeout(total=15)
             async with aiohttp.ClientSession(headers=self.headers, timeout=timeout) as session:
                 # Re-enable SSL verification for security
                 async with session.get(url, allow_redirects=True, ssl=True) as response:
+                    # DNS rebinding check: verify final IP matches expected
+                    if resolved_ip:
+                        final_url = str(response.url)
+                        final_hostname = urlparse(final_url).hostname
+                        try:
+                            final_ip = socket.gethostbyname(final_hostname)
+                            if final_ip != resolved_ip:
+                                viki_logger.warning(f"DNS rebinding detected: {hostname} -> {final_ip}")
+                                return "Security: DNS rebinding attempt blocked"
+                        except:
+                            pass
+                    
                     if response.status != 200:
                         return f"Error: HTTP {response.status} when fetching {url}"
                     
