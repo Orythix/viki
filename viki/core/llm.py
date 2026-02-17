@@ -293,6 +293,7 @@ class LocalLLM(LLMProvider):
 
         # 1. Get raw JSON from model
         content = await self.chat(messages, temperature=temperature, format="json", image_path=image_path)
+        content = (content if isinstance(content, str) else str(content or "")).strip()
         viki_logger.debug(f"DEBUG: Raw response from {self.config.get('model_name')}: {content}")
         
         # 2. Parse and patch
@@ -346,18 +347,28 @@ class LocalLLM(LLMProvider):
             raise ValueError(f"Failed to parse structured output: {e}\nContent: {content}")
 
     def _extract_text(self, content: str) -> str:
-        """Try to extract useful text from a failed parse."""
+        """Try to extract useful text from a failed parse. Use plain-text response when content is not JSON."""
         fallback = "I encountered a parsing issue. Could you rephrase that?"
+        if content is None:
+            return fallback
+        s = content.strip() if isinstance(content, str) else str(content or "").strip()
         try:
             raw = json.loads(content) if isinstance(content, str) else {}
             if isinstance(raw, dict):
-                # Try common keys
                 for key in ["final_response", "response", "message", "text", "content", "answer"]:
-                    if key in raw and isinstance(raw[key], str):
+                    if key in raw and isinstance(raw[key], str) and raw[key].strip():
                         return raw[key]
-        except (json.JSONDecodeError, TypeError) as e:
-            viki_logger.debug(f"Failed to extract text from content: {e}")
-        return fallback
+        except (json.JSONDecodeError, TypeError):
+            pass
+        if not s:
+            return fallback
+        if s.startswith("{") or s.startswith("["):
+            return fallback
+        if s.startswith("Error calling Local Model") or "Cannot connect to host" in s or "127.0.0.1:11434" in s:
+            viki_logger.debug("Detected Ollama connection error in fallback")
+            return "I couldn't reach my local model. Make sure Ollama is running (e.g. run `ollama serve` or start the Ollama app), then try again."
+        viki_logger.debug("Using plain-text fallback for model response")
+        return s[:2000] if len(s) > 2000 else s
 
     def _patch_viki_response(self, data: dict) -> dict:
         """Apply heuristic patches for common local LLM schema errors.

@@ -22,13 +22,17 @@ class RecallSkill(BaseSkill):
 
     async def execute(self, params: Dict[str, Any]) -> str:
         query = params.get("query")
-        if not query: return "Error: No query provided."
-        
-        viki_logger.info(f"Recall: Searching internal wisdom for '{query}'")
-        lessons = self.controller.learning.get_relevant_lessons(query)
-        
-        if not lessons:
+        if not query:
+            return "Error: No query provided."
+        limit = int(params.get("limit", 10))
+        viki_logger.info(f"Recall: Hybrid search for '{query}'")
+        try:
+            from viki.core.memory.hybrid_search import search_memory
+            results = await search_memory(self.controller, query, limit=limit, rerank=False)
+        except Exception as e:
+            viki_logger.debug(f"Hybrid search fallback: {e}")
+            results = self.controller.learning.get_relevant_lessons(query, limit=limit)
+        if not results:
             return f"No specific memories found for '{query}'."
-            
-        formatted_lessons = "\n".join([f"- {l}" for l in lessons])
-        return f"RECALLED MEMORIES:\n{formatted_lessons}"
+        formatted = "\n".join([f"- {r}" for r in results])
+        return f"RECALLED MEMORIES:\n{formatted}"

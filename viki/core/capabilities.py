@@ -52,7 +52,7 @@ class CapabilityRegistry:
             safety_tier="medium",
             read_only=False,
             requires_confirmation=True,
-            linked_skills=["filesystem", "filesystem_skill"]
+            linked_skills=["filesystem", "filesystem_skill", "dev_tools"]
         ))
         self.register(Capability(
             name="shell_exec",
@@ -69,6 +69,30 @@ class CapabilityRegistry:
             read_only=False,
             requires_confirmation=False, # Medium but usually allowed
             linked_skills=["window_manager", "clipboard", "system_control"]
+        ))
+        self.register(Capability(
+            name="email_calendar",
+            description="Gmail and Google Calendar (read/send, list/add/remove events).",
+            safety_tier="medium",
+            read_only=False,
+            requires_confirmation=False,
+            linked_skills=["email", "calendar"]
+        ))
+        self.register(Capability(
+            name="external_services",
+            description="Twitter, image gen, messaging, summarize, Obsidian, tasks, Whisper, PDF, smart home, GIF.",
+            safety_tier="medium",
+            read_only=False,
+            requires_confirmation=False,
+            linked_skills=["twitter", "image_gen", "messaging", "summarize", "obsidian", "tasks", "whisper", "pdf", "smart_home", "gif"]
+        ))
+        self.register(Capability(
+            name="content_creation",
+            description="Data analysis, presentations (PPTX), spreadsheets, static websites.",
+            safety_tier="medium",
+            read_only=False,
+            requires_confirmation=False,
+            linked_skills=["data_analysis", "presentation", "spreadsheet", "website"]
         ))
 
     def register(self, cap: Capability):
@@ -98,6 +122,14 @@ class CapabilityRegistry:
              target_cap_name = "shell_exec"
         elif skill_name in ["window_manager", "clipboard", "system_control"]:
              target_cap_name = "desktop_control"
+        elif skill_name == "dev_tools":
+             target_cap_name = "filesystem_write"
+        elif skill_name in ["email", "calendar"]:
+             target_cap_name = "email_calendar"
+        elif skill_name in ["twitter", "image_gen", "messaging", "summarize", "obsidian", "tasks", "whisper", "pdf", "smart_home", "gif"]:
+             target_cap_name = "external_services"
+        elif skill_name in ["data_analysis", "presentation", "spreadsheet", "website"]:
+             target_cap_name = "content_creation"
 
         # 2. Check the capacity
         if target_cap_name:

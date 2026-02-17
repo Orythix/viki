@@ -1,21 +1,30 @@
 import os
 from typing import Dict, Any
 from viki.skills.base import BaseSkill
+from viki.core.utils.path_sandbox import get_allowed_roots, BLOCKED_PATHS
 
 class FileSystemSkill(BaseSkill):
-    def __init__(self):
+    def __init__(self, controller=None):
         super().__init__()
-        # Define allowed base directories (sandbox)
+        self._controller = controller
+        # Prefer workspace_dir and data_dir from settings; fall back to __file__-relative and home dirs
+        if controller and getattr(controller, "settings", None):
+            sys_cfg = controller.settings.get("system", {})
+            if sys_cfg.get("workspace_dir") or sys_cfg.get("data_dir"):
+                self.allowed_roots = get_allowed_roots(controller)
+            else:
+                self._set_fallback_roots()
+        else:
+            self._set_fallback_roots()
+        self.blocked_paths = list(BLOCKED_PATHS)
+
+    def _set_fallback_roots(self) -> None:
+        """Roots when controller/settings are not available (align with original behavior)."""
         self.allowed_roots = [
             os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data")),
             os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "workspace")),
             os.path.expanduser("~/Documents"),
             os.path.expanduser("~/Desktop"),
-        ]
-        # Blocked paths (system directories)
-        self.blocked_paths = [
-            "C:\\Windows", "C:\\Program Files", "C:\\Program Files (x86)",
-            "/etc", "/usr", "/bin", "/sbin", "/boot", "/sys", "/proc"
         ]
     
     @property

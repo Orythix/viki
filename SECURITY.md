@@ -28,8 +28,13 @@ We will acknowledge your report within 48 hours and provide a timeline for a fix
 
 VIKI is designed with a **Defense-in-Depth** approach:
 *   **Local-First Execution**: Most operations occur on-device to minimize external attack surfaces.
+*   **Action Validation**: Every skill execution is checked by `safety.validate_action(skill_name, params)` before running; prohibited patterns and admin-file access are blocked.
+*   **Path Sandboxing**: File operations (filesystem_skill, dev_tools, whisper, PDF, data_analysis) are restricted to allowed roots (workspace_dir, data_dir from settings). Filesystem_skill uses these roots when available.
 *   **Capability Gating**: High-risk skills (filesystem, shell) require explicit permission and are logged in `logs/viki.log`.
 *   **API Authentication**: All REST endpoints are protected by `VIKI_API_KEY`.
+*   **Secret Redaction**: Model output and logs redact API keys and tokens; user input and skill params are logged via `safe_for_log()`.
+*   **Prompt Injection Mitigation**: Incoming prompts are sanitized against a blocklist of jailbreak-style phrases.
+*   **Shell Safety**: Commands containing `;`, `&&`, `||`, or `|` require confirmation (treated as destructive). Optional LLM security scan can be enabled via `system.security_scan_requests`.
 *   **Sandbox Principles**: Shell and system commands are executed within restricted environments where possible.
 
 ## Best Practices for Users

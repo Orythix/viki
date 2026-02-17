@@ -1,10 +1,11 @@
 # VIKI Improvement Plan — Brain, Skills & Architecture
 ## Generated: 2026-02-12 | Based on full codebase audit
-## Last Updated: 2026-02-14
+## Last Updated: 2026-02-17
 
 **Note:** Many items from this plan have been implemented. See:
-- **[viki/IMPLEMENTATION_SUMMARY.md](viki/IMPLEMENTATION_SUMMARY.md)** — Security fixes, runtime bugs, blocking I/O, DB/performance, debounced persistence, tests, observability.
+- **[viki/IMPLEMENTATION_SUMMARY.md](viki/IMPLEMENTATION_SUMMARY.md)** — Security fixes, runtime bugs, blocking I/O, DB/performance, debounced persistence, tests, observability; **Security focus (7.3.0):** validate_action, path sandbox (dev_tools, whisper, PDF, data_analysis), secret redaction, injection blocklist, shell chaining, optional scan_request, filesystem roots from settings.
 - **[viki/MODEL_ENHANCEMENT_SUMMARY.md](viki/MODEL_ENHANCEMENT_SUMMARY.md)** — Model routing, dream consolidation, corrections, pattern persistence, reflex failures, session analysis, knowledge gaps, LoRA, dataset export, A/B testing, performance API, continuous learning.
+- **[viki/SECURITY_SETUP.md](viki/SECURITY_SETUP.md)** — Full security configuration and 7.3.0 features.
 
 ---
 

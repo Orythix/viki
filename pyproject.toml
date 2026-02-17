@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "viki-sdi"
+version = "7.2.0"
+description = "VIKI Sovereign Digital Intelligence — local-first AI agent with Orythix cognitive architecture"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic",
+    "pyyaml",
+    "python-dotenv",
+    "requests",
+    "rich",
+    "colorama",
+    "tqdm",
+    "psutil",
+    "sqlite-utils",
+    "openai",
+    "instructor",
+    "anthropic",
+    "ollama",
+    "sentence-transformers",
+    "duckduckgo-search",
+    "numpy",
+    "scipy",
+    "torch",
+    "torchaudio",
+    "pillow",
+    "opencv-python",
+    "playwright",
+    "watchdog",
+    "pyautogui",
+    "pyperclip",
+    "pyttsx3",
+    "flask",
+    "flask-cors",
+    "beautifulsoup4",
+    "aiohttp",
+    "sounddevice",
+    "python-telegram-bot",
+    "discord.py",
+    "pandas",
+    "openpyxl",
+    "matplotlib",
+    "python-pptx",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio"]
+
+[project.scripts]
+viki = "viki.main:run"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["viki*"]

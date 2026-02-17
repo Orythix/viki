@@ -26,7 +26,8 @@ class ReflectorModule:
             try:
                 with open(log_path, 'r') as f:
                     logs = "".join(f.readlines()[-100:])
-            except: pass
+            except Exception as e:
+                viki_logger.debug("Reflector read logs: %s", e)
 
         # Load performance snapshot
         metrics = self.controller.skill_registry.metrics
@@ -138,7 +139,8 @@ class ReflectorModule:
                 with open(dynamic_path, 'r') as f:
                     data = yaml.safe_load(f) or {}
                     current_directives = data.get('directives', [])
-            except: pass
+            except Exception as e:
+                viki_logger.debug("Reflector read dynamic directives: %s", e)
         
         # Prevent duplicates
         if suggestion not in current_directives:

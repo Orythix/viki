@@ -1,4 +1,5 @@
 import asyncio
+import warnings
 import aiohttp
 from bs4 import BeautifulSoup
 from typing import Dict, Any, List
@@ -7,7 +8,7 @@ import ipaddress
 from viki.skills.base import BaseSkill
 from viki.config.logger import viki_logger
 
-# Support both old and new package names
+# Prefer ddgs (new package name); fall back to duckduckgo_search and suppress rename warning
 HAS_DDG = False
 DDGS = None
 try:
@@ -16,7 +17,9 @@ try:
     HAS_DDG = True
 except ImportError:
     try:
-        from duckduckgo_search import DDGS as _DDGS
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            from duckduckgo_search import DDGS as _DDGS
         DDGS = _DDGS
         HAS_DDG = True
     except ImportError:
@@ -74,13 +77,15 @@ class ResearchSkill(BaseSkill):
     async def _search(self, query: str) -> str:
         try:
             def ddg_search():
-                with DDGS() as ddgs:
-                    return list(ddgs.text(
-                        query, 
-                        region='wt-wt',       # Worldwide (English priority)
-                        safesearch='off',      # Unfiltered results
-                        max_results=5
-                    ))
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", RuntimeWarning)
+                    with DDGS() as ddgs:
+                        return list(ddgs.text(
+                            query,
+                            region='wt-wt',
+                            safesearch='off',
+                            max_results=5
+                        ))
 
             results = await asyncio.to_thread(ddg_search)
             

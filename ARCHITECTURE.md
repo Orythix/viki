@@ -1,4 +1,4 @@
-# VIKI Architecture (v7.2.0 Cortex)
+# VIKI Architecture (v7.3.0 Cortex)
 
 ## Core Philosophy
 Following the **Cortex Upgrade**, VIKI follows a "Professional Intelligence" design pattern:
@@ -24,7 +24,7 @@ Following the **Cortex Upgrade**, VIKI follows a "Professional Intelligence" des
 
 ### 3. Safety Layer (`viki/core/safety.py`)
 *   **Role**: Executive Constraint.
-*   **Function**: Classifies tool calls based on risk. Intercepts "Medium" and "Destructive" actions for mandatory user confirmation (`/confirm`).
+*   **Function**: Validates every skill run via `validate_action(skill_name, params)`; classifies tool calls by risk. Intercepts "Medium" and "Destructive" actions for mandatory user confirmation (`/confirm`). Sanitizes prompts (injection blocklist), redacts secrets in output; optional LLM security scan when `system.security_scan_requests` is enabled.
 
 ### 4. Learning & Failure Memory (`viki/core/learning.py`)
 *   **Role**: Long-Term Stability (SQLite v3).

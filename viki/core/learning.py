@@ -10,7 +10,10 @@ from viki.config.logger import viki_logger
 
 HAS_SEMANTIC = False
 SentenceTransformer = None
-util = None
+try:
+    from sentence_transformers import util
+except ImportError:
+    util = None
 
 
 class LearningModule:
@@ -23,18 +26,12 @@ class LearningModule:
         os.makedirs(self.data_dir, exist_ok=True)
         self.db_path = os.path.join(self.data_dir, "viki_knowledge.db")
         self.legacy_file = os.path.join(self.data_dir, "lessons_semantic.json")
-        
-        self.encoder = None
-        global HAS_SEMANTIC, SentenceTransformer, util
-        
-        try:
-            from sentence_transformers import SentenceTransformer, util
+
+        global HAS_SEMANTIC
+        from viki.core.embeddings import get_encoder
+        self.encoder = get_encoder()
+        if self.encoder is not None:
             HAS_SEMANTIC = True
-            # Use CPU by default to avoid high GPU usage; set VIKI_EMBED_GPU=1 to use GPU
-            _device = "cuda" if (os.getenv("VIKI_EMBED_GPU", "").lower() in ("1", "true", "yes")) else "cpu"
-            self.encoder = SentenceTransformer("all-MiniLM-L6-v2", device=_device)
-        except Exception as e:
-            viki_logger.warning(f"Semantic Engine restricted ({e}). Using keyword proximity.")
 
         self._init_db()
         self._migrate_if_needed()
@@ -202,7 +199,8 @@ class LearningModule:
             try:
                 enc = self.encoder.encode(lesson_str, convert_to_tensor=False)
                 embedding = enc.tolist() if isinstance(enc, np.ndarray) else enc
-            except: pass
+            except Exception as e:
+                viki_logger.debug("Lesson embedding encode: %s", e)
 
         cur.execute('''INSERT INTO lessons 
             (id, content, text_representation, embedding, created_at, last_accessed, access_count, author, source_task, reliability)
@@ -242,7 +240,7 @@ class LearningModule:
         
         if not rows: return []
         
-        if self.encoder:
+        if self.encoder and util is not None:
             try:
                 contents = [r['text_representation'] for r in rows]
                 embeddings = [json.loads(r['embedding']) for r in rows]
@@ -266,7 +264,8 @@ class LearningModule:
                 
                 self.conn.commit()
                 return relevant if relevant else contents[-3:]
-            except: pass
+            except Exception as e:
+                viki_logger.debug("get_relevant_lessons semantic: %s", e)
             
         # Fallback to recent retrieval from the already fetched rows
         return [r['text_representation'] for r in rows[-limit:]]

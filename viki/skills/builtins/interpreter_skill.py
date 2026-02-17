@@ -3,19 +3,36 @@ import subprocess
 import asyncio
 import sys
 import tempfile
-import time
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from viki.skills.base import BaseSkill
 from viki.config.logger import viki_logger
+
+DEFAULT_INTERPRETER_TIMEOUT = 30
+MAX_INTERPRETER_TIMEOUT = 120
+
 
 class InterpreterSkill(BaseSkill):
     """
     Skill for executing Python code in a Sandboxed (Restricted) environment.
     Prevents accidental system modifications.
     """
-    def __init__(self):
+    def __init__(self, controller=None):
         self._name = "python_interpreter"
+        self._controller = controller
         self._description = "Execute Python code for calculations, data analysis, or logic. Usage: python_interpreter(code='...')"
+
+    def _get_timeout(self) -> int:
+        """Timeout in seconds; from settings, env, or default. Capped at MAX_INTERPRETER_TIMEOUT."""
+        if self._controller and getattr(self._controller, "settings", None):
+            cfg = self._controller.settings.get("skills", {}).get("python_interpreter", {})
+            val = cfg.get("timeout_seconds")
+            if val is not None:
+                return min(MAX_INTERPRETER_TIMEOUT, max(1, int(val)))
+        try:
+            val = int(os.environ.get("VIKI_INTERPRETER_TIMEOUT", DEFAULT_INTERPRETER_TIMEOUT))
+            return min(MAX_INTERPRETER_TIMEOUT, max(1, val))
+        except (TypeError, ValueError):
+            return DEFAULT_INTERPRETER_TIMEOUT
         
     @property
     def name(self) -> str:
@@ -52,30 +69,30 @@ class InterpreterSkill(BaseSkill):
                 for key in to_remove:
                     if key in clean_env: del clean_env[key]
                 
-                # Use a separate thread for the blocking subprocess
+                timeout_sec = self._get_timeout()
                 def run_code():
                     return subprocess.run(
                         [sys.executable, file_path],
                         capture_output=True,
                         text=True,
-                        timeout=5, # 5 second limit
+                        timeout=timeout_sec,
                         cwd=tmpdir,
                         env=clean_env
                     )
-                
+
                 result = await asyncio.to_thread(run_code)
-                
+
                 output = result.stdout
                 error = result.stderr
-                
+
                 if result.returncode == 0:
                     return f"Execution Success:\n{output}"
                 else:
                     return f"Execution Error (Return Code {result.returncode}):\n{error}\nOutput: {output}"
-                    
+
             except subprocess.TimeoutExpired:
                 viki_logger.warning("Sandbox Execution Timed Out.")
-                return "Error: Execution timed out (5s limit)."
+                return f"Error: Execution timed out ({timeout_sec}s limit)."
             except Exception as e:
                 viki_logger.error(f"Sandbox Failure: {e}")
                 return f"Sandbox Failure: {str(e)}"

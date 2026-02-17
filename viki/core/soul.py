@@ -20,9 +20,17 @@ class Soul:
 
     def get_system_prompt(self) -> str:
         """Generate the system prompt based on the SOUL configuration."""
-        
+        parts = []
+        tagline = self.config.get('tagline') or self.config.get('positioning')
+        if tagline:
+            parts.append(f"POSITIONING: {tagline}\n")
         # Base Identity
-        prompt = f"You are {self.name}\n{self.config.get('type')}\n\n"
+        parts.append(f"You are {self.name}\n{self.config.get('type')}\n\n")
+        # Molty-style explicit values (Phase 5)
+        values = self.config.get('values', [])
+        if values:
+            parts.append("MY VALUES:\n" + "\n".join([f"- {v}" for v in values]) + "\n\n")
+        prompt = "".join(parts)
         
         # Core Behavior
         behavior = self.config.get('behavior', [])

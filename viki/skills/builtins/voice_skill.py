@@ -1,3 +1,4 @@
+import os
 import pyttsx3
 import asyncio
 from typing import Dict, Any, Optional
@@ -6,19 +7,20 @@ from viki.config.logger import viki_logger
 
 class VoiceSkill(BaseSkill):
     """
-    Text-to-Speech capability for VIKI with Voice Activity Detection (VAD) interruption.
+    Text-to-Speech: pyttsx3 (default) or ElevenLabs when voice.backend=elevenlabs and API key set.
     """
-    def __init__(self, voice_module=None):
+    def __init__(self, voice_module=None, controller=None):
         self._name = "voice"
-        self._description = "Speak text out loud. Supports interruption by human speech."
+        self._description = "Speak text out loud (pyttsx3 or ElevenLabs when configured)."
         self.voice_module = voice_module
+        self._controller = controller
+        self.engine = None
         try:
             self.engine = pyttsx3.init()
             self.engine.setProperty('rate', 170)
             self.engine.setProperty('volume', 0.9)
         except Exception as e:
-            viki_logger.error(f"TTS init error: {e}")
-            self.engine = None
+            viki_logger.debug(f"TTS pyttsx3 init: {e}")
 
     @property
     def name(self) -> str:
@@ -41,46 +43,48 @@ class VoiceSkill(BaseSkill):
             "required": ["text"]
         }
 
+    def _use_elevenlabs(self) -> bool:
+        if not self._controller:
+            return False
+        backend = (self._controller.settings.get("voice") or {}).get("backend", "pyttsx3")
+        if backend != "elevenlabs":
+            return False
+        return bool(os.environ.get("VIKI_ELEVENLABS_API_KEY"))
+
     async def execute(self, params: Dict[str, Any]) -> str:
-        if not self.engine:
-            return "Error: TTS engine not initialized."
-        
         text = params.get('text')
         if not text:
             return "Error: No 'text' provided to speak."
 
+        if self._use_elevenlabs():
+            api_key = os.environ.get("VIKI_ELEVENLABS_API_KEY")
+            voice_id = (self._controller.settings.get("voice") or {}).get("voice_id") or os.environ.get("VIKI_ELEVENLABS_VOICE_ID")
+            try:
+                from viki.core.tts_backends import speak_elevenlabs
+                result = await asyncio.to_thread(speak_elevenlabs, text, api_key, voice_id)
+                if result == "OK":
+                    return f"Spoken (ElevenLabs): {text}"
+                return f"Voice Error: {result}"
+            except Exception as e:
+                return f"Voice Error: {e}"
+
+        if not self.engine:
+            return "Error: TTS engine not initialized (install pyttsx3 or set voice.backend=elevenlabs and VIKI_ELEVENLABS_API_KEY)."
+
         try:
             viki_logger.info(f"Speaking: {text}")
-            
-            # 1. Create Interruption Event
             stop_event = asyncio.Event()
-            
-            # 2. Run TTS and VAD in parallel
-            # Since pyttsx3 is blocking, we run it in a thread.
-            # We track the status to see if it was interrupted.
-            
             tts_task = asyncio.to_thread(self._say_managed, text, stop_event)
-            
             if self.voice_module:
                 vad_task = asyncio.create_task(self.voice_module.listen_for_interruption(stop_event))
-                
-                # Wait for TTS to finish or VAD to trigger
-                done, pending = await asyncio.wait(
-                    [tts_task, vad_task],
-                    return_when=asyncio.FIRST_COMPLETED
-                )
-                
+                done, pending = await asyncio.wait([tts_task, vad_task], return_when=asyncio.FIRST_COMPLETED)
                 if stop_event.is_set():
-                    viki_logger.info("Speech interrupted by user.")
                     self.engine.stop()
                     return f"Spoken (Interrupted): {text}"
-                
-                # Cleanup VAD if TTS finished first
-                stop_event.set() 
+                stop_event.set()
                 await vad_task
             else:
                 await tts_task
-
             return f"Spoken: {text}"
         except Exception as e:
             viki_logger.error(f"Voice execution error: {e}")

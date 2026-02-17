@@ -7,7 +7,7 @@ import json
 from typing import Dict, Any, List, Optional
 # from viki.core.memory import Memory (Removed for v23 Hierarchy)
 from viki.core.soul import Soul
-from viki.core.safety import SafetyLayer
+from viki.core.safety import SafetyLayer, safe_for_log
 from viki.core.llm import ModelRouter, StructuredPrompt
 from viki.core.schema import VIKIResponse, ActionCall
 from viki.skills.registry import SkillRegistry
@@ -36,6 +36,20 @@ from viki.skills.builtins.shell_skill import ShellSkill
 from viki.skills.builtins.notification_skill import NotificationSkill
 from viki.skills.builtins.calendar_skill import CalendarSkill
 from viki.skills.builtins.email_skill import EmailSkill
+from viki.skills.builtins.messaging_skill import UnifiedMessagingSkill
+from viki.skills.builtins.twitter_skill import TwitterSkill
+from viki.skills.builtins.summarize_skill import SummarizeSkill
+from viki.skills.builtins.image_gen_skill import ImageGenSkill
+from viki.skills.builtins.obsidian_skill import ObsidianSkill
+from viki.skills.builtins.tasks_skill import TasksSkill
+from viki.skills.builtins.whisper_skill import WhisperSkill
+from viki.skills.builtins.pdf_skill import PdfSkill
+from viki.skills.builtins.smart_home_skill import SmartHomeSkill
+from viki.skills.builtins.gif_skill import GifSkill
+from viki.skills.builtins.data_analysis_skill import DataAnalysisSkill
+from viki.skills.builtins.presentation_skill import PresentationSkill
+from viki.skills.builtins.spreadsheet_skill import SpreadsheetSkill
+from viki.skills.builtins.website_skill import WebsiteSkill
 from viki.skills.thinking import ThinkingSkill
 from viki.core.learning import LearningModule
 from viki.core.super_admin import SuperAdminLayer
@@ -76,8 +90,11 @@ from viki.config.logger import viki_logger, thought_logger
 
 
 class VIKIController:
-    def __init__(self, settings_path: str, soul_path: str):
+    def __init__(self, settings_path: str, soul_path: str, workspace_override: Optional[str] = None):
         self.settings = self._load_yaml(settings_path)
+        self.soul_path = soul_path
+        if workspace_override:
+            self.settings.setdefault("system", {})["workspace_dir"] = os.path.abspath(workspace_override)
         
         # 0. Fast Perception Layer (Reflex Brain)
         data_dir = self.settings.get('system', {}).get('data_dir', './data')
@@ -106,6 +123,7 @@ class VIKIController:
              self.settings['security_layer_path'] = os.path.join(root_dir, sec_path)
         
         self.soul = Soul(soul_path)
+        self.persona = self._persona_from_soul_path(soul_path)
         self.safety = SafetyLayer(self.settings)
         self.nexus = MessagingNexus(self)
 
@@ -212,8 +230,8 @@ class VIKIController:
         await asyncio.sleep(5) # Give other services time to start
         viki_logger.info("STARTUP PULSE: Initiating autonomous knowledge sync...")
         
-        # 1. Quick Research Pulse
-        if not self.air_gap:
+        # 1. Quick Research Pulse (optional; disable with system.startup_research: false to speed first request)
+        if not self.air_gap and self.settings.get("system", {}).get("startup_research", False):
             try:
                 research_skill = self.skill_registry.get_skill('research')
                 if research_skill:
@@ -262,7 +280,28 @@ class VIKIController:
             viki_logger.debug(f"Background task '{name}' was cancelled")
         except Exception as e:
             viki_logger.error(f"Background task '{name}' failed with exception: {e}", exc_info=True)
-    
+
+    def check_skill_health(self) -> None:
+        """Optional startup check: log warnings if critical skills are misconfigured (email, calendar, research)."""
+        if not self.settings.get("skill_health_check", True):
+            return
+        integrations = self.settings.get("integrations", {})
+        # Gmail
+        gmail_cfg = integrations.get("gmail", {})
+        if gmail_cfg.get("enabled"):
+            path = gmail_cfg.get("credentials_path") or os.environ.get("VIKI_GMAIL_CREDENTIALS_PATH")
+            if not path or not os.path.isfile(path):
+                viki_logger.warning("Skill health: Gmail is enabled but credentials file not found. Set integrations.gmail.credentials_path or VIKI_GMAIL_CREDENTIALS_PATH.")
+        # Google Calendar
+        cal_cfg = integrations.get("google_calendar", {})
+        if cal_cfg.get("enabled"):
+            path = cal_cfg.get("credentials_path") or os.environ.get("VIKI_GOOGLE_CALENDAR_CREDENTIALS_PATH")
+            if not path or not os.path.isfile(path):
+                viki_logger.warning("Skill health: Google Calendar is enabled but credentials file not found. Set integrations.google_calendar.credentials_path or VIKI_GOOGLE_CALENDAR_CREDENTIALS_PATH.")
+        # Research (presence only)
+        if not self.skill_registry.get_skill("research"):
+            viki_logger.warning("Skill health: research skill not registered.")
+
     async def _continuous_learning_loop(self):
         """Background loop for continuous learning checks."""
         # Wait for system to stabilize before starting
@@ -285,73 +324,175 @@ class VIKIController:
             viki_logger.warning(f"Failed to load YAML config from {path}: {e}")
             return {}
 
+    def _persona_from_soul_path(self, soul_path: str) -> str:
+        """Derive persona name from soul config path (e.g. .../personas/dev.yaml -> dev)."""
+        if not soul_path:
+            return "sovereign"
+        base = os.path.basename(soul_path)
+        if "personas" in soul_path and base.endswith(".yaml"):
+            return base[:-5]
+        return "sovereign"
+
+    def get_differentiators(self) -> List[str]:
+        """Return list of differentiators from settings (what makes VIKI specific)."""
+        return self.settings.get("system", {}).get("differentiators", [
+            "Local Neural Forge",
+            "Orythix governance",
+            "Reflex layer",
+            "Air-gap capable",
+        ])
+
+    def _should_checkpoint(self, skill_name: str, params: Dict[str, Any]) -> bool:
+        """True if this skill modifies files or runs shell and we should create a checkpoint before executing."""
+        if skill_name in ("dev_tools", "shell", "filesystem_skill"):
+            return True
+        return False
+
+    def _diff_preview(self, skill_name: str, params: Dict[str, Any]) -> str:
+        """Short preview of the action for confirmation message (Gemini CLI-style)."""
+        if skill_name == "dev_tools":
+            path = params.get("path", "?")
+            if params.get("content") is not None:
+                content = params.get("content", "")
+                n = len(content)
+                first_line = content.split("\n")[0][:60] if content else ""
+                return f"Target: {path} | new content: {n} chars" + (f" | first line: {first_line}..." if first_line else "")
+            if params.get("target") is not None and params.get("replacement") is not None:
+                t, r = params.get("target", ""), params.get("replacement", "")
+                return f"Target: {path} | patch: replace {len(t)} chars with {len(r)} chars"
+        if skill_name == "shell":
+            cmd = safe_for_log(params.get("command", "?"), max_len=120)
+            return f"Command: {cmd}"
+        if skill_name == "filesystem_skill":
+            path = safe_for_log(params.get("path", "?"))
+            return f"Target: {path}"
+        return ""
+
+    # Skill execution timeout: min/max bounds and default budget multiplier
+    SKILL_TIMEOUT_MAX = 120
+    SKILL_TIMEOUT_MIN = 30
+    SKILL_TIMEOUT_BUDGET_DEFAULT = 5
+    SKILL_TIMEOUT_BUDGET_MULTIPLIER = 12
+
+    async def _execute_skill(
+        self, skill_name: str, params: Dict[str, Any], budget: Dict[str, Any]
+    ) -> tuple:
+        """
+        Execute a skill with timeout and optional checkpoint. Single place for execution logic.
+        Returns (result_str_or_None, error_str_or_None, latency_float).
+        """
+        skill = self.skill_registry.get_skill(skill_name)
+        if not skill:
+            return None, f"Skill '{skill_name}' not found.", 0.0
+        if self._should_checkpoint(skill_name, params):
+            self.history.create_checkpoint(self, skill_name, params)
+        budget_time = budget.get("time") or self.SKILL_TIMEOUT_BUDGET_DEFAULT
+        skill_timeout = min(
+            self.SKILL_TIMEOUT_MAX,
+            max(self.SKILL_TIMEOUT_MIN, budget_time * self.SKILL_TIMEOUT_BUDGET_MULTIPLIER),
+        )
+        start_exec = time.time()
+        try:
+            result = await asyncio.wait_for(skill.execute(params), timeout=skill_timeout)
+            latency = time.time() - start_exec
+            return (str(result), None, latency)
+        except asyncio.TimeoutError:
+            return None, f"Action timed out (limit {skill_timeout}s).", 0.0
+        except Exception as e:
+            return None, f"Action failed: {e}", 0.0
+
     def _register_default_skills(self):
-        self.skill_registry.register_skill(TimeSkill())
-        self.skill_registry.register_skill(MathSkill())
-        self.skill_registry.register_skill(FileSystemSkill())
-        self.skill_registry.register_skill(ThinkingSkill())
-        self.skill_registry.register_skill(SystemControlSkill())
-        self.skill_registry.register_skill(ResearchSkill(self))
-        self.skill_registry.register_skill(DevSkill())
-        self.skill_registry.register_skill(VoiceSkill(self.voice_module))
-        self.skill_registry.register_skill(VisionSkill())
-        self.skill_registry.register_skill(InterpreterSkill())
-        self.skill_registry.register_skill(BrowserSkill())
-        self.skill_registry.register_skill(SwarmSkill(self))
-        self.skill_registry.register_skill(OverlaySkill())
-        self.skill_registry.register_skill(SemanticFSSkill(self))
-        self.skill_registry.register_skill(SecuritySkill())
-        self.skill_registry.register_skill(ModelForgeSkill(self))
-        self.skill_registry.register_skill(RecallSkill(self))
-        self.skill_registry.register_skill(MediaControlSkill())
-        self.skill_registry.register_skill(ClipboardSkill())
-        self.skill_registry.register_skill(WindowManagerSkill())
-        self.skill_registry.register_skill(ShellSkill())
-        self.skill_registry.register_skill(NotificationSkill())
-        self.skill_registry.register_skill(ShortVideoSkill(self))
-        # self.skill_registry.register_skill(HackingSkill()) # Disabled due to system-level safety blocks
+        allowlist = self.soul.config.get("skill_allowlist")
+        all_skills = [
+            TimeSkill(),
+            MathSkill(),
+            FileSystemSkill(self),
+            ThinkingSkill(),
+            SystemControlSkill(),
+            ResearchSkill(self),
+            DevSkill(self),
+            VoiceSkill(self.voice_module, self),
+            VisionSkill(),
+            InterpreterSkill(self),
+            BrowserSkill(),
+            SwarmSkill(self),
+            OverlaySkill(),
+            SemanticFSSkill(self),
+            SecuritySkill(),
+            ModelForgeSkill(self),
+            RecallSkill(self),
+            MediaControlSkill(),
+            ClipboardSkill(),
+            WindowManagerSkill(),
+            ShellSkill(),
+            NotificationSkill(),
+            ShortVideoSkill(self),
+            CalendarSkill(self),
+            EmailSkill(self),
+            UnifiedMessagingSkill(self),
+            TwitterSkill(),
+            SummarizeSkill(self),
+            ImageGenSkill(),
+            ObsidianSkill(self),
+            TasksSkill(self),
+            WhisperSkill(self),
+            PdfSkill(self),
+            SmartHomeSkill(),
+            GifSkill(),
+            DataAnalysisSkill(self),
+            PresentationSkill(self),
+            SpreadsheetSkill(self),
+            WebsiteSkill(self),
+        ]
+        if allowlist:
+            allowed = set(allowlist)
+            for skill in all_skills:
+                if skill.name in allowed:
+                    self.skill_registry.register_skill(skill)
+        else:
+            for skill in all_skills:
+                self.skill_registry.register_skill(skill)
 
-        # Aliases for natural language routing
-        self.skill_registry.skills['look'] = self.skill_registry.get_skill('look_at_screen')
-        self.skill_registry.skills['highlight'] = self.skill_registry.get_skill('draw_overlay')
-        self.skill_registry.skills['focus'] = self.skill_registry.get_skill('mount_focus')
-        self.skill_registry.skills['net_scan'] = self.skill_registry.get_skill('security_tools')
-        self.skill_registry.skills['web_audit'] = self.skill_registry.get_skill('security_tools')
-        self.skill_registry.skills['sniffer'] = self.skill_registry.get_skill('security_tools')
-        self.skill_registry.skills['evolve'] = self.skill_registry.get_skill('internal_forge')
-        self.skill_registry.skills['recall'] = self.skill_registry.get_skill('recall')
+        # Aliases: only add if target skill is registered
+        def _alias(alias_name: str, target_name: str):
+            s = self.skill_registry.get_skill(target_name)
+            if s is not None:
+                self.skill_registry.skills[alias_name] = s
 
-        self.skill_registry.skills['python'] = self.skill_registry.get_skill('python_interpreter')
-        self.skill_registry.skills['search'] = self.skill_registry.get_skill('research')
-        self.skill_registry.skills['read'] = self.skill_registry.get_skill('research')
-        self.skill_registry.skills['say'] = self.skill_registry.get_skill('voice')
-        self.skill_registry.skills['speak'] = self.skill_registry.get_skill('voice')
-
-        # Media control aliases
-        self.skill_registry.skills['pause'] = self.skill_registry.get_skill('media_control')
-        self.skill_registry.skills['play'] = self.skill_registry.get_skill('media_control')
-        self.skill_registry.skills['media'] = self.skill_registry.get_skill('media_control')
-        self.skill_registry.skills['volume'] = self.skill_registry.get_skill('media_control')
-        
-        # New aliases
-        self.skill_registry.skills['copy'] = self.skill_registry.get_skill('clipboard')
-        self.skill_registry.skills['paste'] = self.skill_registry.get_skill('clipboard')
-        self.skill_registry.skills['windows'] = self.skill_registry.get_skill('window_manager')
-        self.skill_registry.skills['minimize'] = self.skill_registry.get_skill('window_manager')
-        self.skill_registry.skills['maximize'] = self.skill_registry.get_skill('window_manager')
-        self.skill_registry.skills['powershell'] = self.skill_registry.get_skill('shell')
-        self.skill_registry.skills['notify'] = self.skill_registry.get_skill('notification')
-        self.skill_registry.skills['toast'] = self.skill_registry.get_skill('notification')
-        self.skill_registry.skills['video'] = self.skill_registry.get_skill('short_video_agent')
-        self.skill_registry.skills['short'] = self.skill_registry.get_skill('short_video_agent')
-        self.skill_registry.register_skill(CalendarSkill())
-        self.skill_registry.register_skill(EmailSkill())
-
-        # Custom Aliases
+        _alias('look', 'look_at_screen')
+        _alias('highlight', 'draw_overlay')
+        _alias('focus', 'mount_focus')
+        _alias('net_scan', 'security_tools')
+        _alias('web_audit', 'security_tools')
+        _alias('sniffer', 'security_tools')
+        _alias('evolve', 'internal_forge')
+        _alias('recall', 'recall')
+        _alias('python', 'python_interpreter')
+        _alias('search', 'research')
+        _alias('read', 'research')
+        _alias('say', 'voice')
+        _alias('speak', 'voice')
+        _alias('pause', 'media_control')
+        _alias('play', 'media_control')
+        _alias('media', 'media_control')
+        _alias('volume', 'media_control')
+        _alias('copy', 'clipboard')
+        _alias('paste', 'clipboard')
+        _alias('windows', 'window_manager')
+        _alias('minimize', 'window_manager')
+        _alias('maximize', 'window_manager')
+        _alias('powershell', 'shell')
+        _alias('messaging', 'messaging')
+        _alias('clawdis', 'messaging')
+        _alias('notify', 'notification')
+        _alias('toast', 'notification')
+        _alias('video', 'short_video_agent')
+        _alias('short', 'short_video_agent')
 
     async def process_request(self, user_input: str, on_event=None) -> str:
         placeholders = ["processing...", "executing", "thinking", "one moment", "working on it"]
-        
+        self._last_response_meta = {}
+
         # Normalize input for robustness
         if user_input is None:
             user_input = ""
@@ -384,10 +525,52 @@ class VIKIController:
 
         # 4. Standard Safety Validation
         safe_input = self.safety.validate_request(user_input)
-        
+
+        # 4b. Optional LLM security scan (high-assurance deployments)
+        if self.settings.get("system", {}).get("security_scan_requests"):
+            llm = self.model_router.get_model()
+            scan_result = await self.safety.scan_request(llm, user_input)
+            if not scan_result.get("safe", True):
+                viki_logger.warning(f"Security scan refused request: {scan_result.get('reason', '')}")
+                return f"I cannot comply. {scan_result.get('reason', 'Request blocked by security policy.')}"
+
         # Reset interruption
         self.interrupt_signal.clear()
         self.signals.decay_signals()
+
+        # --- Pending action confirm/reject (CLI flow) ---
+        if self.pending_action:
+            raw_lower = user_input.strip().lower()
+            affirmatives = ("yes", "y", "confirm", "ok", "proceed", "/confirm")
+            negatives = ("no", "n", "reject", "cancel", "/reject")
+            if raw_lower in affirmatives:
+                action = self.pending_action
+                self.pending_action = None
+                skill_name = action.skill_name
+                params = (action.parameters or {}).copy()
+                check_res = self.capabilities.check_permission(skill_name, params=params)
+                if not check_res.allowed:
+                    return f"Confirmation rejected: capability check failed — {check_res.reason}"
+                if not self.safety.validate_action(skill_name, params):
+                    viki_logger.warning(f"Safety: validate_action blocked {skill_name}")
+                    return "Action blocked by safety policy."
+                if self.world.state.safety_zones.get(params.get("path", "")) == "protected":
+                    return "Safety Block: Target is in a protected zone."
+                if self.shadow_mode:
+                    return f"[Shadow Mode] Would have executed: {skill_name}({params}). Set shadow_mode: false to run for real."
+                if on_event:
+                    on_event("status", f"EXECUTING {skill_name}")
+                budget = self.budgets.get("general", self.budgets["general"])
+                result, err, latency = await self._execute_skill(skill_name, params, budget)
+                if err:
+                    self.skill_registry.record_execution(skill_name, False, 0.0)
+                    return err
+                self.skill_registry.record_execution(skill_name, True, latency)
+                return f"Done. {result[:500]}"
+            if raw_lower in negatives:
+                self.pending_action = None
+                return "Action cancelled."
+            return "Please confirm with yes/confirm or cancel with no/reject."
 
         # v25: Active Context Tracking (Phase 4)
         file_matches = re.findall(r'[\w\-\.\/]+\.(?:py|js|ts|css|html|yaml|md)', user_input)
@@ -486,13 +669,79 @@ class VIKIController:
              self.world.scan_codebase(workspace_dir)
              return f"World Engine: Codebase Graph rebuilt. {len(self.world.state.codebase_graph)} modules mapped."
 
+        # /restore: list checkpoints or restore by id (Gemini CLI-style)
+        if user_input.strip().lower().startswith("/restore"):
+             rest = user_input.strip()[7:].strip()
+             if not rest:
+                 checkpoints = self.history.list_checkpoints(limit=20)
+                 if not checkpoints:
+                     return "No checkpoints found. Checkpoints are created before file/shell actions."
+                 lines = ["ID       | Time                  | Action", "-" * 50]
+                 for cp in checkpoints:
+                     lines.append(f"{cp.get('id', '?'):8} | {cp.get('timestamp', '')[:19]:20} | {cp.get('summary', '')[:40]}")
+                 return "CHECKPOINTS (use /restore <id> to revert):\n" + "\n".join(lines)
+             cp_id = rest.split()[0] if rest.split() else ""
+             if cp_id:
+                 success, restored, msg = self.history.restore_checkpoint(cp_id)
+                 return msg
+             return "Usage: /restore  or  /restore <id>"
+
+        # /save <name>: save current conversation to a session file
+        if user_input.strip().lower().startswith("/save"):
+             name = user_input.strip()[5:].strip()
+             if not name or not name.replace("-", "").replace("_", "").isalnum():
+                 return "Usage: /save <name>  (e.g. /save my-session)"
+             data_dir = self.settings.get("system", {}).get("data_dir", "./data")
+             sessions_dir = os.path.join(data_dir, "sessions")
+             os.makedirs(sessions_dir, exist_ok=True)
+             path = os.path.join(sessions_dir, f"{name}.json")
+             try:
+                 trace = self.memory.working.get_trace()
+                 with open(path, "w", encoding="utf-8") as f:
+                     json.dump({"messages": trace}, f, indent=2)
+                 return f"Session saved to {path} ({len(trace)} messages)."
+             except Exception as e:
+                 return f"Save failed: {e}"
+
+        # /load <name>: load a saved session into current conversation
+        if user_input.strip().lower().startswith("/load"):
+             name = user_input.strip()[5:].strip()
+             if not name:
+                 return "Usage: /load <name>  (e.g. /load my-session)"
+             data_dir = self.settings.get("system", {}).get("data_dir", "./data")
+             path = os.path.join(data_dir, "sessions", f"{name}.json")
+             if not os.path.isfile(path):
+                 return f"Session not found: {path}"
+             try:
+                 with open(path, "r", encoding="utf-8") as f:
+                     data = json.load(f)
+                 messages = data.get("messages", [])
+                 self.memory.working.replace_trace(messages)
+                 return f"Loaded session '{name}' ({len(messages)} messages)."
+             except Exception as e:
+                 return f"Load failed: {e}"
+
         # --- ORYTHIX DELIBERATION (v22) ---
         if on_event: on_event("status", "DELIBERATING")
 
         # v23: Integrated Hierarchical Context Retrieval
         # Pass pre-fetched narrative_wisdom to avoid duplicate query
         memory_context = self.memory.get_full_context(safe_input, narrative_wisdom=narrative_wisdom)
-        
+
+        # Project context file (VIKI.md / VIKI_CONTEXT.md) — Gemini CLI-style
+        workspace_dir = self.settings.get('system', {}).get('workspace_dir', './workspace')
+        project_instructions = ""
+        for name in ("VIKI.md", "VIKI_CONTEXT.md"):
+            p = os.path.join(workspace_dir, name)
+            if os.path.isfile(p):
+                try:
+                    with open(p, "r", encoding="utf-8") as f:
+                        project_instructions = f.read(32768)
+                    break
+                except Exception as e:
+                    viki_logger.debug(f"Could not read {p}: {e}")
+        memory_context["project_instructions"] = project_instructions
+
         # Add relevant failures to context for error avoidance
         relevant_failures = self.learning.get_relevant_failures(safe_input, limit=3)
         memory_context['relevant_failures'] = relevant_failures
@@ -503,8 +752,8 @@ class VIKIController:
         # 3. Intelligence Governance (Judgment & Budget)
         # For v23, we use a simplified judgment for the high-level loop
         outcome = JudgmentOutcome.DEEP
-        task_type = self._classify_task(safe_input) # vision, coding, reasoning, general
-        use_lite = False # Use full reasoning by default for sovereignty
+        task_type = self._classify_task(safe_input)  # vision, coding, reasoning, general
+        use_lite = task_type == "general"  # Fast lite path for general chat; full reasoning for vision/coding/reasoning
 
         # Behavior Modulation from Signals
         mods = self.signals.get_modulation()
@@ -518,8 +767,11 @@ class VIKIController:
         max_react_steps = 5  # Safety limit
         action_results = []  # Accumulated results from previous steps
         final_output = None
+        self._last_response_meta = {}  # For API: plan/subtasks and progress
 
         for react_step in range(max_react_steps):
+            if on_event:
+                on_event("progress", {"step": react_step + 1, "total_steps": max_react_steps})
             step_label = f"[ReAct Step {react_step + 1}/{max_react_steps}]" if react_step > 0 else ""
             if step_label:
                 viki_logger.info(f"{step_label} Continuing multi-step reasoning...")
@@ -542,6 +794,7 @@ class VIKIController:
                     signals_context=signals_state + f", AgencyWeights: {agency_weights}",
                     evolution_log=self.evolution.get_evolution_summary(),
                     action_results=action_results,
+                    use_ensemble=self.settings.get("system", {}).get("use_ensemble", True),
                 )
                 self.internal_trace.append({
                     "strategy": viki_resp.final_thought.primary_strategy,
@@ -616,7 +869,11 @@ class VIKIController:
                     viki_logger.warning(msg)
                     action_results.append({"action": skill_name, "error": msg, "step": react_step + 1})
                     continue
-                
+                if not self.safety.validate_action(skill_name, params):
+                    viki_logger.warning(f"Safety: validate_action blocked {skill_name}")
+                    action_results.append({"action": skill_name, "error": "Action blocked by safety policy.", "step": react_step + 1})
+                    continue
+
                 # Safety Confirmation
                 severity = self.safety.get_action_severity(skill_name, params)
                 if severity in ["medium", "destructive"]:
@@ -624,7 +881,11 @@ class VIKIController:
                     reply = (viki_resp.final_response or "").strip()
                     if not reply or reply.lower() in placeholders:
                         reply = "I understand. I have an action ready that needs your confirmation."
-                    return f"{reply}\n\nSafety Check: This is a {severity} action. Confirm to proceed."
+                    diff_preview = self._diff_preview(skill_name, params)
+                    safety_msg = f"{reply}\n\nSafety Check: This is a {severity} action. Confirm to proceed."
+                    if diff_preview:
+                        safety_msg += f"\n\n{diff_preview}"
+                    return safety_msg
 
                 # World Model Protection Zone Check
                 if self.world.state.safety_zones.get(params.get('path', '')) == 'protected':
@@ -633,61 +894,58 @@ class VIKIController:
 
                 # Shadow Mode Gate
                 if self.shadow_mode:
-                    viki_logger.info(f"Shadow Mode: Simulating {skill_name}({params})")
+                    viki_logger.info(f"Shadow Mode: Simulating {skill_name}({safe_for_log(str(params))})")
                     return f"[Shadow Mode] Would execute: {skill_name}({params}). Set shadow_mode: false to run for real."
 
                 # Real Execution
                 if on_event: on_event("status", f"EXECUTING {skill_name}")
-                skill = self.skill_registry.get_skill(skill_name)
-                if skill:
-                    self.history.take_snapshot("ACTION_START", f"Executing {skill_name}", {"params": params})
-                    
-                    start_exec = time.time()
-                    skill_timeout = min(120, max(30, (budget.get("time") or 5) * 12))
-                    try:
-                        result = await asyncio.wait_for(skill.execute(params), timeout=skill_timeout)
-                        latency = time.time() - start_exec
-                        
-                        # Record performance
-                        selected_model = self.model_router.get_model(capabilities=[task_type])
-                        selected_model.record_performance(latency, True)
-                        self.skill_registry.record_execution(skill_name, True, latency)
-                        
-                        self.signals.update_signal("confidence", 0.05)
-                        self.world.track_app_usage(skill_name)
-                        
-                        # Accumulate result for ReAct loop
-                        action_results.append({
-                            "action": f"{skill_name}({params})",
-                            "result": str(result)[:1000],
-                            "step": react_step + 1,
-                        })
-                        
-                        if react_step < max_react_steps - 1:
-                            continue
-                        else:
-                            self.last_interaction_time = time.time()
-                            llm_response = viki_resp.final_response or "Directive sequence concluded."
-                            all_results = "\n".join([f"Step {r['step']}: {r.get('result') or r.get('error')}" for r in action_results])
-                            final_output = self._compress_output(f"{llm_response}\n\nExecution Logs:\n{all_results}")
-                            break
-                
-                    except asyncio.TimeoutError:
-                        self.signals.update_signal("frustration", 0.3)
-                        selected_model = self.model_router.get_model(capabilities=[task_type])
-                        selected_model.record_performance(0.0, False)
-                        self.skill_registry.record_execution(skill_name, False, 0.0)
-                        self.learning.save_failure(skill_name, "Execution timed out", user_input)
-                        return f"I couldn't complete '{skill_name}' in time (limit {skill_timeout}s). Try a simpler request or retry."
-                    except Exception as e:
-                        self.signals.update_signal("frustration", 0.3)
-                        selected_model = self.model_router.get_model(capabilities=[task_type])
-                        selected_model.record_performance(0.0, False)
-                        self.skill_registry.record_execution(skill_name, False, 0.0)
-                        self.learning.save_failure(skill_name, str(e), user_input)
-                        return f"I must apologize. My attempt to execute '{skill_name}' failed: {e}."
-                else:
-                    viki_logger.warning(f"Skill '{skill_name}' not found.")
+                self.history.take_snapshot("ACTION_START", f"Executing {skill_name}", {"params": params})
+                result, err, latency = await self._execute_skill(skill_name, params, budget)
+                if err:
+                    self.signals.update_signal("frustration", 0.3)
+                    selected_model = self.model_router.get_model(capabilities=[task_type])
+                    selected_model.record_performance(0.0, False)
+                    self.skill_registry.record_execution(skill_name, False, 0.0)
+                    self.learning.save_failure(skill_name, err, user_input)
+                    if "timed out" in err:
+                        return f"I couldn't complete '{skill_name}' in time. Try a simpler request or retry."
+                    return f"I must apologize. My attempt to execute '{skill_name}' failed: {err}."
+                selected_model = self.model_router.get_model(capabilities=[task_type])
+                selected_model.record_performance(latency, True)
+                self.skill_registry.record_execution(skill_name, True, latency)
+                self.signals.update_signal("confidence", 0.05)
+                self.world.track_app_usage(skill_name)
+                action_results.append({
+                    "action": f"{skill_name}({params})",
+                    "result": result[:1000],
+                    "step": react_step + 1,
+                })
+                # Early exit when same skill repeatedly returns no useful results (e.g. research "No results found")
+                if len(action_results) >= 2:
+                    last_two = action_results[-2:]
+                    act0 = (last_two[0].get("action") or "").split("(")[0]
+                    act1 = (last_two[1].get("action") or "").split("(")[0]
+                    res0 = (last_two[0].get("result") or last_two[0].get("error") or "").lower()
+                    res1 = (last_two[1].get("result") or last_two[1].get("error") or "").lower()
+                    no_result = "no results found" in res0 or "search error" in res0 or "no results found" in res1 or "search error" in res1
+                    if act0 == act1 and no_result:
+                        viki_logger.info(f"ReAct: Stopping early after repeated empty results from {act0}.")
+                        self.last_interaction_time = time.time()
+                        summary = "\n".join([f"Step {r['step']}: {r.get('result') or r.get('error')}" for r in action_results])
+                        final_output = self._compress_output(
+                            f"I tried {len(action_results)} search steps but didn't find useful results for that. "
+                            f"You can rephrase or try a different question.\n\nExecution log:\n{summary}"
+                        )
+                        self._last_response_meta = {"subtasks": action_results, "total_steps": react_step + 1}
+                        break
+                if react_step < max_react_steps - 1:
+                    continue
+                self.last_interaction_time = time.time()
+                self._last_response_meta = {"subtasks": action_results, "total_steps": max_react_steps}
+                llm_response = viki_resp.final_response or "Directive sequence concluded."
+                all_results = "\n".join([f"Step {r['step']}: {r.get('result') or r.get('error')}" for r in action_results])
+                final_output = self._compress_output(f"{llm_response}\n\nExecution Logs:\n{all_results}")
+                break
 
                 self._reflex_recursion_depth = 0
                 continue
@@ -714,6 +972,7 @@ class VIKIController:
                     final_output = self._compress_output(llm_response)
             else:
                 final_output = self._compress_output(llm_response)
+            self._last_response_meta = {"subtasks": action_results, "total_steps": max_react_steps}
             break
 
         # --- ORYTHIX REFLECTION (v22) ---
@@ -882,11 +1141,8 @@ class VIKIController:
                 
                 # Extract structured facts from session
                 viki_logger.info("Analyzing session for knowledge extraction...")
-                facts = await self.learning.analyze_session(
-                    session_trace=context,
-                    session_outcome=summary,
-                    model_router=self.model_router
-                )
+                model = self.model_router.get_model(capabilities=["reasoning"])
+                facts = await self.learning.analyze_session(model, context, summary)
                 viki_logger.info(f"Session analysis extracted {len(facts)} facts")
         except Exception as e:
             viki_logger.error(f"Narrative synthesis failed: {e}")

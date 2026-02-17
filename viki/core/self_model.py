@@ -75,7 +75,8 @@ class SelfModel:
         try:
             with open("data/self_model.json", "w") as f:
                 json.dump(self._capabilities, f)
-        except: pass
+        except Exception as e:
+            viki_logger.debug("SelfModel save state: %s", e)
 
     def _load_state(self):
         try:
@@ -84,4 +85,5 @@ class SelfModel:
                 with open("data/self_model.json", "r") as f:
                     data = json.load(f)
                     self._capabilities.update(data)
-        except: pass
+        except Exception as e:
+            viki_logger.debug("SelfModel load state: %s", e)

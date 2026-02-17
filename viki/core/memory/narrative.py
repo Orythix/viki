@@ -1,4 +1,3 @@
-
 import sqlite3
 import json
 import time
@@ -8,29 +7,25 @@ from typing import List, Dict, Any, Optional
 from viki.config.logger import viki_logger
 
 try:
-    from sentence_transformers import SentenceTransformer, util
-    HAS_SEMANTIC = True
+    from sentence_transformers import util
 except ImportError:
-    HAS_SEMANTIC = False
+    util = None
+
 
 class NarrativeMemory:
     """
     Orythix Narrative Memory Subsystem.
     Stores and recalls episodic experiences with full context awareness.
     Implements 'Omniscience-like recall' for recent history and semantic search for long-term.
+    Uses shared embedding model from viki.core.embeddings.
     """
     def __init__(self, data_dir: str):
         self.data_dir = data_dir
         os.makedirs(self.data_dir, exist_ok=True)
         self.db_path = os.path.join(self.data_dir, "orythix_narrative.db")
-        
-        self.encoder = None
-        if HAS_SEMANTIC:
-            try:
-                _device = "cuda" if (os.getenv("VIKI_EMBED_GPU", "").lower() in ("1", "true", "yes")) else "cpu"
-                self.encoder = SentenceTransformer("all-MiniLM-L6-v2", device=_device)
-            except Exception as e:
-                viki_logger.warning(f"Narrative Semantic Engine restricted: {e}")
+
+        from viki.core.embeddings import get_encoder
+        self.encoder = get_encoder()
 
         self._init_db()
 
@@ -78,7 +73,8 @@ class NarrativeMemory:
                 # Embed the "story" of the episode
                 story = f"Context: {context} | Intent: {intent} | Action: {action} | Outcome: {outcome}"
                 embedding = self.encoder.encode(story).tolist()
-            except: pass
+            except Exception as e:
+                viki_logger.debug("Narrative episode embedding: %s", e)
 
         self.conn.execute('''INSERT INTO episodes 
             (id, timestamp, trigger_context, intent, plan, action, outcome, confidence, embedding, last_accessed)
@@ -92,7 +88,7 @@ class NarrativeMemory:
         """
         'Omniscience-like recall': Finds semantically relevant past episodes to inform the current decision.
         """
-        if not self.encoder or not HAS_SEMANTIC:
+        if not self.encoder:
             # Fallback to recent history
             return self._get_recent_episodes(limit)
 
@@ -106,10 +102,9 @@ class NarrativeMemory:
             if not rows: return []
             
             corpus_embs = [json.loads(r['embedding']) for r in rows if r['embedding']]
-            if not corpus_embs: return self._get_recent_episodes(limit)
+            if not corpus_embs or util is None: return self._get_recent_episodes(limit)
             
             import torch
-            # Safe semantic search
             hits = util.semantic_search(query_emb, torch.tensor(corpus_embs), top_k=limit)
             
             results = []

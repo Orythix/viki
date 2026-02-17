@@ -2,11 +2,16 @@ import os
 import shutil
 from typing import Dict, Any, List, Optional
 from viki.skills.base import BaseSkill
+from viki.core.utils.path_sandbox import validate_output_path
 
 class DevSkill(BaseSkill):
     """
     Development capabilities: File system exploration, reading, writing, and patching code.
+    Paths are restricted to allowed roots (workspace_dir, data_dir).
     """
+    def __init__(self, controller=None):
+        self._controller = controller
+
     @property
     def name(self) -> str:
         return "dev_tools"
@@ -25,7 +30,11 @@ class DevSkill(BaseSkill):
         path = params.get('path', '.')
         if not path:
             path = '.'
-            
+        ok, path_or_err = validate_output_path(path, controller=self._controller)
+        if not ok:
+            return path_or_err
+        path = path_or_err
+
         # Determine intent based on params
         if 'target' in params and 'replacement' in params:
              return self._patch_file(path, params['target'], params['replacement'])

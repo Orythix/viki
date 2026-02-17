@@ -280,6 +280,8 @@ class DeliberationLayer(CortexLayer):
 
     async def _logic(self, context: Dict[str, Any]) -> VIKIResponse:
         viki_logger.info("Layer 3 (Deliberation) starting Internal Debate...")
+        intent = context.get('intent_type', 'conversation')
+        sentiment = context.get('sentiment', 'neutral')
         
         # 1. Get Model — now uses intent-recommended capabilities
         recommended_caps = context.get('recommended_capabilities', ['reasoning'])
@@ -306,6 +308,7 @@ class DeliberationLayer(CortexLayer):
         conversation_history = context.get('conversation_history', [])
         url_context = context.get('url_context', '')
         world_context = context.get('world_context', '')
+        project_instructions = context.get('project_instructions', '')
         signals_context = context.get('signals_context', '')
         
         # Include any action results from previous ReAct steps
@@ -351,10 +354,12 @@ class DeliberationLayer(CortexLayer):
         if url_context:
             url_info = f"\n\nFETCHED URL CONTENT (actual page data — use THIS, do not hallucinate):\n{url_context[:3000]}\n"
         
-        # Inject World Model + Signals
+        # Inject World Model + Project context (VIKI.md) + Signals
         awareness = ""
         if world_context:
             awareness += f"\n\nWORLD AWARENESS:\n{world_context}\n"
+        if project_instructions:
+            awareness += f"\n\nPROJECT CONTEXT (VIKI.md — follow these instructions):\n{project_instructions}\n"
         if signals_context:
             awareness += f"\nCOGNITIVE STATE:\n{signals_context}\n"
         
@@ -409,24 +414,36 @@ class DeliberationLayer(CortexLayer):
 
         # v24: Internal Specialist Ensemble
         ensemble_trace = None
-        sentiment = context.get('sentiment', 'neutral')
-        intent = context.get('intent_type', 'conversation')
+        use_ensemble_flag = context.get("use_ensemble", True)
 
-        if not use_lite and not action_results:
-             # Triage: Select relevant agents to reduce latency (v25 Enhancement)
-             selected_agents = []
-             if intent in ['coding', 'research']:
-                  selected_agents = ["critic", "architect", "explorer"]
-             elif intent == "correction" or sentiment == "frustrated":
-                  selected_agents = ["critic", "aligner"]
-             elif sentiment == "urgent":
-                  selected_agents = ["aligner"] # Focus on speed and safety
-             elif intent == "question":
-                  selected_agents = ["critic", "explorer", "aligner"]
-             
-             if selected_agents:
-                  viki_logger.info(f"Deliberation: Triggering Triage Ensemble (Agents: {selected_agents})")
-                  ensemble_trace = await self.ensemble.run_ensemble(raw_input, context, selected_agents=selected_agents)
+        def _is_greeting_or_short(raw: str) -> bool:
+            s = (raw or "").strip()
+            if len(s) > 60:
+                return False
+            lower = s.lower()
+            if "?" in s:
+                return False
+            greetings = ("hello", "hi ", "hey ", "how are you", "how's your day", "good morning", "good afternoon", "good evening", "how do you do", "what's up", "hey viki", "hello viki")
+            return any(g in lower for g in greetings)
+
+        if use_ensemble_flag and not use_lite and not action_results:
+             if _is_greeting_or_short(raw_input):
+                  viki_logger.debug("Deliberation: Skipping ensemble for short greeting-like input.")
+             else:
+                 # Triage: Select relevant agents to reduce latency (v25 Enhancement)
+                 selected_agents = []
+                 if intent in ['coding', 'research']:
+                      selected_agents = ["critic", "architect", "explorer"]
+                 elif intent == "correction" or sentiment == "frustrated":
+                      selected_agents = ["critic", "aligner"]
+                 elif sentiment == "urgent":
+                      selected_agents = ["aligner"]
+                 elif intent == "question":
+                      selected_agents = ["critic", "explorer", "aligner"]
+
+                 if selected_agents:
+                      viki_logger.info(f"Deliberation: Triggering Triage Ensemble (Agents: {selected_agents})")
+                      ensemble_trace = await self.ensemble.run_ensemble(raw_input, context, selected_agents=selected_agents)
 
         # Inject ensemble perspectives if any
         ensemble_block = ""
@@ -824,10 +841,11 @@ class ConsciousnessStack:
                              layer_timing=self.layer_timing, pattern_tracker=self.pattern_tracker)
         ]
 
-    async def process(self, user_input: str, memory_context: Dict[str, Any] = None, 
+    async def process(self, user_input: str, memory_context: Dict[str, Any] = None,
                       url_context: str = "", use_lite_schema: bool = False,
                       world_context: str = "", signals_context: str = "",
-                      evolution_log: str = "", action_results: list = None) -> VIKIResponse:
+                      evolution_log: str = "", action_results: list = None,
+                      use_ensemble: bool = True) -> VIKIResponse:
         start_time = time.time()
         data = user_input
         
@@ -850,8 +868,10 @@ class ConsciousnessStack:
                     data["url_context"] = url_context
                     data["use_lite_schema"] = use_lite_schema
                     data["world_context"] = world_context
+                    data["project_instructions"] = h_mem.get("project_instructions", "")
                     data["signals_context"] = signals_context
                     data["action_results"] = action_results or []
+                    data["use_ensemble"] = use_ensemble
                 elif isinstance(data, str):
                     data = {
                         "raw_input": data,
@@ -864,8 +884,10 @@ class ConsciousnessStack:
                         "url_context": url_context,
                         "use_lite_schema": use_lite_schema,
                         "world_context": world_context,
+                        "project_instructions": h_mem.get("project_instructions", ""),
                         "signals_context": signals_context,
                         "action_results": action_results or [],
+                        "use_ensemble": use_ensemble,
                     }
             
             data = await layer.process(data)

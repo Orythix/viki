@@ -1,6 +1,6 @@
 # VIKI Security Setup Guide
 
-**Last updated:** 2026-02-14
+**Last updated:** 2026-02-17
 
 ## Critical: Set Up Before Running
 
@@ -46,7 +46,20 @@ $env:VIKI_ADMIN_SECRET="your-generated-secret-here"
 ADMIN ADMIN_ALPHA_001 your-generated-secret-here SHUTDOWN
 ```
 
-### 3. Flask Debug Mode (Optional, Production)
+### 3. Gmail / Google Calendar (Optional integrations)
+
+When `integrations.gmail.enabled` or `integrations.google_calendar.enabled` are set in settings:
+
+- **Gmail**: Set `VIKI_GMAIL_CREDENTIALS_PATH` to the path of your Google OAuth2 client JSON (from Google Cloud Console). Token is stored in `data_dir/gmail_token.json`. Do not commit credentials or token.
+- **Google Calendar**: Set `VIKI_GOOGLE_CALENDAR_CREDENTIALS_PATH` (or use the same JSON as Gmail). Token in `data_dir/google_calendar_token.json`.
+
+Keep credentials and token files out of version control and restrict file permissions.
+
+### 4. Content-creation skills (data analysis, presentation, spreadsheet, website)
+
+The task-delivery skills (`data_analysis`, `presentation`, `spreadsheet`, `website`) use only local libraries (pandas, openpyxl, matplotlib, python-pptx). No API keys or credentials are required; outputs are written to paths you specify in the workspace or data directory.
+
+### 5. Flask Debug Mode (Optional, Production)
 
 ```bash
 # Disable debug mode for production
@@ -65,31 +78,38 @@ $env:FLASK_DEBUG="False"
 - Invalid keys return 403 Forbidden
 - Keys validated on every request
 
-### 2. File System Sandboxing
-The `filesystem_skill` now restricts access to:
+### 2. File System and Path Sandboxing
+Path access is restricted across multiple skills using the same allowed roots (workspace and data directories from settings or environment).
 
-**Allowed Directories:**
-- `viki/data/`
-- `viki/workspace/`
-- `~/Documents`
-- `~/Desktop`
+**filesystem_skill**
+- **Allowed roots:** When controller/settings are available, uses `system.workspace_dir` and `system.data_dir` from settings (aligned with `path_sandbox`). Otherwise falls back to `viki/data/`, `viki/workspace/`, `~/Documents`, `~/Desktop`.
+- **Blocked:** `C:\Windows`, `C:\Program Files`, `/etc`, `/usr`, `/bin`, `/sbin`, `/boot`, `/sys`, `/proc`.
+- Path traversal is blocked; paths are normalized with `os.path.realpath()`.
 
-**Blocked Directories:**
-- `C:\Windows`
-- `C:\Program Files`
-- `/etc`, `/usr`, `/bin`, `/sbin`, `/boot`, `/sys`, `/proc`
+**dev_tools, whisper, pdf, data_analysis**
+- File read/write paths are validated against the same allowed roots (workspace_dir, data_dir). Access outside allowed directories returns "Access denied: path is outside allowed directories".
 
 **Protection:**
 - Path traversal attempts (`..\..`) are blocked
 - Paths normalized with `os.path.realpath()`
 - Access outside sandbox returns error
 
-### 3. Command Injection Prevention
+### 3. Action and Request Validation
+- **validate_action:** Every skill execution (confirm path and ReAct path) is checked by `safety.validate_action(skill_name, params)` before running. Prohibited patterns and admin-file access are blocked; blocked requests return "Action blocked by safety policy."
+- **Prompt injection mitigation:** Incoming prompts are sanitized: blocklisted phrases (e.g. jailbreak-style instructions) are stripped or replaced. See `safety.injection_blocklist` in code.
+- **Optional LLM security scan:** Set `system.security_scan_requests: true` in `viki/config/settings.yaml` to run an LLM-based security scan before deliberation. Adds latency; recommended for high-assurance deployments.
+
+### 4. Command Injection and Shell Safety
 - PowerShell commands use proper escaping
 - System control uses explicit process creation (no `shell=True`)
-- Input validation rejects dangerous characters (`;`, `&`, `|`, `$`, `` ` ``)
+- **Shell skill:** Commands containing `;`, `&&`, `||`, or `|` are classified as at least **destructive** (require confirmation) to prevent chaining safe + destructive in one string.
+- Input validation rejects dangerous characters where applicable
 
-### 4. SSRF Protection
+### 5. Secret Redaction
+- **Output:** `safety.sanitize_output()` redacts API keys and tokens (e.g. `sk-...`, Bearer JWTs, `xoxb-`, `ghp_`) in model output before it is shown or stored.
+- **Logging:** User input and skill params (e.g. shell `command`, `path`) are logged via `safe_for_log()` (redact + truncate) to avoid leaking secrets in logs.
+
+### 6. SSRF Protection
 The `research_skill` now validates URLs:
 
 **Blocked:**
@@ -102,7 +122,7 @@ The `research_skill` now validates URLs:
 - SSL/TLS verification enabled
 - Only http:// and https:// allowed
 
-### 5. Reflex Security
+### 7. Reflex Security
 Cached reflex actions now undergo:
 - Capability permission checks
 - Safety validation
@@ -227,7 +247,7 @@ curl -H "Authorization: Bearer $VIKI_API_KEY" http://127.0.0.1:5000/api/health  
 
 For issues or questions:
 1. Check logs in `viki/data/viki.log`
-2. Review `IMPLEMENTATION_SUMMARY.md` for changes
+2. Review `IMPLEMENTATION_SUMMARY.md` and CHANGELOG (e.g. 7.3.0) for changes
 3. See `ARCHITECTURE_REFACTOR.md` for future plans
 4. See `OBSERVABILITY.md` for monitoring setup
 

@@ -20,11 +20,13 @@ load_dotenv()
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from viki.core.controller import VIKIController
+from viki.core.safety import safe_for_log
 from viki.config.logger import viki_logger
+from viki.config.resolve import get_soul_path
 
 base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-soul_path = os.path.join(base_dir, "config", "soul.yaml")
 settings_path = os.path.join(base_dir, "config", "settings.yaml")
+soul_path = get_soul_path(settings_path)
 
 controller = VIKIController(settings_path=settings_path, soul_path=soul_path)
 
@@ -203,10 +205,15 @@ def ping():
 @require_api_key
 def health():
     try:
+        tools = list(controller.skill_registry.skills.keys()) if hasattr(controller, 'skill_registry') and controller.skill_registry else []
         return jsonify({
             'status': 'online',
             'version': controller.soul.config.get('version', 'Unknown'),
-            'name': controller.soul.config.get('name', 'VIKI')
+            'name': controller.soul.config.get('name', 'VIKI'),
+            'persona': getattr(controller, 'persona', 'sovereign'),
+            'tagline': controller.soul.config.get('tagline') or controller.soul.config.get('positioning', ''),
+            'differentiators': controller.get_differentiators(),
+            'tools': tools,
         })
     except Exception as e:
         viki_logger.error(f"Health check error: {e}", exc_info=True)
@@ -225,28 +232,32 @@ async def chat():
             return jsonify({'error': 'Invalid JSON body'}), 400
         
         user_input = data.get('message', '')
-        
+
         # --- SECURITY FIX: MED-003 - Input validation ---
         is_valid, error_msg = validate_message(user_input)
         if not is_valid:
             return jsonify({'error': error_msg}), 400
         
-        viki_logger.info(f"API: Processing user input: '{user_input[:100]}'...")
+        viki_logger.info(f"API: Processing user input: '{safe_for_log(user_input)}'...")
         timeout_sec = controller.settings.get('system', {}).get('request_timeout_seconds', 0)
-        if timeout_sec > 0:
-            try:
-                response = await asyncio.wait_for(controller.process_request(user_input), timeout=float(timeout_sec))
-            except asyncio.TimeoutError:
-                viki_logger.warning(f"API: Request timed out after {timeout_sec}s")
-                return jsonify({'error': 'Request timed out. Try a shorter or simpler request.'}), 504
-        else:
-            response = await controller.process_request(user_input)
+        if timeout_sec <= 0:
+            timeout_sec = 600  # Ceiling when disabled so one stuck request does not hold worker indefinitely
+        try:
+            response = await asyncio.wait_for(controller.process_request(user_input), timeout=float(timeout_sec))
+        except asyncio.TimeoutError:
+            viki_logger.warning(f"API: Request timed out after {timeout_sec}s")
+            return jsonify({'error': 'Request timed out. Try a shorter or simpler request.'}), 504
         viki_logger.info("API: Response generated successfully")
         
-        return jsonify({
+        payload = {
             'response': response,
             'timestamp': datetime.now().isoformat()
-        })
+        }
+        meta = getattr(controller, '_last_response_meta', None)
+        if meta:
+            payload['subtasks'] = meta.get('subtasks')
+            payload['total_steps'] = meta.get('total_steps')
+        return jsonify(payload)
     except Exception as e:
         viki_logger.error(f"API chat error: {e}", exc_info=True)
         # Don't expose internal error details to client

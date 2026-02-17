@@ -5,7 +5,7 @@
 
 **Polymorphic Intelligence | Recursive Governance | Autonomous Self-Forging**
 
-[![Version](https://img.shields.io/badge/version-7.2.0-blue.svg)](./CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-7.3.0-blue.svg)](./CHANGELOG.md)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Ollama](https://img.shields.io/badge/Ollama-Local_LLM-orange.svg)](https://ollama.ai)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](./LICENSE)
@@ -24,13 +24,47 @@
 
 VIKI is a **Sovereign Digital Intelligence** designed to be more than just an assistant—she is a partner that evolves alongside your workflow. Built on a foundation of **local-first privacy** and **deterministic governance**, VIKI balances the raw power of LLMs with the safety of a modular, capability-aware architecture.
 
-### Core Pillars (v7.2.0)
+### Core Pillars (v7.3.0)
 
 *   **Intelligence Governance**: Powered by the **Judgment Engine**. Every directive is filtered through a cognitive triage (Reflex, Shallow, Deep) to ensure the right model is used for the right task while maintaining absolute safety.
 *   **The Neural Forge**: A integrated pipeline in the core kernel. VIKI extracts "Wisdom" from her SQLite-backed semantic memory and automatically forges new, project-aware model variants (e.g., `viki-evolved`) based on **Phi-3**, **Mistral**, and **DeepSeek-R1**.
 *   **Capability-Aware Execution**: Granular permission gating. Skills like `filesystem_write` and `shell_exec` are managed by a centralized `CapabilityRegistry`, ensuring high-risk actions never bypass security protocols.
 *   **Recursive Self-Reflection**: Utilizing the **Reflection Layer**, VIKI critiques her own plans before execution, reducing hallucinations and improving tool-use accuracy.
 *   **Unified Persistence Layer**: A multi-tiered SQLite architecture that allows VIKI to retain project context, user preferences, and historical lessons without the overhead of legacy JSON files.
+
+### What makes VIKI specific
+
+VIKI is not a generic assistant. It is differentiated by:
+
+*   **Local Neural Forge**: Evolves model variants from your interactions and lessons—no cloud training.
+*   **Orythix governance**: Ethical governor, judgment engine, and capability gating keep behavior deterministic and auditable.
+*   **Reflex layer**: Fast, low-latency intent recognition for habitual tasks without full deliberation.
+*   **Air-gap capable**: Run with no external API calls; all reasoning and evolution stay on your machine.
+
+### Personas
+
+One codebase, multiple specialized “VIKIs”. Switch by setting `system.persona` in `viki/config/settings.yaml` or the `VIKI_PERSONA` environment variable.
+
+| Persona     | Focus                    | Use when                          |
+|------------|---------------------------|-----------------------------------|
+| **sovereign** | Full capability (default) | You want all skills and no filter. |
+| **dev**      | Coding, Forge, shell, FS  | You want a local-first coding partner. |
+| **research** | Search, recall, browser   | You want accurate, cited research. |
+| **home**     | Calendar, email, media, voice | You want a life/productivity assistant. |
+
+Example: `VIKI_PERSONA=dev python viki/main.py` runs VIKI Dev with only dev-focused skills.
+
+### Task delivery and comparison (more than Manus)
+
+Like universal agents that deliver finished work (e.g. [Manus](https://www.manusai.info/)), VIKI delivers complete artifacts, not just suggestions:
+
+- **Data analysis**: Load CSV/Excel, describe stats, visualize (charts), optional LLM summary (`data_analysis` skill).
+- **Presentations**: Generate PowerPoint (PPTX) from an outline or from natural language (`presentation` skill).
+- **Spreadsheets**: Create or update XLSX and CSV from headers/rows or list-of-dicts (`spreadsheet` skill).
+- **Websites**: Static site scaffold or custom pages (HTML/CSS) in the workspace (`website` skill).
+- **Existing**: PDF edit, image generation, research, code execution (sandboxed), browser automation.
+
+VIKI goes further: **voice** (TTS/STT), **smart home** (e.g. Hue), **Obsidian** vault, **tasks** (file or Things 3), **Twitter**, **Whisper** transcription, **unified messaging** (Telegram, Discord, Slack, WhatsApp), **local Neural Forge**, **Orythix governance**, and **air-gap capable** operation. The API exposes `subtasks` and `total_steps` for task progress; the CLI emits progress events during multi-step ReAct.
 
 ---
 
@@ -97,6 +131,23 @@ VIKI/
     python viki/main.py
     ```
 
+### Using VIKI from the CLI (like Claude Code)
+
+Install the `viki` command so you can run it from any directory with the current (or a given) project as workspace:
+
+- **Install**: From the repo root, run `pip install -e .` (or use the one-line install scripts below).
+- **Run**:
+  - `viki` — use current directory as workspace.
+  - `viki /path/to/project` — use that directory as workspace.
+  - `VIKI_PERSONA=dev viki` — run with the dev persona (coding-focused skills).
+- **Confirm/reject**: When VIKI asks "Confirm to proceed" for a medium or destructive action, reply `yes` or `confirm` to run it, or `no` or `reject` to cancel. You can also use `/confirm` or `/reject`.
+- **Useful in-chat commands**: `/help`, `/skills`, `/shadow` (simulate only), `/scan` (re-scan workspace codebase).
+
+**One-line install (optional)**:
+
+- Windows: `irm https://raw.githubusercontent.com/toozuuu/viki/main/install.ps1 | iex` (or from repo: `.\install.ps1`)
+- Unix: `curl -fsSL https://raw.githubusercontent.com/toozuuu/viki/main/install.sh | bash` (or from repo: `./install.sh`)
+
 4.  **Launch with Hologram Face UI** (talk to VIKI with voice):
     ```powershell
     # Terminal 1: start the UI
@@ -130,7 +181,7 @@ Unlike static bots, VIKI grows. Every 10 stable lessons learned, she initiates a
 *   **API Authentication**: All API endpoints require `VIKI_API_KEY`. Set via environment variable; see [viki/SECURITY_SETUP.md](viki/SECURITY_SETUP.md).
 *   **Admin Commands**: Super-admin uses `VIKI_ADMIN_SECRET` (env). Never commit secrets; use env or a secrets manager.
 *   **Privacy**: 100% Local. No telemetry. No external API calls unless explicitly configured for internet research.
-*   **Control**: Every terminal command and filesystem modification is logged and gated. File operations are sandboxed.
+*   **Control**: Every skill run passes `validate_action`; file paths are sandboxed (dev_tools, whisper, PDF, data_analysis, filesystem). Shell command chaining is treated as destructive. Output and logs redact secrets.
 *   **Audit**: Check `logs/viki.log` and `viki/SECURITY_SETUP.md` for capability checks and setup.
 
 ## Documentation
