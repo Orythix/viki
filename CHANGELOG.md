@@ -2,6 +2,18 @@
 
 All notable changes to the VIKI Sovereign Intelligence project will be documented in this file.
 
+## [7.3.1] - 2026-02-17 (First public pre-release)
+
+### Added
+- **Docker support:** Dockerfile and docker-compose for running the API in containers; FLASK_HOST env for binding; DOCKER.md and README section.
+- **File upload:** Chat API accepts multipart form (message + files); uploads saved to data/uploads; controller accepts attachment_paths; UI attach button and file chips.
+- **Pre-release flow:** PRE_RELEASE.md checklist; GitHub Actions release workflow on tag push; README pre-release notice and docs link.
+
+### Changed
+- **UI:** ChatGPT-style layout, custom alert/confirm, sidebar menu when closed, Dashboard (System, Skills, Models, Brain, World, Missions), hologram sidebar gap.
+
+---
+
 ## [7.3.0] - 2026-02-17 (Security Focus)
 
 ### Added

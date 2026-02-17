@@ -1,0 +1,44 @@
+# Create a GitHub Release when a version tag (v*) is pushed.
+# Usage: git tag -a v7.3.0 -m "Release v7.3.0" && git push origin v7.3.0
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get tag and changelog
+        id: info
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          VERSION=${TAG#v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          if [ -f CHANGELOG.md ]; then
+            awk '/## \['"$VERSION"'\]/{flag=1} flag{print} /## \[/ && !/## \['"$VERSION"'\]/{if(flag) exit}' CHANGELOG.md > release_notes.md || echo "Release $TAG. See CHANGELOG.md." > release_notes.md
+          else
+            echo "Release $TAG" > release_notes.md
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release ${{ steps.info.outputs.tag }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: ${{ contains(steps.info.outputs.version, 'rc') || contains(steps.info.outputs.version, 'a') || contains(steps.info.outputs.version, 'b') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -5,7 +5,7 @@
 
 **Polymorphic Intelligence | Recursive Governance | Autonomous Self-Forging**
 
-[![Version](https://img.shields.io/badge/version-7.3.0-blue.svg)](./CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-7.3.1-blue.svg)](./CHANGELOG.md)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Ollama](https://img.shields.io/badge/Ollama-Local_LLM-orange.svg)](https://ollama.ai)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](./LICENSE)
@@ -16,6 +16,8 @@
 
 [Features](#core-pillars-v730) • [Architecture](#technical-architecture) • [Quick Start](#quick-start) • [Security](#security--ethics)
 
+**Pre-release:** VIKI is in active development. We welcome feedback and bug reports via [GitHub Issues](https://github.com/toozuuu/viki/issues). Set `VIKI_API_KEY` and see [SECURITY_SETUP.md](viki/SECURITY_SETUP.md) before exposing the API.
+
 </div>
 
 ---
@@ -24,7 +26,7 @@
 
 VIKI is a **Sovereign Digital Intelligence** designed to be more than just an assistant—she is a partner that evolves alongside your workflow. Built on a foundation of **local-first privacy** and **deterministic governance**, VIKI balances the raw power of LLMs with the safety of a modular, capability-aware architecture.
 
-### Core Pillars (v7.3.0)
+### Core Pillars (v7.3.1)
 
 *   **Intelligence Governance**: Powered by the **Judgment Engine**. Every directive is filtered through a cognitive triage (Reflex, Shallow, Deep) to ensure the right model is used for the right task while maintaining absolute safety.
 *   **The Neural Forge**: A integrated pipeline in the core kernel. VIKI extracts "Wisdom" from her SQLite-backed semantic memory and automatically forges new, project-aware model variants (e.g., `viki-evolved`) based on **Phi-3**, **Mistral**, and **DeepSeek-R1**.
@@ -201,6 +203,7 @@ Unlike static bots, VIKI grows. Every 10 stable lessons learned, she initiates a
 | Document | Description |
 |----------|--------------|
 | [DOCKER.md](DOCKER.md) | Run VIKI in Docker and use Docker from the agent |
+| [PRE_RELEASE.md](PRE_RELEASE.md) | Checklist and steps for pre-releasing to public users |
 | [SETUP.md](SETUP.md) | Installation and environment |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | System design and data flow |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |
