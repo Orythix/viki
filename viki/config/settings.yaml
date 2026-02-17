@@ -1,8 +1,9 @@
+# User-specific config: use .env (copy from .env.example) instead of editing this file.
+# Env overrides: VIKI_DATA_DIR, VIKI_WORKSPACE_DIR, VIKI_PERSONA, VIKI_SHADOW_MODE, VIKI_AIR_GAP.
 system:
   log_level: "INFO"
   data_dir: "./data"
   workspace_dir: "./workspace"
-  
   # Persona: sovereign (full), dev, research, home. Override with env VIKI_PERSONA.
   persona: sovereign
   

@@ -12,9 +12,9 @@
 
 ---
 
-**VIKI** is the world's first **Sovereign Digital Intelligence** built for absolute privacy and local-first autonomy. Unlike standard chatbots, VIKI utilizes the **Orythix Cognitive Architecture** to perform deep reasoning, multi-tool orchestration, and recursive self-improvement without ever leaking your data to the cloud.
+**VIKI** is an open-source **autonomous AI agent** and **Sovereign Digital Intelligence** for absolute privacy and **local-first** operation. Run with **Ollama**, **Phi-3**, **Mistral**, or **DeepSeek**—no cloud required. Uses the **Orythix Cognitive Architecture** for deep reasoning, multi-tool orchestration, and recursive self-improvement without leaking your data.
 
-[Features](#core-pillars-v720) • [Architecture](#technical-architecture) • [Quick Start](#quick-start) • [Security](#security--ethics)
+[Features](#core-pillars-v730) • [Architecture](#technical-architecture) • [Quick Start](#quick-start) • [Security](#security--ethics)
 
 </div>
 
@@ -119,12 +119,16 @@ VIKI/
     pip install -r requirements.txt
     ```
 
-2.  **Set Security Variables** (required for API; optional for CLI):
+2.  **Configure environment** (recommended so paths and secrets are not hardcoded):
     ```powershell
-    $env:VIKI_API_KEY = (python -c "import secrets; print(secrets.token_urlsafe(32))")
-    $env:VIKI_ADMIN_SECRET = (python -c "import secrets; print(secrets.token_urlsafe(32))")
+    copy .env.example .env
+    # Edit .env and set VIKI_API_KEY, VIKI_ADMIN_SECRET, and optionally VIKI_DATA_DIR, VIKI_WORKSPACE_DIR, VIKI_PERSONA.
     ```
-    See [viki/SECURITY_SETUP.md](viki/SECURITY_SETUP.md) for full details.
+    Or set variables manually. For API: `VIKI_API_KEY` and `VIKI_ADMIN_SECRET` are required. Generate with:
+    ```powershell
+    python -c "import secrets; print(secrets.token_urlsafe(32))"
+    ```
+    See [viki/SECURITY_SETUP.md](viki/SECURITY_SETUP.md) and `.env.example` for all options.
 
 3.  **Launch VIKI (CLI)**:
     ```powershell
@@ -200,5 +204,11 @@ Unlike static bots, VIKI grows. Every 10 stable lessons learned, she initiates a
 
 ---
 
-**VIKI: Virtual Intelligence, Real Evolution.**
+## Keywords and topics
+
+**Local AI agent** · **Autonomous AI** · **Ollama** · **LLM agent** · **Privacy-first AI** · **Sovereign AI** · **Open-source AI assistant** · **ReAct agent** · **Capability gating** · **Neural Forge** · **Self-improving AI** · **CLI AI** · **Python AI agent** · **Orythix** · **Local LLM** · **Air-gap AI** · **Tool-use agent** · **Reflex reasoning** · **Multi-model routing**
+
+---
+
+**VIKI: Virtual Intelligence, Real Evolution.**  
 Designed by Orythix001. 2026.

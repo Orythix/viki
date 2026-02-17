@@ -93,11 +93,23 @@ class VIKIController:
     def __init__(self, settings_path: str, soul_path: str, workspace_override: Optional[str] = None):
         self.settings = self._load_yaml(settings_path)
         self.soul_path = soul_path
+        # Overlay environment variables so users can configure via .env without editing YAML
+        system = self.settings.setdefault("system", {})
+        if os.environ.get("VIKI_DATA_DIR"):
+            system["data_dir"] = os.path.abspath(os.path.expanduser(os.environ["VIKI_DATA_DIR"]))
+        if os.environ.get("VIKI_WORKSPACE_DIR"):
+            system["workspace_dir"] = os.path.abspath(os.path.expanduser(os.environ["VIKI_WORKSPACE_DIR"]))
+        if os.environ.get("VIKI_PERSONA"):
+            system["persona"] = os.environ.get("VIKI_PERSONA", "").strip()
         if workspace_override:
-            self.settings.setdefault("system", {})["workspace_dir"] = os.path.abspath(workspace_override)
-        
+            system["workspace_dir"] = os.path.abspath(workspace_override)
+        # Shadow mode and air gap from env (optional)
+        if os.environ.get("VIKI_SHADOW_MODE", "").lower() in ("1", "true", "yes"):
+            system["shadow_mode"] = True
+        if os.environ.get("VIKI_AIR_GAP", "").lower() in ("1", "true", "yes"):
+            system["air_gap"] = True
         # 0. Fast Perception Layer (Reflex Brain)
-        data_dir = self.settings.get('system', {}).get('data_dir', './data')
+        data_dir = system.get("data_dir", "./data")
         self.reflex = ReflexBrain(data_dir=data_dir)
         
         # Global Interrupt Token (Shared Presence)
@@ -489,7 +501,7 @@ class VIKIController:
         _alias('video', 'short_video_agent')
         _alias('short', 'short_video_agent')
 
-    async def process_request(self, user_input: str, on_event=None) -> str:
+    async def process_request(self, user_input: str, on_event=None, attachment_paths: Optional[List[str]] = None) -> str:
         placeholders = ["processing...", "executing", "thinking", "one moment", "working on it"]
         self._last_response_meta = {}
 
@@ -498,7 +510,11 @@ class VIKIController:
             user_input = ""
         if not isinstance(user_input, str):
             user_input = str(user_input).strip() or ""
-        
+
+        # Inject uploaded attachment paths so model and skills see them
+        if attachment_paths:
+            user_input = "Attached files: " + ", ".join(attachment_paths) + "\n\n" + user_input
+
         # --- ORYTHIX ETHICAL GOVERNOR (v22) ---
         # 1. Check for Emergency Shutdown Code
         if self.governor.check_shutdown(user_input):

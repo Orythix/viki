@@ -10,6 +10,8 @@ import os
 import asyncio
 from functools import wraps
 import secrets
+import uuid
+import re
 from dotenv import load_dotenv
 import threading
 import time
@@ -25,10 +27,57 @@ from viki.config.logger import viki_logger
 from viki.config.resolve import get_soul_path
 
 base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Project root (parent of viki package) for data/uploads
+project_root = os.path.dirname(base_dir)
+UPLOAD_DIR = os.path.join(project_root, "data", "uploads")
+UPLOAD_MAX_MB = int(os.getenv("VIKI_UPLOAD_MAX_MB", "10"))
+UPLOAD_MAX_BYTES = UPLOAD_MAX_MB * 1024 * 1024
+# Block executable and script extensions
+UPLOAD_BLOCKED_EXTENSIONS = {".exe", ".sh", ".bat", ".cmd", ".ps1", ".py", ".js", ".ts"}
+
 settings_path = os.path.join(base_dir, "config", "settings.yaml")
 soul_path = get_soul_path(settings_path)
 
 controller = VIKIController(settings_path=settings_path, soul_path=soul_path)
+
+
+def _ensure_upload_dir():
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
+def _safe_extension(filename: str) -> str:
+    """Return lowercased extension including dot, or empty string."""
+    _, ext = os.path.splitext(filename)
+    return (ext or "").lower()
+
+
+def _save_uploaded_file(file) -> tuple:
+    """
+    Save an uploaded file to UPLOAD_DIR. Returns (absolute_path, error_message).
+    On success error_message is None.
+    """
+    if not file or not file.filename:
+        return None, "No file"
+    ext = _safe_extension(file.filename)
+    if ext in UPLOAD_BLOCKED_EXTENSIONS:
+        return None, f"File type not allowed: {ext}"
+    file.seek(0, 2)
+    size = file.tell()
+    file.seek(0)
+    if size > UPLOAD_MAX_BYTES:
+        return None, f"File too large (max {UPLOAD_MAX_MB} MB)"
+    safe_name = re.sub(r"[^\w\-\.]", "_", file.filename)
+    if len(safe_name) > 200:
+        safe_name = safe_name[:200] + ext
+    unique_name = f"{uuid.uuid4().hex}_{safe_name}"
+    dest_path = os.path.join(UPLOAD_DIR, unique_name)
+    try:
+        _ensure_upload_dir()
+        file.save(dest_path)
+        return os.path.abspath(dest_path), None
+    except Exception as e:
+        viki_logger.warning(f"Upload save failed: {e}")
+        return None, str(e)
 
 app = Flask(__name__)
 
@@ -223,32 +272,47 @@ def health():
 @require_api_key
 @async_route
 async def chat():
-    """Process chat messages asynchronously"""
+    """Process chat messages asynchronously. Accepts JSON or multipart/form-data (message + files)."""
     try:
         viki_logger.info("API: Chat request received")
-        data = request.json
-        
-        if not data:
-            return jsonify({'error': 'Invalid JSON body'}), 400
-        
-        user_input = data.get('message', '')
+        content_type = request.content_type or ""
+        attachment_paths = []
+
+        if "multipart/form-data" in content_type:
+            user_input = (request.form.get("message") or "").strip()
+            # Multiple files can be under key "files"
+            uploaded_files = request.files.getlist("files") if "files" in request.files else []
+            for f in uploaded_files:
+                path, err = _save_uploaded_file(f)
+                if err:
+                    return jsonify({'error': err}), 400
+                if path:
+                    attachment_paths.append(path)
+        else:
+            data = request.json
+            if not data:
+                return jsonify({'error': 'Invalid JSON body'}), 400
+            user_input = data.get('message', '')
 
         # --- SECURITY FIX: MED-003 - Input validation ---
         is_valid, error_msg = validate_message(user_input)
         if not is_valid:
             return jsonify({'error': error_msg}), 400
-        
+
         viki_logger.info(f"API: Processing user input: '{safe_for_log(user_input)}'...")
         timeout_sec = controller.settings.get('system', {}).get('request_timeout_seconds', 0)
         if timeout_sec <= 0:
             timeout_sec = 600  # Ceiling when disabled so one stuck request does not hold worker indefinitely
         try:
-            response = await asyncio.wait_for(controller.process_request(user_input), timeout=float(timeout_sec))
+            response = await asyncio.wait_for(
+                controller.process_request(user_input, attachment_paths=attachment_paths if attachment_paths else None),
+                timeout=float(timeout_sec)
+            )
         except asyncio.TimeoutError:
             viki_logger.warning(f"API: Request timed out after {timeout_sec}s")
             return jsonify({'error': 'Request timed out. Try a shorter or simpler request.'}), 504
         viki_logger.info("API: Response generated successfully")
-        
+
         payload = {
             'response': response,
             'timestamp': datetime.now().isoformat()

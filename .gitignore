@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.so
+*.egg
+*.egg-info/
+.eggs/
 
 # Virtual environments
 .venv/
@@ -10,32 +13,47 @@ venv/
 ENV/
 env/
 .env
+.env.local
+.env.*.local
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+.cursor/
 
 # OS
 .DS_Store
 Thumbs.db
+Desktop.ini
 
 # VIKI-specific
 viki/data/
 data/
+logs/
 *.log
 *.db
 viki/Modelfile.custom
+viki/Modelfile.viki_evolved
+viki/Modelfile.bak
 test_result.txt
 viki/config/candidate_prompt.yaml
 
-# Node modules (if UI is added later)
+# Node / UI (when present at root)
 node_modules/
 dist/
 build/
 
-# Test coverage
+# Test coverage and tools
 .coverage
 htmlcov/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Backup and temp
+*.bak
+*.tmp
+*.orig
+*~
