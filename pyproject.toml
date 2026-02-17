@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "viki-sdi"
-version = "7.3.0"
+version = "7.3.1"
 description = "VIKI Sovereign Digital Intelligence — local-first autonomous AI agent with Ollama, Orythix cognitive architecture, and recursive self-improvement"
 readme = "README.md"
 requires-python = ">=3.10"
