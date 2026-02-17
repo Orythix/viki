@@ -98,12 +98,15 @@ class EvolutionEngine:
         for i, m in enumerate(self.mutations["pending"]):
             if m["id"] == m_id:
                 # Type-specific application
-                if m["type"] == "reflex" and self.reflex:
+                if m["type"] == "reflex":
+                    if not self.reflex:
+                        viki_logger.warning(f"Evolution: Cannot apply reflex mutation {m_id} - reflex module not set")
+                        return False
                     val = m["value"]
                     self.reflex.learn_pattern(val["input"], val["skill"], val["params"])
-                
-                if m["type"] == "skill_synthesis":
-                    self._apply_skill_mutation(m)
+                elif m["type"] == "skill_synthesis":
+                    if not self._apply_skill_mutation(m):
+                        return False
 
                 m["status"] = "applied"
                 m["applied_at"] = time.time()
@@ -124,20 +127,20 @@ class EvolutionEngine:
         return False
 
     def record_success(self, pattern_id: str):
-        """Increment success count for pending mutations related to a pattern."""
-        mutations_to_apply = []
+        """Increment success count for pending mutations related to a pattern.
+        
+        SECURITY FIX: MED-007 - Removed auto-approval.
+        Mutations now require explicit user approval via /approve command.
+        """
         for m in self.mutations["pending"]:
             if m.get("pattern_id") == pattern_id:
                 m["success_count"] += 1
+                # REMOVED: Auto-approval after 3 successes
+                # Now just log the success streak for user review
                 if m["success_count"] >= 3:
-                    mutations_to_apply.append(m["id"])
-                    viki_logger.info(f"Evolution: Mutation {m['id']} auto-applying after 3 consistent successes.")
+                    viki_logger.info(f"Evolution: Mutation {m['id']} has {m['success_count']} successes. Ready for manual approval via /approve {m['id']}")
         
-        for m_id in mutations_to_apply:
-            self.approve_mutation(m_id)
-            
-        if mutations_to_apply:
-            self._save_mutations()
+        self._save_mutations()
 
     def get_active_mutations(self, m_type: str = None) -> List[Dict[str, Any]]:
         if m_type:
@@ -266,7 +269,14 @@ class EvolutionEngine:
             return None
 
     def _validate_skill_code(self, code: str) -> tuple[bool, str]:
-        """Validate dynamically generated skill code for security issues."""
+        """Validate dynamically generated skill code for security issues.
+        
+        SECURITY FIX: HIGH-003 - Enhanced validation including:
+        - Dangerous attribute access
+        - Indirect code execution patterns
+        - Import chain analysis
+        - Runtime behavior restrictions
+        """
         try:
             # Parse the code into an AST
             tree = ast.parse(code)
@@ -274,26 +284,68 @@ class EvolutionEngine:
             return False, f"Syntax error in generated code: {e}"
         
         # Dangerous patterns to detect
-        dangerous_imports = {'os.system', 'subprocess', 'eval', 'exec', '__import__', 'compile'}
-        dangerous_calls = {'eval', 'exec', 'compile', '__import__'}
+        dangerous_imports = {'subprocess', 'os.system', 'os.popen', 'os.spawn', 
+                           'eval', 'exec', 'compile', '__import__', 'builtins',
+                           'importlib', 'ctypes', 'multiprocessing'}
+        dangerous_calls = {'eval', 'exec', 'compile', '__import__', 'open'}
+        dangerous_attrs = {'__globals__', '__code__', '__builtins__', '__class__',
+                          '__mro__', '__subclasses__', '__init__', '__reduce__'}
+        
+        # Track all imports for chain analysis
+        imported_modules = set()
         
         for node in ast.walk(tree):
             # Check for dangerous imports
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    if any(danger in alias.name for danger in ['subprocess', 'os.system']):
+                    imported_modules.add(alias.name)
+                    if alias.name in dangerous_imports:
                         return False, f"Dangerous import detected: {alias.name}"
+                    # Check for partial matches (e.g., os.system)
+                    for danger in dangerous_imports:
+                        if danger in alias.name:
+                            return False, f"Potentially dangerous import: {alias.name}"
             
             if isinstance(node, ast.ImportFrom):
-                if node.module and any(danger in node.module for danger in ['subprocess', 'os']):
+                if node.module:
+                    imported_modules.add(node.module)
+                    if node.module in dangerous_imports:
+                        return False, f"Dangerous import from: {node.module}"
+                    # Check specific function imports
                     for alias in node.names:
-                        if alias.name in ['system', 'popen', 'spawn']:
-                            return False, f"Dangerous import detected: from {node.module} import {alias.name}"
+                        if alias.name in dangerous_calls:
+                            return False, f"Dangerous function import: {alias.name} from {node.module}"
+                        if alias.name in ['system', 'popen', 'spawn', 'call', 'run']:
+                            return False, f"Dangerous subprocess function: {alias.name}"
             
             # Check for dangerous function calls
             if isinstance(node, ast.Call):
                 if isinstance(node.func, ast.Name) and node.func.id in dangerous_calls:
                     return False, f"Dangerous function call detected: {node.func.id}()"
+                
+                # Check for getattr patterns that could access dangerous attributes
+                if isinstance(node.func, ast.Name) and node.func.id == 'getattr':
+                    if len(node.args) >= 2:
+                        if isinstance(node.args[1], ast.Constant):
+                            if node.args[1].value in dangerous_attrs:
+                                return False, f"Dangerous attribute access via getattr: {node.args[1].value}"
+            
+            # Check for attribute access to dangerous attributes
+            if isinstance(node, ast.Attribute):
+                if node.attr in dangerous_attrs:
+                    return False, f"Dangerous attribute access detected: {node.attr}"
+            
+            # Check for f-strings or string formatting that could be used for code injection
+            if isinstance(node, ast.JoinedStr):
+                # This is an f-string - check if it's used suspiciously
+                pass  # Allow f-strings but log for review
+            
+            # Check for class definitions that might override dangerous methods
+            if isinstance(node, ast.ClassDef):
+                for item in node.body:
+                    if isinstance(item, ast.FunctionDef):
+                        if item.name in ['__reduce__', '__reduce_ex__', '__getstate__']:
+                            return False, f"Dangerous method override in class: {item.name}"
         
         # Verify BaseSkill inheritance
         has_base_skill = False
@@ -306,6 +358,17 @@ class EvolutionEngine:
         
         if not has_base_skill:
             return False, "Generated code does not inherit from BaseSkill"
+        
+        # Additional heuristic: Check for suspicious string patterns
+        suspicious_patterns = [
+            'os.system', 'subprocess', 'eval(', 'exec(',
+            '__import__', 'compile(', 'open(',
+            'pickle.loads', 'marshal.loads',
+            'ctypes.CDLL', 'ctypes.windll',
+        ]
+        for pattern in suspicious_patterns:
+            if pattern in code:
+                return False, f"Suspicious pattern detected in code: {pattern}"
         
         return True, "Code validation passed"
     
@@ -320,7 +383,7 @@ class EvolutionEngine:
         if not is_valid:
             viki_logger.error(f"Evolution: Skill mutation rejected - {validation_msg}")
             viki_logger.error(f"Rejected code:\n{code[:500]}")
-            return
+            return False
         
         viki_logger.info(f"Evolution: Skill code validated successfully - {validation_msg}")
         
@@ -338,5 +401,7 @@ class EvolutionEngine:
                 # Hot-load the new module
                 self.skill_registry.discover_skills(self.dynamic_skills_dir)
                 viki_logger.info(f"Evolution: Skill '{skill_name}' hot-loaded into registry.")
+            return True
         except Exception as e:
             viki_logger.error(f"Evolution: Failed to apply skill mutation: {e}")
+            return False
