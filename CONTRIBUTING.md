@@ -63,6 +63,8 @@ We use conventional commits:
 *   `refactor:`: Refactoring production code.
 *   `test:`: Adding missing tests, refactoring tests.
 
+Do not add Co-authored-by for bots or IDE (e.g. Cursor). Commits should show human authorship only. To enable the repo hook that strips it: `git config core.hooksPath .githooks`.
+
 ### Python Styleguide
 
 *   Follow **PEP 8**.
