@@ -467,6 +467,6 @@ if __name__ == '__main__':
     viki_logger.info("API Key required for authentication. Key configured: Yes")
     # Disable debug mode in production for security
     debug_mode = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
-    # SECURITY FIX: CRIT-001 - Bind to localhost only, not all interfaces
-    # Use 127.0.0.1 instead of 0.0.0.0 to prevent network exposure
-    app.run(debug=debug_mode, host='127.0.0.1', port=5000)
+    # SECURITY: Default bind to localhost; set FLASK_HOST=0.0.0.0 when running in Docker
+    host = os.getenv('FLASK_HOST', '127.0.0.1')
+    app.run(debug=debug_mode, host=host, port=5000)

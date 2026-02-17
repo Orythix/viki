@@ -168,6 +168,15 @@ Install the `viki` command so you can run it from any directory with the current
     - Terminal 2 (UI): `cd ui; npm run dev`
     Access at `http://localhost:5173`
 
+6.  **Run with Docker**:
+    Build and run the API in a container. Ollama should be running on the host (or in another container). See [DOCKER.md](DOCKER.md) for details.
+    ```powershell
+    copy .env.example .env
+    # Edit .env and set VIKI_API_KEY (required)
+    docker compose up --build
+    ```
+    Then run the UI on the host: `cd ui && npm run dev`, and set `VITE_VIKI_API_BASE=http://localhost:5000/api` in `ui/.env`. On Windows/Mac the compose file sets `OLLAMA_HOST=http://host.docker.internal:11434` so the container can reach Ollama on the host.
+
 ---
 
 ## The Forge Workflow: "Baking Intelligence"
@@ -191,6 +200,7 @@ Unlike static bots, VIKI grows. Every 10 stable lessons learned, she initiates a
 ## Documentation
 | Document | Description |
 |----------|--------------|
+| [DOCKER.md](DOCKER.md) | Run VIKI in Docker and use Docker from the agent |
 | [SETUP.md](SETUP.md) | Installation and environment |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | System design and data flow |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |
