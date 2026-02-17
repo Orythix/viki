@@ -1,0 +1,38 @@
+# Virtual env and caches
+.venv
+venv
+__pycache__
+*.py[cod]
+*.pyo
+.pytest_cache
+.mypy_cache
+
+# Data and logs (mount at runtime)
+data
+logs
+workspace
+
+# UI (run separately on host)
+ui/node_modules
+ui/dist
+
+# Secrets and env (inject at runtime)
+.env
+.env.*
+!.env.example
+
+# Git and IDE
+.git
+.gitignore
+.cursor
+*.md
+!README.md
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Plans and misc
+plans
+*.plan.md

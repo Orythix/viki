@@ -1,0 +1,20 @@
+# VIKI API — run the backend in Docker.
+# Run the UI on the host: cd ui && npm run dev (set VITE_VIKI_API_BASE=http://localhost:5000/api).
+# Ensure Ollama is running on the host; set OLLAMA_HOST below so the container can reach it.
+
+services:
+  viki-api:
+    build: .
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    environment:
+      FLASK_HOST: "0.0.0.0"
+      VIKI_DATA_DIR: /app/data
+      VIKI_WORKSPACE_DIR: /app/workspace
+      # Reach Ollama on host (Windows/Mac). On Linux use network_mode: host or set to host IP.
+      OLLAMA_HOST: http://host.docker.internal:11434
+    volumes:
+      - ./data:/app/data
+      - ./workspace:/app/workspace
