@@ -5,11 +5,22 @@ import Dashboard from './Dashboard'
 import AlertUI from './AlertUI'
 
 const API_BASE = import.meta.env.VITE_VIKI_API_BASE || 'http://localhost:5000/api'
+const SESSION_STORAGE_KEY = 'viki-session-id'
+
+function getSessionId() {
+  let sessionId = window.localStorage.getItem(SESSION_STORAGE_KEY)
+  if (!sessionId) {
+    sessionId = window.crypto?.randomUUID?.() || `viki-${Date.now()}-${Math.random().toString(16).slice(2)}`
+    window.localStorage.setItem(SESSION_STORAGE_KEY, sessionId)
+  }
+  return sessionId
+}
 
 function getApiHeaders() {
   const key = import.meta.env.VITE_VIKI_API_KEY
-  if (!key) return {}
-  return { Authorization: `Bearer ${key}` }
+  const headers = { 'X-Session-Id': getSessionId() }
+  if (key) headers.Authorization = `Bearer ${key}`
+  return headers
 }
 
 function App() {
@@ -106,12 +117,12 @@ function App() {
 
   const sendMessage = async (e) => {
     e.preventDefault()
-    if (!input.trim() || isLoading) return
+    if ((!input.trim() && attachedFiles.length === 0) || isLoading) return
 
     const messageText = input
     const filesToSend = [...attachedFiles]
     const userContent = filesToSend.length > 0
-      ? `${messageText} (${filesToSend.length} file(s) attached)`
+      ? `${messageText.trim() || 'Attached file(s)'} (${filesToSend.length} file(s) attached)`
       : messageText
     const userMessage = { role: 'user', content: userContent, timestamp: new Date().toISOString() }
     setMessages(prev => [...prev, userMessage])

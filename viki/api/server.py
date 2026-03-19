@@ -37,8 +37,25 @@ UPLOAD_BLOCKED_EXTENSIONS = {".exe", ".sh", ".bat", ".cmd", ".ps1", ".py", ".js"
 
 settings_path = os.path.join(base_dir, "config", "settings.yaml")
 soul_path = get_soul_path(settings_path)
+SESSION_HEADER = "X-Session-Id"
+_controller = None
+_controller_lock = threading.Lock()
 
-controller = VIKIController(settings_path=settings_path, soul_path=soul_path)
+
+def get_controller() -> VIKIController:
+    global _controller
+    if _controller is None:
+        with _controller_lock:
+            if _controller is None:
+                _controller = VIKIController(settings_path=settings_path, soul_path=soul_path)
+    return _controller
+
+
+def get_session_id() -> str:
+    raw = (request.headers.get(SESSION_HEADER) or "").strip()
+    if raw:
+        return re.sub(r"[^A-Za-z0-9._-]", "_", raw)[:128] or "default"
+    return "default"
 
 
 def _ensure_upload_dir():
@@ -254,6 +271,7 @@ def ping():
 @require_api_key
 def health():
     try:
+        controller = get_controller()
         tools = list(controller.skill_registry.skills.keys()) if hasattr(controller, 'skill_registry') and controller.skill_registry else []
         return jsonify({
             'status': 'online',
@@ -274,6 +292,8 @@ def health():
 async def chat():
     """Process chat messages asynchronously. Accepts JSON or multipart/form-data (message + files)."""
     try:
+        controller = get_controller()
+        session_id = get_session_id()
         viki_logger.info("API: Chat request received")
         content_type = request.content_type or ""
         attachment_paths = []
@@ -294,6 +314,9 @@ async def chat():
                 return jsonify({'error': 'Invalid JSON body'}), 400
             user_input = data.get('message', '')
 
+        if attachment_paths and not str(user_input or "").strip():
+            user_input = "Please analyze the attached file(s)."
+
         # --- SECURITY FIX: MED-003 - Input validation ---
         is_valid, error_msg = validate_message(user_input)
         if not is_valid:
@@ -305,7 +328,11 @@ async def chat():
             timeout_sec = 600  # Ceiling when disabled so one stuck request does not hold worker indefinitely
         try:
             response = await asyncio.wait_for(
-                controller.process_request(user_input, attachment_paths=attachment_paths if attachment_paths else None),
+                controller.process_request(
+                    user_input,
+                    attachment_paths=attachment_paths if attachment_paths else None,
+                    session_id=session_id
+                ),
                 timeout=float(timeout_sec)
             )
         except asyncio.TimeoutError:
@@ -315,9 +342,10 @@ async def chat():
 
         payload = {
             'response': response,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat(),
+            'session_id': session_id,
         }
-        meta = getattr(controller, '_last_response_meta', None)
+        meta = controller.get_last_response_meta(session_id=session_id)
         if meta:
             payload['subtasks'] = meta.get('subtasks')
             payload['total_steps'] = meta.get('total_steps')
@@ -332,11 +360,14 @@ async def chat():
 def get_memory():
     """Retrieve conversation memory"""
     try:
+        controller = get_controller()
+        session_id = get_session_id()
         # Use get_context to fetch latest messages from DB or ephemeral memory
-        messages = controller.memory.working.get_trace()
+        messages = controller.memory.working.get_trace(session_id=session_id)
         return jsonify({
             'messages': messages,
-            'limit': controller.memory.working.max_turns
+            'limit': controller.memory.working.max_turns,
+            'session_id': session_id,
         })
     except Exception as e:
         viki_logger.error(f"Memory retrieval error: {e}", exc_info=True)
@@ -346,16 +377,15 @@ def get_memory():
 @require_api_key
 def clear_memory():
     """Clear conversation memory"""
-    if controller.memory.working.db:
-        controller.memory.working.db["messages"].delete_where()
-    else:
-        controller.memory.working.ephemeral_history = []
+    controller = get_controller()
+    controller.memory.working.clear_trace(session_id=get_session_id())
     return jsonify({'status': 'cleared'})
 
 @app.route('/api/skills', methods=['GET'])
 @require_api_key
 def get_skills():
     """List all registered skills"""
+    controller = get_controller()
     skills = []
     for name, skill in controller.skill_registry.skills.items():
         skills.append({
@@ -369,6 +399,7 @@ def get_skills():
 @require_api_key
 def get_models():
     """List available models"""
+    controller = get_controller()
     models = []
     if hasattr(controller, 'model_router'):
         for name, model in controller.model_router.models.items():
@@ -385,6 +416,7 @@ def get_models():
 def get_model_performance():
     """Get performance metrics for all models"""
     try:
+        controller = get_controller()
         performance = []
         
         if hasattr(controller, 'model_router'):
@@ -425,6 +457,7 @@ def get_model_performance():
 @require_api_key
 def get_world():
     """Get World Engine state (Phase 4)"""
+    controller = get_controller()
     state = controller.world.state.model_dump()
     # Summarize graph for lightweight transfer
     state['codebase_graph_summary'] = {
@@ -439,10 +472,12 @@ def get_world():
 @require_api_key
 def get_brain():
     """Get Cognitive State (Signals & Trace)"""
+    controller = get_controller()
+    session_id = get_session_id()
     return jsonify({
         'signals': controller.signals.get_modulation(),
         'trace': controller.internal_trace[-5:] if controller.internal_trace else [],
-        'last_thought': controller.memory.working.get_last_thought() if hasattr(controller.memory.working, 'get_last_thought') else "",
+        'last_thought': controller.memory.working.get_last_thought(session_id=session_id) if hasattr(controller.memory.working, 'get_last_thought') else "",
         'mode': controller.interaction_pace
     })
 
@@ -450,6 +485,7 @@ def get_brain():
 @require_api_key
 def get_missions():
     """Get Active Autonomous Missions (Phase 6)"""
+    controller = get_controller()
     missions = []
     if hasattr(controller, 'mission_control'):
         # Convert heap to list for display
@@ -460,6 +496,7 @@ def get_missions():
     return jsonify({'queue': [], 'active': []})
 
 if __name__ == '__main__':
+    controller = get_controller()
     viki_logger.info("Starting VIKI API Server (ASYNCHRONOUS)...")
     viki_logger.info(f"VIKI Version: {controller.soul.config.get('version', 'Unknown')}")
     viki_logger.info("API available at: http://localhost:5000")

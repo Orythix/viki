@@ -174,7 +174,8 @@ class VIKIController:
         self.capabilities = CapabilityRegistry()
         self._register_default_skills()
         self.active_tasks = []
-        self.pending_action = None # For confirmation flow
+        self.pending_actions = {} # For confirmation flow, keyed by session
+        self._last_response_meta_by_session = {}
         
         # Point 4: Cognitive Budget Allocator
         self.budgets = {
@@ -501,9 +502,17 @@ class VIKIController:
         _alias('video', 'short_video_agent')
         _alias('short', 'short_video_agent')
 
-    async def process_request(self, user_input: str, on_event=None, attachment_paths: Optional[List[str]] = None) -> str:
+    def _normalize_session_id(self, session_id: Optional[str] = None) -> str:
+        return session_id or getattr(self.memory.working, "default_session_id", "default")
+
+    def get_last_response_meta(self, session_id: Optional[str] = None) -> Dict[str, Any]:
+        session_id = self._normalize_session_id(session_id)
+        return self._last_response_meta_by_session.get(session_id, {})
+
+    async def process_request(self, user_input: str, on_event=None, attachment_paths: Optional[List[str]] = None, session_id: Optional[str] = None) -> str:
         placeholders = ["processing...", "executing", "thinking", "one moment", "working on it"]
-        self._last_response_meta = {}
+        session_id = self._normalize_session_id(session_id)
+        self._last_response_meta_by_session[session_id] = {}
 
         # Normalize input for robustness
         if user_input is None:
@@ -555,13 +564,14 @@ class VIKIController:
         self.signals.decay_signals()
 
         # --- Pending action confirm/reject (CLI flow) ---
-        if self.pending_action:
+        pending_action = self.pending_actions.get(session_id)
+        if pending_action:
             raw_lower = user_input.strip().lower()
             affirmatives = ("yes", "y", "confirm", "ok", "proceed", "/confirm")
             negatives = ("no", "n", "reject", "cancel", "/reject")
             if raw_lower in affirmatives:
-                action = self.pending_action
-                self.pending_action = None
+                action = pending_action
+                self.pending_actions.pop(session_id, None)
                 skill_name = action.skill_name
                 params = (action.parameters or {}).copy()
                 check_res = self.capabilities.check_permission(skill_name, params=params)
@@ -584,7 +594,7 @@ class VIKIController:
                 self.skill_registry.record_execution(skill_name, True, latency)
                 return f"Done. {result[:500]}"
             if raw_lower in negatives:
-                self.pending_action = None
+                self.pending_actions.pop(session_id, None)
                 return "Action cancelled."
             return "Please confirm with yes/confirm or cancel with no/reject."
 
@@ -599,7 +609,7 @@ class VIKIController:
         budget = self.budgets.get(task_type, self.budgets["general"])
         
         # Record user message in conversation memory (Working Trace)
-        self.memory.working.add_message("user", safe_input)
+        self.memory.working.add_message("user", safe_input, session_id=session_id)
 
 
         # URL Detection: If user shares a URL, auto-fetch content (with timeout)
@@ -712,7 +722,7 @@ class VIKIController:
              os.makedirs(sessions_dir, exist_ok=True)
              path = os.path.join(sessions_dir, f"{name}.json")
              try:
-                 trace = self.memory.working.get_trace()
+                 trace = self.memory.working.get_trace(session_id=session_id)
                  with open(path, "w", encoding="utf-8") as f:
                      json.dump({"messages": trace}, f, indent=2)
                  return f"Session saved to {path} ({len(trace)} messages)."
@@ -732,7 +742,7 @@ class VIKIController:
                  with open(path, "r", encoding="utf-8") as f:
                      data = json.load(f)
                  messages = data.get("messages", [])
-                 self.memory.working.replace_trace(messages)
+                 self.memory.working.replace_trace(messages, session_id=session_id)
                  return f"Loaded session '{name}' ({len(messages)} messages)."
              except Exception as e:
                  return f"Load failed: {e}"
@@ -742,7 +752,11 @@ class VIKIController:
 
         # v23: Integrated Hierarchical Context Retrieval
         # Pass pre-fetched narrative_wisdom to avoid duplicate query
-        memory_context = self.memory.get_full_context(safe_input, narrative_wisdom=narrative_wisdom)
+        memory_context = self.memory.get_full_context(
+            safe_input,
+            narrative_wisdom=narrative_wisdom,
+            session_id=session_id
+        )
 
         # Project context file (VIKI.md / VIKI_CONTEXT.md) — Gemini CLI-style
         workspace_dir = self.settings.get('system', {}).get('workspace_dir', './workspace')
@@ -783,8 +797,6 @@ class VIKIController:
         max_react_steps = 5  # Safety limit
         action_results = []  # Accumulated results from previous steps
         final_output = None
-        self._last_response_meta = {}  # For API: plan/subtasks and progress
-
         for react_step in range(max_react_steps):
             if on_event:
                 on_event("progress", {"step": react_step + 1, "total_steps": max_react_steps})
@@ -822,7 +834,7 @@ class VIKIController:
                 # Capture user corrections and frustration as lessons
                 if viki_resp.intent_type == "correction" or viki_resp.sentiment == "frustrated":
                     # Get last assistant response for context
-                    trace = self.memory.working.get_trace()
+                    trace = self.memory.working.get_trace(session_id=session_id)
                     if len(trace) >= 2:
                         prev_messages = trace[-3:] if len(trace) >= 3 else trace
                         prev_response = next((m['content'] for m in reversed(prev_messages) 
@@ -893,7 +905,7 @@ class VIKIController:
                 # Safety Confirmation
                 severity = self.safety.get_action_severity(skill_name, params)
                 if severity in ["medium", "destructive"]:
-                    self.pending_action = viki_resp.action
+                    self.pending_actions[session_id] = viki_resp.action
                     reply = (viki_resp.final_response or "").strip()
                     if not reply or reply.lower() in placeholders:
                         reply = "I understand. I have an action ready that needs your confirmation."
@@ -952,12 +964,12 @@ class VIKIController:
                             f"I tried {len(action_results)} search steps but didn't find useful results for that. "
                             f"You can rephrase or try a different question.\n\nExecution log:\n{summary}"
                         )
-                        self._last_response_meta = {"subtasks": action_results, "total_steps": react_step + 1}
+                        self._last_response_meta_by_session[session_id] = {"subtasks": action_results, "total_steps": react_step + 1}
                         break
                 if react_step < max_react_steps - 1:
                     continue
                 self.last_interaction_time = time.time()
-                self._last_response_meta = {"subtasks": action_results, "total_steps": max_react_steps}
+                self._last_response_meta_by_session[session_id] = {"subtasks": action_results, "total_steps": max_react_steps}
                 llm_response = viki_resp.final_response or "Directive sequence concluded."
                 all_results = "\n".join([f"Step {r['step']}: {r.get('result') or r.get('error')}" for r in action_results])
                 final_output = self._compress_output(f"{llm_response}\n\nExecution Logs:\n{all_results}")
@@ -988,7 +1000,7 @@ class VIKIController:
                     final_output = self._compress_output(llm_response)
             else:
                 final_output = self._compress_output(llm_response)
-            self._last_response_meta = {"subtasks": action_results, "total_steps": max_react_steps}
+            self._last_response_meta_by_session[session_id] = {"subtasks": action_results, "total_steps": max_react_steps}
             break
 
         # --- ORYTHIX REFLECTION (v22) ---
@@ -1042,7 +1054,7 @@ class VIKIController:
         except Exception as e:
             viki_logger.debug(f"Evolution proposal skipped: {e}")
         
-        self.memory.working.add_message("assistant", final_output)
+        self.memory.working.add_message("assistant", final_output, session_id=session_id)
         return final_output
 
     async def _trigger_evolution_if_needed(self, force: bool = False):
