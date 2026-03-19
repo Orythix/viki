@@ -31,7 +31,7 @@ class WorkingMemory:
         os.makedirs(data_dir, exist_ok=True)
         self.db_path = os.path.join(data_dir, "viki_working_memory.db")
         
-        self.session_id = str(uuid.uuid4())
+        self.default_session_id = str(uuid.uuid4())
         self.db = None
         
         # --- SECURITY FIX: MED-001 - Thread safety lock ---
@@ -42,7 +42,10 @@ class WorkingMemory:
             self.db = Database(conn)
             self._init_tables()
         else:
-            self.ephemeral_history = []
+            self.ephemeral_history = {}
+
+    def _normalize_session_id(self, session_id: Optional[str] = None) -> str:
+        return session_id or self.default_session_id
 
     def _init_tables(self):
         if not self.db: return
@@ -58,63 +61,92 @@ class WorkingMemory:
                 }, pk="id")
                 self.db["messages"].create_index(["timestamp"])
 
-    def add_message(self, role: str, content: str, metadata: Dict[str, Any] = None):
+    def add_message(self, role: str, content: str, metadata: Dict[str, Any] = None, session_id: Optional[str] = None):
         with self._lock:
+            session_id = self._normalize_session_id(session_id)
             msg_id = str(uuid.uuid4())
             ts = datetime.now().isoformat()
             if self.db:
                 self.db["messages"].insert({
                     "id": msg_id, "role": role, "content": content,
-                    "timestamp": ts, "session_id": self.session_id,
+                    "timestamp": ts, "session_id": session_id,
                     "metadata": json.dumps(metadata or {})
                 })
                 # Enforce turn limit (Working Memory behavior)
-                self._prune_history()
+                self._prune_history(session_id=session_id)
             else:
-                self.ephemeral_history.append({"role": role, "content": content})
-                if len(self.ephemeral_history) > self.max_turns:
-                    self.ephemeral_history.pop(0)
+                history = self.ephemeral_history.setdefault(session_id, [])
+                history.append({"role": role, "content": content})
+                if len(history) > self.max_turns:
+                    history.pop(0)
 
-    def _prune_history(self):
+    def _prune_history(self, session_id: Optional[str] = None):
         """Keep only the last max_turns messages in the database."""
         if not self.db: return
         with self._lock:
+            session_id = self._normalize_session_id(session_id)
             try:
                 # Simple pruning: delete everything but the top N
-                rows = list(self.db["messages"].rows_where(order_by="timestamp DESC", limit=self.max_turns))
+                rows = list(self.db["messages"].rows_where(
+                    "session_id = ?",
+                    [session_id],
+                    order_by="timestamp DESC",
+                    limit=self.max_turns
+                ))
                 if not rows: return
                 oldest_ts = rows[-1]["timestamp"]
-                self.db["messages"].delete_where("timestamp < ?", [oldest_ts])
+                self.db["messages"].delete_where(
+                    "session_id = ? AND timestamp < ?",
+                    [session_id, oldest_ts]
+                )
             except Exception as e:
                 viki_logger.error(f"WorkingMemory Pruning Failed: {e}")
 
-    def get_trace(self) -> List[Dict[str, str]]:
+    def get_trace(self, session_id: Optional[str] = None) -> List[Dict[str, str]]:
         with self._lock:
+            session_id = self._normalize_session_id(session_id)
             if self.db:
-                rows = list(self.db["messages"].rows_where(order_by="timestamp ASC", limit=self.max_turns))
+                rows = list(self.db["messages"].rows_where(
+                    "session_id = ?",
+                    [session_id],
+                    order_by="timestamp ASC",
+                    limit=self.max_turns
+                ))
                 return [{"role": r["role"], "content": r["content"]} for r in rows]
-            return self.ephemeral_history.copy()
+            return list(self.ephemeral_history.get(session_id, []))
 
-    def replace_trace(self, messages: List[Dict[str, str]]) -> None:
+    def replace_trace(self, messages: List[Dict[str, str]], session_id: Optional[str] = None) -> None:
         """Replace current conversation with a saved session (for /load)."""
         with self._lock:
+            session_id = self._normalize_session_id(session_id)
             if self.db:
-                self.db["messages"].delete_where("session_id = ?", [self.session_id])
+                self.db["messages"].delete_where("session_id = ?", [session_id])
                 for m in messages[-self.max_turns:]:
                     role = m.get("role", "user")
                     content = m.get("content", "")
                     self.db["messages"].insert({
                         "id": str(uuid.uuid4()), "role": role, "content": content,
-                        "timestamp": datetime.now().isoformat(), "session_id": self.session_id,
+                        "timestamp": datetime.now().isoformat(), "session_id": session_id,
                         "metadata": "{}"
                     })
             else:
-                self.ephemeral_history = [{"role": m.get("role", "user"), "content": m.get("content", "")} for m in messages[-self.max_turns:]]
+                self.ephemeral_history[session_id] = [
+                    {"role": m.get("role", "user"), "content": m.get("content", "")}
+                    for m in messages[-self.max_turns:]
+                ]
 
-    def get_last_thought(self) -> str:
+    def clear_trace(self, session_id: Optional[str] = None) -> None:
+        with self._lock:
+            session_id = self._normalize_session_id(session_id)
+            if self.db:
+                self.db["messages"].delete_where("session_id = ?", [session_id])
+            else:
+                self.ephemeral_history.pop(session_id, None)
+
+    def get_last_thought(self, session_id: Optional[str] = None) -> str:
         """Get the last assistant message for context."""
         with self._lock:
-            trace = self.get_trace()
+            trace = self.get_trace(session_id=session_id)
             for msg in reversed(trace):
                 if msg.get("role") == "assistant":
                     return msg.get("content", "")
@@ -133,14 +165,14 @@ class HierarchicalMemory:
         self.identity = NarrativeIdentity(data_dir)
         self.semantic = learning_module # Shared with LearningModule
 
-    def get_context(self, current_input: str = "", limit: int = 20) -> Dict[str, Any]:
+    def get_context(self, current_input: str = "", limit: int = 20, session_id: Optional[str] = None) -> Dict[str, Any]:
         """Legacy alias: returns working trace and episodic context. Prefer get_full_context for full stack."""
         return {
-            "working": self.working.get_trace(),
+            "working": self.working.get_trace(session_id=session_id),
             "episodic": self.episodic.retrieve_context(current_input, limit=min(limit, 5)),
         }
 
-    def get_full_context(self, current_input: str, narrative_wisdom: List[Dict] = None) -> Dict[str, Any]:
+    def get_full_context(self, current_input: str, narrative_wisdom: List[Dict] = None, session_id: Optional[str] = None) -> Dict[str, Any]:
         """Synthesizes context across all layers for the Deliberation layer."""
         # v25: Accept pre-fetched narrative wisdom to avoid duplicate queries
         if narrative_wisdom is None:
@@ -153,7 +185,7 @@ class HierarchicalMemory:
         ])
 
         return {
-            "working": self.working.get_trace(),
+            "working": self.working.get_trace(session_id=session_id),
             "episodic": self.episodic.retrieve_context(current_input),
             "semantic": self.semantic.get_relevant_lessons(current_input) if self.semantic else [],
             "narrative_wisdom": wisdom_block,
