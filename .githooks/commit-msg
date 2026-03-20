@@ -1,0 +1,8 @@
+#!/bin/sh
+# Remove Co-authored-by: Cursor from commit messages so history shows human-only authorship.
+msgfile="$1"
+if [ -f "$msgfile" ]; then
+  grep -v "Co-authored-by: Cursor" "$msgfile" > "${msgfile}.tmp"
+  mv "${msgfile}.tmp" "$msgfile"
+fi
+exit 0
