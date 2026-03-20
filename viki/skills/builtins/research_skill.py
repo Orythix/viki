@@ -2,6 +2,7 @@ import asyncio
 import warnings
 import aiohttp
 from bs4 import BeautifulSoup
+import re
 from typing import Dict, Any, List
 from urllib.parse import urlparse
 import ipaddress
@@ -108,23 +109,66 @@ class ResearchSkill(BaseSkill):
             viki_logger.error(f"Search error: {e}")
             return f"Search error: {str(e)}"
 
+    def _extract_facts_from_text(self, text: str, max_facts: int = 3) -> List[str]:
+        """
+        Lightweight deterministic fact extractor.
+        We split into sentences and keep the most informative ones.
+        """
+        if not text:
+            return []
+
+        normalized = re.sub(r"\s+", " ", str(text)).strip()
+        if not normalized:
+            return []
+
+        # Sentence split (best-effort).
+        sentences = re.split(r"(?<=[.!?])\s+", normalized)
+        seen = set()
+        facts: List[str] = []
+        for s in sentences:
+            s = s.strip()
+            if not s:
+                continue
+            if len(s) < 25:
+                continue
+            lower = s.lower()
+            if lower in seen:
+                continue
+            # Skip common low-signal boilerplate.
+            if any(b in lower for b in ["cookie", "subscribe", "privacy policy", "terms of service"]):
+                continue
+            facts.append(s)
+            seen.add(lower)
+            if len(facts) >= max_facts:
+                break
+        return facts
+
     async def _extract_knowledge_from_results(self, query: str, results: List[dict]):
         """Distills snippets into trigger/fact pairs for LearningModule."""
         if not self.controller or not hasattr(self.controller, 'learning'): return
         
         viki_logger.info(f"Research: Extracting autonomous knowledge from '{query}'")
         for r in results[:3]: # Only top 3 for quality
-            body = r.get('body', r.get('snippet', ''))
-            if len(body) > 30:
-                # Store as a lesson using thread pool to avoid blocking
+            body = r.get('body', r.get('snippet', '')) or ""
+            title = r.get('title', '') or ""
+            url = r.get('href', r.get('link', 'web')) or "web"
+
+            facts = self._extract_facts_from_text(body, max_facts=3)
+            if not facts and len(body) > 30:
+                # Fallback: store the snippet as a single fact.
+                facts = [body.strip()[:500]]
+
+            for fact in facts:
+                fact_with_source = f"SOURCE: {url} | {fact}"
                 await asyncio.to_thread(
                     self.controller.learning.save_lesson,
-                    trigger=f"Tell me about {query} ({r.get('title', '')})",
-                    fact=body,
-                    source=r.get('href', 'web')
+                    trigger=f"RESEARCH_FACT: {query} ({title})",
+                    fact=fact_with_source,
+                    source=url,
+                    source_task="web_search",
                 )
 
-    def _validate_url(self, url: str) -> tuple[bool, str]:
+    def _validate_url(self, url: str) -> tuple[bool, str]:  #NOSONAR
         """Validate URL to prevent SSRF attacks.
         
         SECURITY FIX: HIGH-002 - Enhanced SSRF protection including:
@@ -183,7 +227,7 @@ class ResearchSkill(BaseSkill):
                 # Block IPv6 private/link-local/multicast ranges
                 if ip.version == 6:
                     if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast:
-                        return False, f"Access to restricted IPv6 addresses not allowed"
+                        return False, "Access to restricted IPv6 addresses not allowed"
                     # Block AWS IPv6 metadata endpoint
                     if str(ip).startswith('fd00:ec2:'):
                         return False, "Access to cloud metadata endpoints not allowed"
@@ -192,7 +236,7 @@ class ResearchSkill(BaseSkill):
                 # If we can't resolve, allow it (might be blocked by network anyway)
                 # But log for monitoring
                 viki_logger.debug(f"Could not resolve hostname {hostname}: {e}")
-                pass
+                # Allow it; network may still block.
             
             # Block URL-encoded variations of localhost
             import urllib.parse
@@ -216,7 +260,7 @@ class ResearchSkill(BaseSkill):
         except Exception as e:
             return False, f"URL validation error: {str(e)}"
     
-    async def _read_page(self, url: str) -> str:
+    async def _read_page(self, url: str) -> str:  #NOSONAR
         try:
             if not url.startswith('http'):
                 url = 'https://' + url
@@ -232,7 +276,7 @@ class ResearchSkill(BaseSkill):
             try:
                 hostname = urlparse(url).hostname
                 resolved_ip = socket.gethostbyname(hostname)
-            except:
+            except Exception:
                 resolved_ip = None
             
             timeout = aiohttp.ClientTimeout(total=15)
@@ -248,7 +292,7 @@ class ResearchSkill(BaseSkill):
                             if final_ip != resolved_ip:
                                 viki_logger.warning(f"DNS rebinding detected: {hostname} -> {final_ip}")
                                 return "Security: DNS rebinding attempt blocked"
-                        except:
+                        except Exception:
                             pass
                     
                     if response.status != 200:
@@ -280,6 +324,19 @@ class ResearchSkill(BaseSkill):
             # Truncate to avoid overwhelming the LLM
             if len(clean_text) > 4000:
                 clean_text = clean_text[:4000] + "\n... (truncated)"
+
+            # Persist extracted facts from the page content.
+            if self.controller and hasattr(self.controller, "learning"):
+                facts = self._extract_facts_from_text(clean_text, max_facts=3)
+                for fact in facts:
+                    fact_with_source = f"SOURCE: {url} | {fact}"
+                    await asyncio.to_thread(
+                        self.controller.learning.save_lesson,
+                        trigger=f"RESEARCH_FACT: URL({url})",
+                        fact=fact_with_source,
+                        source=url,
+                        source_task="web_page",
+                    )
             
             return f"CONTENT FROM {url}:\n\n{clean_text}"
             

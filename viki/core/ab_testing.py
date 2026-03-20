@@ -72,6 +72,10 @@ class ModelABTest:
         if not model_b:
             return {'error': f"Model {model_b_name} not found"}
         
+        test_count = len(self.test_prompts)
+        if test_count == 0:
+            return {'error': "No test prompts loaded"}
+
         results = {
             'model_a': {
                 'name': model_a_name,
@@ -85,50 +89,53 @@ class ModelABTest:
                 'latencies': [],
                 'errors': 0
             },
-            'test_count': len(self.test_prompts)
+            'test_count': test_count
         }
         
         # Test each prompt on both models
         for i, test_case in enumerate(self.test_prompts):
-            viki_logger.debug(f"A/B Test: Running test {i+1}/{len(self.test_prompts)}")
+            viki_logger.debug(f"A/B Test: Running test {i+1}/{test_count}")
             
-            # Test model A
-            response_a, latency_a, error_a = await self._test_model(model_a, test_case)
+            # Run models in parallel for this test case
+            task_a = self._test_model(model_a, test_case)
+            task_b = self._test_model(model_b, test_case)
+            
+            (response_a, latency_a, error_a), (response_b, latency_b, error_b) = await asyncio.gather(task_a, task_b)
+            
+            # Score model A
             score_a = self._score_response(test_case, response_a)
-            
             results['model_a']['scores'].append(score_a)
             results['model_a']['latencies'].append(latency_a)
             if error_a:
                 results['model_a']['errors'] += 1
             
-            # Test model B
-            response_b, latency_b, error_b = await self._test_model(model_b, test_case)
+            # Score model B
             score_b = self._score_response(test_case, response_b)
-            
             results['model_b']['scores'].append(score_b)
             results['model_b']['latencies'].append(latency_b)
             if error_b:
                 results['model_b']['errors'] += 1
             
-            # Small delay between tests
-            await asyncio.sleep(0.5)
+            # Small delay between tests to avoid overloading local model server
+            await asyncio.sleep(0.2)
         
-        # Calculate aggregates
-        results['model_a']['avg_score'] = sum(results['model_a']['scores']) / len(results['model_a']['scores'])
-        results['model_a']['avg_latency'] = sum(results['model_a']['latencies']) / len(results['model_a']['latencies'])
+        # Calculate aggregates (safe because test_count > 0)
+        results['model_a']['avg_score'] = sum(results['model_a']['scores']) / test_count
+        results['model_a']['avg_latency'] = sum(results['model_a']['latencies']) / test_count
         
-        results['model_b']['avg_score'] = sum(results['model_b']['scores']) / len(results['model_b']['scores'])
-        results['model_b']['avg_latency'] = sum(results['model_b']['latencies']) / len(results['model_b']['latencies'])
+        results['model_b']['avg_score'] = sum(results['model_b']['scores']) / test_count
+        results['model_b']['avg_latency'] = sum(results['model_b']['latencies']) / test_count
         
         # Determine winner (weighted: 70% score, 30% speed)
+        # Latency is normalized (10s = 1.0) for the weighted score
         score_a_weighted = results['model_a']['avg_score'] * 0.7 - (results['model_a']['avg_latency'] / 10.0) * 0.3
         score_b_weighted = results['model_b']['avg_score'] * 0.7 - (results['model_b']['avg_latency'] / 10.0) * 0.3
         
-        results['winner'] = model_a_name if score_a_weighted > score_b_weighted else model_b_name
+        results['winner'] = model_a_name if score_a_weighted >= score_b_weighted else model_b_name
         results['score_difference'] = abs(score_a_weighted - score_b_weighted)
         
         viki_logger.info(f"A/B Test Complete: Winner is {results['winner']} "
-                        f"(Score: A={results['model_a']['avg_score']:.2f}, B={results['model_b']['avg_score']:.2f})")
+                        f"(Scores: A={results['model_a']['avg_score']:.2f}, B={results['model_b']['avg_score']:.2f})")
         
         return results
     
@@ -141,10 +148,16 @@ class ModelABTest:
         ]
         
         try:
-            start_time = time.time()
-            response = await model.chat(messages, temperature=0.7)
-            latency = time.time() - start_time
-            
+            start_time = time.perf_counter()
+            # Standard project model interface is chat_structured or chat
+            if hasattr(model, 'chat'):
+                response = await model.chat(messages, temperature=0.7)
+            else:
+                # Fallback if it's a raw provider
+                viki_logger.warning(f"Model {model} missing 'chat' method, trying alternative.")
+                return "", 0.0, True
+                
+            latency = time.perf_counter() - start_time
             return response, latency, False
         
         except Exception as e:
@@ -201,6 +214,11 @@ class ModelABTest:
         if not model:
             return {'error': f"Model {model_name} not found"}
         
+        test_subset = self.test_prompts[:5]
+        test_count = len(test_subset)
+        if test_count == 0:
+            return {'error': "No test prompts available for validation"}
+
         results = {
             'model': model_name,
             'scores': [],
@@ -209,8 +227,6 @@ class ModelABTest:
         }
         
         # Test on subset of prompts (faster)
-        test_subset = self.test_prompts[:5]
-        
         for test_case in test_subset:
             response, latency, error = await self._test_model(model, test_case)
             score = self._score_response(test_case, response)
@@ -220,8 +236,8 @@ class ModelABTest:
             if error:
                 results['errors'] += 1
         
-        results['avg_score'] = sum(results['scores']) / len(results['scores'])
-        results['avg_latency'] = sum(results['latencies']) / len(results['latencies'])
+        results['avg_score'] = sum(results['scores']) / test_count
+        results['avg_latency'] = sum(results['latencies']) / test_count
         results['passed'] = results['avg_score'] > 0.6 and results['errors'] == 0
         
         viki_logger.info(f"Validation: {model_name} - Score: {results['avg_score']:.2f}, "

@@ -1,8 +1,12 @@
-import cv2
 import asyncio
-import threading
 import time
 from viki.config.logger import viki_logger
+
+try:
+    import cv2
+except Exception as e:
+    cv2 = None
+    viki_logger.warning(f"OpenCV unavailable during BioModule import ({e}). Bio sensing will be disabled.")
 
 class BioModule:
     """
@@ -14,21 +18,29 @@ class BioModule:
         self.is_running = False
         self._thread = None
         self.cap = None
+        self._monitor_task: asyncio.Task | None = None
 
     async def start(self):
+        if cv2 is None:
+            viki_logger.warning("BioModule: Empathy sensor disabled because OpenCV is unavailable.")
+            return
         self.is_running = True
         viki_logger.info("BioModule: Empathy sensor active (Async Loop).")
-        asyncio.create_task(self._monitor_loop())
+        # Store the task so it doesn't get garbage-collected and so we can stop it cleanly.
+        self._monitor_task = asyncio.create_task(self._monitor_loop())
+        await asyncio.sleep(0)  # Yield control to the event loop.
 
     async def _monitor_loop(self):
         # We handle blocking cv2 calls in executor to keep one loop
+        if cv2 is None:
+            return
         loop = asyncio.get_running_loop()
-        self.cap = cv2.VideoCapture(0)
+        self.cap = await loop.run_in_executor(None, cv2.VideoCapture, 0)
         
         while self.is_running:
             try:
                 # Capture frame in executor
-                ret, frame = await loop.run_in_executor(None, self.cap.read)
+                ret, _ = await loop.run_in_executor(None, self.cap.read)
                 if not ret: break
                 
                 # Placeholder for DeepFace/Analysis
@@ -92,3 +104,6 @@ class BioModule:
 
     def stop(self):
         self.is_running = False
+        if self._monitor_task is not None and not self._monitor_task.done():
+            self._monitor_task.cancel()
+        self._monitor_task = None

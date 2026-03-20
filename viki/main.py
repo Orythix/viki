@@ -5,6 +5,7 @@ import time
 import argparse
 import subprocess
 import webbrowser
+import logging
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -42,6 +43,10 @@ class SimpleInterface:
             diff = controller.get_differentiators() if hasattr(controller, "get_differentiators") else []
             first_diff = diff[0] if diff else "Orythix"
             self.console.print(f"[dim]Persona: {persona} | {first_diff}[/]")
+            if hasattr(controller, "get_runtime_health_summary"):
+                health_summary = controller.get_runtime_health_summary()
+                style = "yellow" if "degraded" in health_summary else "dim"
+                self.console.print(f"[{style}]{health_summary}[/]")
         self.console.print("[dim]Type 'exit' to quit.[/]\n")
 
     def print_user(self, text):
@@ -62,6 +67,11 @@ class SimpleInterface:
 
 async def main(workspace_path=None):
     interface = SimpleInterface()
+    # Keep the interactive console clean by default (Claude-like).
+    # Use `/debug` to re-enable verbose internal logging.
+    viki_logger.setLevel(logging.ERROR)
+    debug_mode = False
+
     script_dir = os.path.dirname(os.path.abspath(__file__))
     settings_path = os.path.join(script_dir, "config", "settings.yaml")
     soul_path = get_soul_path(settings_path)
@@ -77,11 +87,14 @@ async def main(workspace_path=None):
     # Event Handler for linear logging
     def on_event(event_type, data):
         if event_type == "thought":
-            interface.print_thought(data)
+            if debug_mode:
+                interface.print_thought(data)
         elif event_type == "action":
-            interface.print_action(str(data))
+            if debug_mode:
+                interface.print_action(str(data))
         elif event_type == "status":
-            pass # Ignore status updates in simple mode to reduce noise
+            # Ignore status updates in simple mode to reduce noise
+            pass
         elif event_type == "error":
             interface.print_error(data)
 
@@ -149,6 +162,10 @@ async def main(workspace_path=None):
                     metrics = controller.skill_registry.get_reliability_score(name)
                     desc = skill.description[:60] if hasattr(skill, 'description') else '—'
                     interface.console.print(f"  [green]{name:20s}[/] {desc} [dim]{metrics}[/]")
+                if getattr(controller, "disabled_skills", None):
+                    interface.console.print("\n[bold yellow]Disabled Skills:[/]")
+                    for name, reason in controller.disabled_skills.items():
+                        interface.console.print(f"  [yellow]{name:20s}[/] {reason}")
                 continue
             
             if user_input.lower() == "/shadow":
@@ -158,21 +175,21 @@ async def main(workspace_path=None):
                 continue
             
             if user_input.lower() == "/debug":
-                import logging
-                logger = logging.getLogger("viki")
-                if logger.level == logging.DEBUG:
-                    logger.setLevel(logging.INFO)
-                    interface.console.print("[yellow]Debug Mode: OFF (INFO level)[/]")
+                if viki_logger.level == logging.DEBUG:
+                    logger.setLevel(logging.ERROR)
+                    viki_logger.setLevel(logging.ERROR)
+                    debug_mode = False
+                    interface.console.print("[yellow]Debug Mode: OFF (ERROR level)[/]")
                 else:
                     logger.setLevel(logging.DEBUG)
+                    viki_logger.setLevel(logging.DEBUG)
+                    debug_mode = True
                     interface.console.print("[yellow]Debug Mode: ON (DEBUG level)[/]")
                 continue
                 
-            # Processing with Spinner
-            with interface.console.status("[bold cyan]Thinking...", spinner="dots"):
-                start_t = time.time()
-                response = await controller.process_request(user_input, on_event=on_event)
-                elapsed = time.time() - start_t
+            start_t = time.time()
+            response = await controller.process_request(user_input, on_event=on_event)
+            elapsed = time.time() - start_t
             
             # Print Final Response
             interface.console.print(f"[dim]   ({elapsed:.2f}s)[/]")

@@ -1,4 +1,5 @@
 from typing import Dict, Any, List
+import re
 from viki.skills.base import BaseSkill
 from viki.config.logger import viki_logger
 
@@ -34,5 +35,17 @@ class RecallSkill(BaseSkill):
             results = self.controller.learning.get_relevant_lessons(query, limit=limit)
         if not results:
             return f"No specific memories found for '{query}'."
-        formatted = "\n".join([f"- {r}" for r in results])
+
+        def _format_recalled(r: str) -> str:
+            # Prefer displaying SOURCE-labeled citations clearly when present.
+            if "SOURCE:" in r:
+                # Expected pattern: "...SOURCE: <url> | <fact>"
+                m = re.search(r"SOURCE:\s*(\S+)\s*\|\s*(.*)$", r)
+                if m:
+                    url = m.group(1)
+                    fact = m.group(2).strip()
+                    return f"- {fact} (source: {url})"
+            return f"- {r}"
+
+        formatted = "\n".join(_format_recalled(r) for r in results)
         return f"RECALLED MEMORIES:\n{formatted}"

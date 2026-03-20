@@ -281,6 +281,7 @@ def health():
             'tagline': controller.soul.config.get('tagline') or controller.soul.config.get('positioning', ''),
             'differentiators': controller.get_differentiators(),
             'tools': tools,
+            'runtime_health': controller.get_runtime_health() if hasattr(controller, 'get_runtime_health') else {},
         })
     except Exception as e:
         viki_logger.error(f"Health check error: {e}", exc_info=True)

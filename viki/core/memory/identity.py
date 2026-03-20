@@ -38,6 +38,16 @@ class NarrativeIdentity:
         
         self.conn.commit()
 
+    def close(self):
+        """Release SQLite resources so tests can delete temp DB files."""
+        if hasattr(self, "conn") and self.conn:
+            try:
+                self.conn.close()
+            except Exception as e:
+                viki_logger.debug(f"NarrativeIdentity: Failed to close SQLite: {e}")
+            finally:
+                self.conn = None
+
     def _seed_identity(self):
         defaults = [
             ("mission_core", "Core Mission: Emerge as a thoughtful superhuman intelligence safely in collaboration with human partners.", "motivation"),

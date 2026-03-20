@@ -3,16 +3,22 @@ import json
 import os
 import time
 import hashlib
+import re
 import sqlite3
-import numpy as np
 from typing import List, Dict, Any, Optional
 from viki.config.logger import viki_logger
+
+try:
+    import numpy as np
+except Exception as e:
+    np = None
+    viki_logger.warning(f"NumPy unavailable during LearningModule import ({e}). Semantic features will use list fallback.")
 
 HAS_SEMANTIC = False
 SentenceTransformer = None
 try:
     from sentence_transformers import util
-except ImportError:
+except Exception:
     util = None
 
 
@@ -163,6 +169,19 @@ class LearningModule:
         except Exception as e:
             viki_logger.error(f"Migration Failed: {e}")
 
+    def _encode_lesson_embedding(self, lesson_str: str):
+        """Best-effort embedding encoding for lessons."""
+        try:
+            enc = self.encoder.encode(lesson_str, convert_to_tensor=False)
+            if np is not None and isinstance(enc, np.ndarray):
+                return enc.tolist()
+            if hasattr(enc, "tolist"):
+                return enc.tolist()
+            return enc
+        except Exception as e:
+            viki_logger.debug("Lesson embedding encode: %s", e)
+            return []
+
     def save_lesson(self, lesson: str = None, relationship: Optional[Dict[str, str]] = None, author: str = "Self", source_task: str = "Unknown", **kwargs):
         """Saves a lesson, generates embeddings, and creates a unique knowledge trace."""
         if not lesson and 'fact' in kwargs:
@@ -196,11 +215,7 @@ class LearningModule:
         # New lesson - embedding
         embedding = []
         if self.encoder:
-            try:
-                enc = self.encoder.encode(lesson_str, convert_to_tensor=False)
-                embedding = enc.tolist() if isinstance(enc, np.ndarray) else enc
-            except Exception as e:
-                viki_logger.debug("Lesson embedding encode: %s", e)
+            embedding = self._encode_lesson_embedding(lesson_str)
 
         cur.execute('''INSERT INTO lessons 
             (id, content, text_representation, embedding, created_at, last_accessed, access_count, author, source_task, reliability)
@@ -238,15 +253,16 @@ class LearningModule:
         cur.execute("SELECT id, content, text_representation, embedding FROM lessons")
         rows = cur.fetchall()
         
+        contents = [r['text_representation'] for r in rows]
+        viki_logger.info(f'LearningModule: get_relevant_lessons found {len(rows)} lessons: {contents}')
         if not rows: return []
         
         if self.encoder and util is not None:
             try:
                 contents = [r['text_representation'] for r in rows]
-                embeddings = [json.loads(r['embedding']) for r in rows]
                 
                 # Check if we have valid embeddings
-                if not any(embeddings):
+                if not any(json.loads(r['embedding']) for r in rows):
                     return contents[-limit:]
 
                 query_emb = self.encoder.encode(context, convert_to_tensor=True)
@@ -254,21 +270,54 @@ class LearningModule:
                 results = util.semantic_search(query_emb, corpus_embs, top_k=limit)
                 
                 relevant = []
+                seen = set()
                 for hit in results[0]:
-                    if hit['score'] > 0.25:
-                        idx = hit['corpus_id']
-                        relevant.append(contents[idx])
-                        # Async update access metadata? For now, sync.
-                        lid = rows[idx]['id']
-                        cur.execute("UPDATE lessons SET last_accessed = ? WHERE id = ?", (time.time(), lid))
+                    idx = hit['corpus_id']
+                    text = contents[idx]
+                    if text in seen:
+                        continue
+                    seen.add(text)
+                    relevant.append(text)
+                    # Update access metadata for every retrieved lesson.
+                    lid = rows[idx]['id']
+                    cur.execute("UPDATE lessons SET last_accessed = ? WHERE id = ?", (time.time(), lid))
                 
                 self.conn.commit()
                 return relevant if relevant else contents[-3:]
             except Exception as e:
                 viki_logger.debug("get_relevant_lessons semantic: %s", e)
             
-        # Fallback to recent retrieval from the already fetched rows
-        return [r['text_representation'] for r in rows[-limit:]]
+        return self._lexical_rank_lessons(rows, context=context, limit=limit)
+
+    def _lexical_rank_lessons(self, rows, context: str, limit: int) -> List[str]:
+        """
+        Lexical overlap ranking for when embeddings are unavailable.
+        Keeps the original recency behavior if no lexical signal exists.
+        """
+        context = context or ""
+        query_tokens = set(re.findall(r"\w+", context.lower()))
+        recent = [r["text_representation"] for r in rows[-limit:]]
+        if not query_tokens:
+            return recent
+
+        scored = []
+        for idx, r in enumerate(rows):
+            text = r["text_representation"] or ""
+            tokens = set(re.findall(r"\w+", text.lower()))
+            overlap = len(query_tokens & tokens)
+            score = overlap / (len(query_tokens) + 1e-6)
+            scored.append((score, idx, text))
+
+        if not scored:
+            return []
+
+        max_score = max(s for s, _, _ in scored)
+        if max_score <= 0:
+            return recent
+
+        # Tie-break with recency.
+        scored.sort(key=lambda x: (-x[0], -x[1]))
+        return [text for _, _, text in scored[:limit]]
 
     def has_macros(self) -> bool:
         """Checks if any procedural macros are learned."""
@@ -389,3 +438,11 @@ class LearningModule:
         cur.execute("DELETE FROM lessons WHERE last_accessed < ?", (now - max_age,))
         self.conn.commit()
         viki_logger.info(f"Pruned old memories (older than {days} days).")
+    def close(self):
+        """Properly close the SQLite connection."""
+        if hasattr(self, 'conn') and self.conn:
+            try:
+                self.conn.close()
+                viki_logger.info("Learning: SQLite connection closed.")
+            except Exception as e:
+                viki_logger.debug(f"Learning: Failed to close SQLite: {e}")

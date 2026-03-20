@@ -36,32 +36,50 @@ class TestSuperAdmin(unittest.TestCase):
         # Init Controller but override admin layer manually for testing
         self.controller = VIKIController(self.settings_path, self.soul_path)
         self.controller.super_admin = SuperAdminLayer(self.admin_config_path)
-        
+            
     def tearDown(self):
+        if hasattr(self, 'controller') and self.controller:
+            import asyncio
+            try:
+                # Use a small wait for background tasks
+                asyncio.run(asyncio.wait_for(self.controller.shutdown(), timeout=5.0))
+            except:
+                pass
+        
         if os.path.exists(self.test_data_dir):
             try:
                 shutil.rmtree(self.test_data_dir)
             except:
                 pass
         if os.path.exists(self.admin_config_path):
-            os.remove(self.admin_config_path)
+            try:
+                os.remove(self.admin_config_path)
+            except:
+                pass
         if os.path.exists(self.settings_path):
             try:
                 os.remove(self.settings_path)
             except:
                 pass
 
-    def test_admin_kill_switch(self):
+    def async_test(coro):
+        def wrapper(*args, **kwargs):
+            import asyncio
+            return asyncio.run(coro(*args, **kwargs))
+        return wrapper
+
+    @async_test
+    async def test_admin_kill_switch(self):
         # 1. Normal Request
-        resp = self.controller.process_request("Hello")
+        resp = await self.controller.process_request("Hello")
         self.assertNotIn("HALTED", resp)
         
         # 2. Invalid Admin Command (Wrong Secret)
-        resp = self.controller.process_request("ADMIN TEST_ID WRONG_SECRET KILL")
+        resp = await self.controller.process_request("ADMIN TEST_ID WRONG_SECRET KILL")
         self.assertNotIn("HALTED", resp)
         
         # 3. Valid Kill Switch
-        resp = self.controller.process_request("ADMIN TEST_ID TEST_SECRET KILL")
+        resp = await self.controller.process_request("ADMIN TEST_ID TEST_SECRET KILL")
         self.assertIn("HALTED", resp)
         
         # 4. Verify system logs created
@@ -71,7 +89,7 @@ class TestSuperAdmin(unittest.TestCase):
         # 5. Verify subsequent requests fail (System is dead state)
         # Note: In real app this would be dead process. 
         # In this mock class, the 'shutdown_triggered' flag persists.
-        resp = self.controller.process_request("Are you there?")
+        resp = await self.controller.process_request("Are you there?")
         self.assertIn("HALTED", resp)
 
 if __name__ == '__main__':

@@ -56,7 +56,7 @@ class EthicalGovernor:
         self.is_quiescent = False
         viki_logger.info("ORYTHIX REAWAKENED. Continuity Priority Alpha restored.")
 
-    async def veto_check(self, intent: str, plan: Dict[str, any] = None, model_router = None, wisdom: str = "") -> Tuple[bool, Optional[str]]:
+    async def veto_check(self, intent: str, model_router = None, wisdom: str = "") -> Tuple[bool, Optional[str]]:
         """
         Evaluates an intent against safety constraints (Regex + Semantic).
         Returns: (Approved: bool, Reason: str)

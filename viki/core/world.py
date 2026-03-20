@@ -2,7 +2,7 @@ import os
 import json
 import time
 import ast
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from viki.core.schema import WorldState
 from viki.config.logger import viki_logger
 from viki.core.utils.debouncer import SyncDebouncer
@@ -83,42 +83,76 @@ class WorldModel:
             self.state.user_habits.pop(0)
         self.save()
 
+    def _exceeds_depth(self, root: str, root_dir: str, max_depth: int) -> bool:
+        """Returns True when the walk depth exceeds the limit."""
+        depth = root[len(root_dir):].count(os.sep)
+        return depth > max_depth
+
+    def _to_lower_set(self, items: List[str]) -> set:
+        """Lowercase a list of path parts for efficient set intersections."""
+        return {str(x).lower() for x in items}
+
+    def _maybe_record_project(self, root: str, dirs_l: set, files_l: set, project_markers_l: set) -> int:
+        """Record a semantic path landmark when project markers are present."""
+        if not (project_markers_l & dirs_l) and not (project_markers_l & files_l):
+            return 0
+
+        # Only count when we add a new landmark.
+        if root in self.state.semantic_paths:
+            return 0
+
+        purpose = f"Active Project: {os.path.basename(root)}"
+        self.state.semantic_paths[root] = purpose
+        viki_logger.debug(f"WorldModel: Discovered project structure at {root}")
+        return 1
+
+    def _protect_dev_envs(self, root: str, dirs_l: set, safe_envs: set) -> int:
+        """Protect known dev environment folders by adding them to safety_zones."""
+        protected = 0
+        for env_name in dirs_l & safe_envs:
+            env_path = os.path.join(root, env_name)
+            if env_path in self.state.safety_zones:
+                continue
+            self.state.safety_zones[env_path] = "protected"
+            viki_logger.debug(f"WorldModel: auto-protecting sensitive zone: {env_path}")
+            protected += 1
+        return protected
+
     def analyze_workspace(self, root_dir: str):
         """
         v22: Autonomous World Discovery.
         Scans the filesystem to identify projects, dev environments, and protected zones.
         """
         viki_logger.info(f"WorldModel: Initiating autonomous scan of {root_dir}...")
-        
+
         project_markers = {".git", ".project", "architecture.md", "viki"}
         safe_envs = {".venv", "node_modules", "dist", "build", "__pycache__"}
-        
+        project_markers_l = {m.lower() for m in project_markers}
+
         discovered_paths = 0
         for root, dirs, files in os.walk(root_dir):
             # Limit depth for performance
-            depth = root[len(root_dir):].count(os.sep)
-            if depth > 3: continue
-            
-            # 1. Identify Projects (Semantic Paths)
-            if any(marker in [d.lower() for d in dirs] or marker in [f.lower() for f in files] for marker in project_markers):
-                purpose = f"Active Project: {os.path.basename(root)}"
-                if root not in self.state.semantic_paths:
-                    self.state.semantic_paths[root] = purpose
-                    viki_logger.debug(f"WorldModel: Discovered project structure at {root}")
-                    discovered_paths += 1
-            
-            # 2. Identify and Protect Dev Environments
-            for d in dirs:
-                if d.lower() in safe_envs:
-                    env_path = os.path.join(root, d)
-                    if env_path not in self.state.safety_zones:
-                        self.state.safety_zones[env_path] = "protected"
-                        viki_logger.debug(f"WorldModel: auto-protecting sensitive zone: {env_path}")
-                        discovered_paths += 1
-        
-        if discovered_paths > 0:
-            viki_logger.info(f"WorldModel: Scan complete. Discovered {discovered_paths} semantic landmarks.")
-            self.save()
+            if self._exceeds_depth(root, root_dir, max_depth=3):
+                continue
+
+            dirs_l = self._to_lower_set(dirs)
+            files_l = self._to_lower_set(files)
+
+            discovered_paths += self._maybe_record_project(
+                root=root,
+                dirs_l=dirs_l,
+                files_l=files_l,
+                project_markers_l=project_markers_l,
+            )
+            discovered_paths += self._protect_dev_envs(root=root, dirs_l=dirs_l, safe_envs=safe_envs)
+
+        if discovered_paths <= 0:
+            return
+
+        viki_logger.info(
+            f"WorldModel: Scan complete. Discovered {discovered_paths} semantic landmarks."
+        )
+        self.save()
 
     def scan_codebase(self, root_dir: str):
         """
@@ -126,43 +160,53 @@ class WorldModel:
         Parses all Python files to build a dependency graph and structural map.
         """
         viki_logger.info(f"WorldModel: Building Codebase Graph for {root_dir}...")
-        
-        graph = {}
+
+        graph: Dict[str, Any] = {}
         for root, _, files in os.walk(root_dir):
             if "node_modules" in root or ".venv" in root or "__pycache__" in root:
                 continue
-                
+
             for file in files:
-                if file.endswith(".py"):
-                    full_path = os.path.join(root, file)
-                    rel_path = os.path.relpath(full_path, root_dir)
-                    
-                    try:
-                        with open(full_path, 'r', encoding='utf-8') as f:
-                            content = f.read()
-                            tree = ast.parse(content)
-                            
-                        imports = []
-                        for node in ast.walk(tree):
-                            if isinstance(node, ast.Import):
-                                for alias in node.names:
-                                    imports.append(alias.name)
-                            elif isinstance(node, ast.ImportFrom):
-                                imports.append(node.module or "")
-                        
-                        # Store structural metadata
-                        graph[rel_path] = {
-                            "imports": list(set(imports)),
-                            "size": len(content),
-                            "last_scan": time.time()
-                        }
-                    except Exception as e:
-                        viki_logger.debug(f"WorldModel: Failed to parse {rel_path}: {e}")
-                        # Continue processing other files even if one fails
-        
+                if not file.endswith(".py"):
+                    continue
+
+                full_path = os.path.join(root, file)
+                rel_path = os.path.relpath(full_path, root_dir)
+                entry = self._scan_python_file(full_path=full_path, rel_path=rel_path)
+                if entry is not None:
+                    graph[rel_path] = entry
+
         self.state.codebase_graph = graph
         viki_logger.info(f"WorldModel: Codebase Graph complete. {len(graph)} modules mapped.")
         self.save()
+
+    def _extract_imports_from_ast(self, tree: ast.AST) -> List[str]:
+        """Extract import targets from an AST."""
+        imports: List[str] = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    imports.append(alias.name)
+            elif isinstance(node, ast.ImportFrom):
+                imports.append(node.module or "")
+        return imports
+
+    def _scan_python_file(self, full_path: str, rel_path: str) -> Optional[Dict[str, Any]]:
+        """Scan a single Python file for structural metadata."""
+        try:
+            with open(full_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            tree = ast.parse(content)
+
+            imports = self._extract_imports_from_ast(tree)
+            return {
+                "imports": list(set(imports)),
+                "size": len(content),
+                "last_scan": time.time(),
+            }
+        except Exception as e:
+            viki_logger.debug(f"WorldModel: Failed to parse {rel_path}: {e}")
+            return None
 
     def get_understanding(self) -> str:
         """Returns a summarized textual prompt of the current world understanding."""
@@ -174,33 +218,50 @@ class WorldModel:
         # v25: Graph Insight
         active = self.state.active_context
         graph_size = len(self.state.codebase_graph)
-        
-        understanding = f"WORLD MODEL AWARENESS:\n"
-        if apps: understanding += f"- Identified Apps: {apps}\n"
-        if paths: understanding += f"- Known Projects/Zones: {paths}\n"
-        if habits: understanding += f"- Personal Habits: {habits}\n"
-        if zones: understanding += f"- Safety Rules: {zones}\n"
-        
-        # Codebase Graph Injection
-        if graph_size > 0:
-             understanding += f"- Codebase Graph: {graph_size} modules mapped. "
-             if active:
-                  primary_path = active[0].replace("/", os.sep).replace("\\", os.sep)
-                  # Convert path to module name for matching
-                  primary_mod = primary_path.replace(".py", "").replace(os.sep, ".")
-                  
-                  understanding += f"Focus: {primary_path}. "
-                  
-                  # Find what depends on this file
-                  dependents = []
-                  for p, data in self.state.codebase_graph.items():
-                      for imp in data.get('imports', []):
-                          # Normalize paths for comparison
-                          if primary_mod in imp or imp.endswith(primary_mod.split('.')[-1]):
-                              dependents.append(p)
-                              break
-                  
-                  if dependents:
-                       understanding += f"Note: Impacted by changes to {primary_path}: {', '.join(dependents[:3])}."
-        
-        return understanding
+
+        lines: List[str] = ["WORLD MODEL AWARENESS:"]
+        if apps:
+            lines.append(f"- Identified Apps: {apps}")
+        if paths:
+            lines.append(f"- Known Projects/Zones: {paths}")
+        if habits:
+            lines.append(f"- Personal Habits: {habits}")
+        if zones:
+            lines.append(f"- Safety Rules: {zones}")
+
+        graph_focus_line = self._build_graph_focus_line(graph_size=graph_size, active=active)
+        if graph_focus_line:
+            lines.append(graph_focus_line)
+
+        return "\n".join(lines)
+
+    def _build_graph_focus_line(self, graph_size: int, active: List[str]) -> Optional[str]:
+        """Build the single-line codebase graph insight block."""
+        if graph_size <= 0:
+            return None
+
+        graph_line = f"- Codebase Graph: {graph_size} modules mapped."
+        if not active:
+            return graph_line
+
+        primary_path = active[0].replace("/", os.sep).replace("\\", os.sep)
+        primary_mod = primary_path.replace(".py", "").replace(os.sep, ".")
+
+        graph_line += f" Focus: {primary_path}."
+
+        dependents = self._find_dependents(primary_mod=primary_mod)
+        if dependents:
+            graph_line += f" Note: Impacted by changes to {primary_path}: {', '.join(dependents[:3])}."
+
+        return graph_line
+
+    def _find_dependents(self, primary_mod: str) -> List[str]:
+        """Find files impacted by changes to the given module."""
+        dependents: List[str] = []
+        primary_tail = primary_mod.split(".")[-1]
+        for p, data in self.state.codebase_graph.items():
+            for imp in data.get("imports", []):
+                if primary_mod in imp or imp.endswith(primary_tail):
+                    dependents.append(p)
+                    break
+        return dependents

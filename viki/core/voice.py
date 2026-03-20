@@ -1,7 +1,18 @@
-import numpy as np
-import sounddevice as sd
 import asyncio
+from typing import Any
 from viki.config.logger import viki_logger
+
+try:
+    import numpy as np
+except Exception as e:
+    np = None
+    viki_logger.warning(f"NumPy unavailable during VoiceModule import ({e}). Voice sonar will be disabled.")
+
+try:
+    import sounddevice as sd
+except Exception as e:
+    sd = None
+    viki_logger.warning(f"sounddevice unavailable during VoiceModule import ({e}). Voice sonar will be disabled.")
 
 # Lazy import torch only when needed
 
@@ -54,6 +65,9 @@ class VoiceModule:
         Logic: threshold = base_noise_floor + 0.2
         Goal: No false positives from air conditioning.
         """
+        if np is None or sd is None:
+            viki_logger.warning("VoiceModule: Ambient sonar disabled because NumPy or sounddevice is unavailable.")
+            return
         if not self.model: await self.initialize()
         
         viki_logger.info("VoiceModule: Ambient Sonar engaged. Calibrating noise floor...")
@@ -64,7 +78,12 @@ class VoiceModule:
                 # We do this in a thread to avoid blocking the loop
                 duration = 0.5
                 recording = await asyncio.to_thread(
-                    lambda: sd.rec(int(duration * self.sampling_rate), samplerate=self.sampling_rate, channels=1, blocking=True)
+                    lambda dur=duration: sd.rec(
+                        int(dur * self.sampling_rate),
+                        samplerate=self.sampling_rate,
+                        channels=1,
+                        blocking=True,
+                    )
                 )
                 sd.wait() # Ensure recording is finished if not blocking? (blocking=True handles it)
                 
@@ -84,8 +103,10 @@ class VoiceModule:
                 
             await asyncio.sleep(10) # Re-calibrate every 10 seconds
 
-    def is_speech(self, audio_chunk: np.ndarray) -> bool:
+    def is_speech(self, audio_chunk: Any) -> bool:
         if self.model is None: return False
+        if np is None:
+            return False
         
         # Ensure we have a valid threshold
         threshold = getattr(self, 'vad_threshold', 0.5)
@@ -103,6 +124,9 @@ class VoiceModule:
         Ultra-low latency listener.
         Runs concurrently with TTS. If speech detected -> stop_event.set()
         """
+        if np is None or sd is None:
+            viki_logger.warning("VoiceModule: Interruption listener disabled because NumPy or sounddevice is unavailable.")
+            return
         if not self.model: await self.initialize()
         
         viki_logger.info("VoiceModule: Ears open for interruption...")

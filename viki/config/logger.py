@@ -23,6 +23,7 @@ def setup_logger(name="VIKI", log_file="viki.log", level=logging.INFO):
 
     logger = logging.getLogger(name)
     logger.setLevel(level)
+    logger.propagate = False  # Avoid duplicate logs if this is a child logger
 
     # Formatter
     formatter = logging.Formatter(

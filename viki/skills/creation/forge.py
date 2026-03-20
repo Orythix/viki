@@ -1,5 +1,6 @@
 import os
 import json
+import asyncio
 from typing import Dict, Any, List
 from viki.skills.base import BaseSkill
 from viki.config.logger import viki_logger
@@ -43,7 +44,7 @@ class ModelForgeSkill(BaseSkill):
             import torch
             from unsloth import FastLanguageModel
             UNSLOTH_AVAILABLE = torch.cuda.is_available()
-        except ImportError:
+        except (ImportError, OSError):
             UNSLOTH_AVAILABLE = False
             
         # Strategy Selection

@@ -35,6 +35,43 @@ class WellnessPulse:
         self.snoozed_until = 0
         self.dismissed_patterns = set()
 
+    def _should_trigger(self) -> bool:
+        """Decide whether we should run a proactive check now."""
+        if not self.is_running or self.disabled:
+            return False
+
+        if time.time() < self.snoozed_until:
+            return False
+
+        last_active = getattr(self.controller, "last_interaction_time", time.time())
+        idle_time = time.time() - last_active
+        return idle_time >= 7200  # 2 hours
+
+    def _get_suggestions(self) -> list:
+        """Compute currently suggested patterns (un-dismissed only)."""
+        frequent = self.controller.learning.get_frequent_lessons(3)
+        return [l for l in frequent if l not in self.dismissed_patterns]
+
+    async def _send_nexus_prompt(self, best_suggestion: str, msg: str) -> None:
+        """Send the proactive prompt to the Nexus if available."""
+        if not hasattr(self.controller, "nexus"):
+            self.dismissed_patterns.add(best_suggestion)
+            return
+
+        async def proactive_callback(response):
+            # In proactive mode, we just log the response or handle it silently.
+            viki_logger.info(f"WellnessPulse Callback: {response}")
+            await asyncio.sleep(0)  # keep callback async without changing behavior
+
+        await self.controller.nexus.ingest(
+            source="System",
+            user_id="WellnessPulse",
+            text=msg,
+            callback=proactive_callback,
+            priority=30,  # Low priority
+        )
+        self.dismissed_patterns.add(best_suggestion)
+
     async def start(self):
         self.is_running = True
         viki_logger.info("WellnessPulse: Awareness layer active.")
@@ -42,44 +79,21 @@ class WellnessPulse:
         while self.is_running:
             # Check every 30 minutes
             await asyncio.sleep(1800) 
-            
-            if not self.is_running or self.disabled: continue
-            if time.time() < self.snoozed_until: continue
-
-            # 1. User Inactivity Check
-            last_active = getattr(self.controller, 'last_interaction_time', time.time())
-            idle_time = time.time() - last_active
-            
-            if idle_time < 7200: # 2 hours
+            if not self._should_trigger():
                 continue
 
-            # 2. Pattern Awareness (Confidence Check)
-            frequent = self.controller.learning.get_frequent_lessons(3)
-            suggestions = [l for l in frequent if l not in self.dismissed_patterns]
+            suggestions = self._get_suggestions()
+            if not suggestions:
+                continue
 
-            if suggestions:
-                best_suggestion = suggestions[best_suggestion_idx if 'best_suggestion_idx' in locals() else 0] if 'best_suggestion' in locals() else suggestions[0]
-                # Wait, I'll just use suggestions[0]
-                best_suggestion = suggestions[0]
-                viki_logger.info(f"WellnessPulse: Pattern detected: {best_suggestion}")
-                
-                msg = (f"I've noticed a pattern: '{best_suggestion}'. "
-                       "Should I automate this? (/dismiss, /snooze, or /disable)")
-                
-                if hasattr(self.controller, 'nexus'):
-                    async def proactive_callback(response):
-                         # In proactive mode, we just log the response or handle it silently
-                         viki_logger.info(f"WellnessPulse Callback: {response}")
+            best_suggestion = suggestions[0]
+            viki_logger.info(f"WellnessPulse: Pattern detected: {best_suggestion}")
 
-                    await self.controller.nexus.ingest(
-                        source="System",
-                        user_id="WellnessPulse",
-                        text=msg,
-                        callback=proactive_callback,
-                        priority=30 # Low priority
-                    )
-                
-                self.dismissed_patterns.add(best_suggestion)
+            msg = (
+                f"I've noticed a pattern: '{best_suggestion}'. "
+                "Should I automate this? (/dismiss, /snooze, or /disable)"
+            )
+            await self._send_nexus_prompt(best_suggestion, msg)
 
     def snooze(self, hours=4):
         self.snoozed_until = time.time() + (hours * 3600)

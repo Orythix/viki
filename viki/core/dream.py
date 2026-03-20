@@ -129,7 +129,7 @@ class DreamModule:
                 research_skill = self.controller.skill_registry.get_skill('research')
                 if research_skill:
                     # Run research - this will automatically trigger lessons extraction
-                    results = await research_skill.execute({"query": f"{topic} overview and latest facts", "num_results": 5})
+                    await research_skill.execute({"query": f"{topic} overview and latest facts", "num_results": 5})
                     viki_logger.info(f"Dreaming: Research complete for '{topic}'")
             except Exception as e:
                 viki_logger.error(f"Dream Research Fail: {e}")
