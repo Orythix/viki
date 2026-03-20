@@ -13,14 +13,42 @@ class TestVIKIIntegration(unittest.TestCase):
         # Update paths relative to d:/My Projects/VIKI/viki
         base_dir = os.path.dirname(os.path.abspath(__file__))
         viki_dir = os.path.dirname(base_dir)  # viki folder
-        project_root = os.path.dirname(viki_dir)  # project root
         
-        # Use actual config files instead of test-specific ones
+        # Use actual config files but override data_dir
         self.settings_path = os.path.join(viki_dir, "config", "settings.yaml")
         self.soul_path = os.path.join(viki_dir, "config", "soul.yaml")
         
-        # Instantiate Controller
+        # Use a temporary data directory for tests to avoid locking main DB
+        import tempfile
+        self.test_dir = tempfile.TemporaryDirectory()
+        self.test_data_path = self.test_dir.name
+        
+        # Instantiate Controller with overridden data_dir if possible
+        # Since VIKIController loads data_dir from settings internally, 
+        # we might need to patch it or pass it.
+        # For now, we'll try to patch os.environ or just allow it to leak but into temp.
+        os.environ["VIKI_DATA_DIR"] = self.test_data_path
+        
         self.controller = VIKIController(self.settings_path, self.soul_path)
+    def tearDown(self):
+        # Proper shutdown to release locks and stop background tasks
+        if hasattr(self, 'controller') and self.controller:
+            # Best-effort synchronous close first to release SQLite file handles
+            # before TemporaryDirectory cleanup runs.
+            try:
+                if hasattr(self.controller, "close"):
+                    self.controller.close()
+            except Exception:
+                pass
+            import asyncio
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    loop.create_task(self.controller.shutdown())
+                else:
+                    asyncio.run(self.controller.shutdown())
+            except Exception:
+                pass
     
     def async_test(coro):
         """Decorator to run async tests."""

@@ -26,6 +26,36 @@ class DevSkill(BaseSkill):
             "- patch_file(path='file.py', target='old', replacement='new')"
         )
 
+    @property
+    def schema(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["list_files", "read_file", "write_file", "patch_file"],
+                    "description": "The developer file operation to perform."
+                },
+                "path": {
+                    "type": "string",
+                    "description": "Path to the target file or directory, relative to the workspace when possible."
+                },
+                "content": {
+                    "type": "string",
+                    "description": "Full file contents for write_file."
+                },
+                "target": {
+                    "type": "string",
+                    "description": "Existing text to replace when using patch_file."
+                },
+                "replacement": {
+                    "type": "string",
+                    "description": "Replacement text for patch_file."
+                }
+            },
+            "required": ["action", "path"]
+        }
+
     async def execute(self, params: Dict[str, Any]) -> str:
         path = params.get('path', '.')
         if not path:
@@ -35,15 +65,34 @@ class DevSkill(BaseSkill):
             return path_or_err
         path = path_or_err
 
-        # Determine intent based on params
+        action = self._resolve_action(params, path)
+        if action == "patch_file":
+            if 'target' not in params or 'replacement' not in params:
+                return "Error: patch_file requires both 'target' and 'replacement'."
+            return self._patch_file(path, params['target'], params['replacement'])
+        if action == "write_file":
+            if 'content' not in params:
+                return "Error: write_file requires 'content'."
+            return self._write_file(path, params['content'])
+        if action == "list_files":
+            return self._list_files(path)
+        if action == "read_file":
+            return self._read_file(path)
+        return "Error: Unknown developer action."
+
+    def _resolve_action(self, params: Dict[str, Any], path: str) -> str:
+        action = str(params.get("action", "")).strip().lower()
+        if action in {"list_files", "read_file", "write_file", "patch_file"}:
+            return action
+
+        # Backward compatibility for older prompt formats.
         if 'target' in params and 'replacement' in params:
-             return self._patch_file(path, params['target'], params['replacement'])
-        elif 'content' in params:
-             return self._write_file(path, params['content'])
-        elif params.get('mode') == 'list' or os.path.isdir(path):
-             return self._list_files(path)
-        else:
-             return self._read_file(path)
+            return "patch_file"
+        if 'content' in params:
+            return "write_file"
+        if params.get('mode') == 'list' or os.path.isdir(path):
+            return "list_files"
+        return "read_file"
 
     def _list_files(self, path: str) -> str:
         try:

@@ -2,15 +2,19 @@ from typing import Dict, Any, List, Optional
 import re
 from viki.config.logger import viki_logger
 
-# Patterns for secret redaction (API keys, tokens). Replace matches with [REDACTED].
+# Placeholder used when redacting secrets in logs/output.
+REDACTED_TOKEN = "[REDACTED]"
+
+# Patterns for secret redaction (API keys, tokens). Replace matches with REDACTED_TOKEN.
 SECRET_REDACT_PATTERNS = [
-    (re.compile(r"sk-[a-zA-Z0-9]{20,}"), "[REDACTED]"),
-    (re.compile(r"Bearer\s+eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+", re.IGNORECASE), "[REDACTED]"),
-    (re.compile(r"eyJ[A-Za-z0-9_-]{50,}"), "[REDACTED]"),  # JWT-like
-    (re.compile(r"xoxb-[a-zA-Z0-9-]+"), "[REDACTED]"),
-    (re.compile(r"xoxp-[a-zA-Z0-9-]+"), "[REDACTED]"),
-    (re.compile(r"ghp_[a-zA-Z0-9]{36}"), "[REDACTED]"),
-    (re.compile(r"gho_[a-zA-Z0-9]{36}"), "[REDACTED]"),
+    (re.compile(r"sk-[a-zA-Z0-9]{20,}"), REDACTED_TOKEN),
+    # Use \w instead of repeating A-Za-z0-9_ in a character class; add '-' explicitly.
+    (re.compile(r"Bearer\s+eyJ[\w-]+\.eyJ[\w-]+\.[\w-]+", re.IGNORECASE), REDACTED_TOKEN),
+    (re.compile(r"eyJ[\w-]{50,}"), REDACTED_TOKEN),  # JWT-like
+    (re.compile(r"xoxb-[a-zA-Z0-9-]+"), REDACTED_TOKEN),
+    (re.compile(r"xoxp-[a-zA-Z0-9-]+"), REDACTED_TOKEN),
+    (re.compile(r"ghp_[a-zA-Z0-9]{36}"), REDACTED_TOKEN),
+    (re.compile(r"gho_[a-zA-Z0-9]{36}"), REDACTED_TOKEN),
 ]
 
 # Max chars to log for user input / params (truncate rest)
@@ -18,7 +22,7 @@ LOG_PARAM_MAX_LEN = 80
 
 
 def redact_secrets(text: str) -> str:
-    """Replace known secret patterns in text with [REDACTED]. Safe for logs and user-facing output."""
+    """Replace known secret patterns in text with REDACTED_TOKEN. Safe for logs and user-facing output."""
     if not text:
         return text
     out = str(text)

@@ -101,6 +101,71 @@ class CapabilityRegistry:
     def get(self, name: str) -> Optional[Capability]:
         return self.capabilities.get(name)
 
+    def _resolve_target_capability_name(
+        self, skill_name: str, params: Dict[str, Any]
+    ) -> Optional[str]:
+        """Map a skill to its most appropriate capability name."""
+        if skill_name == "research":
+            return "internet_research"
+
+        if skill_name in ["filesystem", "filesystem_skill"]:
+            action = params.get("action")
+            write_actions = {"write_file", "delete_file", "remove_file", "create_dir"}
+            return "filesystem_write" if action in write_actions else "filesystem_read"
+
+        fixed = {
+            "shell": "shell_exec",
+            "window_manager": "desktop_control",
+            "clipboard": "desktop_control",
+            "system_control": "desktop_control",
+            "dev_tools": "filesystem_write",
+            "email": "email_calendar",
+            "calendar": "email_calendar",
+        }
+        if skill_name in fixed:
+            return fixed[skill_name]
+
+        external_services = {
+            "twitter",
+            "image_gen",
+            "messaging",
+            "summarize",
+            "obsidian",
+            "tasks",
+            "whisper",
+            "pdf",
+            "smart_home",
+            "gif",
+        }
+        if skill_name in external_services:
+            return "external_services"
+
+        content_creation = {"data_analysis", "presentation", "spreadsheet", "website"}
+        if skill_name in content_creation:
+            return "content_creation"
+
+        return None
+
+    def _capability_to_check_result(
+        self, cap: Capability, target_cap_name: str
+    ) -> CapabilityCheckResult:
+        """Convert a capability object to a permission result."""
+        if not cap.enabled:
+            return CapabilityCheckResult(
+                False,
+                True,
+                False,
+                f"Capability '{target_cap_name}' is installed but currently DISABLED.",
+                target_cap_name,
+            )
+        return CapabilityCheckResult(
+            True,
+            True,
+            True,
+            f"Permission granted by capability '{target_cap_name}'.",
+            target_cap_name,
+        )
+
     def check_permission(self, skill_name: str, params: Dict[str, Any] = None) -> CapabilityCheckResult:
         """
         Verify if a skill is allowed by any active capability.
@@ -109,36 +174,20 @@ class CapabilityRegistry:
         params = params or {}
         
         # 1. Map skill to best-fit capability
-        target_cap_name = None
-        if skill_name == "research":
-             target_cap_name = "internet_research"
-        elif skill_name in ["filesystem", "filesystem_skill"]:
-             action = params.get("action")
-             if action in ["write_file", "delete_file", "remove_file", "create_dir"]:
-                 target_cap_name = "filesystem_write"
-             else:
-                 target_cap_name = "filesystem_read"
-        elif skill_name == "shell":
-             target_cap_name = "shell_exec"
-        elif skill_name in ["window_manager", "clipboard", "system_control"]:
-             target_cap_name = "desktop_control"
-        elif skill_name == "dev_tools":
-             target_cap_name = "filesystem_write"
-        elif skill_name in ["email", "calendar"]:
-             target_cap_name = "email_calendar"
-        elif skill_name in ["twitter", "image_gen", "messaging", "summarize", "obsidian", "tasks", "whisper", "pdf", "smart_home", "gif"]:
-             target_cap_name = "external_services"
-        elif skill_name in ["data_analysis", "presentation", "spreadsheet", "website"]:
-             target_cap_name = "content_creation"
+        target_cap_name = self._resolve_target_capability_name(skill_name, params)
 
-        # 2. Check the capacity
+        # 2. Check the capability
         if target_cap_name:
-             cap = self.get(target_cap_name)
-             if not cap:
-                 return CapabilityCheckResult(False, False, False, f"Capability '{target_cap_name}' is NOT installed.", target_cap_name)
-             if not cap.enabled:
-                 return CapabilityCheckResult(False, True, False, f"Capability '{target_cap_name}' is installed but currently DISABLED.", target_cap_name)
-             return CapabilityCheckResult(True, True, True, f"Permission granted by capability '{target_cap_name}'.", target_cap_name)
+            cap = self.get(target_cap_name)
+            if not cap:
+                return CapabilityCheckResult(
+                    False,
+                    False,
+                    False,
+                    f"Capability '{target_cap_name}' is NOT installed.",
+                    target_cap_name,
+                )
+            return self._capability_to_check_result(cap, target_cap_name)
 
         # 3. Fallback: scan all linked skills
         for cap in self.capabilities.values():

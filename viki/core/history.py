@@ -163,3 +163,16 @@ class TimeTravelModule:
         # For now, it logs the intent. In a full version, it would
         # read the backup_path from the last snapshot and restore.
         pass
+
+    def close(self):
+        """Release SQLite resources so test teardown can delete temp dirs."""
+        try:
+            if not hasattr(self, "db") or self.db is None:
+                return
+            # sqlite_utils.Database provides its own `close()`.
+            if hasattr(self.db, "close"):
+                self.db.close()
+            elif hasattr(self.db, "conn"):
+                self.db.conn.close()
+        except Exception as e:
+            viki_logger.debug(f"TimeTravelModule: Failed to close SQLite: {e}")

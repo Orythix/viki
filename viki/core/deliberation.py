@@ -15,7 +15,7 @@ class DeliberationEngine:
         self.llm = llm
         self.self_model = self_model
 
-    async def deliberate(self, user_input: str, context: List[Dict], history: List[Dict]) -> Tuple[Dict, float]:
+    def deliberate(self, user_input: str, context: List[Dict]) -> Tuple[Dict, float]:
         """
         The Core Cognitive Process.
         1. Interpret Intent
@@ -24,7 +24,7 @@ class DeliberationEngine:
         4. Select Best Execution Path
         """
         # 1. Intent Classification
-        intent = await self._classify_intent(user_input, history)
+        intent = self._classify_intent(user_input)
         
         # 2. Competence Check (Self-Model)
         if self.self_model:
@@ -36,25 +36,25 @@ class DeliberationEngine:
                 }, competence
 
         # 3. Foresight: Generate and Simulate 3 Plans
-        plans = await self._generate_plans(intent, context)
-        best_plan, confidence = await self._simulate_and_select(plans, intent)
+        plans = self._generate_plans(intent, context)
+        best_plan, confidence = self._simulate_and_select(plans)
         
         return best_plan, confidence
 
-    async def _classify_intent(self, user_input: str, history: List[Dict]) -> Dict:
+    def _classify_intent(self, user_input: str) -> Dict:
         """Classifies the user's true intent beyond the literal text."""
         # Simple heuristic for Phase 1/2, LLM for Phase 3
         # For now, we assume simple intent structure
         return {"type": "unknown", "description": user_input, "complexity": "medium"}
 
-    async def _generate_plans(self, intent: Dict, context: List[Dict]) -> List[Dict]:
+    def _generate_plans(self, intent: Dict, context: List[Dict]) -> List[Dict]:
         """Generates candidate plans based on intent and context."""
         # Mocking plan generation for now - usually LLM call
         plan_a = {"id": "A", "action": "reply", "reasoning": "Direct answer", "steps": ["Search", "Answer"]}
         plan_b = {"id": "B", "action": "tool_use", "reasoning": "Deep research", "steps": ["Research", "Summarize", "Answer"]}
         return [plan_a, plan_b]
 
-    async def _simulate_and_select(self, plans: List[Dict], intent: Dict) -> Tuple[Dict, float]:
+    def _simulate_and_select(self, plans: List[Dict]) -> Tuple[Dict, float]:
         """
         Predictive Foresight:
         Simulates the outcome of each plan to estimate success probability.

@@ -30,6 +30,8 @@ class SelfModel:
         self.state = "active" # active, idle, quiescent
         self.last_failure = None
         self._load_state()
+    
+    _STATE_PATH = "data/self_model.json"
 
     def check_competence(self, intent: str) -> float:
         """
@@ -73,7 +75,7 @@ class SelfModel:
 
     def _save_state(self):
         try:
-            with open("data/self_model.json", "w") as f:
+            with open(self._STATE_PATH, "w", encoding="utf-8") as f:
                 json.dump(self._capabilities, f)
         except Exception as e:
             viki_logger.debug("SelfModel save state: %s", e)
@@ -81,8 +83,8 @@ class SelfModel:
     def _load_state(self):
         try:
             import os
-            if os.path.exists("data/self_model.json"):
-                with open("data/self_model.json", "r") as f:
+            if os.path.exists(self._STATE_PATH):
+                with open(self._STATE_PATH, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     self._capabilities.update(data)
         except Exception as e:

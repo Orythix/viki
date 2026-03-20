@@ -1,4 +1,5 @@
 import os
+import asyncio
 import yaml
 import time
 from typing import Dict, Any, List
@@ -15,6 +16,41 @@ class ReflectorModule:
         self.refactor_dir = os.path.join(self.controller.settings.get('system', {}).get('data_dir', './data'), "refactors")
         os.makedirs(self.refactor_dir, exist_ok=True)
 
+    async def _read_text_tail(self, path: str, line_count: int = 100) -> str:
+        """Read last N lines without blocking the event loop."""
+        def _read():
+            with open(path, "r", encoding="utf-8") as f:
+                return "".join(f.readlines()[-line_count:])
+        return await asyncio.to_thread(_read)
+
+    async def _read_text(self, path: str) -> str:
+        """Read a text file without blocking the event loop."""
+        def _read():
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read()
+        return await asyncio.to_thread(_read)
+
+    async def _write_text(self, path: str, text: str) -> None:
+        """Write text without blocking the event loop."""
+        def _write():
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(text)
+        await asyncio.to_thread(_write)
+
+    async def _read_yaml(self, path: str) -> Dict[str, Any]:
+        """Read YAML without blocking the event loop."""
+        def _read():
+            with open(path, "r", encoding="utf-8") as f:
+                return yaml.safe_load(f) or {}
+        return await asyncio.to_thread(_read)
+
+    async def _write_yaml(self, path: str, data: Dict[str, Any]) -> None:
+        """Write YAML without blocking the event loop."""
+        def _write():
+            with open(path, "w", encoding="utf-8") as f:
+                yaml.dump(data, f)
+        await asyncio.to_thread(_write)
+
     async def reflect_on_logs(self):
         """Analyzes logs for behavioral and prompt optimizations."""
         viki_logger.info("Reflector: Initiating self-reflective discovery...")
@@ -24,8 +60,7 @@ class ReflectorModule:
         logs = ""
         if os.path.exists(log_path):
             try:
-                with open(log_path, 'r') as f:
-                    logs = "".join(f.readlines()[-100:])
+                logs = await self._read_text_tail(log_path, line_count=100)
             except Exception as e:
                 viki_logger.debug("Reflector read logs: %s", e)
 
@@ -89,9 +124,10 @@ class ReflectorModule:
         target_file = "viki/core/cortex.py"
         source_code = ""
         try:
-             with open(os.path.join(os.getcwd(), target_file), 'r') as f:
-                  source_code = f.read()
-        except: return
+            source_path = os.path.join(os.getcwd(), target_file)
+            source_code = await self._read_text(source_path)
+        except (OSError, IOError):
+            return
 
         refactor_prompt = [
             {"role": "system", "content": (
@@ -105,28 +141,27 @@ class ReflectorModule:
         ]
 
         try:
-             model = self.controller.model_router.get_model(capabilities=["coding", "reasoning"])
-             proposal = await model.chat(refactor_prompt)
-             
-             # Save proposal to the refactor dir
-             patch_name = f"patch_{int(time.time())}.py"
-             patch_path = os.path.join(self.refactor_dir, patch_name)
-             
-             with open(patch_path, 'w') as f:
-                  f.write(proposal)
-             
-             viki_logger.info(f"Reflector: Autonomous refactor proposed and saved to {patch_path}")
-             
-             # Notify user via Nexus (Telegram/Discord)
-             if hasattr(self.controller, 'nexus'):
-                  await self.controller.nexus.ingest(
-                       source="System",
-                       user_id="Reflector",
-                       text=f"NEURAL REFACTOR: I've detected a bottleneck and proposed a fix at {patch_name}. Use '/refactor review' to examine.",
-                       priority=40
-                  )
+            model = self.controller.model_router.get_model(capabilities=["coding", "reasoning"])
+            proposal = await model.chat(refactor_prompt)
+            
+            # Save proposal to the refactor dir
+            patch_name = f"patch_{int(time.time())}.py"
+            patch_path = os.path.join(self.refactor_dir, patch_name)
+            
+            await self._write_text(patch_path, proposal)
+            
+            viki_logger.info(f"Reflector: Autonomous refactor proposed and saved to {patch_path}")
+            
+            # Notify user via Nexus (Telegram/Discord)
+            if hasattr(self.controller, 'nexus'):
+                await self.controller.nexus.ingest(
+                    source="System",
+                    user_id="Reflector",
+                    text=f"NEURAL REFACTOR: I've detected a bottleneck and proposed a fix at {patch_name}. Use '/refactor review' to examine.",
+                    priority=40,
+                )
         except Exception as e:
-             viki_logger.error(f"Reflector: Refactor proposal failed: {e}")
+            viki_logger.error(f"Reflector: Refactor proposal failed: {e}")
 
     async def apply_evolution(self, suggestion: str):
         """Merges a new directive into the dynamic soul layer."""
@@ -136,9 +171,8 @@ class ReflectorModule:
         current_directives = []
         if os.path.exists(dynamic_path):
             try:
-                with open(dynamic_path, 'r') as f:
-                    data = yaml.safe_load(f) or {}
-                    current_directives = data.get('directives', [])
+                data = await self._read_yaml(dynamic_path)
+                current_directives = data.get('directives', [])
             except Exception as e:
                 viki_logger.debug("Reflector read dynamic directives: %s", e)
         
@@ -149,8 +183,10 @@ class ReflectorModule:
             if len(current_directives) > 10:
                 current_directives.pop(0)
             
-            with open(dynamic_path, 'w') as f:
-                yaml.dump({'directives': current_directives, 'last_evolved': time.time()}, f)
+            await self._write_yaml(
+                dynamic_path,
+                {"directives": current_directives, "last_evolved": time.time()},
+            )
             
             viki_logger.info("Reflector: Core directives evolved and locked.")
             # Update the controller's runtime soul config immediately

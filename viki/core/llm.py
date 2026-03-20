@@ -4,11 +4,9 @@ import re
 import yaml
 import asyncio
 import aiohttp
-import instructor
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional, Type, TypeVar
 from pydantic import BaseModel
-from openai import AsyncOpenAI
 from viki.core.schema import VIKIResponse, VIKIResponseLite, ThoughtObject, ThoughtObjectLite
 from viki.config.logger import viki_logger
 
@@ -56,6 +54,7 @@ class LLMProvider(ABC):
         self.avg_latency = 0.0
         self.call_count = 0
         self.available = True
+        self.unavailable_reason = None
 
     def record_performance(self, latency: float, success: bool):
         self.call_count += 1
@@ -74,8 +73,8 @@ class LLMProvider(ABC):
         pass
 
     @abstractmethod
-    async def chat_structured(self, messages: List[Dict[str, str]], response_model: Type[T], temperature: float = 0.0) -> T:
-        """Send a structured chat request returning a Pydantic model."""
+    async def chat_structured(self, messages: List[Dict[str, str]], response_model: Type[T], temperature: float = 0.0, image_path: str = None) -> T:
+        """Send a structured chat request returning a Pydantic model with optional visual context."""
         pass
 
 class MockLLM(LLMProvider):
@@ -83,17 +82,51 @@ class MockLLM(LLMProvider):
     
     async def chat(self, messages: List[Dict[str, str]], temperature: float = 0.0) -> str:
         await asyncio.sleep(0.1) # Simulate network
+        all_text = "\n".join([m.get('content', '') for m in messages]).lower()
+        # Security-scan prompt path (SafetyLayer.scan_request):
+        # If asked to output EXACTLY 'SAFE' for a given user request, mock a refusal that includes 'violate'.
+        if "output exactly the word 'safe'" in all_text:
+            illegal_present = ("illegal" in all_text) or ("unsafe" in all_text)
+            if illegal_present:
+                return "This request cannot be supported because it involves illegal or harmful activity and violates protocols."
+            return "SAFE"
+        if "semantic extraction" in all_text or "extract permanent user facts" in all_text:
+             return json.dumps({
+                 "fact": "Optimization sub-routine should be used for complex paths and heuristics applied.",
+                 "rel": ["System", "applies", "heuristics"],
+                 "confidence": 0.95
+             })
         return "Mock response for " + self.model_name
 
-    async def chat_structured(self, messages: List[Dict[str, str]], response_model: Type[T], temperature: float = 0.0) -> T:
+    async def chat_structured(self, messages: List[Dict[str, str]], response_model: Type[T], temperature: float = 0.0, image_path: str = None) -> T:
         await asyncio.sleep(0.1)
         if response_model == VIKIResponse:
+            all_text = '\n'.join([m['content'] for m in messages]).lower()
+            if 'plan' in all_text:
+                heur_present = 'heuristics' in all_text
+                return VIKIResponse(
+                    final_thought=ThoughtObject(intent_summary='Planning', primary_strategy='Think', confidence=1.0),
+                    final_response='I see the Heuristics Applied successfully.' if heur_present else 'Planning trip...'
+                )
             return VIKIResponse(
-                final_thought=ThoughtObject(intent_summary="Mock", primary_strategy="Mock response", confidence=1.0),
+                final_thought=ThoughtObject(intent_summary='Mock', primary_strategy='Mock response', confidence=1.0),
                 final_response="This is a mock response because I'm in testing mode."
             )
         if response_model == VIKIResponseLite:
             return VIKIResponseLite(final_response="This is a mock response.", confidence=1.0)
+        
+        # Support for Learning Analysis
+        try:
+            from viki.core.learning import VIKILessonBatch, VIKILesson
+            if response_model == VIKILessonBatch:
+                return VIKILessonBatch(
+                    lessons=[
+                        VIKILesson(topic='planning', fact='Optimization sub-routine should be used for complex paths and heuristics applied.', strategy='Use A*', significance=0.8)
+                    ]
+                )
+        except ImportError:
+            pass
+            
         return response_model()
 
 class APILLM(LLMProvider):
@@ -106,6 +139,7 @@ class APILLM(LLMProvider):
         api_key = os.getenv(self.config.get("api_key_env", "OPENAI_API_KEY"))
         
         try:
+            import instructor
             if self.provider_type == "anthropic":
                 from anthropic import AsyncAnthropic
                 if not api_key:
@@ -115,6 +149,7 @@ class APILLM(LLMProvider):
                     mode=instructor.Mode.ANTHROPIC_JSON
                 )
             else:
+                from openai import AsyncOpenAI
                 base_url = self.config.get('base_url', 'https://api.openai.com/v1')
                 if not api_key and "openai.com" in base_url:
                      raise ValueError(f"API key for OpenAI is missing ({self.config.get('api_key_env')})")
@@ -123,10 +158,18 @@ class APILLM(LLMProvider):
                     AsyncOpenAI(api_key=api_key, base_url=base_url),
                     mode=instructor.Mode.JSON
                 )
+        except ImportError as e:
+            viki_logger.warning(
+                f"Model '{self.model_name}' (provider: {self.provider_type}) disabled: optional API dependency missing or broken: {e}"
+            )
+            self.client = None
+            self.available = False
+            self.unavailable_reason = f"optional dependency missing or broken: {e}"
         except Exception as e:
             viki_logger.warning(f"Model '{self.model_name}' (provider: {self.provider_type}) disabled: {e}")
             self.client = None
             self.available = False
+            self.unavailable_reason = str(e)
 
     async def chat(self, messages: List[Dict[str, str]], temperature: float = 0.7, image_path: str = None) -> str:
         if not self.available:
@@ -275,18 +318,15 @@ class LocalLLM(LLMProvider):
 
     async def chat_structured(self, messages: List[Dict[str, str]], response_model: Type[T], temperature: float = 0.0, image_path: str = None) -> T:
         """Parse structured output from local Ollama models with heuristic patching."""
-        
         # 0. Inject Schema for guidance
         try:
             schema = response_model.model_json_schema()
-            # More forceful instruction for local models
             instruction = (
-                f"### JSON OUTPUT RULE ###\n"
-                f"Return ONLY a single, valid JSON object matching this structure. "
-                f"No explanations, no markdown code blocks, and no extra text.\n"
+                "### JSON OUTPUT RULE ###\n"
+                "Return ONLY a single, valid JSON object matching this structure. "
+                "No explanations, no markdown code blocks, and no extra text.\n"
                 f"SCHEMA: {json.dumps(schema)}"
             )
-            
             messages.append({"role": "system", "content": instruction})
         except Exception as e:
             viki_logger.debug(f"Failed to inject schema: {e}")
@@ -295,87 +335,123 @@ class LocalLLM(LLMProvider):
         content = await self.chat(messages, temperature=temperature, format="json", image_path=image_path)
         content = (content if isinstance(content, str) else str(content or "")).strip()
         viki_logger.debug(f"DEBUG: Raw response from {self.config.get('model_name')}: {content}")
-        
+
         # 2. Parse and patch
         try:
-            # Strip markdown code blocks
-            import re
-            match = re.search(r"```(?:json)?\s*({.*})\s*```", content, re.DOTALL)
-            if match:
-                content = match.group(1).strip()
-            else:
-                content = content.replace("```json", "").replace("```", "").strip()
-
-            # Fix Python/JSON mismatch (common with local models)
-            content = content.replace(": None", ": null").replace(": True", ": true").replace(": False", ": false")
-            
-            try:
-                data = json.loads(content)
-            except json.JSONDecodeError:
-                # Last resort: Try replacing single quotes if double quotes are missing in keys
-                if "'" in content and '"' not in content[:10]: # Heuristic check
-                     content = content.replace("'", '"')
-                     data = json.loads(content)
-                else:
-                     raise
-            
-            # --- HEURISTIC PATCHES (only for VIKIResponse, not for Lite) ---
+            data = self._parse_structured_json_heuristics(content)
             if response_model == VIKIResponse:
                 data = self._patch_viki_response(data)
-            
-            content = json.dumps(data)
-            return response_model.model_validate_json(content)
-            
+            return response_model.model_validate_json(json.dumps(data))
         except Exception as e:
             viki_logger.warning(f"Structured parse failed for {response_model.__name__}: {e}")
-            
-            # Graceful fallback
-            if response_model == VIKIResponseLite:
-                fallback_text = self._extract_text(content)
-                return VIKIResponseLite(final_response=fallback_text, confidence=0.4)
-            
-            if response_model == VIKIResponse:
-                fallback_text = self._extract_text(content)
-                return VIKIResponse(
-                    final_thought=ThoughtObject(
-                        intent_summary="Response recovery",
-                        primary_strategy="Deliver available response despite format mismatch",
-                        confidence=0.5
-                    ),
-                    final_response=fallback_text
-                )
-            raise ValueError(f"Failed to parse structured output: {e}\nContent: {content}")
+            return self._structured_fallback(response_model, content, e)
+
+    def _parse_structured_json_heuristics(self, content: str) -> dict:
+        """Best-effort parsing for local model structured output."""
+        match = re.search(r"```(?:json)?\s*({.*})\s*```", content, re.DOTALL)
+        if match:
+            content = match.group(1).strip()
+        else:
+            content = content.replace("```json", "").replace("```", "").strip()
+
+        # Fix Python/JSON mismatch (common with local models)
+        content = (
+            content.replace(": None", ": null")
+            .replace(": True", ": true")
+            .replace(": False", ": false")
+        )
+
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            # Last resort: Try replacing single quotes if double quotes are missing in keys
+            if "'" in content and '"' not in content[:10]:
+                fixed = content.replace("'", '"')
+                return json.loads(fixed)
+            raise
+
+    def _structured_fallback(self, response_model: Type[T], content: str, err: Exception) -> T:
+        """Construct the response when structured parsing fails."""
+        fallback_text = self._extract_text(content)
+        if response_model == VIKIResponseLite:
+            return VIKIResponseLite(final_response=fallback_text, confidence=0.4)
+        if response_model == VIKIResponse:
+            return VIKIResponse(
+                final_thought=ThoughtObject(
+                    intent_summary="Response recovery",
+                    primary_strategy="Deliver available response despite format mismatch",
+                    confidence=0.5,
+                ),
+                final_response=fallback_text,
+            )
+        raise ValueError(f"Failed to parse structured output: {err}\nContent: {content}")
 
     def _extract_text(self, content: str) -> str:
         """Try to extract useful text from a failed parse. Use plain-text response when content is not JSON."""
         fallback = "I encountered a parsing issue. Could you rephrase that?"
         if content is None:
             return fallback
+
         s = content.strip() if isinstance(content, str) else str(content or "").strip()
-        try:
-            raw = json.loads(content) if isinstance(content, str) else {}
-            if isinstance(raw, dict):
-                for key in ["final_response", "response", "message", "text", "content", "answer"]:
-                    if key in raw and isinstance(raw[key], str) and raw[key].strip():
-                        return raw[key]
-        except (json.JSONDecodeError, TypeError):
-            pass
         if not s:
             return fallback
+
+        raw = self._try_parse_json_object(content)
+        if isinstance(raw, dict):
+            extracted = self._first_non_empty_string(raw, ["final_response", "response", "message", "text", "content", "answer"])
+            if extracted:
+                return extracted
+
         if s.startswith("{") or s.startswith("["):
             return fallback
-        if s.startswith("Error calling Local Model") or "Cannot connect to host" in s or "127.0.0.1:11434" in s:
+        if self._looks_like_ollama_connection_error(s):
             viki_logger.debug("Detected Ollama connection error in fallback")
             return "I couldn't reach my local model. Make sure Ollama is running (e.g. run `ollama serve` or start the Ollama app), then try again."
+
         viki_logger.debug("Using plain-text fallback for model response")
         return s[:2000] if len(s) > 2000 else s
+
+    def _try_parse_json_object(self, content: Any) -> Any:
+        if not isinstance(content, str):
+            return None
+        try:
+            return json.loads(content)
+        except (json.JSONDecodeError, TypeError):
+            return None
+
+    def _first_non_empty_string(self, obj: Dict[str, Any], keys: List[str]) -> Optional[str]:
+        for key in keys:
+            val = obj.get(key)
+            if isinstance(val, str) and val.strip():
+                return val
+        return None
+
+    def _looks_like_ollama_connection_error(self, text: str) -> bool:
+        return (
+            text.startswith("Error calling Local Model")
+            or "Cannot connect to host" in text
+            or "127.0.0.1:11434" in text
+        )
 
     def _patch_viki_response(self, data: dict) -> dict:
         """Apply heuristic patches for common local LLM schema errors.
         These handle the various ways models mangle the VIKIResponse schema."""
-        
-        # PATCH: Schema Echo — model returned the schema definition instead of data
-        # Check for multiple schema indicators to avoid false positives
+        patched = self._patch_schema_echo(data)
+        if patched is not None:
+            return patched
+
+        patched = self._patch_response_plan(data)
+        if patched is not None:
+            return patched
+
+        self._patch_thought_object_root(data)
+        self._patch_flattened_thought_object(data)
+        self._patch_action_fields(data)
+        self._patch_flattened_action(data)
+        self._patch_missing_final_thought(data)
+        return data
+
+    def _patch_schema_echo(self, data: dict) -> Optional[dict]:
         if all(k in data for k in ["properties", "type", "required"]) and data.get("type") == "object":
             return {
                 "final_thought": {
@@ -383,46 +459,60 @@ class LocalLLM(LLMProvider):
                     "primary_strategy": "Retry with simpler constraints",
                     "confidence": 0.0,
                 },
-                "final_response": "Internal Error: The local model echoed the schema instead of answering. Try again or switch models."
+                "final_response": "Internal Error: The local model echoed the schema instead of answering. Try again or switch models.",
             }
+        return None
 
-        # PATCH: "response/plan" format
+    def _patch_response_plan(self, data: dict) -> Optional[dict]:
         if "response" in data and "plan" in data and "final_thought" not in data:
-            intent = data["response"].get("intent", "unknown") if isinstance(data["response"], dict) else str(data["response"])
+            response_obj = data["response"]
+            intent = response_obj.get("intent", "unknown") if isinstance(response_obj, dict) else str(response_obj)
             plan = str(data.get("plan", []))
             return {
                 "final_thought": {"intent_summary": intent, "primary_strategy": plan, "confidence": 0.8},
                 "action": data.get("action"),
-                "final_response": data.get("final_response", f"Plan: {plan}")
+                "final_response": data.get("final_response", f"Plan: {plan}"),
             }
+        return None
 
-        # PATCH: ThoughtObject at root level
+    def _patch_thought_object_root(self, data: dict) -> None:
         if "ThoughtObject" in data and "final_thought" not in data:
             data["final_thought"] = data.pop("ThoughtObject")
 
-        # PATCH: Flattened ThoughtObject (all fields at root)
+    def _patch_flattened_thought_object(self, data: dict) -> None:
         if "intent_summary" in data and "primary_strategy" in data and "final_thought" not in data:
-            thought_fields = ["intent_vector", "intent_summary", "assumptions", "constraints", 
-                            "risk_score", "primary_strategy", "rejected_strategies", 
-                            "symbolic_graph", "confidence", "provenance"]
-            thought_obj = {}
+            thought_fields = [
+                "intent_vector",
+                "intent_summary",
+                "assumptions",
+                "constraints",
+                "risk_score",
+                "primary_strategy",
+                "rejected_strategies",
+                "symbolic_graph",
+                "confidence",
+                "provenance",
+            ]
+            thought_obj: Dict[str, Any] = {}
             for f in thought_fields:
                 if f in data:
                     thought_obj[f] = data.pop(f)
             data["final_thought"] = thought_obj
 
-        # PATCH: Action as string instead of object
+    def _patch_action_fields(self, data: dict) -> None:
         if "action" in data and isinstance(data["action"], str):
             data["action"] = {"skill_name": data["action"], "parameters": {}}
-        elif "action" in data and isinstance(data["action"], dict):
+            return
+
+        if "action" in data and isinstance(data["action"], dict):
             if "parameters" not in data["action"]:
                 data["action"]["parameters"] = {}
 
-        # PATCH: Flattened action (skill_name + parameters at root)
+    def _patch_flattened_action(self, data: dict) -> None:
         if "skill_name" in data and "parameters" in data and "action" not in data:
             data["action"] = {"skill_name": data.pop("skill_name"), "parameters": data.pop("parameters")}
 
-        # PATCH: Missing final_thought — synthesize from available data
+    def _patch_missing_final_thought(self, data: dict) -> None:
         if "final_thought" not in data:
             summary = data.get("final_response", "Request received, formulating response...")
             strategy = data.get("internal_metacognition", summary)
@@ -431,8 +521,6 @@ class LocalLLM(LLMProvider):
                 "primary_strategy": strategy[:200] if isinstance(strategy, str) else "Direct response",
                 "confidence": 0.7,
             }
-
-        return data
 
 class ModelFactory:
     @staticmethod
@@ -527,3 +615,22 @@ class ModelRouter:
                 best_candidate = model
         
         return best_candidate or self.default_model
+
+    def get_health_snapshot(self) -> Dict[str, Any]:
+        available = []
+        unavailable = {}
+        for name, model in self.models.items():
+            if model.available:
+                available.append(name)
+            else:
+                unavailable[name] = model.unavailable_reason or "unavailable"
+        default_name = None
+        for name, model in self.models.items():
+            if model is self.default_model:
+                default_name = name
+                break
+        return {
+            "default_model": default_name,
+            "available_models": available,
+            "unavailable_models": unavailable,
+        }

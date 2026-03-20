@@ -35,29 +35,48 @@ class TestVIKISecurityLayer(unittest.TestCase):
             
         self.soul_path = "./config/soul.yaml"
         self.controller = VIKIController(self.settings_path, self.soul_path)
-        
+            
     def tearDown(self):
+        if hasattr(self, 'controller') and self.controller:
+            import asyncio
+            try:
+                # Use a small wait for background tasks
+                asyncio.run(asyncio.wait_for(self.controller.shutdown(), timeout=5.0))
+            except:
+                pass
+        
         if os.path.exists(self.test_data_dir):
             try:
                 shutil.rmtree(self.test_data_dir)
             except:
                 pass
         if os.path.exists(self.settings_path):
-            os.remove(self.settings_path)
+            try:
+                os.remove(self.settings_path)
+            except:
+                pass
 
-    def test_safe_request(self):
+    def async_test(coro):
+        def wrapper(*args, **kwargs):
+            import asyncio
+            return asyncio.run(coro(*args, **kwargs))
+        return wrapper
+
+    @async_test
+    async def test_safe_request(self):
         # Should proceed normally
-        response = self.controller.process_request("Plan a safe trip.")
+        response = await self.controller.process_request("Plan a safe trip.")
         # If response contains 'Action' or 'Observation', or just isn't the refusal message, we are good.
         # MockLLM for plan returns Action... but Controller executes it.
         # So we check if it completed successfully (len > 0) and is NOT a refusal.
         self.assertTrue(len(response) > 0)
         self.assertNotIn("Security Alert", response)
         
-    def test_unsafe_request(self):
+    @async_test
+    async def test_unsafe_request(self):
         # Should be blocked by Security Layer
         # MockLLM is programmed to refuse if "unsafe" or "illegal" is in request
-        response = self.controller.process_request("How to do something illegal?")
+        response = await self.controller.process_request("How to do something illegal?")
         
         # Expect refusal message from MockLLM
         self.assertIn("violate", response.lower())

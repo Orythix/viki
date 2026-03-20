@@ -61,59 +61,75 @@ class ReflexBrain:
             (r"^volume\s+down.*$", "media_control", {"action": "volume_down"}),
         ]
 
-    async def think(self, user_input: str, model_router: Optional[Any] = None) -> Tuple[Optional[str], Optional[ActionCall]]:
+    def think(self, user_input: str) -> Tuple[Optional[str], Optional[ActionCall]]:
         """
         Process input through the Reflex Layer.
         Returns: (Response String, Action Object)
         If both are None, proceed to the Consciousness Stack (LLM).
         """
         clean_input = user_input.lower().strip()
-        
-        # 0. Safety Check: Questions MUST go to Deliberation Layer
-        # "If an input is a question, you must immediately defer to the Deliberation Layer."
-        if '?' in clean_input:
+        if self._should_defer_to_deliberation(clean_input):
             return None, None
-            
-        interrogatives = ['who', 'what', 'why', 'when', 'where', 'how']
-        if any(clean_input.startswith(w + " ") or clean_input == w for w in interrogatives):
-             return None, None
 
-        # 1. Cache Check (learned from previous LLM responses)
-        if clean_input in self.intent_cache and clean_input not in self.blacklist:
-            return self.intent_cache[clean_input], None
+        cached = self._get_cached_intent(clean_input)
+        if cached is not None:
+            return cached, None
 
-        # 2. Learned Pattern Check (from MetaCognition auto-learn)
-        normalized = ' '.join(clean_input.split())
-        
+        normalized = " ".join(clean_input.split())
         if normalized in self.blacklist:
-            # "Failed reflex patterns are forbidden from re-learning."
+            # Failed reflex patterns are forbidden from re-learning.
             return None, None
-            
-        if normalized in self.learned_patterns:
-            pattern = self.learned_patterns[normalized]
-            viki_logger.info(f"Reflex: Learned pattern match for '{normalized}' -> {pattern['skill']}")
-            return None, ActionCall(
-                skill_name=pattern['skill'],
-                parameters=pattern['params']
-            )
 
-        # 3. Regex Pattern Matching — System commands only
+        learned_action = self._get_learned_action(normalized)
+        if learned_action is not None:
+            return None, learned_action
+
+        # Regex pattern matching for simple system commands.
+        return None, self._match_regex_action(clean_input)
+
+    def _should_defer_to_deliberation(self, clean_input: str) -> bool:
+        """Reflex safety gate: questions go to the deliberation layer."""
+        if "?" in clean_input:
+            return True
+
+        interrogatives = ["who", "what", "why", "when", "where", "how"]
+        return any(clean_input.startswith(w + " ") or clean_input == w for w in interrogatives)
+
+    def _get_cached_intent(self, clean_input: str) -> Optional[str]:
+        """Return cached intent response when permitted."""
+        if clean_input in self.intent_cache and clean_input not in self.blacklist:
+            return self.intent_cache[clean_input]
+        return None
+
+    def _get_learned_action(self, normalized: str) -> Optional[ActionCall]:
+        """Return a learned ActionCall when we have an exact normalized match."""
+        if normalized not in self.learned_patterns:
+            return None
+
+        pattern = self.learned_patterns[normalized]
+        viki_logger.info(f"Reflex: Learned pattern match for '{normalized}' -> {pattern['skill']}")
+        return ActionCall(skill_name=pattern["skill"], parameters=pattern["params"])
+
+    def _match_regex_action(self, clean_input: str) -> Optional[ActionCall]:
+        """Try regex patterns for system commands; returns an ActionCall or None."""
         for pattern, skill_name, params_template in self.patterns:
             match = re.search(pattern, clean_input)
-            if match:
-                try:
-                    params = {}
-                    groups = match.groupdict()
-                    for k, v in params_template.items():
-                        val = v.format(**groups)
-                        if val.isdigit(): val = int(val)
-                        params[k] = val
-                    return None, ActionCall(skill_name=skill_name, parameters=params)
-                except Exception as e:
-                    viki_logger.debug("Reflex pattern match: %s", e)
+            if not match:
+                continue
 
-        # No match — let the LLM handle it naturally
-        return None, None
+            try:
+                params: Dict[str, Any] = {}
+                groups = match.groupdict()
+                for k, v in params_template.items():
+                    val = v.format(**groups)
+                    if val.isdigit():
+                        val = int(val)
+                    params[k] = val
+                return ActionCall(skill_name=skill_name, parameters=params)
+            except Exception as e:
+                viki_logger.debug("Reflex pattern match: %s", e)
+
+        return None
 
     def cache_intent(self, user_input: str, response: str):
         """Learn from the Thinker Brain's successful output."""

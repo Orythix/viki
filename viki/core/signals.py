@@ -41,9 +41,28 @@ class CognitiveSignals:
     def get_modulation(self) -> Dict[str, Any]:
         """Calculates behavior modifiers based on current signals."""
         self.decay_signals()
-        
+        urgency = self.signals["urgency"]
+        frustration = self.signals["frustration"]
+        confidence = self.signals["confidence"]
+
+        if urgency > 0.7:
+            verbosity = "minimal"
+        elif frustration > 0.5:
+            verbosity = "detailed"
+        else:
+            verbosity = "standard"
+
+        if frustration > 0.4:
+            planning_depth = "deep"
+        elif confidence > 0.8:
+            planning_depth = "quick"
+        else:
+            planning_depth = "adaptive"
+
+        safety_bias = "conservative" if frustration > 0.6 else "standard"
+
         return {
-            "verbosity": "minimal" if self.signals["urgency"] > 0.7 else ("detailed" if self.signals["frustration"] > 0.5 else "standard"),
-            "planning_depth": "deep" if self.signals["frustration"] > 0.4 else ("quick" if self.signals["confidence"] > 0.8 else "adaptive"),
-            "safety_bias": "conservative" if self.signals["frustration"] > 0.6 else "standard"
+            "verbosity": verbosity,
+            "planning_depth": planning_depth,
+            "safety_bias": safety_bias,
         }

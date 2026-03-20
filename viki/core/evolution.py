@@ -268,7 +268,7 @@ class EvolutionEngine:
             viki_logger.error(f"Evolution: Skill synthesis failed: {e}")
             return None
 
-    def _validate_skill_code(self, code: str) -> tuple[bool, str]:
+    def _validate_skill_code(self, code: str) -> tuple[bool, str]:  #NOSONAR
         """Validate dynamically generated skill code for security issues.
         
         SECURITY FIX: HIGH-003 - Enhanced validation including:
@@ -306,17 +306,18 @@ class EvolutionEngine:
                         if danger in alias.name:
                             return False, f"Potentially dangerous import: {alias.name}"
             
-            if isinstance(node, ast.ImportFrom):
-                if node.module:
-                    imported_modules.add(node.module)
-                    if node.module in dangerous_imports:
-                        return False, f"Dangerous import from: {node.module}"
-                    # Check specific function imports
-                    for alias in node.names:
-                        if alias.name in dangerous_calls:
-                            return False, f"Dangerous function import: {alias.name} from {node.module}"
-                        if alias.name in ['system', 'popen', 'spawn', 'call', 'run']:
-                            return False, f"Dangerous subprocess function: {alias.name}"
+            if isinstance(node, ast.ImportFrom) and node.module:
+                imported_modules.add(node.module)
+                if node.module in dangerous_imports:
+                    return False, f"Dangerous import from: {node.module}"
+
+                subprocess_funcs = {'system', 'popen', 'spawn', 'call', 'run'}
+                # Check specific function imports
+                for alias in node.names:
+                    if alias.name in dangerous_calls:
+                        return False, f"Dangerous function import: {alias.name} from {node.module}"
+                    if alias.name in subprocess_funcs:
+                        return False, f"Dangerous subprocess function: {alias.name}"
             
             # Check for dangerous function calls
             if isinstance(node, ast.Call):
@@ -331,9 +332,8 @@ class EvolutionEngine:
                                 return False, f"Dangerous attribute access via getattr: {node.args[1].value}"
             
             # Check for attribute access to dangerous attributes
-            if isinstance(node, ast.Attribute):
-                if node.attr in dangerous_attrs:
-                    return False, f"Dangerous attribute access detected: {node.attr}"
+            if isinstance(node, ast.Attribute) and node.attr in dangerous_attrs:
+                return False, f"Dangerous attribute access detected: {node.attr}"
             
             # Check for f-strings or string formatting that could be used for code injection
             if isinstance(node, ast.JoinedStr):

@@ -58,29 +58,26 @@ class KnowledgeGapDetector:
         if not queries:
             return []
         
-        clusters = []
-        
+        clusters: List[List[Dict]] = []
+        similarity_threshold = 0.3  # 30% keyword overlap
+
         for query_data in queries:
-            query_text = query_data['query']
-            query_words = set(self._extract_keywords(query_text))
-            
-            # Try to add to existing cluster
-            added = False
+            query_words = set(self._extract_keywords(query_data["query"]))
+
             for cluster in clusters:
-                cluster_words = set(self._extract_keywords(cluster[0]['query']))
-                
-                # Calculate Jaccard similarity
-                if cluster_words and query_words:
-                    intersection = len(query_words & cluster_words)
-                    union = len(query_words | cluster_words)
-                    similarity = intersection / union if union > 0 else 0
-                    
-                    if similarity > 0.3:  # 30% keyword overlap
-                        cluster.append(query_data)
-                        added = True
-                        break
-            
-            if not added:
+                cluster_words = set(self._extract_keywords(cluster[0]["query"]))
+                if not cluster_words or not query_words:
+                    continue
+
+                # Jaccard similarity: |A ∩ B| / |A ∪ B|
+                intersection = len(query_words & cluster_words)
+                union = len(query_words | cluster_words)
+                similarity = intersection / union if union > 0 else 0
+
+                if similarity > similarity_threshold:
+                    cluster.append(query_data)
+                    break
+            else:
                 clusters.append([query_data])
         
         # Sort clusters by size (larger gaps = more important)

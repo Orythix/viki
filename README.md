@@ -8,11 +8,11 @@
 [![Version](https://img.shields.io/badge/version-7.3.1-blue.svg)](./CHANGELOG.md)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Ollama](https://img.shields.io/badge/Ollama-Local_LLM-orange.svg)](https://ollama.ai)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](./LICENSE)
+[![License: Proprietary](https://img.shields.io/badge/License-Proprietary-orange.svg)](./LICENSE)
 
 ---
 
-**VIKI** is an open-source **autonomous AI agent** and **Sovereign Digital Intelligence** for absolute privacy and **local-first** operation. Run with **Ollama**, **Phi-3**, **Mistral**, or **DeepSeek**—no cloud required. Uses the **Orythix Cognitive Architecture** for deep reasoning, multi-tool orchestration, and recursive self-improvement without leaking your data.
+**VIKI** is a **proprietary** autonomous AI agent and **Sovereign Digital Intelligence** for absolute privacy and **local-first** operation. Run with **Ollama**, **Phi-3**, **Mistral**, or **DeepSeek**—no cloud required. Uses the **Orythix Cognitive Architecture** for deep reasoning, multi-tool orchestration, and recursive self-improvement without leaking your data.
 
 [Features](#core-pillars-v730) • [Architecture](#technical-architecture) • [Quick Start](#quick-start) • [Security](#security--ethics)
 
@@ -219,7 +219,7 @@ Unlike static bots, VIKI grows. Every 10 stable lessons learned, she initiates a
 
 ## Keywords and topics
 
-**Local AI agent** · **Autonomous AI** · **Ollama** · **LLM agent** · **Privacy-first AI** · **Sovereign AI** · **Open-source AI assistant** · **ReAct agent** · **Capability gating** · **Neural Forge** · **Self-improving AI** · **CLI AI** · **Python AI agent** · **Orythix** · **Local LLM** · **Air-gap AI** · **Tool-use agent** · **Reflex reasoning** · **Multi-model routing**
+**Local AI agent** · **Autonomous AI** · **Ollama** · **LLM agent** · **Privacy-first AI** · **Sovereign AI** · **Licensed AI assistant** · **ReAct agent** · **Capability gating** · **Neural Forge** · **Self-improving AI** · **CLI AI** · **Python AI agent** · **Orythix** · **Local LLM** · **Air-gap AI** · **Tool-use agent** · **Reflex reasoning** · **Multi-model routing**
 
 ---
 

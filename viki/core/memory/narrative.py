@@ -8,8 +8,9 @@ from viki.config.logger import viki_logger
 
 try:
     from sentence_transformers import util
-except ImportError:
+except Exception as e:
     util = None
+    viki_logger.warning(f"SentenceTransformers utilities unavailable during NarrativeMemory import ({e}). Episodic semantic recall will use fallback mode.")
 
 
 class NarrativeMemory:
@@ -199,3 +200,10 @@ class NarrativeMemory:
              viki_logger.info("Narrative: DREAM CYCLE complete. 20 episodes consolidated.")
         except Exception as e:
              viki_logger.error(f"Narrative: Dream Cycle failed: {e}")
+
+    def close(self):
+        if hasattr(self, 'conn') and self.conn:
+            try:
+                self.conn.close()
+            except:
+                pass

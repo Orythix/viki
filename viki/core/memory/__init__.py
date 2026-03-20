@@ -152,6 +152,14 @@ class WorkingMemory:
                     return msg.get("content", "")
             return ""
 
+    def close(self):
+        with self._lock:
+            if self.db:
+                try:
+                    self.db.conn.close()
+                except:
+                    pass
+
 class HierarchicalMemory:
     """
     v23: Orchestrator for the Hierarchical Memory Stack.
@@ -184,12 +192,24 @@ class HierarchicalMemory:
             for w in narrative_wisdom
         ])
 
+        # Cortex expects specific key names for prompt construction. Keep backwards-compatible
+        # aliases (`semantic`, `episodic`, `identity`) but also provide `semantic_knowledge`,
+        # `episodic_context`, and `narrative_identity` for the main prompt builder.
+        episodic_context = self.episodic.retrieve_context(current_input)
+        semantic_knowledge = self.semantic.get_relevant_lessons(current_input) if self.semantic else []
+        narrative_identity = self.identity.get_identity_prompt()
+
         return {
             "working": self.working.get_trace(session_id=session_id),
-            "episodic": self.episodic.retrieve_context(current_input),
-            "semantic": self.semantic.get_relevant_lessons(current_input) if self.semantic else [],
+            # Backwards-compatible aliases
+            "episodic": episodic_context,
+            "semantic": semantic_knowledge,
+            "identity": narrative_identity,
+            # Keys consumed by `viki/core/cortex.py`
+            "episodic_context": episodic_context,
+            "semantic_knowledge": semantic_knowledge,
+            "narrative_identity": narrative_identity,
             "narrative_wisdom": wisdom_block,
-            "identity": self.identity.get_identity_prompt()
         }
 
     def record_interaction(self, intent: str, action: str, outcome: str, confidence: float):
@@ -213,3 +233,10 @@ class HierarchicalMemory:
         
         # 3. v25: Check for Dream Cycle trigger (Every 20 episodes)
         # This is handled by a separate background trigger or in-thread periodically
+
+    def close(self):
+        if hasattr(self, 'working'): self.working.close()
+        if hasattr(self, 'episodic'): self.episodic.close()
+        if hasattr(self, 'identity') and hasattr(self.identity, 'close'):
+            self.identity.close()
+        viki_logger.info('HierarchicalMemory: Stack shut down.')
