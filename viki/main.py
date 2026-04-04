@@ -176,12 +176,10 @@ async def main(workspace_path=None):
             
             if user_input.lower() == "/debug":
                 if viki_logger.level == logging.DEBUG:
-                    logger.setLevel(logging.ERROR)
                     viki_logger.setLevel(logging.ERROR)
                     debug_mode = False
                     interface.console.print("[yellow]Debug Mode: OFF (ERROR level)[/]")
                 else:
-                    logger.setLevel(logging.DEBUG)
                     viki_logger.setLevel(logging.DEBUG)
                     debug_mode = True
                     interface.console.print("[yellow]Debug Mode: ON (DEBUG level)[/]")

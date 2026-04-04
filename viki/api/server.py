@@ -40,6 +40,12 @@ soul_path = get_soul_path(settings_path)
 SESSION_HEADER = "X-Session-Id"
 _controller = None
 _controller_lock = threading.Lock()
+# Whether to trust X-Forwarded-For header (only safe when behind a reverse proxy)
+_TRUSTED_PROXY = os.getenv("VIKI_TRUSTED_PROXY", "false").lower() in ("true", "1", "yes")
+
+
+def _is_behind_proxy() -> bool:
+    return _TRUSTED_PROXY
 
 
 def get_controller() -> VIKIController:
@@ -183,7 +189,12 @@ chat_limiter = RateLimiter(max_requests=20, window_seconds=60)     # 20 req/min 
 def check_rate_limit():
     """Apply rate limiting to all API requests."""
     if request.path.startswith('/api/'):
-        client_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+        # Only trust X-Forwarded-For if behind a trusted reverse proxy
+        # Otherwise, use remote_addr to prevent IP spoofing
+        if request.headers.get('X-Forwarded-For') and _is_behind_proxy():
+            client_ip = request.headers.get('X-Forwarded-For').split(',')[0].strip()
+        else:
+            client_ip = request.remote_addr
         
         # Use stricter limiter for chat endpoint
         if request.path == '/api/chat':

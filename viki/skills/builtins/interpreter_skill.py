@@ -65,7 +65,13 @@ class InterpreterSkill(BaseSkill):
                 # 2. Run with timeout and restricted environment
                 # We remove sensitive env vars
                 clean_env = os.environ.copy()
-                to_remove = ["OPENAI_API_KEY", "HF_TOKEN", "AWS_SECRET_ACCESS_KEY", "SECRET_KEY"]
+                to_remove = [
+                    "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "HF_TOKEN",
+                    "AWS_SECRET_ACCESS_KEY", "AWS_DEFAULT_REGION", "AWS_SESSION_TOKEN",
+                    "SECRET_KEY", "VIKI_API_KEY", "VIKI_ADMIN_SECRET",
+                    "PYTHONPATH", "PYTHONHOME", "LD_PRELOAD", "SSL_CERT_FILE",
+                    "GOOGLE_APPLICATION_CREDENTIALS", "KUBECONFIG"
+                ]
                 for key in to_remove:
                     if key in clean_env: del clean_env[key]
                 

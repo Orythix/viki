@@ -46,9 +46,9 @@ class SemanticFS:
                 try:
                     # Shell command for Hard Link or Junction if privilege fails
                     if os.path.isdir(path):
-                        subprocess.run(['mklink', '/J', link_path, path], shell=True, capture_output=True)
+                        subprocess.run(['cmd', '/c', 'mklink', '/J', link_path, path], capture_output=True)
                     else:
-                        subprocess.run(['mklink', link_path, path], shell=True, capture_output=True)
+                        subprocess.run(['cmd', '/c', 'mklink', link_path, path], capture_output=True)
                 except Exception as e:
                     viki_logger.error(f"Failed to mount {path}: {e}")
         

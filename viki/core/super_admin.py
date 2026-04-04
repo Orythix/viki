@@ -19,7 +19,7 @@ class SuperAdminLayer:
             if not self.admin_secret or self.admin_secret == "CHANGE_THIS_SECRET_IMMEDIATELY_XYZ123":
                 # Generate a secure random secret
                 self.admin_secret = secrets.token_urlsafe(32)
-                viki_logger.warning(f"No VIKI_ADMIN_SECRET set. Generated temporary admin secret: {self.admin_secret}")
+                viki_logger.warning("No VIKI_ADMIN_SECRET set. Generated temporary admin secret (check logs for details).")
                 viki_logger.warning("Set VIKI_ADMIN_SECRET environment variable for persistent admin access.")
 
     def _load_config(self):
