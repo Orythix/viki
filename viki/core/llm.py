@@ -765,6 +765,8 @@ class ModelFactory:
             merged_config['type'] = 'api' 
             return APILLM(merged_config)
         elif provider_type == "local":
+            # Native Ollama tool calling is opt-in per profile (YAML); default off for tags often missing or weak at JSON tools.
+            merged_config.setdefault("supports_native_tools", False)
             return LocalLLM(merged_config)
         else:
             raise ValueError(f"Unknown provider type: {provider_type}")

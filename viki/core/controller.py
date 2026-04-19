@@ -1479,14 +1479,19 @@ class VIKIController:
             self.learning.save_lesson(f"INTERNAL_SYSTEM_ADVISORY: {rec}")
 
     def _classify_task(self, input_text: str) -> str:
-        input_lower = input_text.lower()
-        # v21: Explicit Question detection
-        if any(k in input_lower for k in ["see", "look", "screen", "vision", "screenshot"]): return "vision"
+        s = input_text.strip().lower()
+        # v21: Explicit Question detection (use stripped text so leading UI junk does not force "general")
+        if any(k in s for k in ["see", "look", "screen", "vision", "screenshot"]):
+            return "vision"
         question_words = ["what", "who", "where", "when", "why", "how", "is", "are", "can", "do", "does"]
-        if input_text.strip().endswith('?') or any(input_lower.startswith(w) for w in question_words):
+        if s.endswith("?"):
             return "reasoning"  # questions use reasoning budget (no separate "question" key in budgets)
-        if any(k in input_lower for k in ["code", "script", "fix", "patch"]): return "coding"
-        if any(k in input_lower for k in ["plan", "think", "analyze", "sequence"]): return "reasoning"
+        if any(s == w or s.startswith(w + " ") for w in question_words):
+            return "reasoning"
+        if any(k in s for k in ["code", "script", "fix", "patch"]):
+            return "coding"
+        if any(k in s for k in ["plan", "think", "analyze", "sequence"]):
+            return "reasoning"
         return "general"
 
     def _is_explanation_requested(self, input_text: str) -> bool:

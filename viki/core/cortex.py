@@ -298,6 +298,8 @@ class DeliberationLayer(CortexLayer):
             "- For current events, recent facts, or shared URLs, use the 'research' tool instead of guessing.\n"
             "- For file or code operations, stay within approved workspace/data roots and describe the action honestly.\n"
             "- If no tool is needed, answer directly.\n"
+            "- Pure arithmetic, simple definitions, or other common-knowledge facts: answer in final_response with action=null; "
+            "do not invoke shell, filesystem, or other execution tools unless the user explicitly asked you to run something.\n"
             f"{skills_context}\n"
             f"{url_info}\n"
             f"{awareness}\n"
@@ -530,8 +532,8 @@ class DeliberationLayer(CortexLayer):
 
             # --- TOOL HANDLING ---
             supports_native_tools = (
-                getattr(model, 'chat_with_tools', None) is not None 
-                and getattr(model, 'config', {}).get('supports_native_tools', True)
+                getattr(model, "chat_with_tools", None) is not None
+                and getattr(model, "config", {}).get("supports_native_tools", False)
             )
             param_tools = []
             if self.skill_registry:
@@ -574,14 +576,16 @@ class DeliberationLayer(CortexLayer):
                 raw_msg = await model.chat_with_tools(messages, tools=param_tools)
                 llm_latency = time.time() - llm_start
                 
-                # Check for Ollama Errors (e.g. model does not support tools)
-                msg_content = raw_msg.get('content', '')
-                has_error = (
-                    isinstance(msg_content, str) and 
-                    ('ollama error' in msg_content.lower() or 'error' in msg_content.lower()) and
-                    raw_msg.get('role') == 'assistant' and
-                    not raw_msg.get('tool_calls')
-                )
+                # Check for Ollama / transport failures (404 model, parse errors, etc.)
+                msg_content = raw_msg.get("content", "")
+                msg_lower = msg_content.lower() if isinstance(msg_content, str) else ""
+                tool_calls = raw_msg.get("tool_calls") or []
+                has_error = isinstance(msg_content, str) and raw_msg.get("role") == "assistant" and (
+                    "ollama error" in msg_lower
+                    or "not found" in msg_lower
+                    or ("model" in msg_lower and "not found" in msg_lower)
+                    or ("invalid json" in msg_lower)
+                ) and not tool_calls
                 
                 if has_error:
                      viki_logger.warning(f"Native tool call failed: {msg_content}. Fallback to structured output.")

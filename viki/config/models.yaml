@@ -71,6 +71,7 @@ models:
       temperature: 0.1
       priority: 1 # Lowered priority for phi3 (use only when necessary)
       capabilities: ["reflex", "fast_response"]
+      supports_native_tools: false
       description: "Phi-3 - Microsoft's compact model. Use for SHALLOW/REFLEX intent detection."
 
     # --- Specialist: Coding ---

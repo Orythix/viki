@@ -1,3 +1,4 @@
+import re
 import time
 from enum import Enum
 from typing import Dict, Any, List, Optional, Tuple
@@ -53,8 +54,19 @@ class JudgmentEngine:
         # 4. Capability Recommendation (Heuristic)
         recommended_cap = None
         input_lower = user_input.lower()
-        if "search" in input_lower or "find" in input_lower or "research" in input_lower or "who is" in input_lower or "what is" in input_lower:
+        if "search" in input_lower or "find" in input_lower or "research" in input_lower or "who is" in input_lower:
             recommended_cap = "internet_research"
+        elif "what is" in input_lower:
+            # Avoid tagging trivial arithmetic / numeric snippets as web research.
+            tail_m = re.search(r"\bwhat\s+is\s+(.+)$", input_lower.strip())
+            trivial_what_is = False
+            if tail_m:
+                tail = tail_m.group(1).strip().rstrip("?")
+                trivial_what_is = bool(
+                    re.fullmatch(r"[\d\s\+\-\*\/\^\(\)\.\,]+", tail) and len(tail) <= 48
+                )
+            if not trivial_what_is:
+                recommended_cap = "internet_research"
         elif "write" in input_lower or "save" in input_lower or "delete" in input_lower:
             recommended_cap = "filesystem_write"
         elif "list" in input_lower or "read" in input_lower or "open file" in input_lower:
