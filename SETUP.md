@@ -66,6 +66,11 @@ To show the **hologram face** and **talk to VIKI** with voice:
 
 The `--ui` flag starts the API server and opens your browser to `http://localhost:5173`. The default view is the **Hologram** (voice conversation); switch to **Full dashboard** for text chat. The UI needs the API key: create `ui/.env` with `VITE_VIKI_API_KEY=<same value as VIKI_API_KEY>` so the dashboard and hologram view can authenticate. See [viki/SECURITY_SETUP.md](viki/SECURITY_SETUP.md).
 
+### Troubleshooting (Windows)
+
+- **`videoio(MSMF): can't grab frame` after each message**: The BioModule webcam sensor is **off by default** (`system.bio_webcam_enabled: false` in `viki/config/settings.yaml`). If you still see this on an older build, upgrade to the current tree or set `VIKI_BIO_WEBCAM=0` in `.env`. Enable only with a working camera: `VIKI_BIO_WEBCAM=1` or `bio_webcam_enabled: true`.
+- **Hugging Face `HF_TOKEN` / rate limits**: Optional; set `HF_TOKEN` in the environment if you download many models from the Hub.
+
 ## 🧪 Testing
 
 To verify key systems:

@@ -36,7 +36,7 @@ Following the **Cortex Upgrade**, VIKI follows a "Professional Intelligence" des
 *   **Performance API**: `GET /api/models/performance` (trust score, latency, error rate per model).
 *   **Continuous Learner** (`viki/core/continuous_learning.py`): Optional periodic training cycles with validation.
 
-See [viki/MODEL_ENHANCEMENT_SUMMARY.md](viki/MODEL_ENHANCEMENT_SUMMARY.md) and [viki/OBSERVABILITY.md](viki/OBSERVABILITY.md) for details.
+See [viki/skills/creation/forge.py](viki/skills/creation/forge.py) (Neural Forge / Ollama Modelfile and optional LoRA) and [viki/SECURITY_SETUP.md](viki/SECURITY_SETUP.md) for operational details.
 
 ## Cognitive Data Flow
 ```mermaid

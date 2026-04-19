@@ -1,4 +1,5 @@
 import asyncio
+import sys
 import time
 from viki.config.logger import viki_logger
 
@@ -8,12 +9,26 @@ except Exception as e:
     cv2 = None
     viki_logger.warning(f"OpenCV unavailable during BioModule import ({e}). Bio sensing will be disabled.")
 
+
+def _opencv_silence_msmf():
+    """Reduce OpenCV stderr spam when no camera is available (common on Windows MSMF)."""
+    if cv2 is None:
+        return
+    try:
+        cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_ERROR)
+    except Exception:
+        pass
+
+
 class BioModule:
     """
     Bio-Adaptive Interface: Analyzes user's physiological state.
     Uses OpenCV for lightweight detection and placeholder for DeepFace.
+    Webcam capture is opt-in (system.bio_webcam_enabled or VIKI_BIO_WEBCAM=1) to avoid MSMF errors on headless PCs.
     """
-    def __init__(self):
+
+    def __init__(self, webcam_enabled: bool = False):
+        self.webcam_enabled = bool(webcam_enabled)
         self.current_emotion = "neutral"
         self.is_running = False
         self._thread = None
@@ -21,27 +36,60 @@ class BioModule:
         self._monitor_task: asyncio.Task | None = None
 
     async def start(self):
+        if not self.webcam_enabled:
+            viki_logger.debug(
+                "BioModule: Webcam sensor off (set system.bio_webcam_enabled: true or VIKI_BIO_WEBCAM=1 to enable)."
+            )
+            return
         if cv2 is None:
             viki_logger.warning("BioModule: Empathy sensor disabled because OpenCV is unavailable.")
             return
+        _opencv_silence_msmf()
         self.is_running = True
         viki_logger.info("BioModule: Empathy sensor active (Async Loop).")
         # Store the task so it doesn't get garbage-collected and so we can stop it cleanly.
         self._monitor_task = asyncio.create_task(self._monitor_loop())
         await asyncio.sleep(0)  # Yield control to the event loop.
 
+    def _open_capture(self):
+        """Open default camera; prefer DirectShow on Windows to reduce MSMF failures."""
+        if cv2 is None:
+            return None
+        _opencv_silence_msmf()
+        if sys.platform == "win32":
+            try:
+                cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+            except TypeError:
+                cap = cv2.VideoCapture(0)
+            if cap.isOpened():
+                return cap
+            try:
+                cap.release()
+            except Exception:
+                pass
+        cap = cv2.VideoCapture(0)
+        return cap if cap.isOpened() else None
+
     async def _monitor_loop(self):
         # We handle blocking cv2 calls in executor to keep one loop
         if cv2 is None:
             return
         loop = asyncio.get_running_loop()
-        self.cap = await loop.run_in_executor(None, cv2.VideoCapture, 0)
-        
+        self.cap = await loop.run_in_executor(None, self._open_capture)
+        if not self.cap:
+            viki_logger.info(
+                "BioModule: No webcam available or access denied; empathy loop stopped. "
+                "Disable bio_webcam if you do not need camera-based tone hints."
+            )
+            self.is_running = False
+            return
+
         while self.is_running:
             try:
                 # Capture frame in executor
                 ret, _ = await loop.run_in_executor(None, self.cap.read)
-                if not ret: break
+                if not ret:
+                    break
                 
                 # Placeholder for DeepFace/Analysis
                 # In real use: result = await loop.run_in_executor(None, DeepFace.analyze, ...)
@@ -51,7 +99,12 @@ class BioModule:
                 viki_logger.error(f"BioModule Error: {e}")
                 break
         
-        if self.cap: self.cap.release()
+        if self.cap:
+            try:
+                self.cap.release()
+            except Exception:
+                pass
+            self.cap = None
 
     def get_state(self) -> str:
         return self.current_emotion

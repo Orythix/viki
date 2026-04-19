@@ -1,6 +1,7 @@
 import os
 import json
 import re
+import time
 import yaml
 import asyncio
 import aiohttp
@@ -67,6 +68,13 @@ class LLMProvider(ABC):
         else:
             self.trust_score = min(1.0, self.trust_score + 0.01)
 
+        try:
+            from viki.core.usage_log import emit_model_feedback
+
+            emit_model_feedback(self, latency, success)
+        except Exception:
+            pass
+
     @abstractmethod
     async def chat(self, messages: List[Dict[str, str]], temperature: float = 0.7) -> str:
         """Send a asynchronous chat request to the LLM."""
@@ -81,53 +89,116 @@ class MockLLM(LLMProvider):
     """Mock LLM for testing and development."""
     
     async def chat(self, messages: List[Dict[str, str]], temperature: float = 0.0) -> str:
-        await asyncio.sleep(0.1) # Simulate network
-        all_text = "\n".join([m.get('content', '') for m in messages]).lower()
-        # Security-scan prompt path (SafetyLayer.scan_request):
-        # If asked to output EXACTLY 'SAFE' for a given user request, mock a refusal that includes 'violate'.
-        if "output exactly the word 'safe'" in all_text:
-            illegal_present = ("illegal" in all_text) or ("unsafe" in all_text)
-            if illegal_present:
-                return "This request cannot be supported because it involves illegal or harmful activity and violates protocols."
-            return "SAFE"
-        if "semantic extraction" in all_text or "extract permanent user facts" in all_text:
-             return json.dumps({
-                 "fact": "Optimization sub-routine should be used for complex paths and heuristics applied.",
-                 "rel": ["System", "applies", "heuristics"],
-                 "confidence": 0.95
-             })
-        return "Mock response for " + self.model_name
+        t0 = time.perf_counter()
+        success = False
+        try:
+            await asyncio.sleep(0.1) # Simulate network
+            all_text = "\n".join([m.get('content', '') for m in messages]).lower()
+            # Security-scan prompt path (SafetyLayer.scan_request):
+            # If asked to output EXACTLY 'SAFE' for a given user request, mock a refusal that includes 'violate'.
+            if "output exactly the word 'safe'" in all_text:
+                illegal_present = ("illegal" in all_text) or ("unsafe" in all_text)
+                if illegal_present:
+                    success = True
+                    return "This request cannot be supported because it involves illegal or harmful activity and violates protocols."
+                success = True
+                return "SAFE"
+            if "semantic extraction" in all_text or "extract permanent user facts" in all_text:
+                success = True
+                return json.dumps({
+                    "fact": "Optimization sub-routine should be used for complex paths and heuristics applied.",
+                    "rel": ["System", "applies", "heuristics"],
+                    "confidence": 0.95
+                })
+            success = True
+            return "Mock response for " + self.model_name
+        finally:
+            try:
+                from viki.core.usage_log import emit_llm_inference
+
+                emit_llm_inference(self, time.perf_counter() - t0, success, "chat")
+            except Exception:
+                pass
 
     async def chat_structured(self, messages: List[Dict[str, str]], response_model: Type[T], temperature: float = 0.0, image_path: str = None) -> T:
-        await asyncio.sleep(0.1)
-        if response_model == VIKIResponse:
-            all_text = '\n'.join([m['content'] for m in messages]).lower()
-            if 'plan' in all_text:
-                heur_present = 'heuristics' in all_text
-                return VIKIResponse(
-                    final_thought=ThoughtObject(intent_summary='Planning', primary_strategy='Think', confidence=1.0),
-                    final_response='I see the Heuristics Applied successfully.' if heur_present else 'Planning trip...'
-                )
-            return VIKIResponse(
-                final_thought=ThoughtObject(intent_summary='Mock', primary_strategy='Mock response', confidence=1.0),
-                final_response="This is a mock response because I'm in testing mode."
-            )
-        if response_model == VIKIResponseLite:
-            return VIKIResponseLite(final_response="This is a mock response.", confidence=1.0)
-        
-        # Support for Learning Analysis
+        t0 = time.perf_counter()
+        success = False
         try:
-            from viki.core.learning import VIKILessonBatch, VIKILesson
-            if response_model == VIKILessonBatch:
-                return VIKILessonBatch(
-                    lessons=[
-                        VIKILesson(topic='planning', fact='Optimization sub-routine should be used for complex paths and heuristics applied.', strategy='Use A*', significance=0.8)
-                    ]
+            await asyncio.sleep(0.1)
+            if response_model == VIKIResponse:
+                all_text = "\n".join([m["content"] for m in messages]).lower()
+                if "plan" in all_text:
+                    heur_present = "heuristics" in all_text
+                    success = True
+                    return VIKIResponse(
+                        final_thought=ThoughtObject(
+                            intent_summary="Planning", primary_strategy="Think", confidence=1.0
+                        ),
+                        final_response="I see the Heuristics Applied successfully."
+                        if heur_present
+                        else "Planning trip...",
+                    )
+                success = True
+                return VIKIResponse(
+                    final_thought=ThoughtObject(
+                        intent_summary="Mock", primary_strategy="Mock response", confidence=1.0
+                    ),
+                    final_response="This is a mock response because I'm in testing mode.",
                 )
-        except ImportError:
-            pass
-            
-        return response_model()
+            if response_model == VIKIResponseLite:
+                success = True
+                return VIKIResponseLite(final_response="This is a mock response.", confidence=1.0)
+
+            # Support for Learning Analysis
+            try:
+                from viki.core.learning import VIKILessonBatch, VIKILesson
+
+                if response_model == VIKILessonBatch:
+                    success = True
+                    return VIKILessonBatch(
+                        lessons=[
+                            VIKILesson(
+                                topic="planning",
+                                fact="Optimization sub-routine should be used for complex paths and heuristics applied.",
+                                strategy="Use A*",
+                                significance=0.8,
+                            )
+                        ]
+                    )
+            except ImportError:
+                pass
+
+            success = True
+            return response_model()
+        finally:
+            try:
+                from viki.core.usage_log import emit_llm_inference
+
+                emit_llm_inference(self, time.perf_counter() - t0, success, "chat_structured")
+            except Exception:
+                pass
+
+
+def _looks_like_openai_secret(key: Optional[str]) -> bool:
+    """True only for keys that can authenticate api.openai.com (not placeholders like 'ollama')."""
+    if not key or not str(key).strip():
+        return False
+    s = str(key).strip()
+    lowered = s.lower()
+    if lowered in ("ollama", "none", "dummy", "placeholder", "test", "your-api-key-here", "changeme"):
+        return False
+    return s.startswith("sk-")  # includes sk-proj-
+
+
+def _looks_like_anthropic_secret(key: Optional[str]) -> bool:
+    if not key or not str(key).strip():
+        return False
+    s = str(key).strip()
+    lowered = s.lower()
+    if lowered in ("ollama", "none", "dummy", "placeholder", "test", "your-api-key-here", "changeme"):
+        return False
+    return s.startswith("sk-ant-")
+
 
 class APILLM(LLMProvider):
     """OpenAI-compatible API provider with Instructor support."""
@@ -142,8 +213,11 @@ class APILLM(LLMProvider):
             import instructor
             if self.provider_type == "anthropic":
                 from anthropic import AsyncAnthropic
-                if not api_key:
-                    raise ValueError(f"API key for Anthropic is missing ({self.config.get('api_key_env')})")
+                if not _looks_like_anthropic_secret(api_key):
+                    raise ValueError(
+                        f"Anthropic API key missing or invalid ({self.config.get('api_key_env', 'ANTHROPIC_API_KEY')}). "
+                        "Expected a key starting with sk-ant-. Remove placeholder values or use local Ollama profiles."
+                    )
                 self.client = instructor.from_anthropic(
                     AsyncAnthropic(api_key=api_key),
                     mode=instructor.Mode.ANTHROPIC_JSON
@@ -151,11 +225,18 @@ class APILLM(LLMProvider):
             else:
                 from openai import AsyncOpenAI
                 base_url = self.config.get('base_url', 'https://api.openai.com/v1')
-                if not api_key and "openai.com" in base_url:
-                     raise ValueError(f"API key for OpenAI is missing ({self.config.get('api_key_env')})")
-                
+                uses_official_openai = "api.openai.com" in (base_url or "")
+                if uses_official_openai and not _looks_like_openai_secret(api_key):
+                    raise ValueError(
+                        f"OpenAI API key missing or invalid ({self.config.get('api_key_env', 'OPENAI_API_KEY')}). "
+                        "Official OpenAI expects a secret starting with sk-. "
+                        "Unset OPENAI_API_KEY or set system.local_llm_only: true to use Ollama only."
+                    )
+                if not api_key and not uses_official_openai:
+                    api_key = "not-needed"  # OpenAI-compatible local servers (LM Studio, vLLM) often accept any string
+
                 self.client = instructor.from_openai(
-                    AsyncOpenAI(api_key=api_key, base_url=base_url),
+                    AsyncOpenAI(api_key=api_key or "not-needed", base_url=base_url),
                     mode=instructor.Mode.JSON
                 )
         except ImportError as e:
@@ -172,63 +253,85 @@ class APILLM(LLMProvider):
             self.unavailable_reason = str(e)
 
     async def chat(self, messages: List[Dict[str, str]], temperature: float = 0.7, image_path: str = None) -> str:
-        if not self.available:
-            return f"Error: Model '{self.model_name}' is unavailable (likely due to missing API key)."
+        t0 = time.perf_counter()
+        success = False
         try:
+            if not self.available:
+                return f"Error: Model '{self.model_name}' is unavailable (likely due to missing API key)."
             if image_path:
                 import base64
                 # Use asyncio.to_thread for file I/O
                 def read_image():
                     with open(image_path, "rb") as image_file:
                         return base64.b64encode(image_file.read()).decode('utf-8')
-                
+
                 base64_image = await asyncio.to_thread(read_image)
-                
+
                 for i in range(len(messages) - 1, -1, -1):
                     if messages[i]['role'] == 'user':
                         original_text = messages[i]['content']
                         messages[i]['content'] = [
                             {"type": "text", "text": original_text},
-                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}},
                         ]
                         break
 
             response = await self.client.chat.completions.create(
                 model=self.model_name,
                 messages=messages,
-                temperature=temperature
+                temperature=temperature,
             )
+            success = True
             return response.choices[0].message.content
         except Exception as e:
             return f"Error calling API Model: {str(e)}"
+        finally:
+            try:
+                from viki.core.usage_log import emit_llm_inference
+
+                emit_llm_inference(self, time.perf_counter() - t0, success, "chat")
+            except Exception:
+                pass
 
     async def chat_structured(self, messages: List[Dict[str, str]], response_model: Type[T], temperature: float = 0.0, image_path: str = None) -> T:
-        if not self.available:
-             raise ValueError(f"Model '{self.model_name}' is unavailable.")
-        if image_path:
-            import base64
-            # Use asyncio.to_thread for file I/O
-            def read_image():
-                with open(image_path, "rb") as image_file:
-                    return base64.b64encode(image_file.read()).decode('utf-8')
-            
-            base64_image = await asyncio.to_thread(read_image)
-            
-            for i in range(len(messages) - 1, -1, -1):
-                if messages[i]['role'] == 'user':
-                    original_text = messages[i]['content'] or ""
-                    messages[i]['content'] = [
-                        {"type": "text", "text": str(original_text)},
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
-                    ]
-                    break
+        t0 = time.perf_counter()
+        success = False
+        try:
+            if not self.available:
+                raise ValueError(f"Model '{self.model_name}' is unavailable.")
+            if image_path:
+                import base64
+                # Use asyncio.to_thread for file I/O
+                def read_image():
+                    with open(image_path, "rb") as image_file:
+                        return base64.b64encode(image_file.read()).decode('utf-8')
 
-        return await self.client.chat.completions.create(
-            model=self.model_name,
-            messages=messages,
-            response_model=response_model,
-            temperature=temperature
-        )
+                base64_image = await asyncio.to_thread(read_image)
+
+                for i in range(len(messages) - 1, -1, -1):
+                    if messages[i]['role'] == 'user':
+                        original_text = messages[i]['content'] or ""
+                        messages[i]['content'] = [
+                            {"type": "text", "text": str(original_text)},
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}},
+                        ]
+                        break
+
+            out = await self.client.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                response_model=response_model,
+                temperature=temperature,
+            )
+            success = True
+            return out
+        finally:
+            try:
+                from viki.core.usage_log import emit_llm_inference
+
+                emit_llm_inference(self, time.perf_counter() - t0, success, "chat_structured")
+            except Exception:
+                pass
 
 class LocalLLM(LLMProvider):
     """Ollama provider with Async support and JSON mode."""
@@ -240,110 +343,251 @@ class LocalLLM(LLMProvider):
             self.base_url = self.base_url.replace('localhost', '127.0.0.1')
 
     async def chat(self, messages: List[Dict[str, str]], temperature: float = 0.7, format: str = None, image_path: str = None, tools: List[Dict[str, Any]] = None) -> str:
-        data = {
-            "model": self.model_name,
-            "messages": messages,
-            "stream": False,
-            "options": {"temperature": temperature}
-        }
-        if format:
-            data["format"] = format
-        
-        if tools:
-            data["tools"] = tools
-            data["stream"] = False # Tools require non-streaming for now
-        
-        if image_path:
-            import base64
-            # Use asyncio.to_thread for file I/O
-            def read_image():
-                with open(image_path, "rb") as image_file:
-                    return base64.b64encode(image_file.read()).decode('utf-8')
-            
-            base64_image = await asyncio.to_thread(read_image)
-            for i in range(len(messages) - 1, -1, -1):
-                if messages[i]['role'] == 'user':
-                    messages[i]["images"] = [base64_image]
-                    break
+        t0 = time.perf_counter()
+        success = False
+        try:
+            data = {
+                "model": self.model_name,
+                "messages": messages,
+                "stream": False,
+                "options": {"temperature": temperature},
+            }
+            if format:
+                data["format"] = format
 
-        async with aiohttp.ClientSession() as session:
+            if tools:
+                data["tools"] = tools
+                data["stream"] = False  # Tools require non-streaming for now
+
+            if image_path:
+                import base64
+
+                # Use asyncio.to_thread for file I/O
+                def read_image():
+                    with open(image_path, "rb") as image_file:
+                        return base64.b64encode(image_file.read()).decode("utf-8")
+
+                base64_image = await asyncio.to_thread(read_image)
+                for i in range(len(messages) - 1, -1, -1):
+                    if messages[i]["role"] == "user":
+                        messages[i]["images"] = [base64_image]
+                        break
+
+            async with aiohttp.ClientSession() as session:
+                try:
+                    async with session.post(f"{self.base_url}/api/chat", json=data, timeout=120) as resp:
+                        if resp.status == 404:
+                            return f"Error: Model '{self.model_name}' not found."
+                        resp_json = await resp.json()
+
+                        # Handle Tool Calls
+                        if resp_json["message"].get("tool_calls"):
+                            success = True
+                            return json.dumps({"tool_calls": resp_json["message"]["tool_calls"]})
+
+                        success = True
+                        return resp_json["message"]["content"]
+                except Exception as e:
+                    return f"Error calling Local Model: {str(e)}"
+        finally:
             try:
-                async with session.post(f"{self.base_url}/api/chat", json=data, timeout=120) as resp:
-                    if resp.status == 404:
-                        return f"Error: Model '{self.model_name}' not found."
-                    resp_json = await resp.json()
-                    
-                    # Handle Tool Calls
-                    if resp_json['message'].get('tool_calls'):
-                        # Return the first tool call as a special string or handle it
-                        # For now, let's just serialize it so the caller can parse it
-                        return json.dumps({"tool_calls": resp_json['message']['tool_calls']})
-                        
-                    return resp_json['message']['content']
-            except Exception as e:
-                return f"Error calling Local Model: {str(e)}"
+                from viki.core.usage_log import emit_llm_inference
+
+                emit_llm_inference(self, time.perf_counter() - t0, success, "chat")
+            except Exception:
+                pass
 
     async def chat_with_tools(self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]], temperature: float = 0.0) -> Dict[str, Any]:
         """Specific method for tool use that returns the full message object (content + tool_calls)."""
+        t0 = time.perf_counter()
+        success = False
         data = {
             "model": self.model_name,
             "messages": messages,
             "stream": False,
             "options": {"temperature": temperature},
-            "tools": tools
+            "tools": tools,
         }
-        
+
         async with aiohttp.ClientSession() as session:
             try:
                 async with session.post(f"{self.base_url}/api/chat", json=data, timeout=120) as resp:
                     if resp.status == 404:
-                         raise ValueError(f"Model '{self.model_name}' not found.")
-                    
+                        raise ValueError(f"Model '{self.model_name}' not found.")
+
                     try:
                         resp_json = await resp.json()
                     except (aiohttp.ContentTypeError, json.JSONDecodeError) as e:
                         viki_logger.error(f"Failed to parse Ollama response: {e}")
                         raise ValueError(f"Invalid JSON response from Ollama: {resp.status}")
 
-                    if 'error' in resp_json:
+                    if "error" in resp_json:
                         raise ValueError(f"Ollama Error: {resp_json['error']}")
-                        
-                    if 'message' not in resp_json:
-                         raise ValueError(f"Missing 'message' in response: {resp_json}")
 
-                    return resp_json['message'] 
+                    if "message" not in resp_json:
+                        raise ValueError(f"Missing 'message' in response: {resp_json}")
+
+                    success = True
+                    return resp_json["message"]
             except Exception as e:
                 viki_logger.error(f"Tool call failed: {e}")
                 return {"role": "assistant", "content": f"Ollama Error: {str(e)}"}
+            finally:
+                try:
+                    from viki.core.usage_log import emit_llm_inference
+
+                    emit_llm_inference(self, time.perf_counter() - t0, success, "chat_with_tools")
+                except Exception:
+                    pass
+
+    def _compact_json_output_guide(self, response_model: Type[T]) -> str:
+        """Short output instructions — full Pydantic JSON Schema makes Ollama echo the schema back."""
+        if response_model == VIKIResponse:
+            return (
+                "### JSON OUTPUT (required) ###\n"
+                "Return one JSON object only. Use keys: final_thought (object with intent_summary, "
+                "primary_strategy, confidence) and final_response (string — your full answer to the user).\n"
+                "Do NOT return a JSON Schema (no top-level properties, required, or definitions).\n"
+                "Example: {\"final_thought\":{\"intent_summary\":\"User asked a question\","
+                "\"primary_strategy\":\"Answer helpfully\",\"confidence\":0.82},"
+                "\"final_response\":\"Here is my answer...\"}"
+            )
+        if response_model == VIKIResponseLite:
+            return (
+                "### JSON OUTPUT (required) ###\n"
+                "Return one JSON object: {\"final_response\":\"your answer\",\"confidence\":0.85,\"action\":null}\n"
+                "Include action only when a tool call is needed."
+            )
+        try:
+            sch = response_model.model_json_schema()
+            keys = list((sch.get("properties") or {}).keys())
+            if keys:
+                return (
+                    "### JSON OUTPUT ###\n"
+                    f"Return one JSON object with these keys only: {', '.join(keys)}. "
+                    "Populate values; do not output JSON Schema metadata."
+                )
+        except Exception as e:
+            viki_logger.debug("compact guide fallback: %s", e)
+        return "### JSON OUTPUT ###\nReturn one valid JSON object for the task."
+
+    @staticmethod
+    def _data_is_json_schema_echo(data: Any) -> bool:
+        if not isinstance(data, dict):
+            return False
+        if data.get("type") != "object":
+            return False
+        return "properties" in data and "required" in data
+
+    async def _ollama_recover_after_schema_echo(
+        self,
+        msgs_without_guide: List[Dict[str, Any]],
+        response_model: Type[T],
+        temperature: float,
+        image_path: Optional[str],
+    ) -> str:
+        """Second JSON attempt with stricter anti-schema instructions; then plain text if needed."""
+        recovery = [dict(m) for m in msgs_without_guide]
+        if response_model == VIKIResponse:
+            recovery.append(
+                {
+                    "role": "system",
+                    "content": (
+                        "You returned a JSON Schema. That is wrong. Return ONLY a data object (one JSON value) "
+                        "with fields final_thought and final_response as described in the prior instructions. "
+                        "final_response must contain your actual reply to the user."
+                    ),
+                }
+            )
+        else:
+            recovery.append(
+                {
+                    "role": "system",
+                    "content": "Return only the answer JSON object, not a schema describing it.",
+                }
+            )
+        text = await self.chat(
+            recovery,
+            temperature=min(0.4, max(0.1, temperature)),
+            format="json",
+            image_path=image_path,
+        )
+        text = (text if isinstance(text, str) else str(text or "")).strip()
+        try:
+            data2 = self._parse_structured_json_heuristics(text)
+            if not self._data_is_json_schema_echo(data2):
+                return text
+        except Exception:
+            return text
+
+        plain_msgs = [dict(m) for m in msgs_without_guide]
+        plain_msgs.append(
+            {
+                "role": "system",
+                "content": (
+                    "Reply in plain language only. Answer the user's last message helpfully. "
+                    "No JSON, no code fences, no preamble."
+                ),
+            }
+        )
+        return await self.chat(
+            plain_msgs,
+            temperature=min(0.55, max(0.15, temperature)),
+            format=None,
+            image_path=image_path,
+        )
 
     async def chat_structured(self, messages: List[Dict[str, str]], response_model: Type[T], temperature: float = 0.0, image_path: str = None) -> T:
         """Parse structured output from local Ollama models with heuristic patching."""
-        # 0. Inject Schema for guidance
-        try:
-            schema = response_model.model_json_schema()
-            instruction = (
-                "### JSON OUTPUT RULE ###\n"
-                "Return ONLY a single, valid JSON object matching this structure. "
-                "No explanations, no markdown code blocks, and no extra text.\n"
-                f"SCHEMA: {json.dumps(schema)}"
-            )
-            messages.append({"role": "system", "content": instruction})
-        except Exception as e:
-            viki_logger.debug(f"Failed to inject schema: {e}")
+        msgs: List[Dict[str, Any]] = [dict(m) for m in messages]
 
-        # 1. Get raw JSON from model
-        content = await self.chat(messages, temperature=temperature, format="json", image_path=image_path)
+        if image_path:
+            import base64
+
+            def read_image():
+                with open(image_path, "rb") as image_file:
+                    return base64.b64encode(image_file.read()).decode("utf-8")
+
+            base64_image = await asyncio.to_thread(read_image)
+            for i in range(len(msgs) - 1, -1, -1):
+                if msgs[i]["role"] == "user":
+                    msgs[i]["images"] = [base64_image]
+                    break
+
+        guide = self._compact_json_output_guide(response_model)
+        msgs.append({"role": "system", "content": guide})
+
+        content = await self.chat(msgs, temperature=temperature, format="json", image_path=image_path)
         content = (content if isinstance(content, str) else str(content or "")).strip()
-        viki_logger.debug(f"DEBUG: Raw response from {self.config.get('model_name')}: {content}")
+        viki_logger.debug("DEBUG: Raw response from %s", self.config.get("model_name"))
 
-        # 2. Parse and patch
         try:
             data = self._parse_structured_json_heuristics(content)
+            if response_model == VIKIResponse and self._data_is_json_schema_echo(data):
+                viki_logger.info("Local model echoed JSON Schema; recovering with follow-up prompt.")
+                content = await self._ollama_recover_after_schema_echo(
+                    msgs[:-1], response_model, temperature, image_path
+                )
+                content = (content if isinstance(content, str) else str(content or "")).strip()
+                if content.startswith("{") or content.startswith("["):
+                    data = self._parse_structured_json_heuristics(content)
+                else:
+                    return VIKIResponse(
+                        final_thought=ThoughtObject(
+                            intent_summary="Direct reply",
+                            primary_strategy="Plain-language recovery after invalid JSON",
+                            confidence=0.65,
+                        ),
+                        final_response=content[:8000] if len(content) > 8000 else content,
+                    )
+                if response_model == VIKIResponse and self._data_is_json_schema_echo(data):
+                    return self._structured_fallback(response_model, content, ValueError("schema echo persisted"))
+
             if response_model == VIKIResponse:
                 data = self._patch_viki_response(data)
             return response_model.model_validate_json(json.dumps(data))
         except Exception as e:
-            viki_logger.warning(f"Structured parse failed for {response_model.__name__}: {e}")
+            viki_logger.warning("Structured parse failed for %s: %s", response_model.__name__, e)
             return self._structured_fallback(response_model, content, e)
 
     def _parse_structured_json_heuristics(self, content: str) -> dict:
@@ -436,10 +680,6 @@ class LocalLLM(LLMProvider):
     def _patch_viki_response(self, data: dict) -> dict:
         """Apply heuristic patches for common local LLM schema errors.
         These handle the various ways models mangle the VIKIResponse schema."""
-        patched = self._patch_schema_echo(data)
-        if patched is not None:
-            return patched
-
         patched = self._patch_response_plan(data)
         if patched is not None:
             return patched
@@ -450,18 +690,6 @@ class LocalLLM(LLMProvider):
         self._patch_flattened_action(data)
         self._patch_missing_final_thought(data)
         return data
-
-    def _patch_schema_echo(self, data: dict) -> Optional[dict]:
-        if all(k in data for k in ["properties", "type", "required"]) and data.get("type") == "object":
-            return {
-                "final_thought": {
-                    "intent_summary": "Model Error (Schema Echo)",
-                    "primary_strategy": "Retry with simpler constraints",
-                    "confidence": 0.0,
-                },
-                "final_response": "Internal Error: The local model echoed the schema instead of answering. Try again or switch models.",
-            }
-        return None
 
     def _patch_response_plan(self, data: dict) -> Optional[dict]:
         if "response" in data and "plan" in data and "final_thought" not in data:
@@ -542,13 +770,34 @@ class ModelFactory:
             raise ValueError(f"Unknown provider type: {provider_type}")
 
 class ModelRouter:
-    def __init__(self, config_path: str, air_gap: bool = False):
+    def __init__(self, config_path: str, air_gap: bool = False, local_llm_only: bool = False):
         self.models = {}
         self.default_model = None
         self.air_gap = air_gap
+        self.local_llm_only = local_llm_only
         self._load_config(config_path)
 
-        
+    def _model_allowed(self, model: LLMProvider) -> bool:
+        if not model.available:
+            return False
+        if self.air_gap and not isinstance(model, LocalLLM):
+            return False
+        if self.local_llm_only and isinstance(model, APILLM):
+            return False
+        return True
+
+    def _first_allowed_model(self) -> Optional[LLMProvider]:
+        for m in self.models.values():
+            if self._model_allowed(m):
+                return m
+        for m in self.models.values():
+            if m.available and isinstance(m, LocalLLM):
+                return m
+        for m in self.models.values():
+            if m.available:
+                return m
+        return None
+
     def _load_config(self, path: str):
         try:
             with open(path, 'r') as f:
@@ -563,13 +812,24 @@ class ModelRouter:
                 if provider_name in providers:
                     provider_conf = providers[provider_name]
                     self.models[name] = ModelFactory.create(name, profile, provider_conf)
-            
+
+            preferred: Optional[LLMProvider] = None
             if default_profile in self.models:
-                self.default_model = self.models[default_profile]
+                preferred = self.models[default_profile]
             elif self.models:
-                self.default_model = list(self.models.values())[0]
+                preferred = list(self.models.values())[0]
+
+            if preferred and self._model_allowed(preferred):
+                self.default_model = preferred
             else:
-                 self.default_model = MockLLM({'model_name': 'fallback-mock'})
+                self.default_model = self._first_allowed_model() or MockLLM({'model_name': 'fallback-mock'})
+                if preferred and not preferred.available:
+                    viki_logger.warning(
+                        "Default model profile '%s' is unavailable (%s). Using '%s' instead.",
+                        default_profile,
+                        getattr(preferred, "unavailable_reason", "unknown"),
+                        getattr(self.default_model, "model_name", "fallback"),
+                    )
                  
         except (yaml.YAMLError, IOError, FileNotFoundError, KeyError) as e:
             viki_logger.error(f"Failed to load model config from {path}: {e}")
@@ -577,16 +837,17 @@ class ModelRouter:
 
     def get_model(self, capabilities: List[str] = None) -> LLMProvider:
         if not capabilities:
-            return self.default_model
+            if self._model_allowed(self.default_model):
+                return self.default_model
+            fb = self._first_allowed_model()
+            return fb or self.default_model
             
         best_candidate = None
         best_score = -1
         
         for model in self.models.values():
-            if not model.available:
+            if not self._model_allowed(model):
                 continue
-            if self.air_gap and not isinstance(model, LocalLLM):
-                continue # Skip non-local if in air-gap mode
 
             model_caps = model.config.get('capabilities', [])
             
@@ -614,7 +875,11 @@ class ModelRouter:
                 best_score = score
                 best_candidate = model
         
-        return best_candidate or self.default_model
+        if best_candidate:
+            return best_candidate
+        if self._model_allowed(self.default_model):
+            return self.default_model
+        return self._first_allowed_model() or self.default_model
 
     def get_health_snapshot(self) -> Dict[str, Any]:
         available = []

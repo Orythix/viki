@@ -107,7 +107,7 @@ VIKI/
 ## Quick Start
 
 ### Prerequisites
-*   **Python 3.11+**
+*   **Python 3.10+** (3.10, 3.11, and 3.12 are supported; CI runs 3.10 and 3.11 on Ubuntu).
 *   **Ollama CLI**: Installed and running (`ollama serve`).
 *   **Recommended Models**: `phi3` (Reflex), `deepseek-r1` (Reasoning).
 
@@ -118,8 +118,30 @@ VIKI/
     cd viki
     python -m venv .venv
     ./.venv/Scripts/Activate.ps1
-    pip install -r requirements.txt
+    pip install -e .
     ```
+    For tests and lint: `pip install -e ".[dev]"`. Dependencies are declared in `pyproject.toml`; `requirements.txt` only installs the package in editable mode (`-e .`).
+
+#### Install profiles (optional extras)
+
+Extras are defined in [`pyproject.toml`](pyproject.toml) under `[project.optional-dependencies]`:
+
+- **`dev`** — `pytest`, `pytest-asyncio`, `ruff` (CI and local development).
+- **`windows`** — `pypiwin32` for Windows-specific integrations.
+- **`optional-network`** — `scapy`.
+- **`vad`** — `silero-vad` (voice activity).
+- **`qt`** — `PyQt5` (e.g. desktop overlay in `viki/ui/overlay.py`).
+- **`embeddings`** — `sentence-transformers`, `torch`, `torchaudio`.
+- **`browser`** — `playwright` (run `playwright install chromium` after install for the browser skill).
+- **`vision`** — `opencv-python`.
+- **`agent-full`** — convenience bundle of common agent dependencies (see `pyproject.toml` for the exact list).
+
+Examples:
+
+```powershell
+pip install -e ".[dev]"
+pip install -e ".[windows,qt]"
+```
 
 2.  **Configure environment** (recommended so paths and secrets are not hardcoded):
     ```powershell
@@ -202,18 +224,13 @@ Unlike static bots, VIKI grows. Every 10 stable lessons learned, she initiates a
 ## Documentation
 | Document | Description |
 |----------|--------------|
-| [DOCKER.md](DOCKER.md) | Run VIKI in Docker and use Docker from the agent |
-| [PRE_RELEASE.md](PRE_RELEASE.md) | Checklist and steps for pre-releasing to public users |
 | [SETUP.md](SETUP.md) | Installation and environment |
+| [DOCKER.md](DOCKER.md) | Run VIKI in Docker (`docker compose`) |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | System design and data flow |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |
-| [viki/DOCS_INDEX.md](viki/DOCS_INDEX.md) | Index of all viki documentation |
-| [viki/SECURITY_SETUP.md](viki/SECURITY_SETUP.md) | Security configuration |
-| [viki/IMPLEMENTATION_SUMMARY.md](viki/IMPLEMENTATION_SUMMARY.md) | Security & stability fixes |
-| [viki/MODEL_ENHANCEMENT_SUMMARY.md](viki/MODEL_ENHANCEMENT_SUMMARY.md) | Model improvement system |
-| [viki/ARCHITECTURE_REFACTOR.md](viki/ARCHITECTURE_REFACTOR.md) | Future refactoring roadmap |
-| [viki/OBSERVABILITY.md](viki/OBSERVABILITY.md) | Logging and metrics plan |
-| [viki/PERFORMANCE_NOTES.md](viki/PERFORMANCE_NOTES.md) | Performance optimization notes |
+| [SECURITY.md](SECURITY.md) | Security policy and reporting |
+| [viki/SECURITY_SETUP.md](viki/SECURITY_SETUP.md) | API keys, CORS, capability setup |
+| [viki/ARCHITECTURE_REFACTOR.md](viki/ARCHITECTURE_REFACTOR.md) | Controller / pipeline refactor notes |
 
 ---
 

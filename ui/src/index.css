@@ -1579,3 +1579,23 @@ body {
   background: #0d8c6a;
   border-color: #0d8c6a;
 }
+
+/* API key reminder (dashboard) */
+.api-key-banner {
+  padding: var(--space-3) var(--space-4);
+  background: hsla(38, 90%, 45%, 0.15);
+  border-bottom: 1px solid hsla(38, 80%, 50%, 0.35);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+.api-key-banner code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  color: var(--accent);
+}
+
+.api-key-banner a {
+  color: var(--accent);
+}

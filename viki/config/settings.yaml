@@ -1,5 +1,8 @@
 # User-specific config: use .env (copy from .env.example) instead of editing this file.
-# Env overrides: VIKI_DATA_DIR, VIKI_WORKSPACE_DIR, VIKI_PERSONA, VIKI_SHADOW_MODE, VIKI_AIR_GAP.
+# Env overrides: VIKI_DATA_DIR, VIKI_WORKSPACE_DIR, VIKI_PERSONA, VIKI_SHADOW_MODE, VIKI_AIR_GAP, VIKI_LOCAL_LLM_ONLY,
+#   VIKI_FORGE_BASE_OLLAMA_MODEL, VIKI_EMBED_GPU (1/true for CUDA sentence-transformers), VIKI_UNSLOTH_RUN_TRAIN (LoRA),
+#   VIKI_GIT_CONTEXT (1/true appends git snapshot to project context).
+#   VIKI_SESSION_USAGE_LOG (1/true/false) — append JSONL usage events under data_dir (usage_session.jsonl).
 system:
   log_level: "INFO"
   data_dir: "./data"
@@ -9,6 +12,10 @@ system:
   
   # Execution Mode: "live" = real actions, "shadow" = simulate only (safe for testing)
   shadow_mode: false
+
+  # When true, OpenAI/Anthropic API profiles are never selected; use Ollama (models.yaml) only.
+  # Set false and configure real keys when you want cloud models. Env: VIKI_LOCAL_LLM_ONLY=true|false.
+  local_llm_only: true
   
   # Max reasoning steps per request
   max_steps: 100
@@ -28,6 +35,19 @@ system:
   # At startup, log warnings if critical skills (email, calendar, research) are misconfigured.
   skill_health_check: true
 
+  # Ollama tag for Neural Forge Modelfile `FROM` line (e.g. qwen3.5:latest). Override with VIKI_FORGE_BASE_OLLAMA_MODEL.
+  forge_base_ollama_model: "qwen3.5:latest"
+
+  # When true, BioModule opens the default webcam (OpenCV). Default false avoids Windows MSMF errors without a camera.
+  bio_webcam_enabled: false
+
+  # When true (or VIKI_GIT_CONTEXT=1), append cached git branch/status/recent commits from workspace_dir to deliberation context.
+  git_workspace_context: false
+
+  # When true, append per-call usage lines (LLM inference, model_feedback, skill_execution) to data_dir/usage_session.jsonl.
+  # Disable with VIKI_SESSION_USAGE_LOG=false if you want zero extra disk I/O.
+  session_usage_log: true
+
   # What makes VIKI specific (surfaced in API and CLI)
   differentiators:
     - Local Neural Forge
@@ -39,7 +59,8 @@ models_config: "./viki/config/models.yaml"
 security_layer_path: "./viki/config/security_layer.md"
 
 memory:
-  short_term_limit: 20
+  # Working-memory turns kept for conversation context (clamped 10–50 in code). Raise for longer threads.
+  short_term_limit: 28
   long_term_enabled: false
 
 skills:

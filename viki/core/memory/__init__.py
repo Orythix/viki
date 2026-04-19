@@ -18,14 +18,14 @@ from .identity import NarrativeIdentity
 class WorkingMemory:
     """
     Working Memory (Short-term scratchpad).
-    Holds current deliberation trace, lasts ~10-20 turns.
+    Holds current deliberation trace; length capped by memory.short_term_limit (10–50).
     
     SECURITY FIX: MED-001 - Added thread safety with proper locking.
     """
     def __init__(self, config: Dict[str, Any]):
         self.config = config
-        # Limit to 10-20 turns as requested
-        self.max_turns = min(max(config.get('memory', {}).get('short_term_limit', 15), 10), 20)
+        # Clamp short-term trace length (config memory.short_term_limit); wider window = richer multi-turn context.
+        self.max_turns = min(max(config.get('memory', {}).get('short_term_limit', 15), 10), 50)
         
         data_dir = config.get('system', {}).get('data_dir', './data')
         os.makedirs(data_dir, exist_ok=True)

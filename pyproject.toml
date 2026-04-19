@@ -74,7 +74,46 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-asyncio"]
+dev = ["pytest", "pytest-asyncio", "ruff"]
+# Optional stacks (install on top of the base package). See README "Install profiles".
+windows = ["pypiwin32"]
+optional-network = ["scapy"]
+vad = ["silero-vad"]
+qt = ["PyQt5"]
+embeddings = ["sentence-transformers", "torch", "torchaudio"]
+browser = ["playwright"]
+vision = ["opencv-python"]
+agent-full = [
+    "sentence-transformers",
+    "torch",
+    "torchaudio",
+    "playwright",
+    "opencv-python",
+    "watchdog",
+    "pyautogui",
+    "pyperclip",
+    "pyttsx3",
+    "sounddevice",
+    "python-telegram-bot",
+    "discord.py",
+    "pandas",
+    "openpyxl",
+    "matplotlib",
+    "python-pptx",
+    "duckduckgo-search",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+# CI: catch likely bugs without requiring a full style pass on legacy code.
+select = ["F821", "F822", "F823", "F632"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["viki/tests"]
 
 [project.scripts]
 viki = "viki.main:run"

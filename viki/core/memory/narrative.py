@@ -4,6 +4,8 @@ import time
 import os
 import hashlib
 from typing import List, Dict, Any, Optional
+
+import numpy as np
 from viki.config.logger import viki_logger
 
 try:
@@ -11,6 +13,17 @@ try:
 except Exception as e:
     util = None
     viki_logger.warning(f"SentenceTransformers utilities unavailable during NarrativeMemory import ({e}). Episodic semantic recall will use fallback mode.")
+
+
+def _coerce_flat_embedding(v: Any, dim: int) -> Optional[List[float]]:
+    """Return a length-`dim` flat float vector, or None if `v` is ragged / wrong shape / non-finite."""
+    try:
+        a = np.asarray(v, dtype=np.float64)
+    except (ValueError, TypeError):
+        return None
+    if a.shape != (dim,) or not np.isfinite(a).all():
+        return None
+    return a.astype(np.float32, copy=False).tolist()
 
 
 class NarrativeMemory:
@@ -95,23 +108,42 @@ class NarrativeMemory:
 
         try:
             query_emb = self.encoder.encode(current_intent, convert_to_tensor=True)
-            
+            expected_dim = int(query_emb.shape[-1])
+
             cur = self.conn.cursor()
             cur.execute("SELECT id, intent, action, outcome, embedding FROM episodes")
             rows = cur.fetchall()
-            
-            if not rows: return []
-            
-            corpus_embs = [json.loads(r['embedding']) for r in rows if r['embedding']]
-            if not corpus_embs or util is None: return self._get_recent_episodes(limit)
-            
+
+            if not rows:
+                return []
+
+            corpus_rows: List[Any] = []
+            corpus_embs: List[List[float]] = []
+            for r in rows:
+                es = r["embedding"]
+                if not es:
+                    continue
+                try:
+                    v = json.loads(es)
+                except (json.JSONDecodeError, TypeError):
+                    continue
+                flat = _coerce_flat_embedding(v, expected_dim)
+                if flat is None:
+                    continue
+                corpus_embs.append(flat)
+                corpus_rows.append(r)
+
+            if not corpus_embs or util is None:
+                return self._get_recent_episodes(limit)
+
             import torch
+
             hits = util.semantic_search(query_emb, torch.tensor(corpus_embs), top_k=limit)
             
             results = []
             for hit in hits[0]:
                 idx = hit['corpus_id']
-                row = rows[idx]
+                row = corpus_rows[idx]
                 results.append({
                     "intent": row['intent'],
                     "action": row['action'],

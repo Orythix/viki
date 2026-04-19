@@ -22,6 +22,11 @@ env/
 *.swp
 *.swo
 .cursor/
+.claude/
+.agent/
+
+# Forge artifact at repo root (Modelfile under data/ is already under data/)
+/Modelfile.viki_evolved
 
 # OS
 .DS_Store

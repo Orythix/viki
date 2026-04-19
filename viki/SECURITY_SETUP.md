@@ -247,9 +247,9 @@ curl -H "Authorization: Bearer $VIKI_API_KEY" http://127.0.0.1:5000/api/health  
 
 For issues or questions:
 1. Check logs in `viki/data/viki.log`
-2. Review `IMPLEMENTATION_SUMMARY.md` and CHANGELOG (e.g. 7.3.0) for changes
+2. Review `CHANGELOG.md` for release changes
 3. See `ARCHITECTURE_REFACTOR.md` for future plans
-4. See `OBSERVABILITY.md` for monitoring setup
+4. Use `logs/viki.log` and your host metrics stack for monitoring
 
 ---
 

@@ -1,23 +1,5 @@
 import { useState, useEffect } from 'react'
-
-const API_BASE = import.meta.env.VITE_VIKI_API_BASE || 'http://localhost:5000/api'
-const SESSION_STORAGE_KEY = 'viki-session-id'
-
-function getSessionId() {
-  let sessionId = window.localStorage.getItem(SESSION_STORAGE_KEY)
-  if (!sessionId) {
-    sessionId = window.crypto?.randomUUID?.() || `viki-${Date.now()}-${Math.random().toString(16).slice(2)}`
-    window.localStorage.setItem(SESSION_STORAGE_KEY, sessionId)
-  }
-  return sessionId
-}
-
-function getApiHeaders() {
-  const key = import.meta.env.VITE_VIKI_API_KEY
-  const headers = { 'X-Session-Id': getSessionId() }
-  if (key) headers.Authorization = `Bearer ${key}`
-  return headers
-}
+import { API_BASE, getApiHeaders } from './apiConfig'
 
 function Section({ title, children, className = '' }) {
   return (

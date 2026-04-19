@@ -2,7 +2,7 @@
 VIKI API Server
 Provides RESTful endpoints for the React dashboard
 """
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, g
 from flask_cors import CORS
 from datetime import datetime
 import sys
@@ -137,7 +137,7 @@ def add_cors_headers(response):
     if origin in ALLOWED_ORIGINS:
         response.headers['Access-Control-Allow-Origin'] = origin
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Session-Id'
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['X-Frame-Options'] = 'DENY'
     response.headers['X-XSS-Protection'] = '1; mode=block'
@@ -200,7 +200,15 @@ def check_rate_limit():
 
 @app.before_request
 def log_request_info():
-    viki_logger.debug(f"Request: {request.method} {request.url}")
+    g.request_id = uuid.uuid4().hex[:12]
+    g.viki_session = (request.headers.get(SESSION_HEADER) or "").strip()[:64] or "-"
+    viki_logger.debug(
+        "request_id=%s session=%s %s %s",
+        getattr(g, "request_id", "?"),
+        getattr(g, "viki_session", "?"),
+        request.method,
+        request.path,
+    )
     if request.path.startswith('/api/'):
         auth = request.headers.get('Authorization', 'Missing')
         viki_logger.debug(f"Auth Header: {auth[:15] if len(auth) > 15 else auth}...")
@@ -284,8 +292,13 @@ def health():
             'runtime_health': controller.get_runtime_health() if hasattr(controller, 'get_runtime_health') else {},
         })
     except Exception as e:
-        viki_logger.error(f"Health check error: {e}", exc_info=True)
-        return jsonify({'error': str(e)}), 500
+        viki_logger.error(
+            "Health check error (request_id=%s): %s",
+            getattr(g, "request_id", "?"),
+            e,
+            exc_info=True,
+        )
+        return jsonify({'error': 'Health check failed. See server logs.'}), 500
 
 @app.route('/api/chat', methods=['POST'])
 @require_api_key
@@ -323,7 +336,12 @@ async def chat():
         if not is_valid:
             return jsonify({'error': error_msg}), 400
 
-        viki_logger.info(f"API: Processing user input: '{safe_for_log(user_input)}'...")
+        viki_logger.info(
+            "API: Processing user input (request_id=%s session=%s): '%s'...",
+            getattr(g, "request_id", "?"),
+            getattr(g, "viki_session", "?"),
+            safe_for_log(user_input),
+        )
         timeout_sec = controller.settings.get('system', {}).get('request_timeout_seconds', 0)
         if timeout_sec <= 0:
             timeout_sec = 600  # Ceiling when disabled so one stuck request does not hold worker indefinitely
@@ -371,8 +389,13 @@ def get_memory():
             'session_id': session_id,
         })
     except Exception as e:
-        viki_logger.error(f"Memory retrieval error: {e}", exc_info=True)
-        return jsonify({'error': str(e)}), 500
+        viki_logger.error(
+            "Memory retrieval error (request_id=%s): %s",
+            getattr(g, "request_id", "?"),
+            e,
+            exc_info=True,
+        )
+        return jsonify({'error': 'Failed to load memory.'}), 500
 
 @app.route('/api/memory', methods=['DELETE'])
 @require_api_key

@@ -1,3 +1,7 @@
+# Model routing + Neural Forge
+# - `default` profile is used as the primary router target (use a tag you have in `ollama list`).
+# - After a successful internal_forge (Ollama create viki-born-again), set default to `viki-evolved`
+#   if you want the baked-in Modelfile image. Smoke: `ollama run viki-born-again` and VIKI `/model` or GET /api/models.
 models:
   # Provider Definitions
   providers:
@@ -18,8 +22,10 @@ models:
     mock:
       type: "mock"
   
-  # Default model to use (viki-evolved for personalized performance)
-  default: "viki-evolved"
+  # Default profile for routing. Use an Ollama tag you actually have (e.g. qwen35).
+  # After `internal_forge` / Modelfile rebuild, you can switch default to "viki-evolved"
+  # once `ollama list` shows `viki-born-again`.
+  default: "qwen35"
 
   # Routing Strategy:
   #   priority: Higher = preferred when capabilities match (1=fallback, 2=good, 3=specialist)
@@ -28,7 +34,27 @@ models:
 
   # Model Profiles
   profiles:
+    # --- Local installs (match `ollama list` exactly) ---
+    qwen35:
+      provider: "ollama"
+      model_name: "qwen3.5:latest"
+      temperature: 0.5
+      priority: 3
+      capabilities: ["general", "reasoning", "coding", "analysis", "fast_response", "researching", "chatter", "tool_use", "planning"]
+      supports_native_tools: false
+      description: "Qwen 3.5 — primary local generalist when pulled as qwen3.5:latest."
+
+    gemma4:
+      provider: "ollama"
+      model_name: "gemma4:latest"
+      temperature: 0.5
+      priority: 2
+      capabilities: ["general", "reasoning", "chatter", "analysis", "fast_response"]
+      supports_native_tools: false
+      description: "Gemma 4 — local alternative when pulled as gemma4:latest."
+
     # --- Default / Generalist ---
+    # Created by Neural Forge (Ollama Modelfile): `ollama create viki-born-again ...`
     viki-evolved:
       provider: "ollama"
       model_name: "viki-born-again"
@@ -36,7 +62,7 @@ models:
       priority: 3 # Increased to make it the clear primary specialist
       capabilities: ["general", "reasoning", "coding", "analysis", "fast_response", "researching", "chatter", "tool_use"]
       supports_native_tools: false # Disable native API calling for this model version
-      description: "VIKI's Self-Evolved Personality (Mistral-based) - Rebuilt with integrated long-term memory."
+      description: "VIKI Modelfile image (viki-born-again) with baked-in lessons after internal_forge."
 
     # --- Fast Models (SHALLOW / REFLEX) ---
     phi3:

@@ -1,15 +1,14 @@
-
 import asyncio
 import time
 import uuid
 import heapq
 import os
-from typing import List, Dict, Any, Optional
-from viki.config.logger import viki_logger
-from viki.core.schema import VIKIResponse
-
 import json
 from enum import Enum
+from typing import Any, Dict, List, Optional
+
+from viki.config.logger import viki_logger
+from viki.core.ports import RequestProcessorPort
 
 class MissionType(str, Enum):
     RESEARCH = "research"
@@ -57,12 +56,21 @@ class MissionControl:
     """
     Phase 6: Autonomous Goal Governance.
     """
-    def __init__(self, controller):
-        self.controller = controller
-        self.mission_queue = [] 
+
+    def __init__(
+        self,
+        request_processor: RequestProcessorPort,
+        system_settings: Dict[str, Any],
+        signals: Any,
+    ):
+        self._request_processor = request_processor
+        self._signals = signals
+        self.mission_queue: List[Mission] = []
         self.active_missions: Dict[str, Mission] = {}
         self.is_running = False
-        self.persistence_path = os.path.join(controller.settings.get('system', {}).get('data_dir', './data'), "missions.json")
+        self.persistence_path = os.path.join(
+            system_settings.get("data_dir", "./data"), "missions.json"
+        )
         
         self._load_missions()
 
@@ -115,7 +123,7 @@ class MissionControl:
         while self.is_running:
             try:
                 # 1. Check for idle CPU cycles (don't interrupt user)
-                if self.controller.signals.signals.get("cpu_load", 0) > 80:
+                if self._signals.signals.get("cpu_load", 0) > 80:
                     await asyncio.sleep(60) 
                     continue
 
@@ -157,7 +165,7 @@ class MissionControl:
         
         # We inject this into the controller as a "system" request
         # Note: We need a flag to prevent this from triggering strictly 'user' logic
-        response = await self.controller.process_request(prompt) # Re-use core brain
+        response = await self._request_processor.process_request(prompt)
         
         viki_logger.info(f"Mission '{mission.id}' Step Result: {response[:100]}...")
         

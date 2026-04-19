@@ -3,25 +3,7 @@ import './index.css'
 import HologramFace from './HologramFace'
 import Dashboard from './Dashboard'
 import AlertUI from './AlertUI'
-
-const API_BASE = import.meta.env.VITE_VIKI_API_BASE || 'http://localhost:5000/api'
-const SESSION_STORAGE_KEY = 'viki-session-id'
-
-function getSessionId() {
-  let sessionId = window.localStorage.getItem(SESSION_STORAGE_KEY)
-  if (!sessionId) {
-    sessionId = window.crypto?.randomUUID?.() || `viki-${Date.now()}-${Math.random().toString(16).slice(2)}`
-    window.localStorage.setItem(SESSION_STORAGE_KEY, sessionId)
-  }
-  return sessionId
-}
-
-function getApiHeaders() {
-  const key = import.meta.env.VITE_VIKI_API_KEY
-  const headers = { 'X-Session-Id': getSessionId() }
-  if (key) headers.Authorization = `Bearer ${key}`
-  return headers
-}
+import { API_BASE, getApiHeaders, isApiKeyConfigured } from './apiConfig'
 
 function App() {
   const [view, setView] = useState('chat') // 'chat' | 'hologram' | 'dashboard'
@@ -32,12 +14,14 @@ function App() {
   const [skills, setSkills] = useState([])
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [isLoading, setIsLoading] = useState(false)
+  const [apiKeyMissing, setApiKeyMissing] = useState(() => !isApiKeyConfigured())
   const [confirmDialog, setConfirmDialog] = useState(null) // { message, onConfirm }
   const [attachedFiles, setAttachedFiles] = useState([]) // { id, file }[]
   const messagesEndRef = useRef(null)
   const fileInputRef = useRef(null)
 
   useEffect(() => {
+    setApiKeyMissing(!isApiKeyConfigured())
     fetchHealth()
     fetchSkills()
     fetchMemory()
@@ -177,6 +161,11 @@ function App() {
   if (view === 'hologram') {
     return (
       <div className="app app-hologram">
+        {apiKeyMissing && (
+          <div className="api-key-banner" role="status">
+            Set <code>VITE_VIKI_API_KEY</code> in <code>ui/.env</code> to match server <code>VIKI_API_KEY</code>.
+          </div>
+        )}
         <aside className="sidebar sidebar-compact">
           <div className="sidebar-header">
             <div className="logo-wrap">
@@ -212,6 +201,11 @@ function App() {
 
   return (
     <div className="app chatgpt-layout">
+      {apiKeyMissing && (
+        <div className="api-key-banner" role="status">
+          Set <code>VITE_VIKI_API_KEY</code> in <code>ui/.env</code> (same value as server <code>VIKI_API_KEY</code>) so API calls authenticate. See repo file <code>viki/SECURITY_SETUP.md</code>.
+        </div>
+      )}
       <aside className={`sidebar sidebar-chatgpt ${sidebarOpen ? 'open' : 'closed'}`}>
         <div className="sidebar-header">
           <button type="button" className="new-chat-btn" onClick={clearMemory}>

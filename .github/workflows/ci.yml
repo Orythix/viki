@@ -1,0 +1,41 @@
+# Continuous integration: tests and lint on pull requests and main branch pushes.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install package and dev tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Ruff
+        run: ruff check viki
+
+      - name: Validate imports
+        run: python validate_imports.py
+
+      # Ollama-backed cases live in test_viki_integration.py; run locally with models up.
+      - name: Pytest
+        run: pytest viki/tests/ -q --tb=short --ignore=viki/tests/test_viki_integration.py

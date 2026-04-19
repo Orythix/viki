@@ -1,14 +1,18 @@
 import asyncio
-from typing import Dict, Any, List
+from typing import Any, Dict, List
+
 from viki.config.logger import viki_logger
+from viki.core.ports import RequestProcessorPort
+
 
 class MessagingNexus:
     """
     Unified Messaging Nexus: One True Event Loop logic.
     Aggregates inputs into a single PriorityQueue.
     """
-    def __init__(self, controller):
-        self.controller = controller
+
+    def __init__(self, request_processor: RequestProcessorPort):
+        self._request_processor = request_processor
         self.queue = asyncio.PriorityQueue()
         self.active = False
         self.active_tasks = set()
@@ -46,7 +50,9 @@ class MessagingNexus:
         task_id = f"{task['source']}/P{task.get('priority', 'na')}"
         try:
             if on_event: on_event("nexus_task", ("add", task_id))
-            response = await self.controller.process_request(task['text'], on_event=on_event)
+            response = await self._request_processor.process_request(
+                task["text"], on_event=on_event
+            )
             await task['callback'](response)
         except Exception as e:
             viki_logger.error(f"Nexus Error: {e}")

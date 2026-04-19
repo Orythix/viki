@@ -63,7 +63,7 @@ def create_modelfile():
         summary = summarize_memories(memories)
         memory_block = f"\n\nCORE SEMANTIC KNOWLEDGE:\n{summary}"
 
-    base_model = "phi3" 
+    base_model = os.environ.get("VIKI_FORGE_BASE_OLLAMA_MODEL", "qwen3.5:latest").strip() or "qwen3.5:latest" 
     
     modelfile_content = f"""
 FROM {base_model}

@@ -1,3 +1,4 @@
+import asyncio
 import os
 import discord
 from viki.config.logger import viki_logger

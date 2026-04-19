@@ -1,55 +1,10 @@
-# Core & Config
-pydantic
-pyyaml
-python-dotenv
-requests
-rich
-colorama
-tqdm
-psutil
-sqlite-utils
-
-# LLM & AI
-openai
-instructor
-anthropic
-ollama
-sentence-transformers
-duckduckgo-search
-numpy
-scipy
-torch
-torchaudio
-pillow
-opencv-python
-
-# Agent Capabilities
-playwright
-watchdog
-pyautogui
-pyperclip
-pyttsx3
-scapy
-pypiwin32
-PyQt5
-
-# Web & API (Optional)
-flask
-flask-cors
-beautifulsoup4
-aiohttp
-
-# Voice & Audio
-sounddevice
-# pyaudio is often problematic on windows, sounddevice is preferred
-silero-vad
-
-# Connectivity (Nexus)
-python-telegram-bot
-discord.py
-
-# Self-Evolution (Forge) check local GPU support first
-# unsloth # Install via their specific command
-# trl
-# peft
-# bitsandbytes
+# Runtime and version pins live in pyproject.toml (single source of truth).
+#
+# Install application:
+#   pip install -e .
+#
+# Install with dev tools (pytest, ruff, pytest-asyncio):
+#   pip install -e ".[dev]"
+#
+# Optional stacks: see README "Install profiles" (e.g. .[windows], .[agent-full], .[qt]).
+-e .

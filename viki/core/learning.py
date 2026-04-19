@@ -374,8 +374,81 @@ class LearningModule:
         cur.execute("SELECT COUNT(*) FROM lessons WHERE access_count > 1")
         return cur.fetchone()[0]
 
-    def close(self):
-        self.conn.close()
+    def export_training_dataset(self, output_path: str, format: str = "jsonl") -> str:
+        """
+        Export reinforced lessons (access_count >= 2) for LoRA / external trainers.
+        format: jsonl (default, one object per line with \"text\" for TRL/Unsloth), alpaca, openai
+        """
+        cur = self.conn.cursor()
+        cur.execute(
+            "SELECT text_representation, content, access_count, source_task, reliability FROM lessons WHERE access_count >= 2 ORDER BY last_accessed DESC"
+        )
+        rows = cur.fetchall()
+        if not rows:
+            return "No lessons with access_count >= 2 to export."
+
+        parent = os.path.dirname(os.path.abspath(output_path))
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        lines: List[str] = []
+
+        if format == "jsonl":
+            for r in rows:
+                try:
+                    obj = json.loads(r["content"]) if r["content"] else {}
+                except (json.JSONDecodeError, TypeError):
+                    obj = {}
+                trig = obj.get("trigger") or "context"
+                fact = obj.get("fact") or r["text_representation"]
+                block = (
+                    f"### Instruction:\nRemember this for future VIKI interactions.\n"
+                    f"### Input:\n{trig}\n### Response:\n{fact}"
+                )
+                lines.append(json.dumps({"text": block}, ensure_ascii=False))
+
+        elif format == "alpaca":
+            for r in rows:
+                try:
+                    obj = json.loads(r["content"]) if r["content"] else {}
+                except (json.JSONDecodeError, TypeError):
+                    obj = {}
+                lines.append(
+                    json.dumps(
+                        {
+                            "instruction": "Remember this for future VIKI interactions.",
+                            "input": obj.get("trigger") or "context",
+                            "output": obj.get("fact") or r["text_representation"],
+                        },
+                        ensure_ascii=False,
+                    )
+                )
+
+        elif format == "openai":
+            for r in rows:
+                try:
+                    obj = json.loads(r["content"]) if r["content"] else {}
+                except (json.JSONDecodeError, TypeError):
+                    obj = {}
+                fact = obj.get("fact") or r["text_representation"]
+                trig = obj.get("trigger") or "user context"
+                lines.append(
+                    json.dumps(
+                        {
+                            "messages": [
+                                {"role": "system", "content": "You are VIKI's knowledge consolidation trainer."},
+                                {"role": "user", "content": str(trig)},
+                                {"role": "assistant", "content": str(fact)},
+                            ]
+                        },
+                        ensure_ascii=False,
+                    )
+                )
+        else:
+            raise ValueError(f"Unknown export format: {format}")
+
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines))
+        return f"Exported {len(lines)} rows to {output_path} ({format})."
 
     async def analyze_session(self, model, trace: List[Dict[str, str]], outcome: str):
         """

@@ -8,7 +8,7 @@ import importlib
 from typing import Dict, Any, List, Optional
 from viki.core.soul import Soul
 from viki.core.safety import SafetyLayer, safe_for_log
-from viki.core.llm import ModelRouter, StructuredPrompt
+from viki.core.llm import APILLM, ModelRouter, StructuredPrompt
 from viki.core.schema import VIKIResponse, ActionCall
 from viki.skills.registry import SkillRegistry
 from viki.core.learning import LearningModule
@@ -43,6 +43,8 @@ from viki.ops.tenant_ops import SimpleOpsPlanner, ControllerTenantConnector, Ops
 
 # Phase 6: Autonomy
 from viki.core.mission_control import MissionControl
+from viki.core.request_pipeline import RequestContext, build_default_preflight_pipeline
+from viki.core.git_context import get_git_workspace_snapshot
 
 from viki.config.logger import viki_logger, thought_logger
 
@@ -83,6 +85,26 @@ class VIKIController:
             system["shadow_mode"] = True
         if os.environ.get("VIKI_AIR_GAP", "").lower() in ("1", "true", "yes"):
             system["air_gap"] = True
+        if os.environ.get("VIKI_LOCAL_LLM_ONLY") is not None:
+            system["local_llm_only"] = os.environ.get("VIKI_LOCAL_LLM_ONLY", "").strip().lower() in (
+                "1",
+                "true",
+                "yes",
+            )
+        if os.environ.get("VIKI_GIT_CONTEXT", "").lower() in ("1", "true", "yes"):
+            system["git_workspace_context"] = True
+
+        if os.environ.get("VIKI_SESSION_USAGE_LOG") is not None:
+            raw = os.environ.get("VIKI_SESSION_USAGE_LOG", "").strip().lower()
+            system["session_usage_log"] = raw in ("1", "true", "yes")
+
+        # Bio webcam: unset = keep YAML default; explicit 0/1 overrides
+        if os.environ.get("VIKI_BIO_WEBCAM") is not None:
+            system["bio_webcam_enabled"] = os.environ.get("VIKI_BIO_WEBCAM", "").strip().lower() in (
+                "1",
+                "true",
+                "yes",
+            )
 
     def _resolve_models_config(self, root_dir: str) -> None:
         models_conf_rel = self.settings.get("models_config", "viki/config/models.yaml")
@@ -200,7 +222,7 @@ class VIKIController:
         self.soul = Soul(soul_path)
         self.persona = self._persona_from_soul_path(soul_path)
         self.safety = SafetyLayer(self.settings)
-        self.nexus = MessagingNexus(self)
+        self.nexus = MessagingNexus(request_processor=self)
 
         self.learning = LearningModule(self.settings.get('system', {}).get('data_dir', self.DEFAULT_DATA_DIR))
         
@@ -226,12 +248,28 @@ class VIKIController:
         self.super_admin = SuperAdminLayer(admin_path) 
         self.air_gap = self.settings.get('system', {}).get('air_gap', False)
         self.shadow_mode = self.settings.get('system', {}).get('shadow_mode', False)
+        self.local_llm_only = self.settings.get('system', {}).get('local_llm_only', True)
         
         # Level 6 Modules
         self.sfs = SemanticFS(self.settings.get('system', {}).get('workspace_dir', self.DEFAULT_WORKSPACE_DIR))
         self.history = TimeTravelModule(self.settings.get('system', {}).get('data_dir', self.DEFAULT_DATA_DIR))
 
-        self.model_router = ModelRouter(self.models_config_path, air_gap=self.air_gap)
+        try:
+            from viki.core.usage_log import configure_session_usage_log
+
+            _dd = self.settings.get("system", {}).get("data_dir", self.DEFAULT_DATA_DIR)
+            configure_session_usage_log(
+                _dd,
+                bool(self.settings.get("system", {}).get("session_usage_log", True)),
+            )
+        except Exception:
+            pass
+
+        self.model_router = ModelRouter(
+            self.models_config_path,
+            air_gap=self.air_gap,
+            local_llm_only=self.local_llm_only,
+        )
         
         self.skill_registry = SkillRegistry()
         self.capabilities = CapabilityRegistry()
@@ -282,7 +320,9 @@ class VIKIController:
         self.watchdog = WatchdogModule(self)
         self.wellness = WellnessPulse(self)
         self.reflector = ReflectorModule(self)
-        self.bio = BioModule()
+        self.bio = BioModule(
+            webcam_enabled=bool(self.settings.get("system", {}).get("bio_webcam_enabled", False)),
+        )
         self.dream = DreamModule(self)
 
         # v13: Autonomous Startup Pulse
@@ -300,7 +340,12 @@ class VIKIController:
         self.deliberation = DeliberationEngine(llm=self.model_router, self_model=self.self_model)
         
         # Phase 6: Autonomy
-        self.mission_control = MissionControl(self)
+        self.mission_control = MissionControl(
+            request_processor=self,
+            system_settings=self.settings.get("system", {}),
+            signals=self.signals,
+        )
+        self._preflight_pipeline = build_default_preflight_pipeline()
 
     async def _startup_pulse(self):
         """Autonomous startup sequence: Connect, Research, Evolve."""
@@ -406,8 +451,21 @@ class VIKIController:
         for name, reason in list(unavailable_models.items()):
             if name == default_name:
                 continue
-            if isinstance(reason, str) and ("API key for" in reason and "missing" in reason):
-                unavailable_models.pop(name, None)
+            if isinstance(reason, str):
+                low = reason.lower()
+                # Common APILLM init failures when keys are unset or placeholders.
+                if ("api key" in low and "missing" in low) or (
+                    "api key" in low and "invalid" in low
+                ):
+                    unavailable_models.pop(name, None)
+        # Cloud profiles are intentionally out of scope when local-only or air-gapped.
+        if self.model_router and (self.local_llm_only or self.air_gap):
+            for name in list(unavailable_models.keys()):
+                if name == default_name:
+                    continue
+                inst = self.model_router.models.get(name)
+                if inst is not None and isinstance(inst, APILLM):
+                    unavailable_models.pop(name, None)
         model_health["unavailable_models"] = unavailable_models
         registered_skills = sorted(self.skill_registry.list_skills()) if self.skill_registry else []
         disabled_skills = dict(sorted((self.disabled_skills or {}).items()))
@@ -531,11 +589,31 @@ class VIKIController:
         try:
             result = await asyncio.wait_for(skill.execute(params), timeout=skill_timeout)
             latency = time.time() - start_exec
+            try:
+                from viki.core.usage_log import emit_skill_execution
+
+                emit_skill_execution(skill_name, latency, True, None)
+            except Exception:
+                pass
             return (str(result), None, latency)
         except asyncio.TimeoutError:
-            return None, f"Action timed out (limit {skill_timeout}s).", 0.0
+            err_msg = f"Action timed out (limit {skill_timeout}s)."
+            try:
+                from viki.core.usage_log import emit_skill_execution
+
+                emit_skill_execution(skill_name, time.time() - start_exec, False, err_msg)
+            except Exception:
+                pass
+            return None, err_msg, 0.0
         except Exception as e:
-            return None, f"Action failed: {e}", 0.0
+            err_msg = f"Action failed: {e}"
+            try:
+                from viki.core.usage_log import emit_skill_execution
+
+                emit_skill_execution(skill_name, time.time() - start_exec, False, err_msg)
+            except Exception:
+                pass
+            return None, err_msg, 0.0
 
     def _json_type_matches(self, value: Any, expected_type: str) -> bool:
         """Very small JSON-schema type checker (best-effort, not full validation)."""
@@ -800,111 +878,19 @@ class VIKIController:
         if not isinstance(user_input, str):
             user_input = str(user_input).strip() or ""
 
-        # --- Super Admin Kill Switch ---
-        # Tests expect that a valid `ADMIN <id> <secret> KILL` flips the controller into a dead/HALTED state.
-        if getattr(self.super_admin, "shutdown_triggered", False):
-            return "HALTED"
-        try:
-            if self.super_admin and self.super_admin.check_command(user_input):
-                return "HALTED"
-        except Exception as e:
-            viki_logger.debug(f"Super admin kill switch check failed: {e}")
+        pre_ctx = RequestContext(
+            user_input=user_input,
+            session_id=session_id,
+            on_event=on_event,
+            attachment_paths=attachment_paths,
+        )
+        preflight_response = await self._preflight_pipeline.run_preflight(self, pre_ctx)
+        if preflight_response is not None:
+            return preflight_response
 
-        # Inject uploaded attachment paths so model and skills see them
-        if attachment_paths:
-            user_input = "Attached files: " + ", ".join(attachment_paths) + "\n\n" + user_input
-
-        # --- ORYTHIX ETHICAL GOVERNOR (v22) ---
-        # 1. Check for Emergency Shutdown Code
-        if self.governor.check_shutdown(user_input):
-            return "Orythix — Quiescent (shutdown key 970317 accepted)"
-
-        # 2. Check for Reawaken Command
-        if self.governor.is_quiescent:
-             if self.governor.check_reawaken(user_input):
-                 return "Orythix — Reawakened. Systems Online."
-             return "Status: Quiescent. Systems Frozen."
-
-        # 3. Veto Check on Raw Intent (v25 Semantic Upgrade)
-        # Fetch narrative wisdom once and reuse it
-        narrative_wisdom = self.memory.episodic.get_semantic_knowledge(limit=3)
-        wisdom_block = "\n".join([
-            f"- [{(w.get('category') or 'general').upper()}]: {w.get('insight', '')}"
-            for w in (narrative_wisdom if isinstance(narrative_wisdom, list) else [])
-        ])
-        
-        allowed, reason = await self.governor.veto_check(user_input, model_router=self.model_router, wisdom=wisdom_block)
-        if not allowed:
-            viki_logger.warning(f"Governor Vetoed Request: {reason}")
-            return f"I cannot comply. {reason}"
-
-        # 4. Standard Safety Validation
-        safe_input = self.safety.validate_request(user_input)
-
-        # 4b. Optional LLM security scan (high-assurance deployments)
-        security_scan_requests = self.settings.get("system", {}).get("security_scan_requests")
-        # If the setting is omitted, default to scanning when the security prompt is loaded.
-        if security_scan_requests is None:
-            security_scan_requests = bool(getattr(self.safety, "security_prompt", None))
-        if security_scan_requests:
-            llm = self.model_router.get_model()
-            scan_result = await self.safety.scan_request(llm, user_input)
-            if not scan_result.get("safe", True):
-                viki_logger.warning(f"Security scan refused request: {scan_result.get('reason', '')}")
-                return f"I cannot comply. {scan_result.get('reason', 'Request blocked by security policy.')}"
-
-        # Reset interruption
-        self.interrupt_signal.clear()
-        self.signals.decay_signals()
-
-        # --- Pending action confirm/reject (CLI flow) ---
-        pending_ops = self.pending_ops_plans.get(session_id)
-        if pending_ops:
-            raw_lower = user_input.strip().lower()
-            affirmatives = ("yes", "y", "confirm", "ok", "proceed", self.CONFIRM_TOKEN)
-            negatives = ("no", "n", "reject", "cancel", self.REJECT_TOKEN)
-            if raw_lower in affirmatives:
-                plan = pending_ops
-                self.pending_ops_plans.pop(session_id, None)
-                return await self._apply_ops_plan(plan, session_id=session_id)
-            if raw_lower in negatives:
-                self.pending_ops_plans.pop(session_id, None)
-                return "OpsPlan cancelled."
-            return "OpsPlan pending approval. Confirm with yes/confirm or cancel with no/reject."
-
-        pending_action = self.pending_actions.get(session_id)
-        if pending_action:
-            raw_lower = user_input.strip().lower()
-            affirmatives = ("yes", "y", "confirm", "ok", "proceed", self.CONFIRM_TOKEN)
-            negatives = ("no", "n", "reject", "cancel", self.REJECT_TOKEN)
-            if raw_lower in affirmatives:
-                action = pending_action
-                self.pending_actions.pop(session_id, None)
-                skill_name = action.skill_name
-                params = (action.parameters or {}).copy()
-                check_res = self.capabilities.check_permission(skill_name, params=params)
-                if not check_res.allowed:
-                    return f"Confirmation rejected: capability check failed — {check_res.reason}"
-                if not self.safety.validate_action(skill_name, params):
-                    viki_logger.warning(f"Safety: validate_action blocked {skill_name}")
-                    return "Action blocked by safety policy."
-                if self.world.state.safety_zones.get(params.get("path", "")) == "protected":
-                    return "Safety Block: Target is in a protected zone."
-                if self.shadow_mode:
-                    return f"[Shadow Mode] Would have executed: {skill_name}({params}). Set shadow_mode: false to run for real."
-                if on_event:
-                    on_event("status", f"EXECUTING {skill_name}")
-                budget = self.budgets.get("general", self.budgets["general"])
-                result, err, latency = await self._execute_skill(skill_name, params, budget)
-                if err:
-                    self.skill_registry.record_execution(skill_name, False, 0.0)
-                    return err
-                self.skill_registry.record_execution(skill_name, True, latency)
-                return f"Done. {result[:500]}"
-            if raw_lower in negatives:
-                self.pending_actions.pop(session_id, None)
-                return "Action cancelled."
-            return "Please confirm with yes/confirm or cancel with no/reject."
+        user_input = pre_ctx.user_input
+        safe_input = pre_ctx.safe_input
+        narrative_wisdom = pre_ctx.narrative_wisdom
 
         # v25: Active Context Tracking (Phase 4)
         file_matches = re.findall(r'[\w\-\.\/]+\.(?:py|js|ts|css|html|yaml|md)', user_input)
@@ -1108,6 +1094,17 @@ class VIKIController:
                 except Exception as e:
                     viki_logger.debug(f"Could not read {p}: {e}")
         memory_context["project_instructions"] = project_instructions
+
+        if self.settings.get("system", {}).get("git_workspace_context"):
+            try:
+                snap = await asyncio.to_thread(get_git_workspace_snapshot, workspace_dir)
+                if snap:
+                    base = memory_context.get("project_instructions") or ""
+                    memory_context["project_instructions"] = (
+                        (base + "\n\n" + snap).strip() if base else snap
+                    )
+            except Exception as e:
+                viki_logger.debug("git_workspace_context: %s", e)
 
         # Add relevant failures to context for error avoidance
         relevant_failures = self.learning.get_relevant_failures(safe_input, limit=3)
