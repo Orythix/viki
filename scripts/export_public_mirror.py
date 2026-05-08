@@ -7,7 +7,7 @@ Does not push to GitHub — run git commands yourself in the destination.
   python scripts/export_public_mirror.py --manifest scripts/public_mirror.manifest.yaml
   python scripts/export_public_mirror.py --dry-run
 
-See docs/REPOSITORY_VISIBILITY_AND_BRANCHES.md
+See docs/DOCUMENTATION.md § Repository visibility and public mirror.
 """
 from __future__ import annotations
 

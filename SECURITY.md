@@ -1,6 +1,6 @@
 # Security Policy
 
-General documentation index: [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md). API and capability setup: [viki/SECURITY_SETUP.md](viki/SECURITY_SETUP.md).
+General documentation index: [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md). API and capability setup (full tree): [viki/SECURITY_SETUP.md](viki/SECURITY_SETUP.md) (available in the implementation checkout).
 
 ## Supported Versions
 
@@ -16,14 +16,22 @@ Security fixes are applied to the most recent minor release line.
 
 **Please do not open a public GitHub issue for security vulnerabilities.**
 
-Use GitHub's private vulnerability reporting:
+Use GitHub **private vulnerability reporting**:
 
-1. Open the [Security tab of the repository](https://github.com/Orythix/viki/security)
+### Implementation repository (maintainers & invited collaborators)
+
+1. Open the [Security tab](https://github.com/Orythix/viki/security) of the **Orythix/viki** repository
 2. Click **Report a vulnerability**
-3. Include:
-   - A clear description of the issue and its impact
-   - Steps to reproduce (or a minimal proof-of-concept)
-   - Affected version, OS, and any relevant logs (with secrets redacted)
+
+### Public documentation only ([VIKI-public](https://github.com/Orythix/VIKI-public))
+
+If you do **not** have access to the private implementation repo, report via the [Security tab on **Orythix/VIKI-public**](https://github.com/Orythix/VIKI-public/security) instead (same **Report a vulnerability** flow).
+
+### What to include
+
+- A clear description of the issue and its impact
+- Steps to reproduce (or a minimal proof-of-concept)
+- Affected version, OS, and any relevant logs (with secrets redacted)
 
 We aim to acknowledge reports within **48 hours** and provide a remediation
 timeline within **7 days** of triage. Coordinated disclosure is appreciated;

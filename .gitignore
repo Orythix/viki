@@ -71,6 +71,9 @@ htmlcov/
 # Local public-mirror manifest (may list custom paths; keep private if needed)
 scripts/public_mirror.manifest.yaml
 
+# Accidental pytest cache dirs under qa-automation
+qa-automation/pytest-cache-files-*/
+
 # Backup and temp
 *.bak
 *.tmp
