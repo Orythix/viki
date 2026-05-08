@@ -1,0 +1,39 @@
+// Declarative pipeline example — paste into Jenkins Job (Multibranch or Pipeline).
+// Requires: pipeline-utility-steps, tools: Maven, JDK17, Python3 optional.
+
+pipeline {
+  agent any
+  options {
+    timestamps()
+  }
+  triggers {
+    pollSCM('H/15 * * * *') // adjust; prefer webhooks
+  }
+  stages {
+    stage('Checkout') {
+      steps { checkout scm }
+    }
+    stage('QA Python unit') {
+      steps {
+        sh 'python3 -m pip install -r qa-automation/requirements.txt'
+        sh 'pytest qa-automation/tests/unit -q --junitxml=qa-python.xml || true'
+        junit 'qa-python.xml'
+      }
+    }
+    stage('QA Java') {
+      tools {
+        maven 'Maven-3.9'
+        jdk 'JDK17'
+      }
+      steps {
+        sh 'mvn -B -f qa-automation/tracks/java-api/pom.xml test'
+      }
+    }
+    stage('QA k6') {
+      steps {
+        // Install k6 on agent once, or use docker run grafana/k6
+        sh 'k6 run qa-automation/tracks/performance/k6-ci-smoke.js'
+      }
+    }
+  }
+}

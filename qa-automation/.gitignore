@@ -1,0 +1,22 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+report.html
+results.xml
+qa-junit.xml
+
+# Java
+tracks/java-api/target/
+
+# Node / UI
+tracks/ui-playwright/node_modules/
+tracks/ui-playwright/playwright-report/
+tracks/ui-playwright/test-results/
+tracks/ui-cypress/node_modules/
+tracks/ui-cypress/cypress/videos/
+tracks/ui-cypress/cypress/screenshots/
+
+# k6 / JMeter local outputs
+*.jtl
+tracks/jmeter/report/

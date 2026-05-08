@@ -125,6 +125,10 @@ git config core.hooksPath .githooks
 * Components must be responsive and follow the existing dark-mode HSL theme.
 * Maintain the "Hologram" aesthetic for any new UI surfaces.
 
+## Subprojects
+
+Changes to **`security-lab/`** or **`qa-automation/`** should keep those folders **runnable on their own** (do not require importing private VIKI internals unless explicitly agreed). Use each subfolder’s `README.md` and tests as the contract. Docs index: [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md).
+
 ## Need Help?
 
 * General questions → [GitHub Discussions](https://github.com/Orythix/viki/discussions)

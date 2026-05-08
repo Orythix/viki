@@ -15,7 +15,7 @@
 1.  **Clone the Repository**:
     ```powershell
     git clone https://github.com/Orythix/viki.git
-    cd viki
+    cd viki   # or your clone folder name (e.g. VIKI)
     ```
 
 2.  **Create Virtual Environment**:
@@ -79,6 +79,16 @@ To verify key systems:
 2.  **Memory Recall**: Ask "What do you remember about our last session?"
 3.  **Visual Test**: Ask "What's on my screen right now?"
 4.  **Evolution Test**: Type `/evolve` to trigger a dry run of the Neural Forge.
+
+## Related folders in this repo
+
+These ship beside `viki/` but are separate entry points:
+
+- **`ui/`** — React dashboard; needs `VITE_VIKI_API_KEY` matching `VIKI_API_KEY`.
+- **`security-lab/`** — Standalone FastAPI defensive lab; see [security-lab/README.md](security-lab/README.md).
+- **`qa-automation/`** — Test-framework examples (pytest, Java, Playwright, k6); see [qa-automation/README.md](qa-automation/README.md).
+
+Full map: [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md).
 
 ---
 **Enjoy your new digital partner.**

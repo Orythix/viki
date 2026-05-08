@@ -74,6 +74,19 @@
   --duration-normal: 0.28s;
 }
 
+/* Screen-reader only — keeps copy available to AT without changing layout */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root {
     --duration-fast: 0.01ms;
@@ -704,8 +717,8 @@ body {
 }
 
 .chatgpt-layout .sidebar-btn.active {
-  background: rgba(16, 163, 127, 0.12);
-  color: #0d8c6a;
+  background: #d1fae5;
+  color: #047857;
 }
 
 .chatgpt-layout .sidebar-footer {
@@ -726,7 +739,7 @@ body {
 }
 
 .chatgpt-layout .sidebar-status .status-dot.online {
-  background: #10a37f;
+  background: #047857;
 }
 
 .chatgpt-layout .sidebar-status .status-dot.offline {
@@ -899,7 +912,7 @@ body {
 }
 
 .chatgpt-layout .chat-message.user .message-content {
-  background: #10a37f;
+  background: #047857;
   color: #fff;
   border: none;
 }
@@ -998,8 +1011,8 @@ body {
 }
 
 .chatgpt-layout .chat-attach-btn:hover:not(:disabled) {
-  color: #10a37f;
-  background: rgba(16, 163, 127, 0.08);
+  color: #047857;
+  background: #ecfdf5;
 }
 
 .chatgpt-layout .chat-attach-btn:disabled {
@@ -1051,8 +1064,8 @@ body {
 }
 
 .chatgpt-layout .chat-file-chip-remove:hover {
-  color: #dc2626;
-  background: rgba(220, 38, 38, 0.1);
+  color: #7f1d1d;
+  background: #fee2e2;
 }
 
 .chatgpt-layout .chat-send-btn {
@@ -1064,7 +1077,7 @@ body {
   justify-content: center;
   border: none;
   border-radius: var(--radius-lg);
-  background: #10a37f;
+  background: #047857;
   color: #fff;
   cursor: pointer;
   transition: background var(--duration-fast), opacity var(--duration-fast);
@@ -1072,12 +1085,67 @@ body {
 }
 
 .chatgpt-layout .chat-send-btn:hover:not(:disabled) {
-  background: #0d8c6a;
+  background: #036149;
 }
 
 .chatgpt-layout .chat-send-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.chatgpt-layout .message-content-error {
+  color: #f87171;
+}
+
+.chatgpt-layout .chat-retry-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-default);
+}
+
+.chatgpt-layout .chat-retry-btn {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--accent-border);
+  background: var(--accent-surface);
+  color: var(--accent);
+  cursor: pointer;
+  transition: background var(--duration-fast), opacity var(--duration-fast);
+}
+
+.chatgpt-layout .chat-retry-btn:hover:not(:disabled) {
+  background: hsla(172, 72%, 48%, 0.2);
+}
+
+.chatgpt-layout .chat-retry-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.chatgpt-layout .chat-retry-dismiss {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.chatgpt-layout .chat-retry-dismiss:hover:not(:disabled) {
+  color: var(--text-secondary);
 }
 
 .chatgpt-layout .chat-disclaimer {
@@ -1175,7 +1243,7 @@ body {
 .dashboard-loading-dots span {
   width: 8px;
   height: 8px;
-  background: #10a37f;
+  background: #047857;
   border-radius: 50%;
   animation: loadingDot 1.2s var(--ease-out) infinite both;
 }
@@ -1218,14 +1286,14 @@ body {
 }
 
 .dashboard-btn.primary {
-  background: #10a37f;
+  background: #047857;
   color: #fff;
-  border-color: #10a37f;
+  border-color: #047857;
 }
 
 .dashboard-btn.primary:hover {
-  background: #0d8c6a;
-  border-color: #0d8c6a;
+  background: #036149;
+  border-color: #036149;
 }
 
 .dashboard-btn.secondary {
@@ -1245,8 +1313,8 @@ body {
 }
 
 .dashboard-btn.ghost:hover {
-  background: rgba(0, 0, 0, 0.05);
-  color: #374151;
+  background: #e5e7eb;
+  color: #030712;
 }
 
 .dashboard-grid {
@@ -1312,13 +1380,13 @@ body {
 }
 
 .dashboard-system-row .badge.online {
-  background: rgba(16, 163, 127, 0.15);
-  color: #0d8c6a;
+  background: #d1fae5;
+  color: #047857;
 }
 
 .dashboard-system-row .badge.offline {
-  background: rgba(220, 38, 38, 0.15);
-  color: #dc2626;
+  background: #fee2e2;
+  color: #7f1d1d;
 }
 
 .dashboard-system-list {
@@ -1570,14 +1638,14 @@ body {
 }
 
 .alert-ui-btn-confirm {
-  background: #10a37f;
-  border: 1px solid #10a37f;
+  background: #047857;
+  border: 1px solid #047857;
   color: #fff;
 }
 
 .alert-ui-btn-confirm:hover {
-  background: #0d8c6a;
-  border-color: #0d8c6a;
+  background: #036149;
+  border-color: #036149;
 }
 
 /* API key reminder (dashboard) */
@@ -1619,9 +1687,9 @@ body {
   color: #374151;
   text-transform: capitalize;
 }
-.status-active { background: hsla(142, 70%, 40%, 0.15); color: hsl(142, 70%, 25%); }
-.status-cancelled { background: hsla(0, 70%, 40%, 0.15); color: hsl(0, 70%, 35%); }
-.status-pending { background: hsla(38, 70%, 40%, 0.15); color: hsl(38, 70%, 30%); }
+.status-active { background: #dcfce7; color: #14532d; }
+.status-cancelled { background: #fee2e2; color: #7f1d1d; }
+.status-pending { background: #fef3c7; color: #78350f; }
 .mission-cancel-btn {
   padding: 4px 10px;
   font-size: var(--text-xs);
@@ -1656,7 +1724,7 @@ body {
   position: absolute;
   top: 2px;
   bottom: 2px;
-  background: linear-gradient(90deg, #6366f1, #818cf8);
+  background: linear-gradient(90deg, #4338ca, #4f46e5);
   color: #fff;
   font-size: 10px;
   font-family: var(--font-mono);
@@ -1677,7 +1745,7 @@ body {
   color: #6366f1;
 }
 @keyframes streaming-blink { to { visibility: hidden; } }
-.chat-stop-btn { background: hsla(0, 70%, 50%, 0.85) !important; color: #fff !important; }
+.chat-stop-btn { background: #b91c1c !important; color: #fff !important; }
 
 /* Per-model scorecard sparklines (P2). */
 .sparkline { vertical-align: middle; opacity: 0.65; color: #6366f1; }

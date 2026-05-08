@@ -64,8 +64,8 @@ graph TD
 ## Frontier Wiring (2026 Gap-Closure)
 
 The original "5-Layer Consciousness Stack" claims now match implementation. Each
-of the items below was wired up during the [Frontier Gap Closure Backlog](docs/PLAN.md)
-sprint and is exercised by tests under `viki/tests/`:
+of the items below was wired up during the internal **frontier / gap-closure** effort
+and is exercised by tests under `viki/tests/`:
 
 - **MCP integration is live.** [`viki/integrations/mcp_client.py`](viki/integrations/mcp_client.py) is loaded at controller boot via `attach_mcp_skills_sync` (called from `VIKIController.__init__` and `viki/main.py`). External tools listed in [`viki/config/mcp_servers.yaml`](viki/config/mcp_servers.yaml) appear as native skills, and `/api/mcp/servers` enumerates them.
 - **Promotion gate fixed.** `ContinuousLearner._capability_index_for` now constructs `CapabilityIndex(results_root, min_tasks, bootstrap_iters)` using positional/typed args. P0 regression test: [`viki/tests/test_forge_promotion.py`](viki/tests/test_forge_promotion.py).
@@ -100,3 +100,15 @@ VIKI ships with two coordinated low-resource paths so the agent stays usable on 
 - **UI lite mode.** `ui/src/HologramFace.jsx` dynamically imports `@react-three/fiber`, `@react-three/drei`, and `HologramGirl3D` so they aren't part of the initial bundle, and renders a CSS-only orb when `?lite=1`, `localStorage.viki_lite === '1'`, or `navigator.hardwareConcurrency <= 4` / `navigator.deviceMemory <= 4`.
 
 Tests pin both paths: [`viki/tests/test_lazy_skill_proxy.py`](viki/tests/test_lazy_skill_proxy.py) verifies metadata-without-load, deferred import, and failure isolation. [`viki/tests/test_low_resource_mode.py`](viki/tests/test_low_resource_mode.py) boots a real controller with `VIKI_LOW_RESOURCE=1` and asserts that `viki.skills.builtins.{vision,browser,computer_use,whisper,pdf,…}_skill` modules are *not* in `sys.modules` after construction.
+
+## Monorepo siblings (not imported by `viki/`)
+
+These directories ship in the same repository but are **optional** sidecars:
+
+| Path | Role |
+|------|------|
+| [`ui/`](ui/) | Operator dashboard: chat (SSE), hologram, missions, forge controls |
+| [`security-lab/`](security-lab/) | Standalone FastAPI lab: prompt-injection heuristics, RBAC tools, audit DB |
+| [`qa-automation/`](qa-automation/) | Learning-oriented API/UI/perf test examples and CI samples |
+
+They do not change runtime imports for `python viki/main.py`; see each folder’s README for setup.

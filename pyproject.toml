@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "viki-sdi"
 version = "7.3.2"
-description = "VIKI Sovereign Digital Intelligence — local-first autonomous AI agent with Ollama, Orythix cognitive architecture, and recursive self-improvement"
+description = "VIKI Sovereign Digital Intelligence — open-source self-hosted AI agent: Ollama local LLMs, Python CLI, Flask API (SSE chat), React dashboard, MCP tools, RAG memory, Neural Forge, capability gating, Apache-2.0"
 readme = "README.md"
 license = { text = "Apache-2.0" }
 authors = [
@@ -15,17 +15,24 @@ urls = { Homepage = "https://github.com/Orythix/viki", Changelog = "https://gith
 requires-python = ">=3.10"
 keywords = [
     "ai-agent",
+    "open-source-ai-agent",
+    "self-hosted-ai",
     "autonomous-agent",
     "ollama",
     "local-llm",
+    "private-llm",
     "privacy-first",
     "sovereign-ai",
     "react-agent",
+    "mcp",
+    "rag",
     "orythix",
     "cognitive-architecture",
     "tool-use",
     "cli-assistant",
     "python",
+    "ai-assistant",
+    "llm-agent",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",

@@ -1,5 +1,7 @@
 # Security Policy
 
+General documentation index: [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md). API and capability setup: [viki/SECURITY_SETUP.md](viki/SECURITY_SETUP.md).
+
 ## Supported Versions
 
 Security fixes are applied to the most recent minor release line.

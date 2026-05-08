@@ -46,6 +46,7 @@ from viki.ops.tenant_ops import SimpleOpsPlanner, ControllerTenantConnector, Ops
 from viki.core.mission_control import MissionControl
 from viki.core.request_pipeline import RequestContext, build_default_preflight_pipeline
 from viki.core.git_context import get_git_workspace_snapshot
+from viki.core.endpoint_guard import EndpointGuardService
 
 from viki.config.logger import viki_logger, thought_logger
 
@@ -109,6 +110,18 @@ class VIKIController:
                 system["lesson_export_min_access_count"] = max(1, int(raw))
             except ValueError:
                 pass
+
+        if os.environ.get("VIKI_ENDPOINT_GUARD") is not None:
+            raw = os.environ.get("VIKI_ENDPOINT_GUARD", "").strip().lower()
+            eg = self.settings.setdefault("endpoint_guard", {})
+            if not isinstance(eg, dict):
+                eg = {}
+                self.settings["endpoint_guard"] = eg
+            if raw in ("1", "true", "yes", "on"):
+                eg["enabled"] = True
+                eg.setdefault("auto_start_watcher", True)
+            elif raw in ("0", "false", "no", "off"):
+                eg["enabled"] = False
 
         if os.environ.get("VIKI_BACKGROUND_EVOLUTION_AT_BOOT") is not None:
             raw = os.environ.get("VIKI_BACKGROUND_EVOLUTION_AT_BOOT", "").strip().lower()
@@ -195,6 +208,7 @@ class VIKIController:
             ("toast", "notification"),
             ("video", "short_video_agent"),
             ("short", "short_video_agent"),
+            ("antivirus", "endpoint_guard"),
         ]
         for alias_name, target_name in alias_pairs:
             target = self.skill_registry.get_skill(target_name)
@@ -389,6 +403,7 @@ class VIKIController:
             analysis_interval_s=float(bio_settings.get("bio_analysis_interval_s", 10.0)),
         )
         self.dream = DreamModule(self)
+        self.endpoint_guard = EndpointGuardService(self)
 
         # v13: Autonomous Startup Pulse — skipped in low_resource_mode or VIKI_SKIP_STARTUP_PULSE (headless evolve).
         _skip_pulse = os.environ.get("VIKI_SKIP_STARTUP_PULSE", "").strip().lower() in ("1", "true", "yes")
@@ -435,6 +450,13 @@ class VIKIController:
             signals=self.signals,
         )
         self._preflight_pipeline = build_default_preflight_pipeline()
+
+        # Endpoint guard runs in a background thread; start here so API/sync construction
+        # (no asyncio loop) still enables the watcher. Idempotent if also triggered later.
+        try:
+            self.endpoint_guard.start_watcher()
+        except Exception as e:
+            viki_logger.debug("endpoint_guard init: %s", e)
 
     async def _startup_pulse(self):
         """Autonomous startup sequence: Connect, Research, Evolve.
@@ -1110,6 +1132,7 @@ class VIKIController:
             ("viki.skills.builtins.voice_skill", "VoiceSkill", (self.voice_module, self)),
             ("viki.skills.builtins.sfs_skill", "SemanticFSSkill", (self,)),
             ("viki.skills.builtins.security_skill", "SecuritySkill", ()),
+            ("viki.skills.builtins.endpoint_guard_skill", "EndpointGuardSkill", (self,)),
             ("viki.skills.creation.forge", "ModelForgeSkill", (self,)),
             ("viki.skills.builtins.recall_skill", "RecallSkill", (self,)),
             ("viki.skills.builtins.media_skill", "MediaControlSkill", ()),

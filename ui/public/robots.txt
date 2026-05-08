@@ -1,3 +1,6 @@
+# VIKI dashboard (Vite). For local dev, crawlers rarely hit this origin.
 User-agent: *
 Allow: /
-Sitemap: https://viki.ai/sitemap.xml
+
+# When you deploy this UI to a public HTTPS host, add your sitemap, e.g.:
+# Sitemap: https://your-domain.example/sitemap.xml

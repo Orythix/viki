@@ -1,0 +1,12 @@
+{
+  "name": "qa-lab-ui-cypress",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "cy:open": "cypress open",
+    "cy:run": "cypress run"
+  },
+  "devDependencies": {
+    "cypress": "^13.16.0"
+  }
+}

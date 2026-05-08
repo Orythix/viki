@@ -1,0 +1,17 @@
+{
+  "roles": {
+    "lab_admin": {
+      "description": "Full lab access — use only on trusted admin workstations.",
+      "permissions": ["chat", "tools.shell", "tools.http_get", "metrics.read", "audit.read", "security.test"]
+    },
+    "researcher": {
+      "description": "Standard defensive research — no shell by default.",
+      "permissions": ["chat", "tools.http_get", "metrics.read", "audit.read", "security.test"]
+    },
+    "observer": {
+      "description": "Read-only monitoring.",
+      "permissions": ["metrics.read", "audit.read"]
+    }
+  },
+  "default_role": "researcher"
+}

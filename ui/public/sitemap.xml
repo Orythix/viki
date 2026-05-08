@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- Template: replace URLs when you deploy the dashboard publicly. For OSS discovery, the main entry is the GitHub repo README. -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://viki.ai/</loc>
-    <lastmod>2026-02-12</lastmod>
+    <loc>https://github.com/Orythix/viki</loc>
+    <lastmod>2026-05-09</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>

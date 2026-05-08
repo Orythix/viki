@@ -1,0 +1,16 @@
+{
+  "name": "qa-lab-ui-playwright",
+  "private": true,
+  "version": "1.0.0",
+  "description": "QA learning — Playwright (TypeScript) against security-lab frontend",
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "codegen": "playwright codegen"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  }
+}

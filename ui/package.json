@@ -2,7 +2,16 @@
   "name": "viki-dashboard",
   "private": true,
   "version": "2.3.0",
-  "description": "VIKI Interface - Virtual Intelligence Knowledge Interface",
+  "description": "VIKI operator UI — open-source local AI agent dashboard (React/Vite): chat, SSE streaming, hologram voice, missions, forge. Pairs with github.com/Orythix/viki.",
+  "keywords": [
+    "viki",
+    "ai-agent",
+    "local-llm",
+    "ollama",
+    "self-hosted-ai",
+    "react-dashboard",
+    "open-source"
+  ],
   "author": "VIKI Project Contributors",
   "license": "Apache-2.0",
   "repository": {

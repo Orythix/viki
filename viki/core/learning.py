@@ -312,7 +312,11 @@ class LearningModule:
         cur.execute("SELECT id, content, text_representation, embedding FROM lessons")
         rows = cur.fetchall()
         contents = [r['text_representation'] for r in rows]
-        viki_logger.info(f'LearningModule: get_relevant_lessons found {len(rows)} lessons: {contents}')
+        viki_logger.info("LearningModule: get_relevant_lessons scanning %s lesson row(s)", len(rows))
+        viki_logger.debug(
+            "LearningModule: lesson text preview (first 3, truncated): %s",
+            [(c or "")[:120] for c in contents[:3]],
+        )
         if not rows:
             return []
 
@@ -590,6 +594,7 @@ class LearningModule:
         Import lessons from a JSONL file (curated facts for training).
         Supported shapes per line: {\"trigger\",\"fact\"}, {\"instruction\",\"input\",\"output\"},
         {\"messages\":[{\"role\",\"content\"},...]}, or {\"text\": \"...\"}.
+        Optional per-line fields: source_task, author, reliability (float).
         If reinforce=True, each imported row is saved twice so access_count reaches 2 when new.
         """
         if not os.path.isfile(path):
@@ -635,16 +640,26 @@ class LearningModule:
                         trigger, fact = user_txt, asst_txt
                 if not fact or len(fact) < 3:
                     continue
+                row_source = str(obj.get("source_task") or source_task).strip() or source_task
+                row_author = str(obj.get("author") or "Self").strip() or "Self"
+                row_rel = obj.get("reliability")
+                rel_kw: Dict[str, Any] = {}
+                if isinstance(row_rel, (int, float)):
+                    rel_kw["reliability"] = float(row_rel)
                 self.save_lesson(
                     trigger=trigger or "imported",
                     fact=fact,
-                    source_task=source_task,
+                    source_task=row_source,
+                    author=row_author,
+                    **rel_kw,
                 )
                 if reinforce:
                     self.save_lesson(
                         trigger=trigger or "imported",
                         fact=fact,
-                        source_task=source_task,
+                        source_task=row_source,
+                        author=row_author,
+                        **rel_kw,
                     )
                 n += 1
         return f"Imported {n} lesson row(s) from {path}."

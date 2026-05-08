@@ -59,3 +59,7 @@ Original playbooks authored in this repository (MIT, consistent with the surroun
 - `engineering/agent_and_tool_use_patterns.md`
 - `engineering/real_time_and_event_driven.md`
 - `engineering/cryptography_and_key_management.md`
+
+## Megatron-LM playbooks
+
+Task-oriented **`SKILL.md`** files for NVIDIA Megatron-LM workflows (build, Slurm, CI/CD, testing, golden values, …) live under **`megatron_lm/`**. Browse that tree in the IDE; filenames match upstream task names.

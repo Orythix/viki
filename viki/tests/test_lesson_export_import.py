@@ -49,6 +49,31 @@ class TestLessonExportImport(unittest.TestCase):
         self.assertIsNotNone(row)
         self.assertGreaterEqual(row[0], 2)
 
+    def test_import_jsonl_per_row_source_author_reliability(self):
+        path = os.path.join(self.td, "meta.jsonl")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(
+                json.dumps(
+                    {
+                        "trigger": "ROW_META",
+                        "fact": "Per-row metadata must flow into the lessons table.",
+                        "source_task": "https://example.com/doc",
+                        "author": "Tester",
+                        "reliability": 0.91,
+                    }
+                )
+                + "\n"
+            )
+        msg = self.lm.import_lessons_from_jsonl(path, source_task="fallback_default")
+        self.assertIn("Imported 1", msg)
+        cur = self.lm.conn.cursor()
+        cur.execute("SELECT source_task, author, reliability FROM lessons LIMIT 1")
+        row = cur.fetchone()
+        self.assertIsNotNone(row)
+        self.assertEqual(row[0], "https://example.com/doc")
+        self.assertEqual(row[1], "Tester")
+        self.assertAlmostEqual(row[2], 0.91, places=2)
+
 
 if __name__ == "__main__":
     unittest.main()

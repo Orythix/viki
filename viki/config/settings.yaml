@@ -8,6 +8,7 @@
 #   VIKI_LESSON_EXPORT_MIN_ACCESS — integer min access_count for LoRA/JSONL export (default 2).
 #   VIKI_BACKGROUND_EVOLUTION_AT_BOOT — enable forge.background_evolution_at_boot from env.
 #   VIKI_SKIP_STARTUP_PULSE — skip startup pulse (headless boot evolve script).
+#   VIKI_ENDPOINT_GUARD — 1/true enables or 0/false disables endpoint_guard (local heuristic watcher + optional Defender).
 system:
   log_level: "INFO"
   data_dir: "./data"
@@ -151,3 +152,15 @@ obsidian:
 # Tasks: file (data_dir/tasks.json) or things3 (macOS)
 tasks:
   provider: "file"    # file | things3
+
+# Local endpoint guard: heuristics on new files in Downloads/workspace + optional AV CLI (Defender on Windows, ClamAV on Linux/macOS if installed).
+# Not a full antivirus engine — keep your OS AV enabled. Disabled in low_resource_mode.
+# Env VIKI_ENDPOINT_GUARD=0 turns this off without editing YAML.
+endpoint_guard:
+  enabled: true
+  auto_start_watcher: true
+  watch_paths: []     # empty = XDG download dir + ~/Downloads + workspace_dir (non-recursive)
+  use_windows_defender_cli: true
+  use_clamav_cli: false   # Linux/macOS/BSD: set true if clamscan or clamdscan is on PATH
+  alert_on_severity: medium   # log / lesson / optional AV scan when severity >= this (low|medium|high)
+  debounce_seconds: 2.0

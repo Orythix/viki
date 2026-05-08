@@ -1,0 +1,3 @@
+{"id": "profile_role", "query": "Who is the technical lead focused on Angular and frontend architecture?", "must_contain_any": ["Sachin", "Technical Lead", "Angular"]}
+{"id": "n8n_integrations", "query": "workflow automation platform with hundreds of integrations and fair-code license", "must_contain_any": ["n8n", "400"]}
+{"id": "strict_stack", "query": "TypeScript React Node AWS Figma Docker daily tooling", "must_contain_all": ["TypeScript", "React", "Figma"]}

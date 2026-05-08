@@ -61,6 +61,11 @@ Browser: typically `http://localhost:5173`. The UI must authenticate: set `VITE_
 | `VIKI_UNSLOTH_RUN_TRAIN` | `1` / `true` — allow GPU LoRA training inside `internal_forge` (requires Unsloth stack) |
 | `VIKI_GIT_CONTEXT` | `1` / `true` — append **git snapshot** (branch, status, recent commits) from `workspace_dir` to deliberation context |
 | `VIKI_SESSION_USAGE_LOG` | `true` / `false` — when set, overrides `system.session_usage_log` (append JSONL usage under `data_dir`) |
+| `VIKI_ENDPOINT_GUARD` | `1` / `true` / `yes` enables, `0` / `false` / `no` disables `endpoint_guard` (local heuristic watcher; not a full AV replacement) |
+
+### 3.4 Local endpoint guard (antivirus companion)
+
+`endpoint_guard` in `viki/config/settings.yaml` watches **download folders** (XDG on Linux, `~/Downloads`, plus **workspace_dir**; non-recursive by default) for new files, applies **heuristic** risk scoring (e.g. double extensions, ransomware-like names), logs warnings, can record a lesson, and on **high** severity may invoke **Microsoft Defender** on Windows or **ClamAV** (`clamscan` / `clamdscan` on `PATH`) when `use_clamav_cli` is true on Linux/macOS/BSD. **Keep your normal antivirus enabled** — this layer is an assistant, not a substitute for a full AV product.
 
 ---
 
@@ -68,7 +73,7 @@ Browser: typically `http://localhost:5173`. The UI must authenticate: set `VITE_
 
 | File | What to change |
 |------|----------------|
-| `viki/config/settings.yaml` | `system.*`, `memory.short_term_limit` (10–50), `system.use_ensemble`, `system.session_usage_log`, `system.forge_base_ollama_model`, timeouts |
+| `viki/config/settings.yaml` | `system.*`, `memory.short_term_limit` (10–50), `system.use_ensemble`, `system.session_usage_log`, `system.forge_base_ollama_model`, `endpoint_guard.*`, timeouts |
 | `viki/config/models.yaml` | `models.default` profile name; profile `model_name` must match `ollama list` exactly |
 | `.env` (optional) | `VIKI_API_KEY`, `VIKI_ADMIN_SECRET`, cloud keys if `local_llm_only: false` |
 
@@ -194,8 +199,9 @@ VIKI does not scrape the whole web for pretraining. **Internet → SQLite lesson
 | Grow lessons from the web | Use the **research** skill in chat (persona must allow `research`: sovereign, research, coding, dev, …), paste URLs, or run **`python scripts/ingest_web_topics.py --file topics.txt`** (one DuckDuckGo query per line). Requires `duckduckgo-search` or `ddgs` (see `pyproject.toml`). |
 | Auto-lookup on uncertainty | With `system.auto_web_research_when_uncertain: true` (and not air-gap/shadow), uncertain replies trigger search; snippets can still feed lessons via the research path. |
 | Export threshold | `export_training_dataset` includes lessons with `access_count >= N`. Set **`system.lesson_export_min_access_count`** (default **2**), **`VIKI_LESSON_EXPORT_MIN_ACCESS`**, or **`python scripts/build_viki_model.py --min-count`** so JSONL and prompt-bake stay aligned. |
-| Import curated JSONL | From Python or a small harness: `LearningModule.import_lessons_from_jsonl(path, reinforce=True)` to load `trigger`/`fact` (or Alpaca / chat) lines; `reinforce=True` saves twice so new rows reach `access_count` **2**. |
+| Import curated JSONL | From Python or a small harness: `LearningModule.import_lessons_from_jsonl(path, reinforce=True)` to load `trigger`/`fact` (or Alpaca / chat) lines; optional per-line **`source_task`**, **`author`**, **`reliability`**. **`python scripts/seed_knowledge.py`** loads `viki/config/knowledge_seed.jsonl` (operator + reference facts); add `--reinforce` for export-ready `access_count`. |
 | Bake a model | From repo root: **`python scripts/build_viki_model.py`** (CPU prompt-bake) or **`--strategy lora`** with **`VIKI_UNSLOTH_RUN_TRAIN=1`** and CUDA. See script docstring and §10 above. |
+| **RAG retrieval eval** | Curate JSONL gold (`must_contain_any` / `must_contain_all`) and run **`python scripts/run_rag_eval.py --gold viki/eval/fixtures/rag_gold.example.jsonl --out reports/rag_eval.json`**. Add **`--judge`** for optional local Ollama relevance scoring. See [viki/eval/README.md](viki/eval/README.md). |
 
 Disable internet training by **`VIKI_AIR_GAP=1`** (no outbound search).
 
@@ -224,7 +230,10 @@ Keep **`low_resource_mode`** or **`air_gap`** on hosts that must not do this wor
 
 - [SETUP.md](SETUP.md) — install and first run  
 - [README.md](README.md) — product overview and architecture pointers  
+- [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md) — full documentation index  
 - [viki/SECURITY_SETUP.md](viki/SECURITY_SETUP.md) — API keys, UI auth, integrations  
+- [security-lab/README.md](security-lab/README.md) — optional local defensive AI security lab  
+- [qa-automation/README.md](qa-automation/README.md) — optional QA automation learning tracks  
 
 ---
 

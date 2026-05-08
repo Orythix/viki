@@ -23,6 +23,36 @@
 
 ---
 
+## Overview (what VIKI is)
+
+**VIKI** (**Virtual Intelligence Knowledge Interface**) is an **open-source AI agent** and **self-hosted autonomous assistant** written in **Python**. It targets **local-first** and **air-gapped** setups using **Ollama** (Phi, Mistral, Qwen, DeepSeek, and other local models), with optional cloud profiles when you opt in. The stack includes a **CLI**, **Flask REST API** (chat with **SSE streaming**, missions, forge, traces), **MCP** tool integration, **RAG-style** semantic memory over SQLite, **Neural Forge** baking of lessons into custom **Ollama** images, and a **React + Vite** operator **dashboard** (text chat, hologram voice UI, sub-agents). Governance uses **capability gating**, an ethical governor, and structured logging—not a multi-tenant SaaS; you run it on **your** machine or **Docker**.
+
+**Repository:** [github.com/Orythix/viki](https://github.com/Orythix/viki) · **License:** Apache 2.0
+
+## Frequently asked questions
+
+### What is VIKI used for?
+
+Coding assistance, local research with citations, task automation (files, shell, browser via Playwright), presentations and spreadsheets, messaging connectors (Telegram, Discord, Slack, WhatsApp), voice interaction, and experiments with **multi-step agents** and **tool use**—all with a strong **privacy** story because the default path never leaves your network.
+
+### Is VIKI free? Can I self-host?
+
+Yes. VIKI is **Apache-2.0** open source. You install from this repo, run `python viki/main.py` or Docker, and supply your own **Ollama** models. There is no required cloud subscription.
+
+### Does VIKI run offline?
+
+You can run in **air-gap** mode (`VIKI_AIR_GAP=1`) so routing sticks to local models and outbound research is disabled. You still need local LLM weights (e.g. via Ollama) on disk.
+
+### How is VIKI different from LangChain, AutoGPT, or “ChatGPT desktop”?
+
+VIKI ships as a **single opinionated agent system**: judgment/reflex layers, SQLite-backed **lessons**, **forge** pipeline to **Ollama** Modelfiles, first-class **dashboard** and **API**, and a broad **builtin skill** set. It is not a thin wrapper library; it is a runnable **sovereign agent** product you deploy yourself.
+
+### What are the minimum requirements?
+
+**Python 3.10+**, **Ollama** (or another supported local inference path per config), and enough RAM for your chosen model (many setups work on **8 GB**; **4 GB** is possible with small models and `low_resource_mode`). See [README § Running on low-end PCs](#running-on-low-end-pcs).
+
+---
+
 ## The Sovereign Evolution
 
 VIKI is a **Sovereign Digital Intelligence** designed to be more than just an assistant—she is a partner that evolves alongside your workflow. Built on a foundation of **local-first privacy** and **deterministic governance**, VIKI balances the raw power of LLMs with the safety of a modular, capability-aware architecture.
@@ -170,10 +200,15 @@ VIKI/
 │   ├── config/             # Orchestration & Soul profiles
 │   ├── skills/             # Modular Ability System (FS, Shell, Research)
 │   ├── api/                # Unified Nexus (Discord, Telegram, Web)
-│   └── main.py             # Autoritative Entry point
-├── data/                   # SQLite Persistent Wisdom & Facts
-├── logs/                   # Structured Telemetry & Audit Trails
-└── tests/                  # Core stability & Benchmark suites
+│   ├── eval/               # RAG eval fixtures + README
+│   └── main.py             # Authoritative entry point
+├── ui/                     # Vite + React dashboard (chat, hologram, operator UI)
+├── security-lab/           # Standalone defensive AI security lab (FastAPI + Docker)
+├── qa-automation/          # Multi-stack QA learning tracks (pytest, Java, Playwright, k6, …)
+├── docs/                   # Repo-wide documentation index (see DOCUMENTATION.md)
+├── data/                   # SQLite wisdom & facts (gitignored by default)
+├── logs/                   # Structured telemetry (gitignored by default)
+└── viki/tests/             # Core stability & integration suites
 ```
 
 ---
@@ -350,14 +385,21 @@ Unlike static bots, VIKI also grows during normal use: interact, lessons accumul
 *   **Audit**: Check `logs/viki.log` and `viki/SECURITY_SETUP.md` for capability checks and setup.
 
 ## Documentation
+
+**Full index:** [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md) (core VIKI, UI, `security-lab`, `qa-automation`, eval, playbooks).
+
 | Document | Description |
-|----------|--------------|
+|----------|-------------|
 | [SETUP.md](SETUP.md) | Installation and environment |
+| [VIKI_RUNBOOK.md](VIKI_RUNBOOK.md) | Operations, troubleshooting, RAG eval, boot evolution |
 | [DOCKER.md](DOCKER.md) | Run VIKI in Docker (`docker compose`) |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | System design and data flow |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |
 | [SECURITY.md](SECURITY.md) | Security policy and reporting |
 | [viki/SECURITY_SETUP.md](viki/SECURITY_SETUP.md) | API keys, CORS, capability setup |
+| [viki/eval/README.md](viki/eval/README.md) | RAG retrieval evaluation (`run_rag_eval.py`) |
+| [security-lab/README.md](security-lab/README.md) | Local defensive AI security lab |
+| [qa-automation/README.md](qa-automation/README.md) | QA automation learning monorepo |
 | [viki/ARCHITECTURE_REFACTOR.md](viki/ARCHITECTURE_REFACTOR.md) | Controller / pipeline refactor notes |
 | [`scripts/build_viki_model.py`](scripts/build_viki_model.py) | CLI: bake lessons into an Ollama model (`prompt_bake` / LoRA / DPO) |
 
@@ -365,7 +407,7 @@ Unlike static bots, VIKI also grows during normal use: interact, lessons accumul
 
 ## Keywords and topics
 
-**Local AI agent** · **Autonomous AI** · **Ollama** · **LLM agent** · **Privacy-first AI** · **Sovereign AI** · **Open-source AI assistant** · **ReAct agent** · **Capability gating** · **Neural Forge** · **Self-improving AI** · **CLI AI** · **Python AI agent** · **Orythix** · **Local LLM** · **Air-gap AI** · **Tool-use agent** · **Reflex reasoning** · **Multi-model routing**
+**Local AI agent** · **Self-hosted AI assistant** · **Open-source AI agent** · **Autonomous AI** · **Ollama agent** · **Python AI agent** · **LLM agent** · **ReAct agent** · **Tool-use agent** · **MCP integration** · **RAG** · **Semantic memory** · **Private AI** · **Privacy-first AI** · **Air-gapped AI** · **Sovereign AI** · **Local LLM** · **Offline LLM** · **Neural Forge** · **Ollama Modelfile** · **Capability gating** · **AI agent dashboard** · **Voice AI assistant** · **CLI AI** · **Self-improving AI** · **Orythix** · **Multi-model routing** · **Agentic workflow** · **Windows AI agent** · **Linux AI agent**
 
 ---
 

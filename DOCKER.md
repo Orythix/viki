@@ -1,5 +1,7 @@
 # Running VIKI in Docker
 
+Documentation index: [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md).
+
 This guide covers running the VIKI API in Docker and using Docker from the agent (e.g. listing containers, running images).
 
 ## Prerequisites

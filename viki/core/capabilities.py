@@ -47,6 +47,14 @@ class CapabilityRegistry:
             linked_skills=["filesystem", "filesystem_skill"]
         ))
         self.register(Capability(
+            name="local_security_guard",
+            description="Heuristic file-risk checks, directory sweep, optional AV CLI (Defender/ClamAV); complements OS AV.",
+            safety_tier="safe",
+            read_only=True,
+            requires_confirmation=False,
+            linked_skills=["endpoint_guard"]
+        ))
+        self.register(Capability(
             name="filesystem_write",
             description="Create, edit, or delete files on the local system.",
             safety_tier="medium",

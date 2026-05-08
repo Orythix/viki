@@ -4,6 +4,12 @@ All notable changes to the VIKI Sovereign Intelligence project will be documente
 This project adheres to [Semantic Versioning](https://semver.org/) and the
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
+## [Unreleased]
+
+### Changed
+- **Documentation**: added [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md) as the canonical index; cross-linked `README`, `SETUP`, `VIKI_RUNBOOK`, `ARCHITECTURE`, `CONTRIBUTING`, `DOCKER`, `security-lab`, `qa-automation`, and related docs; fixed a broken `docs/PLAN.md` reference in `ARCHITECTURE.md`.
+- **SEO / discoverability**: README overview + FAQ; richer `keywords` in README, `pyproject.toml`, and `ui/package.json`; `ui/index.html` meta/OG/Twitter/JSON-LD aligned to the GitHub repo (removed placeholder `viki.ai` and missing `og:image`); `ui/public/robots.txt` and `sitemap.xml` no longer point at a non-owned domain.
+
 ## [7.3.2] - 2026-05-08 (Public release prep)
 
 ### Added
