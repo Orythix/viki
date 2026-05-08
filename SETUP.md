@@ -14,7 +14,7 @@
 
 1.  **Clone the Repository**:
     ```powershell
-    git clone https://github.com/toozuuu/viki.git
+    git clone https://github.com/Orythix/viki.git
     cd viki
     ```
 

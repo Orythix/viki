@@ -16,7 +16,7 @@ Security fixes are applied to the most recent minor release line.
 
 Use GitHub's private vulnerability reporting:
 
-1. Open the [Security tab of the repository](https://github.com/toozuuu/viki/security)
+1. Open the [Security tab of the repository](https://github.com/Orythix/viki/security)
 2. Click **Report a vulnerability**
 3. Include:
    - A clear description of the issue and its impact

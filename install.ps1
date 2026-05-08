@@ -1,5 +1,5 @@
 # VIKI CLI one-line install (Windows PowerShell)
-# Usage: irm https://raw.githubusercontent.com/toozuuu/viki/main/install.ps1 | iex
+# Usage: irm https://raw.githubusercontent.com/Orythix/viki/main/install.ps1 | iex
 # Or from repo: .\install.ps1
 
 $ErrorActionPreference = "Stop"

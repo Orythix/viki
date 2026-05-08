@@ -60,9 +60,9 @@ representative at an online or offline event.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the maintainers via a private
-[GitHub security advisory](https://github.com/toozuuu/viki/security/advisories/new)
+[GitHub security advisory](https://github.com/Orythix/viki/security/advisories/new)
 or by opening a confidential thread in
-[GitHub Discussions](https://github.com/toozuuu/viki/discussions).
+[GitHub Discussions](https://github.com/Orythix/viki/discussions).
 All complaints will be reviewed and investigated promptly and fairly.
 
 All community leaders are obligated to respect the privacy and security of the

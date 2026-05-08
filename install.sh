@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # VIKI CLI one-line install (Unix)
-# Usage: curl -fsSL https://raw.githubusercontent.com/toozuuu/viki/main/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/Orythix/viki/main/install.sh | bash
 # Or from repo: ./install.sh
 
 set -e

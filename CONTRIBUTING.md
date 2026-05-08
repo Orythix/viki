@@ -38,7 +38,7 @@ VIKI is built on the **Orythix Cognitive Architecture**:
 
 ### Reporting Bugs
 
-* **Search first** — see if the bug is already filed in [Issues](https://github.com/toozuuu/viki/issues).
+* **Search first** — see if the bug is already filed in [Issues](https://github.com/Orythix/viki/issues).
 * **Use the bug template** and include:
   * a clear title and description,
   * steps to reproduce,
@@ -70,7 +70,7 @@ VIKI is built on the **Orythix Cognitive Architecture**:
 ## Development Setup
 
 ```bash
-git clone https://github.com/toozuuu/viki.git
+git clone https://github.com/Orythix/viki.git
 cd viki
 python -m venv .venv
 # Windows: .\.venv\Scripts\Activate.ps1
@@ -127,8 +127,8 @@ git config core.hooksPath .githooks
 
 ## Need Help?
 
-* General questions → [GitHub Discussions](https://github.com/toozuuu/viki/discussions)
-* Bug reports → [GitHub Issues](https://github.com/toozuuu/viki/issues)
+* General questions → [GitHub Discussions](https://github.com/Orythix/viki/discussions)
+* Bug reports → [GitHub Issues](https://github.com/Orythix/viki/issues)
 * Security issues → see [`SECURITY.md`](./SECURITY.md) (private advisories only)
 
 ---

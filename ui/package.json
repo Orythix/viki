@@ -7,12 +7,12 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/toozuuu/viki.git"
+    "url": "https://github.com/Orythix/viki.git"
   },
   "bugs": {
-    "url": "https://github.com/toozuuu/viki/issues"
+    "url": "https://github.com/Orythix/viki/issues"
   },
-  "homepage": "https://github.com/toozuuu/viki#readme",
+  "homepage": "https://github.com/Orythix/viki#readme",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -9,7 +9,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Ollama](https://img.shields.io/badge/Ollama-Local_LLM-orange.svg)](https://ollama.ai)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
-[![CI](https://github.com/toozuuu/viki/actions/workflows/ci.yml/badge.svg)](https://github.com/toozuuu/viki/actions/workflows/ci.yml)
+[![CI](https://github.com/Orythix/viki/actions/workflows/ci.yml/badge.svg)](https://github.com/Orythix/viki/actions/workflows/ci.yml)
 
 ---
 
@@ -17,7 +17,7 @@
 
 [Features](#core-pillars-v732) • [Architecture](#technical-architecture) • [Quick Start](#quick-start) • [Security](#security--ethics) • [Contributing](./CONTRIBUTING.md)
 
-**Pre-release:** VIKI is in active development. We welcome feedback and bug reports via [GitHub Issues](https://github.com/toozuuu/viki/issues) and questions via [GitHub Discussions](https://github.com/toozuuu/viki/discussions). Set `VIKI_API_KEY` and see [SECURITY_SETUP.md](viki/SECURITY_SETUP.md) before exposing the API.
+**Pre-release:** VIKI is in active development. We welcome feedback and bug reports via [GitHub Issues](https://github.com/Orythix/viki/issues) and questions via [GitHub Discussions](https://github.com/Orythix/viki/discussions). Set `VIKI_API_KEY` and see [SECURITY_SETUP.md](viki/SECURITY_SETUP.md) before exposing the API.
 
 </div>
 
@@ -188,7 +188,7 @@ VIKI/
 ### Installation
 1.  **Clone & Initialize**:
     ```powershell
-    git clone https://github.com/toozuuu/viki.git
+    git clone https://github.com/Orythix/viki.git
     cd viki
     python -m venv .venv
     ./.venv/Scripts/Activate.ps1
@@ -247,8 +247,8 @@ Install the `viki` command so you can run it from any directory with the current
 
 **One-line install (optional)**:
 
-- Windows: `irm https://raw.githubusercontent.com/toozuuu/viki/main/install.ps1 | iex` (or from repo: `.\install.ps1`)
-- Unix: `curl -fsSL https://raw.githubusercontent.com/toozuuu/viki/main/install.sh | bash` (or from repo: `./install.sh`)
+- Windows: `irm https://raw.githubusercontent.com/Orythix/viki/main/install.ps1 | iex` (or from repo: `.\install.ps1`)
+- Unix: `curl -fsSL https://raw.githubusercontent.com/Orythix/viki/main/install.sh | bash` (or from repo: `./install.sh`)
 
 4.  **Launch with Hologram Face UI** (talk to VIKI with voice):
     ```powershell

@@ -46,4 +46,4 @@ Anything else we should know — config snippets (redacted), recent changes, etc
 ## Have you read the docs?
 
 - [ ] I have read [`README.md`](../README.md) and [`viki/SECURITY_SETUP.md`](../viki/SECURITY_SETUP.md)
-- [ ] I have searched [existing issues](https://github.com/toozuuu/viki/issues?q=is%3Aissue) for duplicates
+- [ ] I have searched [existing issues](https://github.com/Orythix/viki/issues?q=is%3Aissue) for duplicates

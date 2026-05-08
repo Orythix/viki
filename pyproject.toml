@@ -11,7 +11,7 @@ license = { text = "Apache-2.0" }
 authors = [
     { name = "VIKI Project Contributors" },
 ]
-urls = { Homepage = "https://github.com/toozuuu/viki", Changelog = "https://github.com/toozuuu/viki/blob/main/CHANGELOG.md", Issues = "https://github.com/toozuuu/viki/issues" }
+urls = { Homepage = "https://github.com/Orythix/viki", Changelog = "https://github.com/Orythix/viki/blob/main/CHANGELOG.md", Issues = "https://github.com/Orythix/viki/issues" }
 requires-python = ">=3.10"
 keywords = [
     "ai-agent",
