@@ -271,11 +271,11 @@ def strategy_lora(
     settings = load_settings()
     info(f"LoRA training: dataset={dataset_path.name}, steps={steps}")
     msg = _unsloth_train_sync(
-        dataset_path=str(dataset_path),
-        steps=int(steps),
-        summary=f"dataset={dataset_path.name}",
         data_dir=str(data_dir),
+        dataset_path=str(dataset_path),
+        params={"steps": int(steps)},
         settings=settings,
+        summary=f"dataset={dataset_path.name}",
     )
     print(msg)
     if "adapter saved" in msg.lower():
@@ -342,10 +342,10 @@ async def _run_dpo_async(
     msg = await asyncio.to_thread(
         run_dpo_training,
         dataset_path=str(pref_path),
-        base_model=base,
+        base_model_id=base,
         output_dir=str(out_dir),
         method=method,
-        max_steps=int(steps),
+        steps=int(steps),
     )
     print(msg)
     return 0

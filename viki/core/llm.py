@@ -13,6 +13,46 @@ from viki.config.logger import viki_logger
 
 T = TypeVar("T", bound=BaseModel)
 
+
+def _resolve_ollama_thinking_from_settings(system_settings: Optional[Dict[str, Any]]) -> bool:
+    """Env VIKI_OLLAMA_THINK overrides settings.system.ollama_enable_thinking."""
+    env = (os.environ.get("VIKI_OLLAMA_THINK") or "").strip().lower()
+    if env in ("1", "true", "yes"):
+        return True
+    if env in ("0", "false", "no"):
+        return False
+    sys = (system_settings or {}).get("system") or {}
+    return bool(sys.get("ollama_enable_thinking", False))
+
+
+def _resolve_ollama_options_from_settings(system_settings: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    sys = (system_settings or {}).get("system") or {}
+    opts = sys.get("ollama_options")
+    return dict(opts) if isinstance(opts, dict) else {}
+
+
+def _effective_profile_for_factory(
+    profile: Dict[str, Any],
+    provider_conf: Dict[str, Any],
+    system_settings: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Merge Ollama tuning from settings (and optional per-profile overrides) into the profile dict."""
+    if provider_conf.get("type") != "local":
+        return profile
+    merged = dict(profile)
+    thinking = _resolve_ollama_thinking_from_settings(system_settings)
+    if profile.get("ollama_enable_thinking") is not None:
+        thinking = bool(profile["ollama_enable_thinking"])
+    merged["ollama_enable_thinking"] = thinking
+    base_opts = _resolve_ollama_options_from_settings(system_settings)
+    po = profile.get("ollama_options")
+    if isinstance(po, dict):
+        merged["ollama_options"] = {**base_opts, **po}
+    elif base_opts:
+        merged["ollama_options"] = dict(base_opts)
+    return merged
+
+
 class StructuredPrompt:
     def __init__(self, request: str, messages: List[Dict[str, str]] = None):
         self.request = request
@@ -418,6 +458,14 @@ class LocalLLM(LLMProvider):
         self.base_url = self.config.get('base_url', 'http://127.0.0.1:11434').rstrip('/')
         if 'localhost' in self.base_url:
             self.base_url = self.base_url.replace('localhost', '127.0.0.1')
+        self._ollama_enable_thinking = bool(config.get("ollama_enable_thinking", False))
+        _oo = config.get("ollama_options")
+        self._ollama_options: Dict[str, Any] = dict(_oo) if isinstance(_oo, dict) else {}
+
+    def _ollama_options_merged(self, temperature: float) -> Dict[str, Any]:
+        o: Dict[str, Any] = {"temperature": float(temperature)}
+        o.update(self._ollama_options)
+        return o
 
     def is_cloud(self) -> bool:
         # Local Ollama / OpenAI-compatible local servers (LM Studio, vLLM) running on this host.
@@ -438,7 +486,8 @@ class LocalLLM(LLMProvider):
             "model": self.model_name,
             "messages": messages,
             "stream": True,
-            "options": {"temperature": temperature},
+            "think": self._ollama_enable_thinking,
+            "options": self._ollama_options_merged(temperature),
         }
         try:
             async with aiohttp.ClientSession() as session:
@@ -457,6 +506,8 @@ class LocalLLM(LLMProvider):
                         except json.JSONDecodeError:
                             continue
                         msg = payload.get("message") or {}
+                        if msg.get("thinking"):
+                            continue
                         chunk = msg.get("content") or ""
                         if chunk:
                             yield chunk
@@ -473,7 +524,8 @@ class LocalLLM(LLMProvider):
                 "model": self.model_name,
                 "messages": messages,
                 "stream": False,
-                "options": {"temperature": temperature},
+                "think": self._ollama_enable_thinking,
+                "options": self._ollama_options_merged(temperature),
             }
             if format:
                 data["format"] = format
@@ -504,12 +556,14 @@ class LocalLLM(LLMProvider):
                         resp_json = await resp.json()
 
                         # Handle Tool Calls
-                        if resp_json["message"].get("tool_calls"):
+                        _msg = resp_json["message"]
+                        _msg.pop("thinking", None)
+                        if _msg.get("tool_calls"):
                             success = True
-                            return json.dumps({"tool_calls": resp_json["message"]["tool_calls"]})
+                            return json.dumps({"tool_calls": _msg["tool_calls"]})
 
                         success = True
-                        return resp_json["message"]["content"]
+                        return _msg.get("content") or ""
                 except Exception as e:
                     return f"Error calling Local Model: {str(e)}"
         finally:
@@ -528,7 +582,8 @@ class LocalLLM(LLMProvider):
             "model": self.model_name,
             "messages": messages,
             "stream": False,
-            "options": {"temperature": temperature},
+            "think": self._ollama_enable_thinking,
+            "options": self._ollama_options_merged(temperature),
             "tools": tools,
         }
 
@@ -551,7 +606,9 @@ class LocalLLM(LLMProvider):
                         raise ValueError(f"Missing 'message' in response: {resp_json}")
 
                     success = True
-                    return resp_json["message"]
+                    msg = dict(resp_json["message"])
+                    msg.pop("thinking", None)
+                    return msg
             except Exception as e:
                 viki_logger.error(f"Tool call failed: {e}")
                 return {"role": "assistant", "content": f"Ollama Error: {str(e)}"}
@@ -907,13 +964,21 @@ class ModelFactory:
         raise ValueError(f"Unknown provider type: {provider_type}")
 
 class ModelRouter:
-    def __init__(self, config_path: str, air_gap: bool = False, local_llm_only: bool = False, budget=None):
+    def __init__(
+        self,
+        config_path: str,
+        air_gap: bool = False,
+        local_llm_only: bool = False,
+        budget=None,
+        system_settings: Optional[Dict[str, Any]] = None,
+    ):
         self.models = {}
         self.default_model = None
         self.air_gap = air_gap
         self.local_llm_only = local_llm_only
         self.budget = budget
         self._budget_config: Dict[str, Any] = {}
+        self._system_settings = system_settings
         self._load_config(config_path)
 
     def _model_allowed(self, model: LLMProvider) -> bool:
@@ -973,7 +1038,10 @@ class ModelRouter:
                     provider_conf = providers[provider_name]
                     # Merge `provider` name into config so providers know which one they are.
                     merged_provider_conf = {**provider_conf, "provider": provider_name}
-                    self.models[name] = ModelFactory.create(name, profile, merged_provider_conf)
+                    eff_profile = _effective_profile_for_factory(
+                        profile, merged_provider_conf, self._system_settings
+                    )
+                    self.models[name] = ModelFactory.create(name, eff_profile, merged_provider_conf)
 
             preferred: Optional[LLMProvider] = None
             if default_profile in self.models:

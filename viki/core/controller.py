@@ -280,6 +280,7 @@ class VIKIController:
             air_gap=self.air_gap,
             local_llm_only=self.local_llm_only,
             budget=self.llm_budget,
+            system_settings=self.settings,
         )
         # Re-merge YAML budget config into the LLMBudget after _load_config picked it up.
         if getattr(self.model_router, "_budget_config", None):

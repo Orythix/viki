@@ -15,7 +15,7 @@
 
 **VIKI** is an open-source autonomous AI agent and **Sovereign Digital Intelligence** for absolute privacy and **local-first** operation. Run with **Ollama**, **Phi-3**, **Mistral**, or **DeepSeek**—no cloud required. Uses the **Orythix Cognitive Architecture** for deep reasoning, multi-tool orchestration, and recursive self-improvement without leaking your data.
 
-[Features](#core-pillars-v732) • [Architecture](#technical-architecture) • [Quick Start](#quick-start) • [Security](#security--ethics) • [Contributing](./CONTRIBUTING.md)
+[Features](#core-pillars-v732) • [Architecture](#technical-architecture) • [Quick Start](#quick-start) • [Build the VIKI model](#build-your-viki-model) • [Security](#security--ethics) • [Contributing](./CONTRIBUTING.md)
 
 **Pre-release:** VIKI is in active development. We welcome feedback and bug reports via [GitHub Issues](https://github.com/Orythix/viki/issues) and questions via [GitHub Discussions](https://github.com/Orythix/viki/discussions). Set `VIKI_API_KEY` and see [SECURITY_SETUP.md](viki/SECURITY_SETUP.md) before exposing the API.
 
@@ -182,8 +182,8 @@ VIKI/
 
 ### Prerequisites
 *   **Python 3.10+** (3.10, 3.11, and 3.12 are supported; CI runs 3.10 and 3.11 on Ubuntu).
-*   **Ollama CLI**: Installed and running (`ollama serve`).
-*   **Recommended Models**: `phi3` (Reflex), `deepseek-r1` (Reasoning).
+*   **Ollama CLI**: Installed and running (the desktop app or service usually already listens on `127.0.0.1:11434`; a second `ollama serve` is only needed if nothing is bound to that port).
+*   **Recommended Models**: `phi3` (Reflex), `deepseek-r1` (Reasoning). For the **Neural Forge** bake step, pull whatever base you configure (commonly `qwen3.5:latest` or `gemma4:latest`); see [Build your VIKI model](#build-your-viki-model).
 
 ### Installation
 1.  **Clone & Initialize**:
@@ -277,14 +277,68 @@ Install the `viki` command so you can run it from any directory with the current
 
 ---
 
-## The Forge Workflow: "Baking Intelligence"
+## Build your VIKI model
 
-Unlike static bots, VIKI grows. Every 10 stable lessons learned, she initiates a **Neural Evolution**:
+**Neural Forge** — you can turn VIKI’s **reinforced lessons** (SQLite-backed learning DB under `data/`) into a **local Ollama image** whose system prompt embeds that wisdom. This is the main way to “build” the agent’s baked-in personality and corrections without cloud training.
 
-1.  **Interact**: Use VIKI for your dev tasks.
-2.  **Learn**: VIKI stores "Lessons" in her internal SQLite knowledge base.
-3.  **Forge**: The system automatically triggers the forge when stability milestones are met.
-4.  **Verify**: VIKI now responds with built-in awareness of your latest project state, no RAG required.
+### What gets built (default: `prompt_bake`)
+
+The script [`scripts/build_viki_model.py`](scripts/build_viki_model.py) exports a small JSONL dataset, writes `data/Modelfile.viki_evolved` with `FROM <your-base-model>` plus a **SYSTEM** block of top lessons, then runs `ollama create` to produce an Ollama **tag** (default: `viki-born-again`). No GPU is required for this path.
+
+Optional **GPU** strategies (`--strategy lora`, `dpo`, `orpo`) are documented in the script header and need CUDA plus env flags (`VIKI_UNSLOTH_RUN_TRAIN`, etc.).
+
+### Prerequisites
+
+1. **Ollama** reachable (`ollama list` works).
+2. **Base model** pulled, e.g. `ollama pull qwen3.5:latest` (or `gemma4:latest`, or any tag you pass with `--base`).
+3. **Some lessons** in the DB (the script will fail if there are zero). Use VIKI normally so reinforced lessons accumulate.
+
+### Configure the base model
+
+Set the bake base in **`viki/config/settings.yaml`**:
+
+```yaml
+system:
+  forge_base_ollama_model: "qwen3.5:latest"   # or gemma4:latest, etc.
+```
+
+Override for one session: `$env:VIKI_FORGE_BASE_OLLAMA_MODEL = "gemma4:latest"` (PowerShell).
+
+### Build commands (repo root)
+
+```powershell
+cd D:\path\to\VIKI   # your clone
+
+# Prompt-bake using settings / env base → creates Ollama tag viki-born-again
+python scripts/build_viki_model.py
+
+# Same, but force a specific base and output tag (keep multiple variants side by side)
+python scripts/build_viki_model.py --base gemma4:latest --name viki-born-gemma
+
+# Bake and set models.yaml default profile to viki-evolved (see below)
+python scripts/build_viki_model.py --set-default
+```
+
+Useful flags: `--min-count N` (only lessons seen at least *N* times), `--no-export`, `--dry-run`. Run `python scripts/build_viki_model.py --help` for the full list.
+
+### Wire the image into VIKI
+
+- The Ollama **image name** is whatever you passed as `--name` (default **`viki-born-again`**).
+- The **`viki-evolved`** entry in [`viki/config/models.yaml`](viki/config/models.yaml) maps the profile to that image via `model_name` (by default `viki-born-again`).
+- **`python scripts/build_viki_model.py --set-default`** sets `models.default: viki-evolved` so the app prefers your forged model.
+- If you used a custom `--name`, either update `model_name` under `viki-evolved` or add another profile and set `default:` to it.
+
+### Try it
+
+```powershell
+ollama run viki-born-again
+```
+
+In the **VIKI app**, local Ollama calls default to **`think: false`** (see `system.ollama_enable_thinking` in `settings.yaml`) so end users do not see long reasoning traces; the raw `ollama run` CLI may still show thinking unless you pass flags such as `--hidethinking` / `--think=false` for your model.
+
+### Ongoing evolution
+
+Unlike static bots, VIKI also grows during normal use: interact, lessons accumulate, then **re-run** `build_viki_model.py` when you want a fresh `ollama create` with updated baked-in knowledge.
 
 ---
 
@@ -305,6 +359,7 @@ Unlike static bots, VIKI grows. Every 10 stable lessons learned, she initiates a
 | [SECURITY.md](SECURITY.md) | Security policy and reporting |
 | [viki/SECURITY_SETUP.md](viki/SECURITY_SETUP.md) | API keys, CORS, capability setup |
 | [viki/ARCHITECTURE_REFACTOR.md](viki/ARCHITECTURE_REFACTOR.md) | Controller / pipeline refactor notes |
+| [`scripts/build_viki_model.py`](scripts/build_viki_model.py) | CLI: bake lessons into an Ollama model (`prompt_bake` / LoRA / DPO) |
 
 ---
 

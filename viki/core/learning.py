@@ -22,6 +22,27 @@ except Exception:
     util = None
 
 
+def _lesson_content_trigger_fact(content: Optional[str], text_representation: str) -> tuple[Optional[str], str]:
+    """
+    Normalize stored lesson `content` for export. JSON may decode to a dict
+    ({trigger, fact}), a legacy plain string from save_lesson(lesson=str), or
+    other shapes from migration — not always a dict.
+    """
+    if not content:
+        return None, text_representation
+    try:
+        parsed = json.loads(content)
+    except (json.JSONDecodeError, TypeError):
+        return None, text_representation
+    if isinstance(parsed, dict):
+        fact = parsed.get("fact") or text_representation
+        trig = parsed.get("trigger")
+        return (str(trig) if trig else None), str(fact)
+    if isinstance(parsed, str):
+        return None, (parsed if parsed else text_representation)
+    return None, json.dumps(parsed, ensure_ascii=False)
+
+
 class LearningModule:
     """
     Semantic Memory 3.0: High-performance SQLite backend with automatic JSON migration.
@@ -477,12 +498,8 @@ class LearningModule:
 
         if format == "jsonl":
             for r in rows:
-                try:
-                    obj = json.loads(r["content"]) if r["content"] else {}
-                except (json.JSONDecodeError, TypeError):
-                    obj = {}
-                trig = obj.get("trigger") or "context"
-                fact = obj.get("fact") or r["text_representation"]
+                trig_raw, fact = _lesson_content_trigger_fact(r["content"], r["text_representation"])
+                trig = trig_raw or "context"
                 block = (
                     f"### Instruction:\nRemember this for future VIKI interactions.\n"
                     f"### Input:\n{trig}\n### Response:\n{fact}"
@@ -491,16 +508,13 @@ class LearningModule:
 
         elif format == "alpaca":
             for r in rows:
-                try:
-                    obj = json.loads(r["content"]) if r["content"] else {}
-                except (json.JSONDecodeError, TypeError):
-                    obj = {}
+                trig_raw, fact = _lesson_content_trigger_fact(r["content"], r["text_representation"])
                 lines.append(
                     json.dumps(
                         {
                             "instruction": "Remember this for future VIKI interactions.",
-                            "input": obj.get("trigger") or "context",
-                            "output": obj.get("fact") or r["text_representation"],
+                            "input": trig_raw or "context",
+                            "output": fact,
                         },
                         ensure_ascii=False,
                     )
@@ -508,12 +522,8 @@ class LearningModule:
 
         elif format == "openai":
             for r in rows:
-                try:
-                    obj = json.loads(r["content"]) if r["content"] else {}
-                except (json.JSONDecodeError, TypeError):
-                    obj = {}
-                fact = obj.get("fact") or r["text_representation"]
-                trig = obj.get("trigger") or "user context"
+                trig_raw, fact = _lesson_content_trigger_fact(r["content"], r["text_representation"])
+                trig = trig_raw or "user context"
                 lines.append(
                     json.dumps(
                         {

@@ -1,6 +1,7 @@
 # User-specific config: use .env (copy from .env.example) instead of editing this file.
 # Env overrides: VIKI_DATA_DIR, VIKI_WORKSPACE_DIR, VIKI_PERSONA, VIKI_SHADOW_MODE, VIKI_AIR_GAP, VIKI_LOCAL_LLM_ONLY,
-#   VIKI_FORGE_BASE_OLLAMA_MODEL, VIKI_EMBED_GPU (1/true for CUDA sentence-transformers), VIKI_UNSLOTH_RUN_TRAIN (LoRA),
+#   VIKI_FORGE_BASE_OLLAMA_MODEL, VIKI_OLLAMA_THINK (1/true enables Ollama reasoning trace; default off for speed + cleaner UX),
+#   VIKI_EMBED_GPU (1/true for CUDA sentence-transformers), VIKI_UNSLOTH_RUN_TRAIN (LoRA),
 #   VIKI_GIT_CONTEXT (1/true appends git snapshot to project context).
 #   VIKI_SESSION_USAGE_LOG (1/true/false) — append JSONL usage events under data_dir (usage_session.jsonl).
 system:
@@ -34,8 +35,15 @@ system:
   # When true, run LLM security scan (scan_request) before deliberation. Adds latency and an extra LLM call per request.
   security_scan_requests: false
 
-  # When true, run internal specialist ensemble (critic/explorer/aligner) for complex intents. Set false for maximum speed.
+  # When true, run internal specialist ensemble (critic/explorer/aligner) for complex intents. Set false for lower latency.
   use_ensemble: true
+
+  # Ollama (local): when false, API sends think=false — hides reasoning traces and usually responds faster on thinking models.
+  # Per-profile override: set ollama_enable_thinking on a models.yaml profile. Env: VIKI_OLLAMA_THINK=1 to force on.
+  ollama_enable_thinking: false
+
+  # Optional Ollama generate options merged into every local request (temperature is still set per call). Example: num_predict: 2048
+  ollama_options: {}
 
   # When true, run a quick web research pulse at startup. Set false to avoid competing with first user request.
   startup_research: false
@@ -48,7 +56,7 @@ system:
   skill_health_check: true
 
   # Ollama tag for Neural Forge Modelfile `FROM` line (e.g. qwen3.5:latest). Override with VIKI_FORGE_BASE_OLLAMA_MODEL.
-  forge_base_ollama_model: "qwen3.5:latest"
+  forge_base_ollama_model: "gemma4:latest"
 
   # When true, BioModule opens the default webcam (OpenCV). Default false avoids Windows MSMF errors without a camera.
   bio_webcam_enabled: false
