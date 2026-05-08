@@ -1,6 +1,6 @@
 # VIKI Security Setup Guide
 
-**Last updated:** 2026-02-17
+**Last updated:** 2026-05-08
 
 ## Critical: Set Up Before Running
 
@@ -137,8 +137,8 @@ Cached reflex actions now undergo:
 
 ```bash
 # Clone and install
-git clone <repository>
-cd VIKI
+git clone https://github.com/Orythix/viki.git
+cd viki
 
 # Install dependencies
 pip install -r requirements.txt

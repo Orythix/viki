@@ -25,7 +25,14 @@ class TestControllerBoot(unittest.TestCase):
         cls.settings_path = os.path.join(base, "config", "settings.yaml")
         cls.soul_path = os.path.join(base, "config", "soul.yaml")
 
+    _ENV_VARS = ("VIKI_DATA_DIR", "VIKI_DISABLE_AUTOLAUNCH")
+
     def setUp(self):
+        # Snapshot env so we can restore it; otherwise these vars leak into
+        # later tests in the same process (they would inherit our temp dir
+        # path even after tearDown deletes it, which on Windows manifests as
+        # 'sqlite3.OperationalError: database is locked').
+        self._env_snapshot = {k: os.environ.get(k) for k in self._ENV_VARS}
         self._td = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         os.environ["VIKI_DATA_DIR"] = self._td.name
         os.environ["VIKI_DISABLE_AUTOLAUNCH"] = "1"
@@ -43,6 +50,11 @@ class TestControllerBoot(unittest.TestCase):
                 except Exception:
                     pass
         finally:
+            for k, v in self._env_snapshot.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
             try:
                 self._td.cleanup()
             except Exception:

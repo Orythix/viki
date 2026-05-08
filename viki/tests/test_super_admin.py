@@ -16,7 +16,16 @@ class TestSuperAdmin(unittest.TestCase):
         if os.path.exists(self.test_data_dir):
             shutil.rmtree(self.test_data_dir)
         os.makedirs(self.test_data_dir)
-        
+
+        # Force the SuperAdminLayer to read TEST_SECRET, not whatever lives in
+        # the developer's local .env (which other tests may have loaded via
+        # `load_dotenv()` when importing `viki.api.server`). Snapshot the env
+        # so we restore it in tearDown and don't leak into other tests.
+        self._env_snapshot = {
+            "VIKI_ADMIN_SECRET": os.environ.get("VIKI_ADMIN_SECRET"),
+        }
+        os.environ["VIKI_ADMIN_SECRET"] = "TEST_SECRET"
+
         # Test Admin Config
         self.admin_config_path = "./tests/test_admin.yaml"
         with open(self.admin_config_path, 'w') as f:
@@ -45,7 +54,13 @@ class TestSuperAdmin(unittest.TestCase):
                 asyncio.run(asyncio.wait_for(self.controller.shutdown(), timeout=5.0))
             except:
                 pass
-        
+
+        for k, v in getattr(self, "_env_snapshot", {}).items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
         if os.path.exists(self.test_data_dir):
             try:
                 shutil.rmtree(self.test_data_dir)
