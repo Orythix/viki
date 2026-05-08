@@ -12,7 +12,7 @@ class JudgmentOutcome(Enum):
     DEEP = "deep"               # Full consciousness stack, internal debate
     REFUSE = "refuse"           # Safety or clarity block
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 @dataclass
 class JudgmentResult:
@@ -23,6 +23,21 @@ class JudgmentResult:
     recommendation: str # "proceed", "deny", "confirm"
     reason: str
     recommended_capability: Optional[str] = None
+    failure_similarity: float = 0.0
+    elapsed_ms: float = 0.0
+
+    def as_dict(self) -> Dict[str, Any]:
+        return {
+            "outcome": self.outcome.value,
+            "clarity": round(self.clarity, 3),
+            "risk": round(self.risk, 3),
+            "novelty": round(self.novelty, 3),
+            "failure_similarity": round(self.failure_similarity, 3),
+            "recommendation": self.recommendation,
+            "reason": self.reason,
+            "recommended_capability": self.recommended_capability,
+            "elapsed_ms": round(self.elapsed_ms, 2),
+        }
 
 class JudgmentEngine:
     """
@@ -31,115 +46,101 @@ class JudgmentEngine:
     Enforces 'Judgment before Reasoning'.
     """
     def __init__(self, failure_memory, budget_allocator):
+        # `failure_memory` is the LearningModule (lessons + failures + macros).
         self.failure_memory = failure_memory
         self.budgets = budget_allocator
         self.safety_threshold = 0.8
         self.reflex_threshold = 0.2 # Below this novelty/complexity, reflex only
+        self._reflex_command_keywords = {
+            "open", "launch", "click", "type", "scroll", "press",
+            "pause", "play", "resume", "skip", "mute", "unmute", "volume",
+            "search", "google", "stop",
+        }
 
-    async def evaluate(self, user_input: str, context: Dict[str, Any]) -> JudgmentResult:
+    async def evaluate(self, user_input: str, context: Optional[Dict[str, Any]] = None) -> JudgmentResult:
         """
         Calculates the optimal cognitive mode for a task.
         Returns detailed JudgmentResult for downstream processing.
         """
-        # 1. Intent Clarity (Heuristic for now, could use a small local model)
+        t0 = time.perf_counter()
+        context = context or {}
+
         clarity = self._calculate_clarity(user_input)
-        
-        # 2. Risk Assessment
         risk = self._assess_risk(user_input, context)
-        
-        # 3. Novelty & Failure check
         past_failure = self._check_failure_similarity(user_input)
         novelty = self._estimate_novelty(user_input, context)
-        
-        # 4. Capability Recommendation (Heuristic)
-        recommended_cap = None
-        input_lower = user_input.lower()
-        if "search" in input_lower or "find" in input_lower or "research" in input_lower or "who is" in input_lower:
-            recommended_cap = "internet_research"
-        elif "what is" in input_lower:
-            # Avoid tagging trivial arithmetic / numeric snippets as web research.
-            tail_m = re.search(r"\bwhat\s+is\s+(.+)$", input_lower.strip())
-            trivial_what_is = False
-            if tail_m:
-                tail = tail_m.group(1).strip().rstrip("?")
-                trivial_what_is = bool(
-                    re.fullmatch(r"[\d\s\+\-\*\/\^\(\)\.\,]+", tail) and len(tail) <= 48
-                )
-            if not trivial_what_is:
-                recommended_cap = "internet_research"
-        elif "write" in input_lower or "save" in input_lower or "delete" in input_lower:
-            recommended_cap = "filesystem_write"
-        elif "list" in input_lower or "read" in input_lower or "open file" in input_lower:
-            recommended_cap = "filesystem_read"
-        
-        viki_logger.info(f"Judgment Engine: Clarity={clarity:.2f}, Risk={risk:.2f}, Novelty={novelty:.2f}, RecCap={recommended_cap}")
+
+        recommended_cap = self._recommend_capability(user_input)
+
+        viki_logger.info(
+            "Judgment Engine: Clarity=%.2f, Risk=%.2f, Novelty=%.2f, FailSim=%.2f, RecCap=%s",
+            clarity, risk, novelty, past_failure, recommended_cap,
+        )
+
+        def _make(outcome: JudgmentOutcome, recommendation: str, reason: str) -> JudgmentResult:
+            elapsed = (time.perf_counter() - t0) * 1000.0
+            return JudgmentResult(
+                outcome=outcome,
+                clarity=clarity,
+                risk=risk,
+                novelty=novelty,
+                recommendation=recommendation,
+                reason=reason,
+                recommended_capability=recommended_cap,
+                failure_similarity=past_failure,
+                elapsed_ms=elapsed,
+            )
 
         # --- JUDGMENT LOGIC ---
-        
-        # Rule: Refuse if risk is extreme or clarity is zero
+
+        # Rule: Refuse if risk is extreme.
         if risk > self.safety_threshold:
-            return JudgmentResult(
-                outcome=JudgmentOutcome.REFUSE, clarity=clarity, risk=risk, novelty=novelty, 
-                recommendation="deny", reason="Task exceeds risk threshold (Critical Zone).",
-                recommended_capability=recommended_cap
-            )
+            return _make(JudgmentOutcome.REFUSE, "deny", "Task exceeds risk threshold (Critical Zone).")
         if clarity < 0.3:
-            return JudgmentResult(
-                outcome=JudgmentOutcome.REFUSE, clarity=clarity, risk=risk, novelty=novelty, 
-                recommendation="deny", reason="Intent too ambiguous.",
-                recommended_capability=recommended_cap
-            )
+            return _make(JudgmentOutcome.REFUSE, "deny", "Intent too ambiguous.")
 
-        # Rule: Repeat failures require Deep Thinking
+        # Rule: Repeat failures require Deep Thinking.
         if past_failure > 0.7:
-             viki_logger.warning("Judgment: Detected high failure similarity. Escalating to DEEP reasoning.")
-             return JudgmentResult(
-                 outcome=JudgmentOutcome.DEEP, clarity=clarity, risk=risk, novelty=novelty,
-                 recommendation="proceed", reason="Escalating context: Previous similar attempts failed.",
-                 recommended_capability=recommended_cap
-             )
+            viki_logger.warning("Judgment: Detected high failure similarity. Escalating to DEEP reasoning.")
+            return _make(JudgmentOutcome.DEEP, "proceed", "Escalating context: Previous similar attempts failed.")
 
-        # Rule: REFLEX only for explicit system commands
-        command_keywords = ["open", "launch", "click", "type", "scroll", "press",
-                            "pause", "play", "resume", "skip", "mute", "unmute", "volume",
-                            "search", "google"]
-        input_words = input_lower.split()
-        if any(k in input_words for k in command_keywords) and risk < 0.2:
-             return JudgmentResult(
-                 outcome=JudgmentOutcome.REFLEX, clarity=clarity, risk=risk, novelty=novelty,
-                 recommendation="proceed", reason="Direct system command detected.",
-                 recommended_capability=recommended_cap
-             )
+        # Rule: REFLEX only for explicit, low-risk system commands.
+        input_words = user_input.lower().split()
+        if any(k in input_words for k in self._reflex_command_keywords) and risk < 0.2:
+            return _make(JudgmentOutcome.REFLEX, "proceed", "Direct system command detected.")
 
-        # Rule: Questions require DEEP reasoning for accuracy
+        # Rule: Questions require DEEP reasoning for accuracy.
         if context.get("task_type") == "question":
-             return JudgmentResult(
-                 outcome=JudgmentOutcome.DEEP, clarity=clarity, risk=risk, novelty=novelty,
-                 recommendation="proceed", reason="Inquisitive intent detected. Routing to Deliberation Layer.",
-                 recommended_capability=recommended_cap
-             )
+            return _make(JudgmentOutcome.DEEP, "proceed", "Inquisitive intent detected. Routing to Deliberation Layer.")
 
-        # Rule: Bias toward simplicity (Model Agnostic Thrift)
+        # Rule: Bias toward simplicity (Model Agnostic Thrift).
         if novelty < self.reflex_threshold and risk < 0.1 and clarity > 0.8:
-            return JudgmentResult(
-                outcome=JudgmentOutcome.SHALLOW, clarity=clarity, risk=risk, novelty=novelty,
-                recommendation="proceed", reason="Familiar pattern. Shallow reasoning applied.",
-                recommended_capability=recommended_cap
-            )
+            return _make(JudgmentOutcome.SHALLOW, "proceed", "Familiar pattern. Shallow reasoning applied.")
 
         if risk < 0.4 and novelty < 0.6:
-            return JudgmentResult(
-                outcome=JudgmentOutcome.SHALLOW, clarity=clarity, risk=risk, novelty=novelty,
-                recommendation="proceed", reason="Standard task. Shallow reasoning applied.",
-                recommended_capability=recommended_cap
-            )
+            return _make(JudgmentOutcome.SHALLOW, "proceed", "Standard task. Shallow reasoning applied.")
 
-        # Default to Deep for everything else
-        return JudgmentResult(
-            outcome=JudgmentOutcome.DEEP, clarity=clarity, risk=risk, novelty=novelty,
-            recommendation="proceed", reason="Novel or complex task. Deliberative planning required.",
-            recommended_capability=recommended_cap
-        )
+        return _make(JudgmentOutcome.DEEP, "proceed", "Novel or complex task. Deliberative planning required.")
+
+    def _recommend_capability(self, user_input: str) -> Optional[str]:
+        input_lower = user_input.lower()
+        if any(k in input_lower for k in ("search", "find", "research", "who is")):
+            return "internet_research"
+        if "what is" in input_lower:
+            tail_m = re.search(r"\bwhat\s+is\s+(.+)$", input_lower.strip())
+            trivial = False
+            if tail_m:
+                tail = tail_m.group(1).strip().rstrip("?")
+                trivial = bool(
+                    re.fullmatch(r"[\d\s\+\-\*\/\^\(\)\.\,]+", tail) and len(tail) <= 48
+                )
+            if not trivial:
+                return "internet_research"
+        if any(k in input_lower for k in ("write", "save", "delete")):
+            return "filesystem_write"
+        if any(k in input_lower for k in ("list", "read", "open file")):
+            return "filesystem_read"
+        return None
 
     def _calculate_clarity(self, text: str) -> float:
         words = text.split()
@@ -166,11 +167,79 @@ class JudgmentEngine:
             
         return min(1.0, risk)
 
+    def _tokenize(self, text: str) -> set:
+        return {w for w in re.findall(r"\w+", (text or "").lower()) if len(w) > 2}
+
     def _check_failure_similarity(self, text: str) -> float:
-        # Interface with LearningModule failure memory
-        # For now, a mock score
-        return 0.1 
+        """
+        Compare against recent failures in the LearningModule.
+        Returns 0.0..1.0 — peak Jaccard overlap between input tokens and any recent failure context/action.
+        """
+        if not self.failure_memory or not hasattr(self.failure_memory, "get_relevant_failures"):
+            return 0.0
+        try:
+            failures = self.failure_memory.get_relevant_failures(text, limit=5) or []
+        except Exception as e:
+            viki_logger.debug("JudgmentEngine: failure lookup failed: %s", e)
+            return 0.0
+
+        if not failures:
+            return 0.0
+
+        query = self._tokenize(text)
+        if not query:
+            return 0.0
+
+        peak = 0.0
+        for f in failures:
+            tokens = self._tokenize(str(f))
+            if not tokens:
+                continue
+            inter = len(query & tokens)
+            union = len(query | tokens) or 1
+            peak = max(peak, inter / union)
+        return min(1.0, peak)
 
     def _estimate_novelty(self, text: str, context: Dict[str, Any]) -> float:
-        # Check against macro memory and world habits
-        return 0.5 # Default
+        """
+        Approximates novelty via lesson recall + recent-history overlap.
+        - Strong overlap with prior lessons -> low novelty.
+        - No overlap -> high novelty.
+        """
+        if not self.failure_memory or not hasattr(self.failure_memory, "get_relevant_lessons"):
+            return 0.5
+
+        try:
+            lessons = self.failure_memory.get_relevant_lessons(text, limit=5) or []
+        except Exception as e:
+            viki_logger.debug("JudgmentEngine: lesson lookup failed: %s", e)
+            return 0.5
+
+        # No prior knowledge at all -> moderately novel.
+        total_lessons = 0
+        try:
+            total_lessons = self.failure_memory.get_total_lesson_count()
+        except Exception:
+            total_lessons = 0
+        if total_lessons == 0:
+            return 0.7
+
+        if not lessons:
+            return 0.85
+
+        query = self._tokenize(text)
+        if not query:
+            return 0.5
+
+        peak = 0.0
+        for lesson in lessons:
+            tokens = self._tokenize(str(lesson))
+            if not tokens:
+                continue
+            inter = len(query & tokens)
+            denom = len(query) or 1
+            peak = max(peak, inter / denom)
+
+        # peak=1.0 -> no novelty (everything overlaps); peak=0.0 -> highly novel.
+        novelty = 1.0 - min(1.0, peak)
+        return max(0.0, min(1.0, novelty))

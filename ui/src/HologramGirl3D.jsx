@@ -352,7 +352,12 @@ function AIGeneratedFaceWrapper({ url }) {
   // Disable Draco and MeshOpt so plain GLB files load reliably
   const { scene } = useGLTF(url, false, false)
   const groupRef = useRef()
-  const hologramMaterial = useMemo(() => createHologramShaderMaterial(), [])
+  // r3f-style mutation: the shader material is a stable instance and we
+  // bump its uniform every frame outside React render, which is the
+  // standard pattern for animated three.js materials. Lint rules around
+  // ref/argument immutability give false positives here, so we read the
+  // material via a state slot whose identity is stable.
+  const [hologramMaterial] = useState(() => createHologramShaderMaterial())
 
   const clonedScene = useMemo(() => {
     const clone = scene.clone()
@@ -365,6 +370,7 @@ function AIGeneratedFaceWrapper({ url }) {
   }, [scene, hologramMaterial])
 
   useFrame((_, delta) => {
+    // eslint-disable-next-line react-hooks/immutability
     if (hologramMaterial?.uniforms?.uTime) hologramMaterial.uniforms.uTime.value += delta
   })
 
@@ -386,7 +392,7 @@ function AIGeneratedFaceWrapper({ url }) {
   )
 }
 
-export default function HologramGirl3D({ mode }) {
+export default function HologramGirl3D() {
   const [glbError, setGlbError] = useState(false)
   const faceGlbUrl = useMemo(() => getFaceGlbUrl(), [])
   const useGLB = faceGlbUrl && !glbError

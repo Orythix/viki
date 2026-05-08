@@ -1,0 +1,11 @@
+# MCP server configuration for VIKI (Phase 3).
+# Each entry boots an MCP server and exposes its tools as VIKI skills.
+# Disabled by default — set `command:` and ensure the official `mcp` SDK is installed.
+
+servers: {}
+  # figma:
+  #   command: ["npx", "-y", "@figma/mcp-server"]
+  #   env:
+  #     FIGMA_TOKEN: ${FIGMA_TOKEN}
+  # supabase:
+  #   command: ["npx", "-y", "@supabase/mcp-server"]

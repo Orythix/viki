@@ -2,12 +2,13 @@
 VIKI API Server
 Provides RESTful endpoints for the React dashboard
 """
-from flask import Flask, request, jsonify, g
+from flask import Flask, request, jsonify, g, Response, stream_with_context
 from flask_cors import CORS
 from datetime import datetime
 import sys
 import os
 import asyncio
+import json
 from functools import wraps
 import secrets
 import uuid
@@ -15,6 +16,8 @@ import re
 from dotenv import load_dotenv
 import threading
 import time
+import queue
+from typing import Any, Dict
 
 load_dotenv()
 
@@ -25,6 +28,7 @@ from viki.core.controller import VIKIController
 from viki.core.safety import safe_for_log
 from viki.config.logger import viki_logger
 from viki.config.resolve import get_soul_path
+from viki.api.events import get_event_bus
 
 base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Project root (parent of viki package) for data/uploads
@@ -48,6 +52,10 @@ def get_controller() -> VIKIController:
         with _controller_lock:
             if _controller is None:
                 _controller = VIKIController(settings_path=settings_path, soul_path=soul_path)
+                try:
+                    _controller.attach_mcp_skills_sync()
+                except Exception as e:
+                    viki_logger.debug(f"MCP attach skipped: {e}")
     return _controller
 
 
@@ -97,6 +105,14 @@ def _save_uploaded_file(file) -> tuple:
         return None, str(e)
 
 app = Flask(__name__)
+
+# P1: optional flask-sock based WebSocket. Falls back to no-op if not installed.
+_sock = None
+try:
+    from flask_sock import Sock  # type: ignore
+    _sock = Sock(app)
+except Exception as e:
+    viki_logger.debug("flask_sock not available; /ws disabled (%s).", e)
 
 # --- SECURITY FIX: HIGH-004 - Require API key in production ---
 API_KEY = os.getenv('VIKI_API_KEY')
@@ -374,6 +390,111 @@ async def chat():
         # Don't expose internal error details to client
         return jsonify({'error': "An internal error occurred while processing your request."}), 500
 
+@app.route('/api/chat/stream', methods=['POST'])
+@require_api_key
+def chat_stream():
+    """
+    Phase 6: Server-Sent Events streaming chat.
+
+    Emits one event per "stage" (route, status, partial token, final response)
+    so the UI can render token-by-token. Falls back to a single 'final' event
+    if the controller cannot produce intermediate output.
+    """
+    try:
+        controller = get_controller()
+        session_id = get_session_id()
+        data = request.get_json(silent=True) or {}
+        user_input = (data.get("message") or "").strip()
+        is_valid, error_msg = validate_message(user_input)
+        if not is_valid:
+            return jsonify({"error": error_msg}), 400
+
+        @stream_with_context
+        def gen():
+            yield _sse("status", {"phase": "received", "session_id": session_id})
+
+            # P0 fix: real per-event streaming. Run controller.process_request
+            # in a worker thread that pushes (kind, payload) tuples into a
+            # thread-safe queue; the generator drains the queue and yields
+            # each event as it arrives. A sentinel terminates the loop.
+            event_queue: queue.Queue = queue.Queue()
+            SENTINEL = object()
+            result_holder: Dict[str, Any] = {"response": None, "error": None}
+
+            def on_event(kind: str, payload):
+                try:
+                    event_queue.put((kind, payload))
+                except Exception:
+                    pass
+
+            def worker():
+                try:
+                    response = asyncio.run(
+                        controller.process_request(
+                            user_input, session_id=session_id, on_event=on_event
+                        )
+                    )
+                    result_holder["response"] = response
+                except Exception as e:
+                    result_holder["error"] = str(e)
+                    viki_logger.error(f"chat_stream worker error: {e}", exc_info=True)
+                finally:
+                    event_queue.put(SENTINEL)
+
+            t = threading.Thread(target=worker, name="chat-stream", daemon=True)
+            t.start()
+
+            try:
+                while True:
+                    try:
+                        item = event_queue.get(timeout=30.0)
+                    except queue.Empty:
+                        # Heartbeat keeps proxies/load-balancers from closing the connection.
+                        yield _sse("ping", {"ts": datetime.now().isoformat()})
+                        continue
+                    if item is SENTINEL:
+                        break
+                    kind, payload = item
+                    yield _sse(kind, {"payload": payload})
+
+                if result_holder["error"]:
+                    yield _sse("error", {"error": "Internal streaming error."})
+                else:
+                    meta = controller.get_last_response_meta(session_id=session_id) or {}
+                    yield _sse(
+                        "final",
+                        {
+                            "response": result_holder["response"],
+                            "subtasks": meta.get("subtasks"),
+                            "total_steps": meta.get("total_steps"),
+                            "cognitive_route": meta.get("cognitive_route"),
+                        },
+                    )
+            except GeneratorExit:
+                viki_logger.debug("chat_stream client disconnected.")
+                raise
+            except Exception as e:
+                viki_logger.error(f"chat_stream generator error: {e}", exc_info=True)
+                yield _sse("error", {"error": "Internal streaming error."})
+            finally:
+                yield _sse("done", {})
+
+        headers = {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        }
+        return Response(gen(), headers=headers)
+    except Exception as e:
+        viki_logger.error(f"chat_stream error: {e}", exc_info=True)
+        return jsonify({"error": "An internal error occurred while opening stream."}), 500
+
+
+def _sse(event: str, data: Any) -> str:
+    payload = json.dumps(data, default=str) if not isinstance(data, str) else data
+    return f"event: {event}\ndata: {payload}\n\n"
+
+
 @app.route('/api/memory', methods=['GET'])
 @require_api_key
 def get_memory():
@@ -453,7 +574,8 @@ def get_model_performance():
                 performance.append({
                     'name': name,
                     'model_name': model.model_name,
-                    'provider': model.config.get('provider', 'unknown'),
+                    'provider': getattr(model, 'provider_name', model.config.get('provider', 'unknown')),
+                    'is_cloud': bool(getattr(model, 'is_cloud', lambda: False)()),
                     'capabilities': model.config.get('capabilities', []),
                     'priority': model.config.get('priority', 2),
                     'trust_score': round(model.trust_score, 3),
@@ -461,8 +583,13 @@ def get_model_performance():
                     'call_count': model.call_count,
                     'error_count': model.error_count,
                     'error_rate': round(error_rate, 3),
+                    'cost_per_1k_in': float(getattr(model, 'cost_per_1k_in', 0.0)),
+                    'cost_per_1k_out': float(getattr(model, 'cost_per_1k_out', 0.0)),
+                    'input_tokens': int(getattr(model, 'input_tokens', 0)),
+                    'output_tokens': int(getattr(model, 'output_tokens', 0)),
+                    'total_cost_usd': round(float(getattr(model, 'total_cost_usd', 0.0)), 6),
                     'strengths': model.strengths,
-                    'weaknesses': model.weaknesses
+                    'weaknesses': model.weaknesses,
                 })
             
             # Sort by trust score descending
@@ -476,6 +603,182 @@ def get_model_performance():
     except Exception as e:
         viki_logger.error(f"Model performance error: {e}", exc_info=True)
         return jsonify({'error': 'Failed to retrieve model performance'}), 500
+
+
+@app.route('/api/models/budget', methods=['GET'])
+@require_api_key
+def get_model_budget():
+    """Phase 1: cloud cost budget snapshot (daily/per-call caps + circuit breakers)."""
+    try:
+        controller = get_controller()
+        if hasattr(controller, "llm_budget") and controller.llm_budget is not None:
+            return jsonify(controller.llm_budget.snapshot())
+        return jsonify({"enabled": False})
+    except Exception as e:
+        viki_logger.error(f"Model budget error: {e}", exc_info=True)
+        return jsonify({"error": "Failed to retrieve model budget"}), 500
+
+
+@app.route('/api/evals', methods=['GET'])
+@require_api_key
+def get_evals():
+    """Phase 2: Capability Index dashboard. Aggregates latest eval runs into one number."""
+    try:
+        controller = get_controller()
+        from viki.core.capability_index import CapabilityIndex
+
+        data_dir = controller.settings.get("system", {}).get("data_dir", "./data")
+        results_root = os.path.join(data_dir, "eval_results")
+        forge_settings = controller.settings.get("forge", {}) or {}
+        min_tasks = int(forge_settings.get("capability_index_min_tasks", 0))
+        bootstrap = int(forge_settings.get("capability_index_bootstrap_iters", 0))
+        index = CapabilityIndex(
+            results_root,
+            min_tasks=min_tasks,
+            bootstrap_iters=bootstrap,
+        ).compute()
+        return jsonify(index)
+    except Exception as e:
+        viki_logger.error(f"Eval index error: {e}", exc_info=True)
+        return jsonify({"error": "Failed to compute capability index"}), 500
+
+
+@app.route('/api/scorecard/segmented', methods=['GET'])
+@require_api_key
+def get_scorecard_segmented():
+    """Phase 5: per-model breakdown of the IntelligenceScorecard."""
+    try:
+        controller = get_controller()
+        return jsonify(controller.scorecard.get_segmented_summary())
+    except Exception as e:
+        viki_logger.error(f"Scorecard segmented error: {e}", exc_info=True)
+        return jsonify({"error": "Failed to compute segmented scorecard"}), 500
+
+
+@app.route('/api/scorecard/trends', methods=['GET'])
+@require_api_key
+def get_scorecard_trends():
+    """P2: per-model sparkline series + regression detection."""
+    try:
+        controller = get_controller()
+        try:
+            points = int(request.args.get("points", 30))
+        except (TypeError, ValueError):
+            points = 30
+        try:
+            window = int(request.args.get("window", 10))
+        except (TypeError, ValueError):
+            window = 10
+        try:
+            threshold = float(request.args.get("threshold", 0.05))
+        except (TypeError, ValueError):
+            threshold = 0.05
+        return jsonify(controller.scorecard.get_segmented_trends(
+            points=points,
+            regression_window=window,
+            regression_threshold=threshold,
+        ))
+    except Exception as e:
+        viki_logger.error(f"Scorecard trends error: {e}", exc_info=True)
+        return jsonify({"error": "Failed to compute scorecard trends"}), 500
+
+
+@app.route('/api/traces', methods=['GET'])
+@require_api_key
+def get_traces():
+    """Phase 6: in-memory trace records for the OpenTelemetry-style flame graph."""
+    try:
+        from viki.core.tracing import get_local_spans
+
+        limit = int(request.args.get("limit", 100))
+        return jsonify({"spans": get_local_spans(limit=limit)})
+    except Exception as e:
+        viki_logger.error(f"Trace dump error: {e}", exc_info=True)
+        return jsonify({"error": "Failed to read traces"}), 500
+
+
+@app.route('/api/traces/grouped', methods=['GET'])
+@require_api_key
+def get_traces_grouped():
+    """P1: persistent traces grouped by trace_id with parent/child links for Gantt rendering."""
+    try:
+        from viki.core.tracing import get_persistent_traces
+
+        limit = int(request.args.get("limit", 50))
+        return jsonify({"traces": get_persistent_traces(limit=limit)})
+    except Exception as e:
+        viki_logger.error(f"Trace group error: {e}", exc_info=True)
+        return jsonify({"error": "Failed to read grouped traces"}), 500
+
+
+@app.route('/api/forge/promotion', methods=['GET'])
+@require_api_key
+def get_forge_promotion():
+    """Phase 5: eval-gated promotion state (current default, history, consecutive passes)."""
+    try:
+        controller = get_controller()
+        learner = getattr(controller, "continuous_learner", None)
+        if learner is None:
+            return jsonify({"error": "continuous_learner not available"}), 503
+        return jsonify(learner.get_status())
+    except Exception as e:
+        viki_logger.error(f"Promotion state error: {e}", exc_info=True)
+        return jsonify({"error": "Failed to read promotion state"}), 500
+
+
+def _require_admin_secret() -> bool:
+    """Forge mutating endpoints require an extra header on top of the API key."""
+    expected = os.getenv("VIKI_ADMIN_SECRET", "")
+    if not expected:
+        return True  # no admin secret configured -> allow
+    provided = request.headers.get("X-Admin-Secret", "")
+    return bool(provided) and secrets.compare_digest(provided, expected)
+
+
+@app.route('/api/forge/promote', methods=['POST'])
+@require_api_key
+def forge_promote():
+    """Operator-initiated promotion. Bypasses the consecutive-passes gate."""
+    if not _require_admin_secret():
+        return jsonify({"error": "admin secret required"}), 403
+    data = request.get_json(silent=True) or {}
+    model_name = (data.get("model") or "").strip()
+    if not model_name:
+        return jsonify({"error": "model is required"}), 400
+    controller = get_controller()
+    learner = getattr(controller, "continuous_learner", None)
+    if learner is None or not hasattr(learner, "force_promote"):
+        return jsonify({"error": "continuous_learner not available"}), 503
+    try:
+        result = learner.force_promote(model_name, operator=data.get("operator") or "ui")
+        if not result.get("ok"):
+            return jsonify(result), 400
+        return jsonify(result)
+    except Exception as e:
+        viki_logger.error(f"force_promote failed: {e}", exc_info=True)
+        return jsonify({"error": "force_promote failed"}), 500
+
+
+@app.route('/api/forge/rollback', methods=['POST'])
+@require_api_key
+def forge_rollback():
+    """Operator-initiated rollback to the previous (or specified) default model."""
+    if not _require_admin_secret():
+        return jsonify({"error": "admin secret required"}), 403
+    data = request.get_json(silent=True) or {}
+    model_name = (data.get("model") or "").strip() or None
+    controller = get_controller()
+    learner = getattr(controller, "continuous_learner", None)
+    if learner is None or not hasattr(learner, "force_rollback"):
+        return jsonify({"error": "continuous_learner not available"}), 503
+    try:
+        result = learner.force_rollback(model_name, operator=data.get("operator") or "ui")
+        if not result.get("ok"):
+            return jsonify(result), 400
+        return jsonify(result)
+    except Exception as e:
+        viki_logger.error(f"force_rollback failed: {e}", exc_info=True)
+        return jsonify({"error": "force_rollback failed"}), 500
 
 @app.route('/api/world', methods=['GET'])
 @require_api_key
@@ -498,26 +801,345 @@ def get_brain():
     """Get Cognitive State (Signals & Trace)"""
     controller = get_controller()
     session_id = get_session_id()
+    router_telemetry: Dict[str, Any] = {}
+    if hasattr(controller, "get_router_telemetry"):
+        try:
+            router_telemetry = controller.get_router_telemetry()
+        except Exception:
+            router_telemetry = {}
     return jsonify({
         'signals': controller.signals.get_modulation(),
         'trace': controller.internal_trace[-5:] if controller.internal_trace else [],
         'last_thought': controller.memory.working.get_last_thought(session_id=session_id) if hasattr(controller.memory.working, 'get_last_thought') else "",
-        'mode': controller.interaction_pace
+        'mode': controller.interaction_pace,
+        'router_telemetry': router_telemetry,
     })
 
-@app.route('/api/missions', methods=['GET'])
+@app.route('/api/missions', methods=['GET', 'POST'])
 @require_api_key
-def get_missions():
-    """Get Active Autonomous Missions (Phase 6)"""
+def missions_collection():
+    """List autonomous missions (GET) or queue a new one (POST)."""
     controller = get_controller()
-    missions = []
-    if hasattr(controller, 'mission_control'):
-        # Convert heap to list for display
+    if not hasattr(controller, 'mission_control'):
+        if request.method == 'GET':
+            return jsonify({'queue': [], 'active': []})
+        return jsonify({"error": "MissionControl not initialized"}), 503
+
+    if request.method == 'GET':
         queue = [m.to_dict() for m in controller.mission_control.mission_queue]
-        # Dict to list
         active = [m.to_dict() for m in controller.mission_control.active_missions.values()]
         return jsonify({'queue': queue, 'active': active})
-    return jsonify({'queue': [], 'active': []})
+
+    data = request.get_json(silent=True) or {}
+    description = (data.get('description') or '').strip()
+    if not description:
+        return jsonify({"error": "description is required"}), 400
+    try:
+        from viki.core.mission_control import MissionType
+        m_type_raw = (data.get('type') or 'maintenance').lower()
+        try:
+            m_type = MissionType(m_type_raw)
+        except ValueError:
+            m_type = MissionType.MAINTENANCE
+        mid = controller.mission_control.add_mission(
+            description,
+            int(data.get('priority', 50)),
+            m_type,
+            int(data.get('repeat_interval', 0)),
+        )
+        return jsonify({"id": mid, "description": description}), 201
+    except Exception as e:
+        viki_logger.error(f"Mission create failed: {e}", exc_info=True)
+        return jsonify({"error": "Failed to queue mission"}), 500
+
+
+@app.route('/api/missions/<mission_id>', methods=['GET'])
+@require_api_key
+def get_mission(mission_id):
+    controller = get_controller()
+    mc = getattr(controller, 'mission_control', None)
+    if mc is None:
+        return jsonify({"error": "MissionControl not initialized"}), 404
+    m = mc.active_missions.get(mission_id)
+    if m is None:
+        return jsonify({"error": "not found"}), 404
+    return jsonify(m.to_dict())
+
+
+@app.route('/api/missions/<mission_id>/cancel', methods=['POST'])
+@require_api_key
+def cancel_mission(mission_id):
+    controller = get_controller()
+    mc = getattr(controller, 'mission_control', None)
+    if mc is None:
+        return jsonify({"error": "MissionControl not initialized"}), 404
+    m = mc.active_missions.get(mission_id)
+    if m is None:
+        return jsonify({"error": "not found"}), 404
+    m.status = "cancelled"
+    try:
+        mc._save_missions()
+    except Exception:
+        pass
+    return jsonify({"id": mission_id, "status": m.status})
+
+
+@app.route('/api/missions/<mission_id>/graph', methods=['GET'])
+@require_api_key
+def mission_graph(mission_id):
+    """Return the mission's task graph if one was constructed."""
+    controller = get_controller()
+    graphs = getattr(controller, 'mission_graphs', None) or {}
+    g = graphs.get(mission_id)
+    if g is None:
+        return jsonify({"mission_id": mission_id, "nodes": [], "edges": []})
+    nodes = []
+    edges = []
+    for nid, n in getattr(g, 'nodes', {}).items():
+        nodes.append({
+            "id": nid,
+            "title": getattr(n, 'title', nid),
+            "status": getattr(getattr(n, 'status', None), 'value', str(getattr(n, 'status', ''))),
+            "skill": getattr(n, 'skill', None),
+        })
+        for parent in getattr(n, 'depends_on', []) or []:
+            edges.append({"from": parent, "to": nid})
+    return jsonify({
+        "mission_id": mission_id,
+        "goal": getattr(g, 'goal', ''),
+        "nodes": nodes,
+        "edges": edges,
+    })
+
+
+@app.route('/api/subagents', methods=['GET'])
+@require_api_key
+def list_subagents():
+    controller = get_controller()
+    registry = getattr(controller, 'sub_agents', {}) or {}
+    out = []
+    for sid, agent in registry.items():
+        out.append({
+            "id": sid,
+            "name": getattr(agent, 'name', ''),
+            "parent": getattr(agent, 'parent', None),
+            "capabilities": sorted(list(getattr(agent, 'capabilities', set()))),
+            "is_running": bool(getattr(agent, 'is_running', False)),
+            "started_at": getattr(agent, 'started_at', None),
+            "finished_at": getattr(agent, 'finished_at', None),
+            "error": getattr(agent, 'error', None),
+        })
+    return jsonify({"subagents": out})
+
+
+@app.route('/api/subagents/<subagent_id>/cancel', methods=['POST'])
+@require_api_key
+def cancel_subagent(subagent_id):
+    controller = get_controller()
+    registry = getattr(controller, 'sub_agents', {}) or {}
+    agent = registry.get(subagent_id)
+    if agent is None:
+        return jsonify({"error": "not found"}), 404
+    try:
+        task = getattr(agent, '_task', None)
+        if task is not None:
+            task.cancel()
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    return jsonify({"id": subagent_id, "status": "cancelling"})
+
+
+@app.route('/api/code/search', methods=['GET'])
+@require_api_key
+def code_search():
+    """
+    P1: thin REST wrapper over the persistent code-search index.
+
+    Query params:
+      q       (required)  search query
+      top_k   (optional)  default=8
+      action  (optional)  'search' | 'symbol' | 'scan' (default: search)
+    """
+    controller = get_controller()
+    skill = controller.skill_registry.get_skill('code_search') if hasattr(controller, 'skill_registry') else None
+    if skill is None:
+        return jsonify({"error": "code_search skill not registered"}), 404
+    action = (request.args.get('action') or 'search').lower()
+    q = request.args.get('q') or ''
+    top_k = int(request.args.get('top_k') or 8)
+    try:
+        if action == 'scan':
+            n_files, n_chunks, n_symbols = skill.scan(skill._workspace_dir())
+            return jsonify({"n_files": n_files, "n_chunks": n_chunks, "n_symbols": n_symbols})
+        if action == 'symbol':
+            results = skill.find_symbol(q)
+            return jsonify({"symbols": [s.__dict__ for s in results]})
+        results = skill.search(q, top_k=top_k)
+        return jsonify({"chunks": [r.as_dict() for r in results]})
+    except Exception as e:
+        viki_logger.error(f"code_search endpoint error: {e}", exc_info=True)
+        return jsonify({"error": "code_search failed"}), 500
+
+
+@app.route('/api/artifacts/<mission_id>', methods=['GET'])
+@require_api_key
+def get_artifacts_manifest(mission_id):
+    """Return the artifact manifest for a mission."""
+    controller = get_controller()
+    workspace = (controller.settings.get("system") or {}).get("workspace_dir", "./workspace")
+    try:
+        from viki.core.artifact_manifest import ArtifactManifest
+        m = ArtifactManifest.load(mission_id, workspace)
+    except Exception as e:
+        viki_logger.error(f"manifest load failed: {e}", exc_info=True)
+        return jsonify({"error": "manifest load failed"}), 500
+    if m is None:
+        return jsonify({"error": "manifest not found"}), 404
+    return jsonify(m.to_dict())
+
+
+@app.route('/api/artifacts/<mission_id>/file', methods=['GET'])
+@require_api_key
+def get_artifact_file(mission_id):
+    """
+    Stream a single artifact file. The artifact must be listed in the
+    mission's manifest and must live inside the workspace dir.
+    """
+    controller = get_controller()
+    workspace_dir = os.path.abspath(
+        (controller.settings.get("system") or {}).get("workspace_dir", "./workspace")
+    )
+    rel = (request.args.get("path") or "").strip()
+    if not rel:
+        return jsonify({"error": "path required"}), 400
+    abs_path = os.path.abspath(rel)
+    # Path traversal guard: artifact must be inside workspace_dir.
+    if not abs_path.startswith(workspace_dir + os.sep) and abs_path != workspace_dir:
+        return jsonify({"error": "path outside workspace"}), 403
+    try:
+        from viki.core.artifact_manifest import ArtifactManifest
+        m = ArtifactManifest.load(mission_id, workspace_dir)
+    except Exception:
+        m = None
+    if m is None:
+        return jsonify({"error": "manifest not found"}), 404
+    listed = {os.path.abspath(a.path) for a in m.artifacts}
+    if abs_path not in listed:
+        return jsonify({"error": "artifact not in manifest"}), 404
+    if not os.path.isfile(abs_path):
+        return jsonify({"error": "file missing on disk"}), 410
+
+    def gen():
+        with open(abs_path, "rb") as f:
+            while True:
+                chunk = f.read(64 * 1024)
+                if not chunk:
+                    break
+                yield chunk
+
+    fname = os.path.basename(abs_path)
+    return Response(
+        gen(),
+        mimetype="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+@app.route('/api/mcp/servers', methods=['GET'])
+@require_api_key
+def get_mcp_servers():
+    """List MCP-connected servers and the tools they expose as VIKI skills."""
+    controller = get_controller()
+    client = getattr(controller, 'mcp_client', None)
+    if client is None:
+        return jsonify({
+            "enabled": False,
+            "servers": [],
+            "skill_count": 0,
+            "reason": "MCP SDK not installed or no servers configured.",
+        })
+    tools = client.list_tools() if hasattr(client, 'list_tools') else []
+    by_server: Dict[str, list] = {}
+    for t in tools:
+        by_server.setdefault(t.get('server', '?'), []).append({
+            "name": t.get('tool'),
+            "description": t.get('description', ''),
+        })
+    servers = [{"name": name, "tools": tlist} for name, tlist in by_server.items()]
+    return jsonify({
+        "enabled": True,
+        "servers": servers,
+        "skill_count": int(getattr(controller, 'mcp_skill_count', 0) or 0),
+    })
+
+if _sock is not None:
+    @_sock.route('/ws')
+    def ws_endpoint(ws):
+        """
+        Bidirectional channel for live mission/sub-agent events. Auth uses
+        the same `?api_key=...` query arg or `X-API-Key` header as REST.
+        Inbound messages: JSON with {"action": "subscribe"|"interrupt"|"ping",
+        "channels": [...], "target_id": "..."}.
+        """
+        token = (
+            request.headers.get('X-API-Key')
+            or request.args.get('api_key')
+            or ''
+        )
+        if not token or not secrets.compare_digest(token, API_KEY or ''):
+            ws.send(json.dumps({"event": "error", "data": {"error": "unauthorized"}}))
+            return
+        bus = get_event_bus()
+        sub = bus.subscribe(channels=None)
+        try:
+            ws.send(json.dumps({"event": "hello", "data": {"sub_id": sub.id}}))
+
+            def _drain():
+                while True:
+                    try:
+                        msg = sub.queue.get(timeout=15.0)
+                        ws.send(msg)
+                    except queue.Empty:
+                        try:
+                            ws.send(json.dumps({"event": "ping", "data": {"ts": time.time()}}))
+                        except Exception:
+                            return
+                    except Exception:
+                        return
+
+            t = threading.Thread(target=_drain, daemon=True)
+            t.start()
+
+            controller = get_controller()
+            while True:
+                raw = ws.receive(timeout=60)
+                if raw is None:
+                    continue
+                try:
+                    msg = json.loads(raw)
+                except Exception:
+                    msg = {"action": "raw", "payload": raw}
+                action = (msg.get("action") or "").lower()
+                if action == "ping":
+                    ws.send(json.dumps({"event": "pong", "data": {}}))
+                elif action == "interrupt":
+                    target = msg.get("target_id")
+                    sub_agents = getattr(controller, 'sub_agents', {}) or {}
+                    agent = sub_agents.get(target)
+                    if agent is not None:
+                        try:
+                            t = getattr(agent, '_task', None)
+                            if t is not None:
+                                t.cancel()
+                        except Exception as e:
+                            ws.send(json.dumps({"event": "error", "data": {"error": str(e)}}))
+                            continue
+                        ws.send(json.dumps({"event": "interrupted", "data": {"id": target}}))
+                    else:
+                        ws.send(json.dumps({"event": "error", "data": {"error": "not_found"}}))
+        finally:
+            bus.unsubscribe(sub.id)
+
 
 if __name__ == '__main__':
     controller = get_controller()

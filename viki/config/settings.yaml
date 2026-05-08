@@ -13,6 +13,14 @@ system:
   # Execution Mode: "live" = real actions, "shadow" = simulate only (safe for testing)
   shadow_mode: false
 
+  # Low-resource mode for old / underpowered PCs. When true:
+  #   - heavy skills (vision, browser, computer-use, whisper, pdf, …) load only on first use,
+  #   - proactive loops (wellness, dream, reflector, watchdog, startup pulse) are skipped,
+  #   - continuous-learning loop is disabled,
+  #   - mission control still runs only on explicit /missions.
+  # Override at runtime with VIKI_LOW_RESOURCE=1.
+  low_resource_mode: false
+
   # When true, OpenAI/Anthropic API profiles are never selected; use Ollama (models.yaml) only.
   # Set false and configure real keys when you want cloud models. Env: VIKI_LOCAL_LLM_ONLY=true|false.
   local_llm_only: true
@@ -31,6 +39,10 @@ system:
 
   # When true, run a quick web research pulse at startup. Set false to avoid competing with first user request.
   startup_research: false
+
+  # When true, fire a 1-token Ollama "ping" at boot to load the default model into RAM/VRAM.
+  # Cuts ~5-15s off the cold first-reply on a 4 GB / 4-core box. Disabled in low_resource_mode and air_gap.
+  prewarm_default_model: true
 
   # At startup, log warnings if critical skills (email, calendar, research) are misconfigured.
   skill_health_check: true
@@ -62,6 +74,18 @@ memory:
   # Working-memory turns kept for conversation context (clamped 10–50 in code). Raise for longer threads.
   short_term_limit: 28
   long_term_enabled: false
+
+# Background poll cadences. Bigger numbers = lower idle CPU on low-end PCs.
+proactive:
+  wellness_interval_s: 1800        # how often to check for proactive prompts (default 30 min)
+  wellness_idle_threshold_s: 7200  # only prompt after this much user idle time (default 2 h)
+
+# Forge / continuous-learning timing. Disabled entirely when low_resource_mode is true.
+forge:
+  continuous_learning_warmup_s: 300       # delay before first promotion check (default 5 min)
+  continuous_learning_interval_s: 21600   # how often to re-score candidate models (default 6 h)
+  capability_index_min_tasks: 0           # 0 = back-compat; raise for stricter promotion thresholds
+  capability_index_bootstrap_iters: 0     # 0 = skip CIs (cheap); 200+ for confidence intervals
 
 skills:
   auto_discover: true

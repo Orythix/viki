@@ -1,0 +1,88 @@
+name: Benchmarks
+
+on:
+  pull_request:
+    paths:
+      - "viki/**"
+      - "scripts/evals/**"
+      - "data/eval_fixtures/**"
+      - "viki/config/models.yaml"
+  schedule:
+    # Weekly full run, Sunday 03:00 UTC.
+    - cron: "0 3 * * 0"
+  workflow_dispatch: {}
+
+jobs:
+  pr-fast-evals:
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run execution-graded eval suites (mock + air-gap)
+        env:
+          VIKI_AIR_GAP: "1"
+          VIKI_LOCAL_LLM_ONLY: "1"
+        run: |
+          python -m scripts.evals.humaneval_plus --limit 3 --air-gap --no-llm-judge --mock
+          python -m scripts.evals.livecodebench --limit 2 --air-gap --no-llm-judge --mock
+
+      - name: Compute capability index
+        run: |
+          python -c "from viki.core.capability_index import CapabilityIndex; import json; print(json.dumps(CapabilityIndex('data/eval_results').compute(), indent=2))"
+
+      - name: Upload eval results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results-pr
+          path: data/eval_results/
+          if-no-files-found: warn
+
+  weekly-full:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run all suites (with cloud allowed; secrets required)
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        run: |
+          python -m scripts.evals.run_all --limit 25
+
+      - name: Capability Index
+        run: |
+          python -c "from viki.core.capability_index import CapabilityIndex; import json; print(json.dumps(CapabilityIndex('data/eval_results').compute(), indent=2))"
+
+      - name: Upload eval results
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results-weekly
+          path: data/eval_results/

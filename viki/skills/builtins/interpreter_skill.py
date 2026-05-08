@@ -50,49 +50,18 @@ class InterpreterSkill(BaseSkill):
         return await self._execute_sandboxed(code)
 
     async def _execute_sandboxed(self, code: str) -> str:
-        """Runs python code in a separate process with restricted imports/access."""
+        """Runs python code via the configured sandbox backend (docker or subprocess)."""
+        from viki.core.sandbox import get_sandbox
+
         viki_logger.info("Executing Python in Sandbox...")
-        
-        # 1. Create a workspace
-        with tempfile.TemporaryDirectory() as tmpdir:
-            file_path = os.path.join(tmpdir, "script.py")
-            with open(file_path, "w") as f:
-                # Add a wrapper to prevent some imports if needed, 
-                # but for now we rely on OS level restriction
-                f.write(code)
-            
-            try:
-                # 2. Run with timeout and restricted environment
-                # We remove sensitive env vars
-                clean_env = os.environ.copy()
-                to_remove = ["OPENAI_API_KEY", "HF_TOKEN", "AWS_SECRET_ACCESS_KEY", "SECRET_KEY"]
-                for key in to_remove:
-                    if key in clean_env: del clean_env[key]
-                
-                timeout_sec = self._get_timeout()
-                def run_code():
-                    return subprocess.run(
-                        [sys.executable, file_path],
-                        capture_output=True,
-                        text=True,
-                        timeout=timeout_sec,
-                        cwd=tmpdir,
-                        env=clean_env
-                    )
-
-                result = await asyncio.to_thread(run_code)
-
-                output = result.stdout
-                error = result.stderr
-
-                if result.returncode == 0:
-                    return f"Execution Success:\n{output}"
-                else:
-                    return f"Execution Error (Return Code {result.returncode}):\n{error}\nOutput: {output}"
-
-            except subprocess.TimeoutExpired:
-                viki_logger.warning("Sandbox Execution Timed Out.")
-                return f"Error: Execution timed out ({timeout_sec}s limit)."
-            except Exception as e:
-                viki_logger.error(f"Sandbox Failure: {e}")
-                return f"Sandbox Failure: {str(e)}"
+        timeout_sec = self._get_timeout()
+        sandbox = get_sandbox(self._controller)
+        result = await sandbox.run_python(code, timeout=timeout_sec)
+        if result.timed_out:
+            return f"Error: Execution timed out ({timeout_sec}s limit) [{sandbox.backend}]."
+        if result.exit_code == 0:
+            return f"Execution Success [{sandbox.backend}]:\n{result.stdout}"
+        return (
+            f"Execution Error (Return Code {result.exit_code}) [{sandbox.backend}]:\n"
+            f"{result.stderr}\nOutput: {result.stdout}"
+        )

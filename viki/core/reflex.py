@@ -1,3 +1,4 @@
+import random
 import re
 import time
 import json
@@ -6,6 +7,52 @@ from typing import Optional, Tuple, Dict, Any, List
 from viki.core.schema import ActionCall
 from viki.config.logger import viki_logger
 from viki.core.utils.debouncer import SyncDebouncer
+
+
+# Conversational reflexes — greetings / acks / farewells that should never need
+# an LLM. Each entry is (compiled_regex, [response_options]). Responses rotate
+# pseudo-randomly per call to avoid a robotic feel.
+_CONVERSATIONAL_REFLEXES: List[Tuple[re.Pattern, List[str]]] = [
+    (
+        re.compile(r"^(hi|hello|hey|yo|hola|hiya)(\s+(there|viki))?[\.\!]*$", re.IGNORECASE),
+        [
+            "Hey. What can I do for you?",
+            "Hi. Ready when you are.",
+            "Hello. What's the task?",
+        ],
+    ),
+    (
+        re.compile(r"^good\s+(morning|afternoon|evening|night)(\s+viki)?[\.\!]*$", re.IGNORECASE),
+        [
+            "Good {tod}. How can I help?",
+            "Good {tod} — what are we working on?",
+        ],
+    ),
+    (
+        re.compile(r"^(thanks|thank\s+you|thx|cheers|ty)(\s+viki)?[\.\!]*$", re.IGNORECASE),
+        [
+            "Anytime.",
+            "Glad to help.",
+            "You got it.",
+        ],
+    ),
+    (
+        re.compile(r"^(ok|okay|cool|nice|got\s+it|sounds\s+good|alright)[\.\!]*$", re.IGNORECASE),
+        [
+            "Acknowledged.",
+            "Got it.",
+            "Standing by.",
+        ],
+    ),
+    (
+        re.compile(r"^(bye|goodbye|see\s+ya|cya|later|farewell|good\s+night)[\.\!]*$", re.IGNORECASE),
+        [
+            "Catch you later.",
+            "See you soon.",
+            "Until next time.",
+        ],
+    ),
+]
 
 class ReflexBrain:
     """
@@ -59,6 +106,18 @@ class ReflexBrain:
             (r"^unmute.*$", "media_control", {"action": "mute"}),
             (r"^volume\s+up.*$", "media_control", {"action": "volume_up"}),
             (r"^volume\s+down.*$", "media_control", {"action": "volume_down"}),
+
+            # Math (deterministic SafeMathEvaluator path)
+            (
+                r"^(?:calc(?:ulate)?|compute|eval(?:uate)?|what\s+is|whats|whatis)\s+(?P<expression>[\d\s\.\+\-\*\/\^\%\(\)\,e]+)\??$",
+                "math_skill",
+                {"expression": "{expression}"},
+            ),
+            (
+                r"^(?P<expression>[\d\.\s]+\s*[\+\-\*\/\^\%]\s*[\d\.\s]+(?:\s*[\+\-\*\/\^\%]\s*[\d\.\s]+)*)\s*=?\s*\??$",
+                "math_skill",
+                {"expression": "{expression}"},
+            ),
         ]
 
     def think(self, user_input: str) -> Tuple[Optional[str], Optional[ActionCall]]:
@@ -68,6 +127,14 @@ class ReflexBrain:
         If both are None, proceed to the Consciousness Stack (LLM).
         """
         clean_input = user_input.lower().strip()
+
+        # Conversational reflex (greeting / ack / farewell). Runs BEFORE
+        # the deliberation-deferral gate so "hi" / "hello viki" / "thanks"
+        # never pay the LLM cold-start tax.
+        canned = self._match_conversational_reflex(user_input)
+        if canned is not None:
+            return canned, None
+
         if self._should_defer_to_deliberation(clean_input):
             return None, None
 
@@ -86,6 +153,35 @@ class ReflexBrain:
 
         # Regex pattern matching for simple system commands.
         return None, self._match_regex_action(clean_input)
+
+    def _match_conversational_reflex(self, user_input: str) -> Optional[str]:
+        """
+        Match against `_CONVERSATIONAL_REFLEXES` and return a canned reply.
+        Returns None if no match. Uses `random.choice` for a tiny bit of
+        variety so VIKI doesn't sound like a copy-paste bot.
+        """
+        text = (user_input or "").strip()
+        if not text or len(text) > 60:
+            return None
+        for regex, options in _CONVERSATIONAL_REFLEXES:
+            m = regex.match(text)
+            if not m:
+                continue
+            choice = random.choice(options)
+            try:
+                # Allow `{tod}` token substitution for "good morning" etc.
+                tod = ""
+                groups = m.groups()
+                for g in groups:
+                    if g and g.lower() in ("morning", "afternoon", "evening", "night"):
+                        tod = g.lower()
+                        break
+                if "{tod}" in choice:
+                    choice = choice.format(tod=tod or "day")
+            except Exception:
+                pass
+            return choice
+        return None
 
     def _should_defer_to_deliberation(self, clean_input: str) -> bool:
         """Reflex safety gate: questions go to the deliberation layer."""

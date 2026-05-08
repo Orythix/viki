@@ -113,6 +113,11 @@ class MissionControl:
         self.active_missions[mission.id] = mission
         self._save_missions()
         viki_logger.info(f"Mission Control: New Directive queued -> {description}")
+        try:
+            from viki.api.events import get_event_bus
+            get_event_bus().publish("mission_created", mission.to_dict(), channel="missions")
+        except Exception:
+            pass
         return mission.id
 
     async def start_loop(self):
@@ -154,6 +159,11 @@ class MissionControl:
         viki_logger.info(f"Mission Control: Stepping '{mission.description}'...")
         mission.status = "active"
         mission.last_check = time.time()
+        try:
+            from viki.api.events import get_event_bus
+            get_event_bus().publish("mission_step", mission.to_dict(), channel="missions")
+        except Exception:
+            pass
         
         # Self-Prompting: Ask the Core what to do next for this mission
         prompt = (

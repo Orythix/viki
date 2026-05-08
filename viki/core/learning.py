@@ -33,14 +33,36 @@ class LearningModule:
         self.db_path = os.path.join(self.data_dir, "viki_knowledge.db")
         self.legacy_file = os.path.join(self.data_dir, "lessons_semantic.json")
 
-        global HAS_SEMANTIC
-        from viki.core.embeddings import get_encoder
-        self.encoder = get_encoder()
-        if self.encoder is not None:
-            HAS_SEMANTIC = True
+        # Lazy encoder: defer importing `sentence_transformers` until the
+        # first call that actually needs an embedding. On a 4 GB / 4-core
+        # box this saves ~1-3 s and ~150 MB at boot. Greetings / acks
+        # never trigger the import at all.
+        self._encoder = None
+        self._encoder_loaded = False
 
         self._init_db()
         self._migrate_if_needed()
+        # Phase 6: vector index over the embeddings column. Built lazily when
+        # first queried so cold-start cost stays low.
+        self._vector_backend = None
+        self._vector_backend_dirty = True
+        self._vector_index_path = os.path.join(self.data_dir, "lessons_vector.sqlite")
+
+    @property
+    def encoder(self):
+        """Lazily import and instantiate the sentence-transformer encoder."""
+        if not self._encoder_loaded:
+            self._encoder_loaded = True
+            try:
+                global HAS_SEMANTIC
+                from viki.core.embeddings import get_encoder
+                self._encoder = get_encoder()
+                if self._encoder is not None:
+                    HAS_SEMANTIC = True
+            except Exception as e:
+                viki_logger.debug(f"LearningModule encoder lazy-load failed: {e}")
+                self._encoder = None
+        return self._encoder
 
     def _init_db(self):
         """Initialize SQLite schema for all knowledge types."""
@@ -228,6 +250,7 @@ class LearningModule:
                        (lid, relationship.get('subject'), relationship.get('predicate'), relationship.get('object')))
         
         self.conn.commit()
+        self.mark_vector_dirty()
 
     def get_frequent_lessons(self, min_count: int = 3) -> List[str]:
         """Returns lessons that have been reinforced (access_count >= min_count)."""
@@ -248,46 +271,106 @@ class LearningModule:
         return cur.fetchone()[0]
 
     def get_relevant_lessons(self, context: str, limit: int = 5) -> List[str]:
-        """Performs semantic or lexical search over the knowledge base."""
+        """Performs semantic or lexical search over the knowledge base.
+
+        Phase 6: backed by a persistent vector index (sqlite-vss when available,
+        numpy fallback otherwise). The Python-level encode-everything-per-call
+        path is gone; we encode the query once and let the index do the rest.
+        """
+        # Cheap-retrieve fast path: trivial inputs (greetings, short acks)
+        # never benefit from a lesson lookup; skip the SQL query AND the
+        # embedding encode entirely.
+        try:
+            from viki.core.utils.trivial_input import is_trivial_input
+            if is_trivial_input(context):
+                return []
+        except Exception:
+            pass
+
         cur = self.conn.cursor()
         cur.execute("SELECT id, content, text_representation, embedding FROM lessons")
         rows = cur.fetchall()
-        
         contents = [r['text_representation'] for r in rows]
         viki_logger.info(f'LearningModule: get_relevant_lessons found {len(rows)} lessons: {contents}')
-        if not rows: return []
-        
-        if self.encoder and util is not None:
-            try:
-                contents = [r['text_representation'] for r in rows]
-                
-                # Check if we have valid embeddings
-                if not any(json.loads(r['embedding']) for r in rows):
-                    return contents[-limit:]
+        if not rows:
+            return []
 
-                query_emb = self.encoder.encode(context, convert_to_tensor=True)
-                corpus_embs = self.encoder.encode(contents, convert_to_tensor=True)
-                results = util.semantic_search(query_emb, corpus_embs, top_k=limit)
-                
-                relevant = []
-                seen = set()
-                for hit in results[0]:
-                    idx = hit['corpus_id']
-                    text = contents[idx]
-                    if text in seen:
-                        continue
-                    seen.add(text)
-                    relevant.append(text)
-                    # Update access metadata for every retrieved lesson.
-                    lid = rows[idx]['id']
-                    cur.execute("UPDATE lessons SET last_accessed = ? WHERE id = ?", (time.time(), lid))
-                
-                self.conn.commit()
-                return relevant if relevant else contents[-3:]
+        if self.encoder is not None:
+            try:
+                backend = self._get_vector_backend(rows)
+                if backend is not None:
+                    query_emb = self.encoder.encode(context).tolist()
+                    hits = backend.search(query_emb, top_k=limit, query_text=context)
+                    if hits:
+                        text_to_id = {r['text_representation']: r['id'] for r in rows}
+                        out: List[str] = []
+                        seen = set()
+                        for h in hits:
+                            if h.text in seen:
+                                continue
+                            seen.add(h.text)
+                            out.append(h.text)
+                            lid = text_to_id.get(h.text)
+                            if lid is not None:
+                                cur.execute(
+                                    "UPDATE lessons SET last_accessed = ? WHERE id = ?",
+                                    (time.time(), lid),
+                                )
+                        self.conn.commit()
+                        return out or contents[-min(limit, 3):]
             except Exception as e:
-                viki_logger.debug("get_relevant_lessons semantic: %s", e)
-            
+                viki_logger.debug("get_relevant_lessons vector path failed: %s", e)
+
         return self._lexical_rank_lessons(rows, context=context, limit=limit)
+
+    def _get_vector_backend(self, rows):
+        """Build (or rebuild when dirty) the vector index over current rows."""
+        if self.encoder is None:
+            return None
+        valid_rows = []
+        for r in rows:
+            try:
+                emb = json.loads(r['embedding']) if r['embedding'] else None
+            except Exception:
+                emb = None
+            if emb:
+                valid_rows.append((r['id'], emb, r['text_representation'] or ''))
+        if not valid_rows:
+            return None
+
+        if self._vector_backend is None or self._vector_backend_dirty:
+            from viki.core.vector_memory import build_vector_backend
+
+            dim = len(valid_rows[0][1])
+            try:
+                self._vector_backend = build_vector_backend(
+                    dim=dim,
+                    db_path=self._vector_index_path,
+                    prefer=["sqlite-vss", "numpy-memory"],
+                )
+            except Exception as e:
+                viki_logger.debug("vector backend init failed: %s", e)
+                return None
+            try:
+                row_iter = (
+                    (
+                        abs(hash(str(rid))) % (2**31),
+                        emb,
+                        text,
+                        {"raw_id": rid},
+                    )
+                    for rid, emb, text in valid_rows
+                )
+                self._vector_backend.upsert_many(row_iter)
+                self._vector_backend_dirty = False
+            except Exception as e:
+                viki_logger.debug("vector backend upsert failed: %s", e)
+                return None
+        return self._vector_backend
+
+    def mark_vector_dirty(self) -> None:
+        """Invalidate the vector index after a write so the next query rebuilds."""
+        self._vector_backend_dirty = True
 
     def _lexical_rank_lessons(self, rows, context: str, limit: int) -> List[str]:
         """

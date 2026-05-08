@@ -70,6 +70,16 @@ class CapabilityRegistry:
             requires_confirmation=False, # Medium but usually allowed
             linked_skills=["window_manager", "clipboard", "system_control"]
         ))
+        # Phase 4: grounded computer-use loop is destructive (clicks, typing, drag).
+        self.register(Capability(
+            name="computer_use",
+            description="Grounded UI vision + pyautogui actions (click, type, drag, navigate).",
+            safety_tier="destructive",
+            read_only=False,
+            requires_confirmation=True,
+            enabled=False,  # Off by default; user must explicitly enable.
+            linked_skills=["computer_use"],
+        ))
         self.register(Capability(
             name="email_calendar",
             description="Gmail and Google Calendar (read/send, list/add/remove events).",
@@ -93,6 +103,45 @@ class CapabilityRegistry:
             read_only=False,
             requires_confirmation=False,
             linked_skills=["data_analysis", "presentation", "spreadsheet", "website"]
+        ))
+        # Phase 3: Local code-aware skills (search index, planner/executor wrapper).
+        self.register(Capability(
+            name="code_intelligence",
+            description="Repo-aware code search, planner/executor edits, and patch-and-verify (filesystem-write tier).",
+            safety_tier="medium",
+            read_only=False,
+            requires_confirmation=False,
+            linked_skills=["code_search", "plan_edit"],
+        ))
+        # Phase 0/3: low-risk utilities are default-allow so reflex/cortex can use them
+        # without forcing the user to install an explicit capability.
+        self.register(Capability(
+            name="safe_utilities",
+            description="Pure-compute or read-only utilities (math, time, thinking, recall, notifications, vision-passive).",
+            safety_tier="safe",
+            read_only=True,
+            requires_confirmation=False,
+            linked_skills=[
+                "math_skill",
+                "time_skill",
+                "thinking_skill",
+                "thinking",
+                "recall",
+                "notification",
+                "vision",
+                "internal_forge",
+                "media_control",
+                "browser",
+                "voice",
+                "swarm_council",
+                "draw_overlay",
+                "mount_focus",
+                "security_tools",
+                "short_video_agent",
+                "sql_query",
+                "aws_console",
+                "kubernetes_ctl",
+            ],
         ))
 
     def register(self, cap: Capability):

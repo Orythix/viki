@@ -158,11 +158,39 @@ class TimeTravelModule:
                 viki_logger.error(f"Restore failed for {orig}: {e}")
         return True, restored, f"Restored {len(restored)} file(s) from checkpoint {checkpoint_id}."
 
-    async def undo_last(self):
-        # Implementation depends on the complexity of actions
-        # For now, it logs the intent. In a full version, it would
-        # read the backup_path from the last snapshot and restore.
-        pass
+    def get_last_checkpoint(self) -> Optional[Dict[str, Any]]:
+        """Return the most recent checkpoint row, or None if there are none."""
+        try:
+            rows = list(self.db["checkpoints"].rows_where(order_by="timestamp desc", limit=1))
+        except Exception:
+            rows = list(self.db["checkpoints"].rows)
+        if not rows:
+            return None
+        if isinstance(rows, list) and rows:
+            return rows[0]
+        return None
+
+    def undo_last(self) -> Tuple[bool, List[str], str]:
+        """
+        Restore files from the most recent checkpoint.
+
+        Returns (success, restored_paths, message). Used by the `/undo`
+        command and the controller's confirmation pipeline.
+        """
+        cp = self.get_last_checkpoint()
+        if not cp:
+            return False, [], "No checkpoints available to undo."
+        cid = cp.get("id")
+        if not cid:
+            return False, [], "Last checkpoint missing id."
+        ok, restored, msg = self.restore_checkpoint(cid)
+        if ok:
+            self.take_snapshot(
+                "undo",
+                f"undo_last restored checkpoint {cid}",
+                {"checkpoint_id": cid, "restored": restored},
+            )
+        return ok, restored, msg
 
     def close(self):
         """Release SQLite resources so test teardown can delete temp dirs."""

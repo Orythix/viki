@@ -23,17 +23,38 @@ def _opencv_silence_msmf():
 class BioModule:
     """
     Bio-Adaptive Interface: Analyzes user's physiological state.
-    Uses OpenCV for lightweight detection and placeholder for DeepFace.
-    Webcam capture is opt-in (system.bio_webcam_enabled or VIKI_BIO_WEBCAM=1) to avoid MSMF errors on headless PCs.
+
+    P2 hardening:
+    - Webcam + analysis are EXPERIMENTAL by default. Enable with one of:
+        * `system.bio_webcam_enabled: true`
+        * env `VIKI_BIO_WEBCAM=1`
+      The legacy stub never actually classified emotion; the `experimental`
+      flag below makes that explicit and gates real backends.
+    - Real DeepFace path is opt-in via `bio_backend: deepface` (env
+      `VIKI_BIO_BACKEND=deepface`); falls back to the experimental stub if
+      DeepFace isn't installed.
+    - ONNX backend slot exists for future low-dependency models.
     """
 
-    def __init__(self, webcam_enabled: bool = False):
+    EXPERIMENTAL_NOTICE = "BioModule: bio sensing is experimental; emotion stays 'neutral' unless a real backend is loaded."
+
+    def __init__(
+        self,
+        webcam_enabled: bool = False,
+        backend: str = "stub",
+        analysis_interval_s: float = 10.0,
+    ):
         self.webcam_enabled = bool(webcam_enabled)
+        self.backend = (backend or "stub").lower()
+        self.analysis_interval_s = max(1.0, float(analysis_interval_s))
         self.current_emotion = "neutral"
+        self.experimental = self.backend == "stub"
         self.is_running = False
         self._thread = None
         self.cap = None
         self._monitor_task: asyncio.Task | None = None
+        self._deepface = None
+        self._deepface_load_failed = False
 
     async def start(self):
         if not self.webcam_enabled:
@@ -46,7 +67,10 @@ class BioModule:
             return
         _opencv_silence_msmf()
         self.is_running = True
-        viki_logger.info("BioModule: Empathy sensor active (Async Loop).")
+        if self.experimental:
+            viki_logger.info(self.EXPERIMENTAL_NOTICE)
+        else:
+            viki_logger.info("BioModule: Empathy sensor active (backend=%s).", self.backend)
         # Store the task so it doesn't get garbage-collected and so we can stop it cleanly.
         self._monitor_task = asyncio.create_task(self._monitor_loop())
         await asyncio.sleep(0)  # Yield control to the event loop.
@@ -86,15 +110,14 @@ class BioModule:
 
         while self.is_running:
             try:
-                # Capture frame in executor
-                ret, _ = await loop.run_in_executor(None, self.cap.read)
+                ret, frame = await loop.run_in_executor(None, self.cap.read)
                 if not ret:
                     break
-                
-                # Placeholder for DeepFace/Analysis
-                # In real use: result = await loop.run_in_executor(None, DeepFace.analyze, ...)
-                
-                await asyncio.sleep(10) # Heavy analysis every 10s
+                if self.backend == "deepface":
+                    self.current_emotion = await loop.run_in_executor(
+                        None, self._analyze_deepface, frame
+                    )
+                await asyncio.sleep(self.analysis_interval_s)
             except Exception as e:
                 viki_logger.error(f"BioModule Error: {e}")
                 break
@@ -108,6 +131,32 @@ class BioModule:
 
     def get_state(self) -> str:
         return self.current_emotion
+
+    def _analyze_deepface(self, frame) -> str:
+        """Real DeepFace path. Lazy-loads the package and falls back to 'neutral' on errors."""
+        if self._deepface_load_failed:
+            return self.current_emotion
+        if self._deepface is None:
+            try:
+                from deepface import DeepFace  # type: ignore
+                self._deepface = DeepFace
+            except Exception as e:
+                self._deepface_load_failed = True
+                viki_logger.warning("BioModule: DeepFace unavailable (%s); reverting to 'neutral'.", e)
+                return "neutral"
+        try:
+            result = self._deepface.analyze(
+                frame,
+                actions=["emotion"],
+                enforce_detection=False,
+                silent=True,
+            )
+            payload = result[0] if isinstance(result, list) else result
+            dominant = payload.get("dominant_emotion") or payload.get("emotion") or "neutral"
+            return str(dominant)
+        except Exception as e:
+            viki_logger.debug("BioModule: DeepFace analyze failed: %s", e)
+            return self.current_emotion
 
     def select_tone(self, user_input: str, task_type: str) -> str:
         """

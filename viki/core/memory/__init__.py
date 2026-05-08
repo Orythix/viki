@@ -182,8 +182,15 @@ class HierarchicalMemory:
 
     def get_full_context(self, current_input: str, narrative_wisdom: List[Dict] = None, session_id: Optional[str] = None) -> Dict[str, Any]:
         """Synthesizes context across all layers for the Deliberation layer."""
+        # Cheap-retrieve fast path: trivial smalltalk doesn't need semantic
+        # search. Skip the narrative-wisdom fetch and the embedding-based
+        # semantic_knowledge query entirely. Saves ~2 sentence-transformer
+        # encodes per "hello viki"-class turn.
+        from viki.core.utils.trivial_input import is_trivial_input
+        cheap = is_trivial_input(current_input)
+
         # v25: Accept pre-fetched narrative wisdom to avoid duplicate queries
-        if narrative_wisdom is None:
+        if narrative_wisdom is None and not cheap:
             narrative_wisdom = self.episodic.get_semantic_knowledge(limit=3)
         if not isinstance(narrative_wisdom, list):
             narrative_wisdom = []
@@ -195,8 +202,16 @@ class HierarchicalMemory:
         # Cortex expects specific key names for prompt construction. Keep backwards-compatible
         # aliases (`semantic`, `episodic`, `identity`) but also provide `semantic_knowledge`,
         # `episodic_context`, and `narrative_identity` for the main prompt builder.
-        episodic_context = self.episodic.retrieve_context(current_input)
-        semantic_knowledge = self.semantic.get_relevant_lessons(current_input) if self.semantic else []
+        if cheap:
+            try:
+                episodic_context = self.episodic.retrieve_context(current_input, limit=3, cheap=True)
+            except TypeError:
+                # Older signature without `cheap` kwarg.
+                episodic_context = self.episodic.retrieve_context(current_input, limit=3)
+            semantic_knowledge = []
+        else:
+            episodic_context = self.episodic.retrieve_context(current_input)
+            semantic_knowledge = self.semantic.get_relevant_lessons(current_input) if self.semantic else []
         narrative_identity = self.identity.get_identity_prompt()
 
         return {

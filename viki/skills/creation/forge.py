@@ -184,14 +184,89 @@ class ModelForgeSkill(BaseSkill):
         }
 
     async def execute(self, params: Dict[str, Any]) -> str:
-        uns = _unsloth_stack_available()
-        strategy = params.get("strategy", "auto")
-        if strategy == "lora" and not uns:
-            return "Error: LoRA training requested but Unsloth/CUDA not available."
+        """
+        Phase 5: preference optimization (DPO/ORPO) is the default Forge path.
 
-        if strategy == "lora" or (strategy == "auto" and uns):
+        strategy:
+            - "auto" (default): try DPO/ORPO with TRL; fall back to LoRA SFT;
+              fall back to prompt-bake (Modelfile).
+            - "dpo" / "orpo": preference optimization.
+            - "lora": classic supervised LoRA.
+            - "prompt_bake" / "modelfile": cold-start prompt injection.
+        """
+        from viki.core.preference_forge import trl_dpo_available
+
+        uns = _unsloth_stack_available()
+        dpo = trl_dpo_available()
+        strategy = (params.get("strategy") or "auto").lower()
+
+        if strategy in ("dpo", "orpo"):
+            if not dpo:
+                return (
+                    f"Error: {strategy.upper()} requested but TRL/CUDA stack unavailable. "
+                    "Falling back: rerun with strategy='lora' or 'prompt_bake'."
+                )
+            return await self._execute_preference_training(params, method=strategy)
+
+        if strategy == "auto":
+            if dpo:
+                return await self._execute_preference_training(params, method="dpo")
+            if uns:
+                return await self._execute_unsloth_training(params)
+            return await self._build_ollama_model(params)
+
+        if strategy == "lora":
+            if not uns:
+                return "Error: LoRA training requested but Unsloth/CUDA not available."
             return await self._execute_unsloth_training(params)
-        return await self._build_ollama_model(params)
+
+        if strategy in ("prompt_bake", "modelfile", "ollama"):
+            return await self._build_ollama_model(params)
+
+        return f"Error: unknown forge strategy {strategy!r}. Use auto|dpo|orpo|lora|prompt_bake."
+
+    async def _execute_preference_training(
+        self, params: Dict[str, Any], method: str
+    ) -> str:
+        from viki.core.preference_forge import (
+            PreferenceDatasetBuilder,
+            run_dpo_training,
+        )
+
+        data_dir = self.controller.settings.get("system", {}).get("data_dir", "./data")
+        os.makedirs(data_dir, exist_ok=True)
+        dataset_path = os.path.join(data_dir, f"preference_dataset_{method}.jsonl")
+
+        builder = PreferenceDatasetBuilder(self.controller.learning)
+        summary, n_pairs = builder.build(dataset_path, max_pairs=int(params.get("max_pairs", 500)))
+        if n_pairs == 0:
+            return f"PreferenceForge: {summary}"
+
+        run_train = (os.environ.get("VIKI_DPO_RUN_TRAIN") or "").lower() in ("1", "true", "yes")
+        if not run_train:
+            return (
+                f"{summary} GPU {method.upper()} training is gated by VIKI_DPO_RUN_TRAIN=1. "
+                "Set the flag plus VIKI_UNSLOTH_BASE_MODEL to a 4-bit base, then re-run."
+            )
+
+        base_id = (
+            (os.environ.get("VIKI_UNSLOTH_BASE_MODEL") or "").strip()
+            or (self.controller.settings.get("system") or {}).get("unsloth_base_model", "").strip()
+            or "unsloth/Qwen2.5-3B-Instruct-bnb-4bit"
+        )
+        out_dir = os.path.join(data_dir, f"viki-{method}-adapter")
+        try:
+            return await asyncio.to_thread(
+                run_dpo_training,
+                dataset_path,
+                base_id,
+                out_dir,
+                method,
+                int(params.get("steps", 60)),
+            )
+        except Exception as e:
+            viki_logger.exception("Preference training failed")
+            return f"PreferenceForge: {e!s}. {summary}"
 
     async def _build_ollama_model(self, params: Dict[str, Any]) -> str:
         """

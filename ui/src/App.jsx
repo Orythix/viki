@@ -11,14 +11,16 @@ function App() {
   const [input, setInput] = useState('')
   const [status, setStatus] = useState('offline')
   const [vikiInfo, setVikiInfo] = useState({ name: 'VIKI', version: '7.3.0' })
-  const [skills, setSkills] = useState([])
+  const [, setSkills] = useState([])
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [isLoading, setIsLoading] = useState(false)
+  const [streamingPhase, setStreamingPhase] = useState('') // 'received' | 'thinking' | 'final' | ''
   const [apiKeyMissing, setApiKeyMissing] = useState(() => !isApiKeyConfigured())
   const [confirmDialog, setConfirmDialog] = useState(null) // { message, onConfirm }
   const [attachedFiles, setAttachedFiles] = useState([]) // { id, file }[]
   const messagesEndRef = useRef(null)
   const fileInputRef = useRef(null)
+  const abortRef = useRef(null)
 
   useEffect(() => {
     setApiKeyMissing(!isApiKeyConfigured())
@@ -40,7 +42,7 @@ function App() {
       const data = await res.json()
       setStatus('online')
       setVikiInfo(data)
-    } catch (error) {
+    } catch {
       setStatus('offline')
     }
   }
@@ -99,6 +101,127 @@ function App() {
     setAttachedFiles(prev => prev.filter(x => x.id !== id))
   }
 
+  const stopStreaming = () => {
+    abortRef.current?.abort()
+    abortRef.current = null
+    setIsLoading(false)
+    setStreamingPhase('')
+  }
+
+  // Parse a Server-Sent Events stream from a fetch response body. Calls
+  // `onEvent({event, data})` for each complete event. Resolves on stream end.
+  const consumeSSE = async (response, onEvent) => {
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder('utf-8')
+    let buffer = ''
+    let currentEvent = 'message'
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      let nlIndex
+      // Events are separated by blank lines (\n\n).
+      while ((nlIndex = buffer.indexOf('\n\n')) !== -1) {
+        const raw = buffer.slice(0, nlIndex)
+        buffer = buffer.slice(nlIndex + 2)
+        const lines = raw.split('\n')
+        let dataPayload = ''
+        currentEvent = 'message'
+        for (const line of lines) {
+          if (line.startsWith('event:')) {
+            currentEvent = line.slice(6).trim()
+          } else if (line.startsWith('data:')) {
+            dataPayload += line.slice(5).trim()
+          }
+        }
+        if (dataPayload) {
+          let parsed = dataPayload
+          try { parsed = JSON.parse(dataPayload) } catch { /* keep as string */ }
+          onEvent({ event: currentEvent, data: parsed })
+        }
+      }
+    }
+  }
+
+  const sendMessageStreaming = async (messageText) => {
+    const controller = new AbortController()
+    abortRef.current = controller
+    setStreamingPhase('received')
+    let assistantText = ''
+    let inserted = false
+
+    try {
+      const res = await fetch(`${API_BASE}/chat/stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getApiHeaders() },
+        body: JSON.stringify({ message: messageText }),
+        signal: controller.signal,
+      })
+      if (!res.ok || !res.body) {
+        throw new Error(`Stream failed (${res.status})`)
+      }
+
+      await consumeSSE(res, ({ event, data }) => {
+        const payload = data?.payload ?? data
+        if (event === 'status') {
+          setStreamingPhase(payload?.phase || 'thinking')
+        } else if (event === 'partial' || event === 'thought') {
+          const chunk = typeof payload === 'string' ? payload : (payload?.text || '')
+          if (!chunk) return
+          assistantText += chunk
+          setMessages(prev => {
+            if (!inserted) {
+              inserted = true
+              return [...prev, {
+                role: 'assistant',
+                content: assistantText,
+                timestamp: new Date().toISOString(),
+                streaming: true,
+              }]
+            }
+            const out = prev.slice(0, -1)
+            out.push({ ...prev[prev.length - 1], content: assistantText })
+            return out
+          })
+        } else if (event === 'final') {
+          const finalText = data?.response ?? payload?.response ?? assistantText
+          setMessages(prev => {
+            if (inserted) {
+              const out = prev.slice(0, -1)
+              out.push({
+                role: 'assistant',
+                content: finalText,
+                timestamp: new Date().toISOString(),
+              })
+              return out
+            }
+            return [...prev, {
+              role: 'assistant',
+              content: finalText,
+              timestamp: new Date().toISOString(),
+            }]
+          })
+          setStreamingPhase('final')
+        } else if (event === 'error') {
+          throw new Error(data?.error || payload?.error || 'Streaming error')
+        }
+      })
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: '_Stopped._',
+          timestamp: new Date().toISOString(),
+        }])
+        return
+      }
+      throw error
+    } finally {
+      abortRef.current = null
+      setStreamingPhase('')
+    }
+  }
+
   const sendMessage = async (e) => {
     e.preventDefault()
     if ((!input.trim() && attachedFiles.length === 0) || isLoading) return
@@ -115,37 +238,35 @@ function App() {
     setIsLoading(true)
 
     try {
-      let res
-      if (filesToSend.length > 0) {
-        const formData = new FormData()
-        formData.append('message', messageText)
-        filesToSend.forEach(({ file }) => formData.append('files', file, file.name))
-        res = await fetch(`${API_BASE}/chat`, {
-          method: 'POST',
-          headers: getApiHeaders(),
-          body: formData
-        })
-      } else {
-        res = await fetch(`${API_BASE}/chat`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...getApiHeaders() },
-          body: JSON.stringify({ message: messageText })
-        })
+      // SSE streaming path is only used when there are no file attachments.
+      // File-attached prompts still go through the legacy multipart endpoint.
+      if (filesToSend.length === 0) {
+        await sendMessageStreaming(messageText)
+        return
       }
+
+      const formData = new FormData()
+      formData.append('message', messageText)
+      filesToSend.forEach(({ file }) => formData.append('files', file, file.name))
+      const res = await fetch(`${API_BASE}/chat`, {
+        method: 'POST',
+        headers: getApiHeaders(),
+        body: formData,
+      })
       const data = await res.json()
       if (data.error) throw new Error(data.error)
       if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`)
       setMessages(prev => [...prev, {
         role: 'assistant',
         content: data.response,
-        timestamp: data.timestamp || new Date().toISOString()
+        timestamp: data.timestamp || new Date().toISOString(),
       }])
     } catch (error) {
-      const msg = error.message || (error.status === 413 ? 'File(s) too large or too many.' : 'Request failed.')
+      const msg = error.message || 'Request failed.'
       setMessages(prev => [...prev, {
         role: 'assistant',
         content: `Error: ${msg}`,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       }])
     } finally {
       setIsLoading(false)
@@ -263,8 +384,8 @@ function App() {
                   <h1>{vikiInfo.name}</h1>
                   <p>Sovereign Digital Intelligence. Ask me anything.</p>
                   <div className="suggestions">
-                    {suggestions.map((text, i) => (
-                      <button key={i} type="button" className="suggestion-chip" onClick={() => setInput(text)}>
+                    {suggestions.map((text) => (
+                      <button key={text} type="button" className="suggestion-chip" onClick={() => setInput(text)}>
                         {text}
                       </button>
                     ))}
@@ -273,20 +394,21 @@ function App() {
               )}
 
               {messages.map((msg, idx) => (
-                <div key={idx} className={`chat-message ${msg.role}`}>
+                <div key={`${msg.timestamp}-${idx}`} className={`chat-message ${msg.role}`}>
                   {msg.role === 'assistant' && <div className="message-avatar">V</div>}
                   <div className="message-body">
                     <div className="message-content">
                       {msg.content.split('\n').map((line, i) => (
-                        <p key={i}>{line || '\u00A0'}</p>
+                        <p key={`${msg.timestamp}-line-${i}`}>{line || '\u00A0'}</p>
                       ))}
+                      {msg.streaming && <span className="streaming-cursor">▍</span>}
                     </div>
                   </div>
                   {msg.role === 'user' && <div className="message-avatar user">You</div>}
                 </div>
               ))}
 
-              {isLoading && (
+              {isLoading && streamingPhase === 'received' && (
                 <div className="chat-message assistant">
                   <div className="message-avatar">V</div>
                   <div className="message-body">
@@ -323,9 +445,15 @@ function App() {
                   disabled={isLoading}
                   autoFocus
                 />
-                <button type="submit" className="chat-send-btn" disabled={isLoading || (!input.trim() && attachedFiles.length === 0)} aria-label="Send">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
-                </button>
+                {isLoading ? (
+                  <button type="button" className="chat-send-btn chat-stop-btn" onClick={stopStreaming} aria-label="Stop streaming">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
+                  </button>
+                ) : (
+                  <button type="submit" className="chat-send-btn" disabled={!input.trim() && attachedFiles.length === 0} aria-label="Send">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
+                  </button>
+                )}
               </form>
               <p className="chat-disclaimer">VIKI can make mistakes. Check important info.</p>
             </div>

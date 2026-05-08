@@ -2,9 +2,11 @@
 Continuous Learning Pipeline
 Manages automated model improvement cycles.
 """
+import os
 import time
+import json
 import asyncio
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from viki.config.logger import viki_logger
 
 
@@ -17,6 +19,13 @@ class ContinuousLearner:
         self.min_lessons_for_training = 100
         self.last_training_time = 0
         self.training_enabled = True
+        # Phase 5: eval-gated promotion configuration.
+        sys_cfg = (controller.settings.get("system") or {}) if getattr(controller, "settings", None) else {}
+        self.promotion_min_index_delta = float(sys_cfg.get("promotion_min_index_delta", 0.01))
+        self.promotion_min_consecutive_passes = int(sys_cfg.get("promotion_min_consecutive_passes", 2))
+        data_dir = sys_cfg.get("data_dir", "./data")
+        self.promotion_state_path = os.path.join(data_dir, "promotion_state.json")
+        self._promotion_state: Dict[str, Any] = self._load_promotion_state()
     
     def _schedule_to_seconds(self) -> float:
         """Convert schedule string to seconds."""
@@ -80,20 +89,21 @@ class ContinuousLearner:
             if "SUCCESS" in result.upper() or "COMPLETE" in result.upper():
                 new_model_name = "viki-born-again"  # Default forge output
                 viki_logger.info(f"ContinuousLearner: Validating {new_model_name}...")
-                
+
                 is_valid = await self._validate_model(new_model_name)
-                
+
                 if is_valid:
                     viki_logger.info(f"ContinuousLearner: Validation passed for {new_model_name}")
-                    # Note: Model is already created, user can manually switch to it
-                    # Auto-switching could be dangerous, so we just log success
                     self.last_training_time = time.time()
-                    
-                    # Log to learning for future reference
+                    # Phase 5: eval-gated auto-promotion.
+                    promoted = await self.maybe_promote(new_model_name)
                     self.controller.learning.save_lesson(
                         trigger="Model training completed",
-                        fact=f"Successfully trained {new_model_name} with {self.controller.learning.get_total_lesson_count()} lessons",
-                        source="continuous_learning"
+                        fact=(
+                            f"Trained {new_model_name} with {self.controller.learning.get_total_lesson_count()} lessons; "
+                            f"promotion={'yes' if promoted else 'pending eval gate'}"
+                        ),
+                        source="continuous_learning",
                     )
                 else:
                     viki_logger.warning(f"ContinuousLearner: Validation failed for {new_model_name}")
@@ -180,5 +190,206 @@ class ContinuousLearner:
             'current_lessons': lesson_count,
             'last_training_time': self.last_training_time,
             'time_until_next_hours': round(time_until_next / 3600, 1),
-            'ready_to_train': lesson_count >= self.min_lessons_for_training and time_since_last >= self._schedule_to_seconds()
+            'ready_to_train': lesson_count >= self.min_lessons_for_training and time_since_last >= self._schedule_to_seconds(),
+            'promotion_state': self._promotion_state,
         }
+
+    # --------------------------- Phase 5: eval-gated promotion -----------------------------
+
+    def _load_promotion_state(self) -> Dict[str, Any]:
+        try:
+            if os.path.isfile(self.promotion_state_path):
+                with open(self.promotion_state_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+        except Exception as e:
+            viki_logger.debug("ContinuousLearner: failed to load promotion state: %s", e)
+        return {
+            "current_default": None,
+            "previous_default": None,
+            "history": [],
+            "consecutive_passes": {},
+        }
+
+    def _save_promotion_state(self) -> None:
+        try:
+            os.makedirs(os.path.dirname(self.promotion_state_path) or ".", exist_ok=True)
+            with open(self.promotion_state_path, "w", encoding="utf-8") as f:
+                json.dump(self._promotion_state, f, indent=2)
+        except Exception as e:
+            viki_logger.debug("ContinuousLearner: failed to save promotion state: %s", e)
+
+    async def _capability_index_for(self, model_name: str) -> Optional[float]:
+        """
+        Compute the latest CapabilityIndex restricted to a model's results.
+
+        Falls back to None if the eval harness has not produced any results
+        (e.g. on a fresh checkout).
+        """
+        try:
+            from viki.core.capability_index import CapabilityIndex
+
+            data_dir = (self.controller.settings.get("system") or {}).get("data_dir", "./data")
+            forge_settings = (self.controller.settings.get("forge") or {})
+            min_tasks = int(forge_settings.get("capability_index_min_tasks", 0))
+            bootstrap = int(forge_settings.get("capability_index_bootstrap_iters", 0))
+            # P0 fix: CapabilityIndex's signature is positional `results_root`, not
+            # `eval_results_dir`. The previous keyword raised TypeError silently
+            # (swallowed by the except below), so promotion never scored anything.
+            ci = CapabilityIndex(
+                os.path.join(data_dir, "eval_results"),
+                min_tasks=min_tasks,
+                bootstrap_iters=bootstrap,
+            )
+            snapshot = ci.compute()
+        except Exception as e:
+            viki_logger.debug("ContinuousLearner: capability index compute failed: %s", e)
+            return None
+        return float(snapshot.get("capability_index", 0.0)) if snapshot else None
+
+    async def maybe_promote(self, candidate_model: str) -> bool:
+        """
+        Promote `candidate_model` to `models.default` only if its CapabilityIndex
+        beats the current default by `promotion_min_index_delta` for
+        `promotion_min_consecutive_passes` consecutive evaluations.
+
+        On regression, the previous default is restored (auto-rollback).
+        """
+        current_default = self._promotion_state.get("current_default")
+        try:
+            current_default = current_default or (
+                (self.controller.models_config or {}).get("models", {}).get("default")
+            )
+        except Exception:
+            current_default = current_default or None
+
+        candidate_score = await self._capability_index_for(candidate_model)
+        if candidate_score is None:
+            viki_logger.info(
+                "ContinuousLearner: no eval data for %s; skipping promotion gate.",
+                candidate_model,
+            )
+            return False
+        baseline_score = await self._capability_index_for(current_default) if current_default else 0.0
+        baseline_score = baseline_score or 0.0
+
+        passes = self._promotion_state.setdefault("consecutive_passes", {})
+        history = self._promotion_state.setdefault("history", [])
+        delta = candidate_score - baseline_score
+
+        if delta >= self.promotion_min_index_delta:
+            passes[candidate_model] = passes.get(candidate_model, 0) + 1
+            viki_logger.info(
+                "Promotion gate: %s passed evaluation %d/%d (delta=%.3f).",
+                candidate_model,
+                passes[candidate_model],
+                self.promotion_min_consecutive_passes,
+                delta,
+            )
+        else:
+            passes[candidate_model] = 0
+            history.append({
+                "ts": time.time(),
+                "candidate": candidate_model,
+                "baseline": current_default,
+                "candidate_score": candidate_score,
+                "baseline_score": baseline_score,
+                "decision": "regression",
+            })
+            self._save_promotion_state()
+            await self._rollback_to(current_default)
+            return False
+
+        if passes[candidate_model] >= self.promotion_min_consecutive_passes:
+            self._promotion_state["previous_default"] = current_default
+            self._promotion_state["current_default"] = candidate_model
+            history.append({
+                "ts": time.time(),
+                "candidate": candidate_model,
+                "baseline": current_default,
+                "candidate_score": candidate_score,
+                "baseline_score": baseline_score,
+                "decision": "promoted",
+            })
+            passes[candidate_model] = 0
+            self._save_promotion_state()
+            self._apply_default_model(candidate_model)
+            return True
+
+        self._save_promotion_state()
+        return False
+
+    async def _rollback_to(self, model_name: Optional[str]) -> None:
+        """Auto-rollback to the previous default on regression."""
+        if not model_name:
+            return
+        viki_logger.warning("ContinuousLearner: rolling back default model to %s", model_name)
+        self._apply_default_model(model_name)
+
+    def force_promote(self, model_name: str, operator: str = "operator") -> Dict[str, Any]:
+        """
+        P1: operator-initiated promotion. Bypasses the consecutive-passes
+        gate but still records the action in promotion history.
+        """
+        if not model_name:
+            return {"ok": False, "error": "model_name required"}
+        previous = self._promotion_state.get("current_default") or (
+            (self.controller.models_config or {}).get("models", {}).get("default")
+        )
+        self._promotion_state["previous_default"] = previous
+        self._promotion_state["current_default"] = model_name
+        history = self._promotion_state.setdefault("history", [])
+        history.append({
+            "ts": time.time(),
+            "candidate": model_name,
+            "baseline": previous,
+            "decision": "force_promoted",
+            "operator": operator,
+        })
+        self._save_promotion_state()
+        self._apply_default_model(model_name)
+        return {"ok": True, "new_default": model_name, "previous": previous}
+
+    def force_rollback(self, model_name: Optional[str] = None, operator: str = "operator") -> Dict[str, Any]:
+        """
+        P1: operator-initiated rollback to the recorded previous default,
+        or to an explicit `model_name` if provided.
+        """
+        target = model_name or self._promotion_state.get("previous_default")
+        if not target:
+            return {"ok": False, "error": "no previous default recorded"}
+        previous = self._promotion_state.get("current_default")
+        self._promotion_state["current_default"] = target
+        self._promotion_state["previous_default"] = previous
+        history = self._promotion_state.setdefault("history", [])
+        history.append({
+            "ts": time.time(),
+            "candidate": target,
+            "baseline": previous,
+            "decision": "force_rolled_back",
+            "operator": operator,
+        })
+        self._save_promotion_state()
+        self._apply_default_model(target)
+        return {"ok": True, "new_default": target, "previous": previous}
+
+    def _apply_default_model(self, model_name: str) -> None:
+        try:
+            mc = self.controller.models_config or {}
+            mc.setdefault("models", {})["default"] = model_name
+            # Persist to disk if possible.
+            cfg_path = os.path.join(os.path.dirname(__file__), "..", "config", "models.yaml")
+            cfg_path = os.path.abspath(cfg_path)
+            if os.path.isfile(cfg_path):
+                try:
+                    import yaml  # type: ignore
+
+                    with open(cfg_path, "r", encoding="utf-8") as f:
+                        data = yaml.safe_load(f) or {}
+                    data.setdefault("models", {})["default"] = model_name
+                    with open(cfg_path, "w", encoding="utf-8") as f:
+                        yaml.safe_dump(data, f, sort_keys=False)
+                except Exception as e:
+                    viki_logger.debug("ContinuousLearner: failed to rewrite models.yaml: %s", e)
+            viki_logger.info("ContinuousLearner: default model now %s", model_name)
+        except Exception as e:
+            viki_logger.warning("ContinuousLearner: apply default failed: %s", e)

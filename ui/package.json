@@ -3,7 +3,16 @@
   "private": true,
   "version": "2.3.0",
   "description": "VIKI Interface - Virtual Intelligence Knowledge Interface",
-  "author": "Orythix001",
+  "author": "VIKI Project Contributors",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/toozuuu/viki.git"
+  },
+  "bugs": {
+    "url": "https://github.com/toozuuu/viki/issues"
+  },
+  "homepage": "https://github.com/toozuuu/viki#readme",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15,6 +24,7 @@
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
     "anthropic": "^0.0.0",
+    "prop-types": "^15.8.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "three": "^0.182.0"

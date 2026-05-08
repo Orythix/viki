@@ -29,6 +29,7 @@ from viki.core.signals import CognitiveSignals
 from viki.core.world import WorldModel
 from viki.core.cortex import ConsciousnessStack
 from viki.core.judgment import JudgmentEngine, JudgmentOutcome, JudgmentResult
+from viki.core.cognitive_loop import CognitiveRouter, RouterTelemetry, CognitiveRoute
 from viki.core.capabilities import CapabilityRegistry
 from viki.core.scorecard import IntelligenceScorecard
 from viki.core.benchmark import ControlledBenchmark
@@ -265,16 +266,45 @@ class VIKIController:
         except Exception:
             pass
 
+        # Phase 1: Budget enforcement for cloud calls (daily/per-call cost cap + circuit breaker).
+        from viki.core.llm_budget import LLMBudget
+        budget_state_path = os.path.join(
+            self.settings.get("system", {}).get("data_dir", self.DEFAULT_DATA_DIR),
+            "llm_budget.json",
+        )
+        # Initial budget config will be merged with the YAML's `models.budget` block in the router.
+        self.llm_budget = LLMBudget(state_path=budget_state_path)
+
         self.model_router = ModelRouter(
             self.models_config_path,
             air_gap=self.air_gap,
             local_llm_only=self.local_llm_only,
+            budget=self.llm_budget,
         )
+        # Re-merge YAML budget config into the LLMBudget after _load_config picked it up.
+        if getattr(self.model_router, "_budget_config", None):
+            self.llm_budget.config.update(self.model_router._budget_config)
         
         self.skill_registry = SkillRegistry()
         self.capabilities = CapabilityRegistry()
         self.disabled_skills = {}
         self._register_default_skills()
+        # Phase 7 (P0): MCP integration. We hold the client here; actual
+        # connection happens in `attach_mcp_skills_sync()` which is called
+        # at boot by API/main entry points (and tolerates missing SDK / config).
+        self.mcp_client = None
+        self.mcp_skill_count = 0
+        # Phase 7 (P1): registry of live SubAgents so the API can list/cancel
+        # them. Keys are SubAgent.id.
+        self.sub_agents: Dict[str, Any] = {}
+        # Phase 7 (P1): persistent trace store with parent IDs for the
+        # dashboard Gantt view. Failure is non-fatal.
+        try:
+            from viki.core.tracing import init_persistent_traces
+            data_dir = (self.settings.get("system") or {}).get("data_dir", self.DEFAULT_DATA_DIR)
+            init_persistent_traces(os.path.join(data_dir, "traces.db"))
+        except Exception as e:
+            viki_logger.debug("init_persistent_traces failed: %s", e)
         self.active_tasks = []
         self.pending_actions = {} # For confirmation flow, keyed by session
         self.pending_ops_plans = {}  # For ops approval flow, keyed by session
@@ -297,6 +327,13 @@ class VIKIController:
         
         # v11: Intelligence Governance (Judgment Engine)
         self.judgment = JudgmentEngine(self.learning, self.budgets)
+        # Phase 0: Cognitive routing — wires Reflex + Judgment into the hot path.
+        self.router_telemetry = RouterTelemetry()
+        self.cognitive_router = CognitiveRouter(
+            judgment=self.judgment,
+            reflex=self.reflex,
+            telemetry=self.router_telemetry,
+        )
         self.scorecard = IntelligenceScorecard(self.settings.get('system', {}).get('data_dir', self.DEFAULT_DATA_DIR))
         
         # v25: Adaptive Self-Modification (Evolution Engine)
@@ -320,17 +357,46 @@ class VIKIController:
         self.watchdog = WatchdogModule(self)
         self.wellness = WellnessPulse(self)
         self.reflector = ReflectorModule(self)
+        bio_settings = self.settings.get("system", {})
+        bio_backend = (
+            os.environ.get("VIKI_BIO_BACKEND")
+            or bio_settings.get("bio_backend")
+            or "stub"
+        )
         self.bio = BioModule(
-            webcam_enabled=bool(self.settings.get("system", {}).get("bio_webcam_enabled", False)),
+            webcam_enabled=bool(bio_settings.get("bio_webcam_enabled", False)),
+            backend=bio_backend,
+            analysis_interval_s=float(bio_settings.get("bio_analysis_interval_s", 10.0)),
         )
         self.dream = DreamModule(self)
 
-        # v13: Autonomous Startup Pulse
-        try:
-            asyncio.get_running_loop()
-            self._create_tracked_task(self._startup_pulse(), "startup_pulse")
-        except RuntimeError:
-            viki_logger.debug("Sync Mode: Startup Pulse deferred (no running loop).")
+        # v13: Autonomous Startup Pulse — skipped entirely in low_resource_mode.
+        if not getattr(self, "low_resource_mode", False):
+            try:
+                asyncio.get_running_loop()
+                self._create_tracked_task(self._startup_pulse(), "startup_pulse")
+            except RuntimeError:
+                viki_logger.debug("Sync Mode: Startup Pulse deferred (no running loop).")
+        else:
+            viki_logger.debug("Startup pulse suppressed by low_resource_mode.")
+
+        # Background Ollama pre-warm. Fires a 1-token ping at the default
+        # model so by the time the user types their first real question, the
+        # model weights are loaded into RAM/VRAM. Gated by the
+        # `system.prewarm_default_model` flag (default true), and disabled in
+        # low_resource_mode and air_gap. Failures are swallowed — boot must
+        # never block on this.
+        prewarm_enabled = (
+            self.settings.get("system", {}).get("prewarm_default_model", True)
+            and not getattr(self, "low_resource_mode", False)
+            and not getattr(self, "air_gap", False)
+        )
+        if prewarm_enabled:
+            try:
+                asyncio.get_running_loop()
+                self._create_tracked_task(self._prewarm_default_model(), "ollama_prewarm")
+            except RuntimeError:
+                viki_logger.debug("Sync Mode: Ollama prewarm deferred (no running loop).")
 
         # --- ORYTHIX COGNITIVE ARCHITECTURE (v22 Evolution) ---
         self.governor = EthicalGovernor()
@@ -348,8 +414,17 @@ class VIKIController:
         self._preflight_pipeline = build_default_preflight_pipeline()
 
     async def _startup_pulse(self):
-        """Autonomous startup sequence: Connect, Research, Evolve."""
+        """Autonomous startup sequence: Connect, Research, Evolve.
+
+        Heavy steps (research pulse, evolution pulse, workspace scan,
+        mission control, continuous learning) all check
+        `low_resource_mode` and short-circuit when it is on, so VIKI
+        boots cleanly on machines with little RAM / IO budget.
+        """
         await asyncio.sleep(5) # Give other services time to start
+        if getattr(self, "low_resource_mode", False):
+            viki_logger.info("STARTUP PULSE: low_resource_mode ON — skipping autonomous startup pulse.")
+            return
         viki_logger.info("STARTUP PULSE: Initiating autonomous knowledge sync...")
         
         # 1. Quick Research Pulse (optional; disable with system.startup_research: false to speed first request)
@@ -370,11 +445,10 @@ class VIKIController:
              if forge:
                  await forge.execute({"steps": 20}) # Very quick pulse
 
-        # 3. Autonomous World Discovery (v22)
+        # 3. Autonomous World Discovery (v22) — gated to skip on low-resource hosts.
         workspace_dir = self.settings.get('system', {}).get('workspace_dir', self.DEFAULT_WORKSPACE_DIR)
         if os.path.exists(workspace_dir):
             viki_logger.info(f"Startup: Initiating autonomous world mapping for {workspace_dir}...")
-            # Run in a separate thread/task if it's too slow, but here we just call the method
             self.world.analyze_workspace(workspace_dir)
             self.world.scan_codebase(workspace_dir)
 
@@ -384,6 +458,46 @@ class VIKIController:
         
         # 5. Start Continuous Learning Monitor (checks periodically for training)
         self._create_tracked_task(self._continuous_learning_loop(), "continuous_learning")
+
+    async def _prewarm_default_model(self):
+        """
+        Fire a tiny 1-token ping at the default chat model so Ollama loads it
+        into memory before the user's first real prompt. Cuts ~5–15 s off
+        the cold first-reply on a 4 GB / 4-core box.
+        """
+        try:
+            await asyncio.sleep(1.5)  # let boot settle / MCP attach finish
+            if not self.model_router:
+                return
+            try:
+                model = self.model_router.get_model(["chatter"])
+            except Exception as e:
+                viki_logger.debug(f"Prewarm: model_router.get_model failed: {e}")
+                return
+            if model is None:
+                return
+            chat_fn = getattr(model, "chat", None)
+            if chat_fn is None:
+                return
+            t0 = time.time()
+            try:
+                if asyncio.iscoroutinefunction(chat_fn):
+                    try:
+                        await chat_fn([{"role": "user", "content": "."}])
+                    except TypeError:
+                        # Some chat() signatures take temperature as positional.
+                        await chat_fn([{"role": "user", "content": "."}], 0.0)
+                else:
+                    chat_fn([{"role": "user", "content": "."}])
+            except Exception as e:
+                viki_logger.debug(f"Prewarm chat failed (non-fatal): {e}")
+                return
+            elapsed = time.time() - t0
+            viki_logger.info(
+                f"Prewarm: default model '{getattr(model, 'model_name', '?')}' loaded in {elapsed:.1f}s."
+            )
+        except Exception as e:
+            viki_logger.debug(f"Prewarm task swallowed: {e}")
 
     def _create_tracked_task(self, coro, name: str = "unnamed"):
         """Create a background task with proper tracking and error handling."""
@@ -492,23 +606,55 @@ class VIKIController:
         parts = []
         if health["disabled_skills"]:
             parts.append(f"{len(health['disabled_skills'])} skills disabled")
-        if health["unavailable_models"]:
-            parts.append(f"{len(health['unavailable_models'])} models unavailable")
-        return "Runtime health: degraded (" + ", ".join(parts) + ")"
+
+        unavailable = health.get("unavailable_models") or {}
+        if unavailable:
+            # Surface the actual model names so the user can act on it. For
+            # Ollama-style names (`qwen3.5:latest`) we suggest a concrete
+            # `ollama pull` command. The list is capped at 3 to keep the
+            # summary readable.
+            names = list(unavailable.keys())
+            shown = names[:3]
+            extra = "" if len(names) <= 3 else f" (+{len(names) - 3} more)"
+            joined = ", ".join(f"'{n}'" for n in shown) + extra
+            count = len(names)
+            label = "model" if count == 1 else "models"
+            hint = ""
+            try:
+                first = shown[0]
+                # Ollama tags are always `name:tag`. Strip the tag for the pull hint.
+                if ":" in first:
+                    base = first.split(":", 1)[0]
+                    hint = f" Run: ollama pull {base}"
+                else:
+                    hint = f" Run: ollama pull {first}"
+            except Exception:
+                hint = ""
+            parts.append(f"{count} {label} unavailable: {joined}.{hint}")
+
+        return "Runtime health: degraded — " + " | ".join(parts)
 
     async def _continuous_learning_loop(self):
-        """Background loop for continuous learning checks."""
-        # Wait for system to stabilize before starting
-        await asyncio.sleep(300)  # 5 minutes
-        
+        """Background loop for continuous learning checks.
+
+        Stops itself when low_resource_mode is on. Interval and warm-up
+        are settings-driven (forge.continuous_learning_warmup_s,
+        forge.continuous_learning_interval_s) so operators can dial them
+        down on small machines.
+        """
+        if getattr(self, "low_resource_mode", False):
+            viki_logger.info("low_resource_mode: continuous_learning_loop disabled.")
+            return
+        forge_settings = self.settings.get("forge", {}) or {}
+        warmup_s = max(0, int(forge_settings.get("continuous_learning_warmup_s", 300)))
+        interval_s = max(60, int(forge_settings.get("continuous_learning_interval_s", 21600)))
+        await asyncio.sleep(warmup_s)
         while True:
             try:
                 await self.continuous_learner.check_and_train()
             except Exception as e:
                 viki_logger.error(f"Continuous learning check failed: {e}")
-            
-            # Check every 6 hours
-            await asyncio.sleep(21600)
+            await asyncio.sleep(interval_s)
 
     def _load_yaml(self, path: str) -> Dict[str, Any]:
         try:
@@ -772,8 +918,48 @@ class VIKIController:
             f"Messages: {msg_summary or 'n/a'}"
         )
 
+    # Heavy skills that import optional/expensive deps (torch, playwright,
+    # pandas, pdfplumber, onnxruntime, whisper, transformers, etc.). These are
+    # registered as LazySkillProxy on every boot — they only fully load when
+    # the planner actually invokes them. Reduces cold-start by ~30–60% on
+    # low-end Windows boxes.
+    _LAZY_SKILL_SPECS = [
+        # (skill_name, description, module_path, class_name, needs_controller, safety_tier)
+        ("look_at_screen",     "Capture and describe screen content.",       "viki.skills.builtins.vision_skill",        "VisionSkill",         False, "safe"),
+        ("python_interpreter", "Execute Python in a sandbox.",                "viki.skills.builtins.interpreter_skill",  "InterpreterSkill",    True,  "medium"),
+        ("browser",       "Headless browser navigation and scraping.",       "viki.skills.builtins.browser_skill",       "BrowserSkill",        False, "medium"),
+        ("swarm_council", "Multi-agent swarm orchestration.",                 "viki.skills.builtins.swarm_skill",         "SwarmSkill",          True,  "safe"),
+        ("draw_overlay",  "Floating overlay UI.",                             "viki.skills.builtins.overlay_skill",       "OverlaySkill",        False, "safe"),
+        ("short_video_agent", "Generate short videos.",                       "viki.skills.builtins.short_video_skill",   "ShortVideoSkill",     True,  "safe"),
+        ("calendar",      "Google Calendar integration.",                    "viki.skills.builtins.calendar_skill",      "CalendarSkill",       True,  "safe"),
+        ("email",         "Gmail integration.",                              "viki.skills.builtins.email_skill",         "EmailSkill",          True,  "safe"),
+        ("messaging",     "Unified messaging across Discord/Telegram/etc.", "viki.skills.builtins.messaging_skill",     "UnifiedMessagingSkill", True, "safe"),
+        ("twitter",       "Twitter/X integration.",                          "viki.skills.builtins.twitter_skill",       "TwitterSkill",        False, "safe"),
+        ("summarize",     "Summarize long text/web pages.",                  "viki.skills.builtins.summarize_skill",     "SummarizeSkill",      True,  "safe"),
+        ("image_gen",     "Generate images.",                                "viki.skills.builtins.image_gen_skill",     "ImageGenSkill",       False, "safe"),
+        ("obsidian",      "Obsidian vault notes.",                           "viki.skills.builtins.obsidian_skill",      "ObsidianSkill",       True,  "safe"),
+        ("tasks",         "Task list management.",                           "viki.skills.builtins.tasks_skill",         "TasksSkill",          True,  "safe"),
+        ("whisper",       "Audio transcription.",                            "viki.skills.builtins.whisper_skill",       "WhisperSkill",        True,  "safe"),
+        ("pdf",           "PDF reading and extraction.",                     "viki.skills.builtins.pdf_skill",           "PdfSkill",            True,  "safe"),
+        ("smart_home",    "Smart-home device control.",                      "viki.skills.builtins.smart_home_skill",    "SmartHomeSkill",      False, "medium"),
+        ("gif",           "GIF generation.",                                 "viki.skills.builtins.gif_skill",           "GifSkill",            False, "safe"),
+        ("data_analysis", "DataFrame analysis.",                             "viki.skills.builtins.data_analysis_skill", "DataAnalysisSkill",   True,  "safe"),
+        ("presentation",  "Slide deck generation.",                          "viki.skills.builtins.presentation_skill",  "PresentationSkill",   True,  "safe"),
+        ("spreadsheet",   "Spreadsheet generation/editing.",                 "viki.skills.builtins.spreadsheet_skill",   "SpreadsheetSkill",    True,  "safe"),
+        ("website",       "Website scaffolding/editing.",                    "viki.skills.builtins.website_skill",       "WebsiteSkill",        True,  "safe"),
+        ("code_search",   "Repository code search.",                         "viki.skills.builtins.code_search_skill",   "CodeSearchSkill",     True,  "safe"),
+        ("plan_edit",     "Multi-file plan-edit-verify loop.",               "viki.skills.builtins.plan_edit_skill",     "PlanEditSkill",       True,  "medium"),
+        ("computer_use",  "Vision-grounded UI automation.",                  "viki.skills.builtins.computer_use_skill",  "ComputerUseSkill",    True,  "medium"),
+    ]
+
     def _register_default_skills(self):
+        from viki.skills.lazy_skill import LazySkillProxy
+
         allowlist = self.soul.config.get("skill_allowlist")
+        low_resource = bool(
+            (self.settings.get("system") or {}).get("low_resource_mode")
+            or os.environ.get("VIKI_LOW_RESOURCE", "").lower() in ("1", "true", "yes")
+        )
 
         def _load_skill(module_path: str, class_name: str, *args):
             try:
@@ -785,7 +971,8 @@ class VIKIController:
                 self.disabled_skills[class_name] = str(e)
                 return None
 
-        skill_specs = [
+        # Eager skills: cheap to import and used on the hot path.
+        eager_specs = [
             ("viki.skills.builtins.time_skill", "TimeSkill", ()),
             ("viki.skills.builtins.math_skill", "MathSkill", ()),
             ("viki.skills.builtins.filesystem_skill", "FileSystemSkill", (self,)),
@@ -794,11 +981,6 @@ class VIKIController:
             ("viki.skills.builtins.research_skill", "ResearchSkill", (self,)),
             ("viki.skills.builtins.dev_skill", "DevSkill", (self,)),
             ("viki.skills.builtins.voice_skill", "VoiceSkill", (self.voice_module, self)),
-            ("viki.skills.builtins.vision_skill", "VisionSkill", ()),
-            ("viki.skills.builtins.interpreter_skill", "InterpreterSkill", (self,)),
-            ("viki.skills.builtins.browser_skill", "BrowserSkill", ()),
-            ("viki.skills.builtins.swarm_skill", "SwarmSkill", (self,)),
-            ("viki.skills.builtins.overlay_skill", "OverlaySkill", ()),
             ("viki.skills.builtins.sfs_skill", "SemanticFSSkill", (self,)),
             ("viki.skills.builtins.security_skill", "SecuritySkill", ()),
             ("viki.skills.creation.forge", "ModelForgeSkill", (self,)),
@@ -808,29 +990,48 @@ class VIKIController:
             ("viki.skills.builtins.window_management_skill", "WindowManagerSkill", ()),
             ("viki.skills.builtins.shell_skill", "ShellSkill", ()),
             ("viki.skills.builtins.notification_skill", "NotificationSkill", ()),
-            ("viki.skills.builtins.short_video_skill", "ShortVideoSkill", (self,)),
-            ("viki.skills.builtins.calendar_skill", "CalendarSkill", (self,)),
-            ("viki.skills.builtins.email_skill", "EmailSkill", (self,)),
-            ("viki.skills.builtins.messaging_skill", "UnifiedMessagingSkill", (self,)),
-            ("viki.skills.builtins.twitter_skill", "TwitterSkill", ()),
-            ("viki.skills.builtins.summarize_skill", "SummarizeSkill", (self,)),
-            ("viki.skills.builtins.image_gen_skill", "ImageGenSkill", ()),
-            ("viki.skills.builtins.obsidian_skill", "ObsidianSkill", (self,)),
-            ("viki.skills.builtins.tasks_skill", "TasksSkill", (self,)),
-            ("viki.skills.builtins.whisper_skill", "WhisperSkill", (self,)),
-            ("viki.skills.builtins.pdf_skill", "PdfSkill", (self,)),
-            ("viki.skills.builtins.smart_home_skill", "SmartHomeSkill", ()),
-            ("viki.skills.builtins.gif_skill", "GifSkill", ()),
-            ("viki.skills.builtins.data_analysis_skill", "DataAnalysisSkill", (self,)),
-            ("viki.skills.builtins.presentation_skill", "PresentationSkill", (self,)),
-            ("viki.skills.builtins.spreadsheet_skill", "SpreadsheetSkill", (self,)),
-            ("viki.skills.builtins.website_skill", "WebsiteSkill", (self,)),
+            ("viki.skills.builtins.engineering_playbook_skill", "EngineeringPlaybookSkill", ()),
+            ("viki.skills.builtins.coding_workflow_skill", "CodingWorkflowSkill", ()),
         ]
         all_skills = []
-        for module_path, class_name, args in skill_specs:
+        for module_path, class_name, args in eager_specs:
             skill = _load_skill(module_path, class_name, *args)
             if skill is not None:
                 all_skills.append(skill)
+
+        # Lazy heavy skills: register a proxy so they appear in the registry
+        # but only import when first invoked.
+        for spec in self._LAZY_SKILL_SPECS:
+            sname, sdesc, smod, scls, needs_ctrl, stier = spec
+            ctor = (lambda c, _needs_ctrl=needs_ctrl: ((c,) if _needs_ctrl else ()))
+            try:
+                proxy = LazySkillProxy(
+                    name=sname,
+                    description=sdesc,
+                    module_path=smod,
+                    class_name=scls,
+                    ctor_args=ctor,
+                    controller=self,
+                    safety_tier=stier,
+                )
+                all_skills.append(proxy)
+            except Exception as e:
+                viki_logger.warning(f"LazySkillProxy '{sname}' failed: {e}")
+                self.disabled_skills[scls] = str(e)
+
+        # Low-resource mode: also lazify dev/research/voice etc. is overkill;
+        # we only drop strictly optional eager skills that would never get
+        # used unless the user asks. Currently the eager set is already lean,
+        # so the flag mainly affects proactive loops downstream. Surface a
+        # log line so operators know the mode is active.
+        if low_resource:
+            viki_logger.info(
+                "VIKIController: low_resource_mode is ON — proactive loops "
+                "(wellness, dream, continuous-learning, startup pulse) will be skipped."
+            )
+            self.low_resource_mode = True
+        else:
+            self.low_resource_mode = False
 
         allowed = set(allowlist) if allowlist else None
         for skill in all_skills:
@@ -846,6 +1047,14 @@ class VIKIController:
     def get_last_response_meta(self, session_id: Optional[str] = None) -> Dict[str, Any]:
         session_id = self._normalize_session_id(session_id)
         return self._last_response_meta_by_session.get(session_id, {})
+
+    def get_router_telemetry(self) -> Dict[str, Any]:
+        """Return cognitive routing telemetry (reflex hit rate, per-outcome counts)."""
+        try:
+            return self.router_telemetry.snapshot()
+        except Exception as e:
+            viki_logger.debug("get_router_telemetry: %s", e)
+            return {"error": str(e)}
 
     async def process_request(
         self,
@@ -1036,6 +1245,14 @@ class VIKIController:
                  return msg
              return "Usage: /restore  or  /restore <id>"
 
+        # /undo: roll back the most recent checkpoint without listing.
+        if user_input.strip().lower() in ("/undo", "/undo last"):
+             ok, restored, msg = self.history.undo_last()
+             if not ok:
+                 return msg
+             extras = (" Restored: " + ", ".join(restored)) if restored else ""
+             return f"Undo: {msg}{extras}"
+
         # /save <name>: save current conversation to a session file
         if user_input.strip().lower().startswith("/save"):
              name = user_input.strip()[5:].strip()
@@ -1113,11 +1330,51 @@ class VIKIController:
         world_understanding = self.world.get_understanding()
 
         
-        # 3. Intelligence Governance (Judgment & Budget)
-        # For v23, we use a simplified judgment for the high-level loop
-        outcome = JudgmentOutcome.DEEP
+        # 3. Intelligence Governance (Judgment & Budget) — Phase 0: real cognitive routing.
         task_type = self._classify_task(safe_input)  # vision, coding, reasoning, general
-        use_lite = task_type == "general"  # Fast lite path for general chat; full reasoning for vision/coding/reasoning
+        try:
+            cognitive_route: CognitiveRoute = await self.cognitive_router.classify(
+                safe_input,
+                context={
+                    "task_type": "question" if task_type == "reasoning" and safe_input.strip().endswith("?") else task_type,
+                    "is_protected_zone": False,
+                    "url_context_present": bool(url_context),
+                },
+                skill_registry=self.skill_registry,
+            )
+        except Exception as e:
+            viki_logger.warning("Cognitive routing failed (%s); defaulting to DEEP.", e)
+            cognitive_route = None
+
+        if cognitive_route is not None:
+            outcome = cognitive_route.outcome
+            # Honor router decision for schema lite vs full.
+            use_lite = cognitive_route.use_lite_schema
+        else:
+            outcome = JudgmentOutcome.DEEP
+            use_lite = task_type == "general"
+
+        # Short-circuit: REFUSE outcome.
+        if cognitive_route is not None and cognitive_route.refusal_reason:
+            self._last_response_meta_by_session[session_id] = {
+                "cognitive_route": cognitive_route.as_dict(),
+            }
+            self.memory.working.add_message(
+                "assistant",
+                f"I cannot proceed with this request. {cognitive_route.refusal_reason}",
+                session_id=session_id,
+            )
+            return f"I cannot proceed with this request. {cognitive_route.refusal_reason}"
+
+        # Short-circuit: REFLEX cached response (no skill execution needed).
+        if cognitive_route is not None and cognitive_route.cached_response:
+            self._last_response_meta_by_session[session_id] = {
+                "cognitive_route": cognitive_route.as_dict(),
+            }
+            self.memory.working.add_message(
+                "assistant", cognitive_route.cached_response, session_id=session_id
+            )
+            return cognitive_route.cached_response
 
         # Behavior Modulation from Signals
         mods = self.signals.get_modulation()
@@ -1131,6 +1388,60 @@ class VIKIController:
         max_react_steps = 5  # Safety limit
         action_results = []  # Accumulated results from previous steps
         final_output = None
+
+        # Phase 0: REFLEX action override — execute directly when ReflexBrain found a learned/regex pattern.
+        reflex_action_override: Optional[ActionCall] = (
+            cognitive_route.action_override if cognitive_route is not None else None
+        )
+        if reflex_action_override is not None and self.skill_registry.get_skill(reflex_action_override.skill_name):
+            skill_name = reflex_action_override.skill_name
+            params = (reflex_action_override.parameters or {}).copy()
+            check_res = self.capabilities.check_permission(skill_name, params=params)
+            if check_res.allowed and self.safety.validate_action(skill_name, params):
+                severity = self.safety.get_action_severity(skill_name, params)
+                if severity in ("medium", "destructive"):
+                    # Bounce to confirmation flow rather than auto-running.
+                    self.pending_actions[session_id] = reflex_action_override
+                    diff_preview = self._diff_preview(skill_name, params)
+                    msg = (
+                        f"Reflex matched '{skill_name}'. Safety Check: this is a {severity} action. "
+                        f"Confirm to proceed."
+                    )
+                    if diff_preview:
+                        msg += f"\n\n{diff_preview}"
+                    self._last_response_meta_by_session[session_id] = {
+                        "cognitive_route": cognitive_route.as_dict(),
+                    }
+                    return msg
+                if not self.shadow_mode:
+                    if on_event:
+                        on_event("status", f"REFLEX EXECUTING {skill_name}")
+                    result, err, latency = await self._execute_skill(skill_name, params, budget)
+                    if not err and result is not None:
+                        try:
+                            self.skill_registry.record_execution(skill_name, True, latency)
+                            self.signals.update_signal("confidence", 0.05)
+                            self.world.track_app_usage(skill_name)
+                        except Exception:
+                            pass
+                        self._last_response_meta_by_session[session_id] = {
+                            "cognitive_route": cognitive_route.as_dict(),
+                            "subtasks": [{"action": f"{skill_name}({params})", "result": str(result)[:1000], "step": 1}],
+                            "total_steps": 1,
+                            "reflex_executed": True,
+                        }
+                        reflex_msg = self._compress_output(f"Done. {result[:1000]}")
+                        self.memory.working.add_message("assistant", reflex_msg, session_id=session_id)
+                        return reflex_msg
+                    if err:
+                        # Reflex failed — invalidate the learned pattern and fall through to deliberation.
+                        try:
+                            self.reflex.report_failure(safe_input)
+                        except Exception:
+                            pass
+                        self.skill_registry.record_execution(skill_name, False, 0.0)
+                        viki_logger.info("Reflex action %s failed (%s); falling through to cortex.", skill_name, err)
+
         for react_step in range(max_react_steps):
             if on_event:
                 on_event("progress", {"step": react_step + 1, "total_steps": max_react_steps})
@@ -1147,6 +1458,10 @@ class VIKIController:
 
             # --- COGNITIVE LAYER (5-Layer Stack) ---
             try:
+                # Honor router decision on ensemble usage: SHALLOW skips ensemble for speed.
+                use_ensemble_setting = self.settings.get("system", {}).get("use_ensemble", True)
+                if cognitive_route is not None:
+                    use_ensemble_setting = use_ensemble_setting and cognitive_route.use_ensemble
                 viki_resp: VIKIResponse = await self.cortex.process(
                     safe_input,
                     memory_context=memory_context,
@@ -1156,7 +1471,8 @@ class VIKIController:
                     signals_context=signals_state + f", AgencyWeights: {agency_weights}",
                     evolution_log=self.evolution.get_evolution_summary(),
                     action_results=action_results,
-                    use_ensemble=self.settings.get("system", {}).get("use_ensemble", True),
+                    use_ensemble=use_ensemble_setting,
+                    on_event=on_event,
                 )
                 self.internal_trace.append({
                     "strategy": viki_resp.final_thought.primary_strategy,
@@ -1414,6 +1730,16 @@ class VIKIController:
         if final_output is None:
             final_output = "I completed processing but have no output to show."
 
+        # Phase 0: Decorate response meta with cognitive route + telemetry snapshot
+        try:
+            if cognitive_route is not None:
+                meta = self._last_response_meta_by_session.get(session_id) or {}
+                meta["cognitive_route"] = cognitive_route.as_dict()
+                meta["router_telemetry"] = self.get_router_telemetry()
+                self._last_response_meta_by_session[session_id] = meta
+        except Exception as e:
+            viki_logger.debug("Cognitive route meta decoration failed: %s", e)
+
         # v25: Evolution - Propose stable patterns to Reflex (Auditable)
         try:
             if hasattr(self.cortex, 'get_reflex_candidates'):
@@ -1513,10 +1839,60 @@ class VIKIController:
             cleaned = cleaned[0].upper() + cleaned[1:]
         return cleaned
 
+    def attach_mcp_skills_sync(self, config_path: Optional[str] = None) -> int:
+        """
+        P0 fix: actually wire MCP skills into the controller at boot time.
+
+        Loads `viki/config/mcp_servers.yaml`, connects to each server, and
+        registers every advertised tool as a `MCPSkillProxy` on the skill
+        registry. Tolerates missing SDK / empty config / connection errors
+        so VIKI keeps booting without MCP. Returns the count of skills
+        installed (0 if disabled).
+        """
+        try:
+            from viki.integrations.mcp_client import attach_mcp_skills
+        except Exception as e:
+            viki_logger.debug("MCP wiring skipped: import failed: %s", e)
+            return 0
+        try:
+            try:
+                asyncio.get_running_loop()
+                # If a loop is already running we cannot block on it; spawn a
+                # background task and return immediately. Tools will register
+                # asynchronously.
+                asyncio.ensure_future(self._attach_mcp_async(config_path))
+                return 0
+            except RuntimeError:
+                installed = asyncio.run(attach_mcp_skills(self, config_path))
+        except Exception as e:
+            viki_logger.warning("MCP wiring failed: %s", e)
+            return 0
+        self.mcp_skill_count = int(installed or 0)
+        if self.mcp_skill_count:
+            viki_logger.info("MCP: %d external tools registered as skills.", self.mcp_skill_count)
+        return self.mcp_skill_count
+
+    async def _attach_mcp_async(self, config_path: Optional[str] = None) -> int:
+        try:
+            from viki.integrations.mcp_client import attach_mcp_skills
+            installed = await attach_mcp_skills(self, config_path)
+        except Exception as e:
+            viki_logger.debug("MCP async attach failed: %s", e)
+            return 0
+        self.mcp_skill_count = int(installed or 0)
+        if self.mcp_skill_count:
+            viki_logger.info("MCP: %d external tools registered as skills.", self.mcp_skill_count)
+        return self.mcp_skill_count
+
     async def shutdown(self):
         viki_logger.info("Shutting down...")
-        
-        # Flush debounced state (evolution, etc.) before exit
+
+        if getattr(self, "mcp_client", None) is not None:
+            try:
+                await self.mcp_client.disconnect_all()
+            except Exception as e:
+                viki_logger.debug("MCP disconnect failed: %s", e)
+
         try:
             self.evolution.flush()
         except Exception as e:

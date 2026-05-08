@@ -38,10 +38,25 @@ class NarrativeMemory:
         os.makedirs(self.data_dir, exist_ok=True)
         self.db_path = os.path.join(self.data_dir, "orythix_narrative.db")
 
-        from viki.core.embeddings import get_encoder
-        self.encoder = get_encoder()
+        # Lazy encoder: deferred until the first call that needs an
+        # embedding. Trivial conversational turns never trigger the import.
+        self._encoder = None
+        self._encoder_loaded = False
 
         self._init_db()
+
+    @property
+    def encoder(self):
+        """Lazily import and instantiate the sentence-transformer encoder."""
+        if not self._encoder_loaded:
+            self._encoder_loaded = True
+            try:
+                from viki.core.embeddings import get_encoder
+                self._encoder = get_encoder()
+            except Exception as e:
+                viki_logger.debug(f"NarrativeMemory encoder lazy-load failed: {e}")
+                self._encoder = None
+        return self._encoder
 
     def _init_db(self):
         self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
@@ -98,12 +113,15 @@ class NarrativeMemory:
         self.conn.commit()
         viki_logger.info(f"Narrative Recorded: Intent='{intent}' | Outcome='{outcome[:50]}...'")
 
-    def retrieve_context(self, current_intent: str, limit: int = 3) -> List[Dict[str, Any]]:
+    def retrieve_context(self, current_intent: str, limit: int = 3, cheap: bool = False) -> List[Dict[str, Any]]:
         """
         'Omniscience-like recall': Finds semantically relevant past episodes to inform the current decision.
+
+        When `cheap=True`, skips the encoder entirely and returns recent episodes only.
+        Use it for trivial conversational inputs where embedding work is wasted.
         """
-        if not self.encoder:
-            # Fallback to recent history
+        if cheap or not self.encoder:
+            # Fallback to recent history (no embedding work)
             return self._get_recent_episodes(limit)
 
         try:

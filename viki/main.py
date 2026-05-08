@@ -81,10 +81,19 @@ async def main(workspace_path=None):
     except Exception as e:
         interface.print_error(f"Initialization Failed: {e}")
         return
+    try:
+        controller.attach_mcp_skills_sync()
+    except Exception as e:
+        viki_logger.debug(f"MCP attach skipped: {e}")
     controller.check_skill_health()
     interface.welcome(controller)
 
-    # Event Handler for linear logging
+    # Event Handler for linear logging.
+    # `_streaming_state` toggles between "header not yet drawn" and "actively
+    # rendering tokens" so we only print "VIKI > " once per turn even if
+    # multiple `partial` events fire.
+    _streaming_state = {"active": False}
+
     def on_event(event_type, data):
         if event_type == "thought":
             if debug_mode:
@@ -92,8 +101,21 @@ async def main(workspace_path=None):
         elif event_type == "action":
             if debug_mode:
                 interface.print_action(str(data))
+        elif event_type == "partial":
+            # Stream tokens straight to the console as they arrive. We use
+            # `console.print(..., end="")` to avoid newlines per chunk.
+            try:
+                if not _streaming_state["active"]:
+                    interface.console.print("[bold cyan]VIKI > [/]", end="")
+                    _streaming_state["active"] = True
+                interface.console.print(str(data), end="")
+            except Exception:
+                pass
+        elif event_type == "final":
+            if _streaming_state["active"]:
+                interface.console.print("")  # close streamed line
+                _streaming_state["active"] = False
         elif event_type == "status":
-            # Ignore status updates in simple mode to reduce noise
             pass
         elif event_type == "error":
             interface.print_error(data)
@@ -111,10 +133,13 @@ async def main(workspace_path=None):
         except Exception as bridge_err:
              viki_logger.warning(f"One or more external bridges failed to initialize: {bridge_err}")
         
-        controller._create_tracked_task(controller.wellness.start(), "wellness_monitoring")
-        controller._create_tracked_task(controller.dream.start_monitoring(), "dream_monitoring")
-        controller._create_tracked_task(controller.reflector.reflect_on_logs(), "log_reflection")
-        controller.watchdog.start(loop)
+        if getattr(controller, "low_resource_mode", False):
+            viki_logger.info("low_resource_mode: skipping wellness/dream/reflector/watchdog loops.")
+        else:
+            controller._create_tracked_task(controller.wellness.start(), "wellness_monitoring")
+            controller._create_tracked_task(controller.dream.start_monitoring(), "dream_monitoring")
+            controller._create_tracked_task(controller.reflector.reflect_on_logs(), "log_reflection")
+            controller.watchdog.start(loop)
     except Exception as e:
         interface.print_error(f"Task Launch Error: {e}")
 
@@ -152,6 +177,7 @@ async def main(workspace_path=None):
                 interface.console.print("  [green]/reject[/]    — Cancel pending action (or reply no/reject)")
                 interface.console.print("  [green]/scan[/]     — Re-scan workspace codebase (use in chat)")
                 interface.console.print("  [green]/restore[/]  — List checkpoints; /restore <id> to revert files")
+                interface.console.print("  [green]/undo[/]     — Roll back the most recent checkpoint")
                 interface.console.print("  [green]/save[/]     — Save session: /save <name>")
                 interface.console.print("  [green]/load[/]     — Load session: /load <name>")
                 continue
@@ -186,12 +212,19 @@ async def main(workspace_path=None):
                 continue
                 
             start_t = time.time()
+            _streaming_state["active"] = False
             response = await controller.process_request(user_input, on_event=on_event)
             elapsed = time.time() - start_t
-            
-            # Print Final Response
-            interface.console.print(f"[dim]   ({elapsed:.2f}s)[/]")
-            interface.print_viki(response)
+
+            # If we already streamed tokens, close the line; otherwise print
+            # the full response in the usual VIKI > block.
+            if _streaming_state["active"]:
+                interface.console.print("")
+                _streaming_state["active"] = False
+                interface.console.print(f"[dim]   ({elapsed:.2f}s)[/]")
+            else:
+                interface.console.print(f"[dim]   ({elapsed:.2f}s)[/]")
+                interface.print_viki(response)
             
         except KeyboardInterrupt:
             break

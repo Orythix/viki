@@ -56,6 +56,18 @@ class LLMProvider(ABC):
         self.call_count = 0
         self.available = True
         self.unavailable_reason = None
+        # Phase 1: cost & token accounting.
+        self.cost_per_1k_in: float = float(config.get("cost_per_1k_in", 0.0))
+        self.cost_per_1k_out: float = float(config.get("cost_per_1k_out", 0.0))
+        self.input_tokens: int = 0
+        self.output_tokens: int = 0
+        self.total_cost_usd: float = 0.0
+        self.provider_name: str = config.get("provider", config.get("provider_type", "unknown"))
+
+    def is_cloud(self) -> bool:
+        """True for any provider that egresses outside the local machine."""
+        # Default conservative: cloud unless overridden by LocalLLM/MockLLM subclasses.
+        return True
 
     def record_performance(self, latency: float, success: bool):
         self.call_count += 1
@@ -75,6 +87,27 @@ class LLMProvider(ABC):
         except Exception:
             pass
 
+    def estimate_cost_usd(self, prompt_tokens: int, completion_tokens: int = 256) -> float:
+        """
+        Rough cost estimator using the provider's per-1k pricing config.
+        Returns 0.0 for local models (no `cost_per_1k_*` set).
+        """
+        return (
+            (prompt_tokens / 1000.0) * self.cost_per_1k_in
+            + (completion_tokens / 1000.0) * self.cost_per_1k_out
+        )
+
+    def record_token_usage(self, input_tokens: int, output_tokens: int) -> float:
+        """Update token counters and return the delta cost for this call."""
+        self.input_tokens += int(input_tokens or 0)
+        self.output_tokens += int(output_tokens or 0)
+        delta = (
+            (input_tokens / 1000.0) * self.cost_per_1k_in
+            + (output_tokens / 1000.0) * self.cost_per_1k_out
+        )
+        self.total_cost_usd += delta
+        return delta
+
     @abstractmethod
     async def chat(self, messages: List[Dict[str, str]], temperature: float = 0.7) -> str:
         """Send a asynchronous chat request to the LLM."""
@@ -85,9 +118,21 @@ class LLMProvider(ABC):
         """Send a structured chat request returning a Pydantic model with optional visual context."""
         pass
 
+    async def chat_stream(self, messages: List[Dict[str, str]], temperature: float = 0.7):
+        """
+        Default streaming implementation: yields the full response as a single chunk.
+        Concrete providers should override with native streaming where supported.
+        """
+        result = await self.chat(messages, temperature=temperature)
+        if result:
+            yield result
+
 class MockLLM(LLMProvider):
     """Mock LLM for testing and development."""
-    
+
+    def is_cloud(self) -> bool:
+        return False
+
     async def chat(self, messages: List[Dict[str, str]], temperature: float = 0.0) -> str:
         t0 = time.perf_counter()
         success = False
@@ -281,6 +326,15 @@ class APILLM(LLMProvider):
                 messages=messages,
                 temperature=temperature,
             )
+            try:
+                usage = getattr(response, "usage", None)
+                if usage is not None:
+                    self.record_token_usage(
+                        getattr(usage, "prompt_tokens", 0) or 0,
+                        getattr(usage, "completion_tokens", 0) or 0,
+                    )
+            except Exception:
+                pass
             success = True
             return response.choices[0].message.content
         except Exception as e:
@@ -333,6 +387,29 @@ class APILLM(LLMProvider):
             except Exception:
                 pass
 
+    async def chat_stream(self, messages: List[Dict[str, str]], temperature: float = 0.7):
+        """Native streaming for OpenAI-compatible / Anthropic via instructor's underlying client."""
+        if not self.available or self.client is None:
+            yield f"Error: Model '{self.model_name}' is unavailable."
+            return
+        try:
+            stream = await self.client.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                temperature=temperature,
+                stream=True,
+            )
+            async for chunk in stream:
+                try:
+                    delta = chunk.choices[0].delta.content if chunk.choices else None
+                except Exception:
+                    delta = None
+                if delta:
+                    yield delta
+        except Exception as e:
+            yield f"Error streaming API Model: {e}"
+
+
 class LocalLLM(LLMProvider):
     """Ollama provider with Async support and JSON mode."""
     
@@ -341,6 +418,52 @@ class LocalLLM(LLMProvider):
         self.base_url = self.config.get('base_url', 'http://127.0.0.1:11434').rstrip('/')
         if 'localhost' in self.base_url:
             self.base_url = self.base_url.replace('localhost', '127.0.0.1')
+
+    def is_cloud(self) -> bool:
+        # Local Ollama / OpenAI-compatible local servers (LM Studio, vLLM) running on this host.
+        try:
+            host = (self.base_url or "").lower()
+            return not (
+                "127.0.0.1" in host
+                or "localhost" in host
+                or "0.0.0.0" in host
+                or host.startswith("http://host.docker.internal")
+            )
+        except Exception:
+            return False
+
+    async def chat_stream(self, messages: List[Dict[str, str]], temperature: float = 0.7):
+        """Native Ollama token streaming."""
+        data = {
+            "model": self.model_name,
+            "messages": messages,
+            "stream": True,
+            "options": {"temperature": temperature},
+        }
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(f"{self.base_url}/api/chat", json=data, timeout=300) as resp:
+                    if resp.status == 404:
+                        yield f"Error: Model '{self.model_name}' not found."
+                        return
+                    async for raw in resp.content:
+                        if not raw:
+                            continue
+                        line = raw.decode("utf-8", errors="ignore").strip()
+                        if not line:
+                            continue
+                        try:
+                            payload = json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+                        msg = payload.get("message") or {}
+                        chunk = msg.get("content") or ""
+                        if chunk:
+                            yield chunk
+                        if payload.get("done"):
+                            return
+        except Exception as e:
+            yield f"Error streaming Local Model: {e}"
 
     async def chat(self, messages: List[Dict[str, str]], temperature: float = 0.7, format: str = None, image_path: str = None, tools: List[Dict[str, Any]] = None) -> str:
         t0 = time.perf_counter()
@@ -755,37 +878,62 @@ class ModelFactory:
     def create(profile_name: str, profile_config: Dict[str, Any], provider_config: Dict[str, Any]) -> LLMProvider:
         provider_type = provider_config.get("type", "mock")
         merged_config = {**provider_config, **profile_config}
-        
+        merged_config.setdefault("provider", provider_type)
+
         if provider_type == "mock":
             return MockLLM(merged_config)
-        elif provider_type == "api":
+        if provider_type == "api":
             return APILLM(merged_config)
-        elif provider_type == "anthropic":
-            # Instructor handles Anthropic via the same interface if configured
-            merged_config['type'] = 'api' 
+        if provider_type == "anthropic":
+            # Instructor handles Anthropic via the same interface if configured.
+            merged_config["type"] = "api"
             return APILLM(merged_config)
-        elif provider_type == "local":
-            # Native Ollama tool calling is opt-in per profile (YAML); default off for tags often missing or weak at JSON tools.
+        if provider_type == "local":
+            # Native Ollama tool calling is opt-in per profile (YAML); default off.
             merged_config.setdefault("supports_native_tools", False)
             return LocalLLM(merged_config)
-        else:
-            raise ValueError(f"Unknown provider type: {provider_type}")
+        if provider_type in ("gemini", "google", "vertex"):
+            from viki.core.llm_providers import GeminiLLM
+            return GeminiLLM(merged_config)
+        if provider_type == "groq":
+            from viki.core.llm_providers import GroqLLM
+            return GroqLLM(merged_config)
+        if provider_type == "mistral":
+            from viki.core.llm_providers import MistralLLM
+            return MistralLLM(merged_config)
+        if provider_type in ("bedrock", "aws_bedrock"):
+            from viki.core.llm_providers import BedrockLLM
+            return BedrockLLM(merged_config)
+        raise ValueError(f"Unknown provider type: {provider_type}")
 
 class ModelRouter:
-    def __init__(self, config_path: str, air_gap: bool = False, local_llm_only: bool = False):
+    def __init__(self, config_path: str, air_gap: bool = False, local_llm_only: bool = False, budget=None):
         self.models = {}
         self.default_model = None
         self.air_gap = air_gap
         self.local_llm_only = local_llm_only
+        self.budget = budget
+        self._budget_config: Dict[str, Any] = {}
         self._load_config(config_path)
 
     def _model_allowed(self, model: LLMProvider) -> bool:
         if not model.available:
             return False
-        if self.air_gap and not isinstance(model, LocalLLM):
+        try:
+            cloud = model.is_cloud()
+        except Exception:
+            cloud = isinstance(model, APILLM)
+        if self.air_gap and cloud:
             return False
-        if self.local_llm_only and isinstance(model, APILLM):
+        if self.local_llm_only and cloud:
             return False
+        if self.budget is not None and cloud:
+            try:
+                breaker = self.budget.get_breaker(getattr(model, "provider_name", "unknown"))
+                if breaker.is_open():
+                    return False
+            except Exception:
+                pass
         return True
 
     def _first_allowed_model(self) -> Optional[LLMProvider]:
@@ -808,12 +956,24 @@ class ModelRouter:
             providers = config.get('models', {}).get('providers', {})
             profiles = config.get('models', {}).get('profiles', {})
             default_profile = config.get('models', {}).get('default', 'mock-model')
+            self._budget_config = dict(config.get('models', {}).get('budget', {}) or {})
+
+            # Build a default LLMBudget if the controller didn't pass one in.
+            if self.budget is None and self._budget_config:
+                try:
+                    from viki.core.llm_budget import LLMBudget
+
+                    self.budget = LLMBudget(self._budget_config)
+                except Exception as e:
+                    viki_logger.debug("Failed to init LLMBudget: %s", e)
 
             for name, profile in profiles.items():
                 provider_name = profile.get('provider')
                 if provider_name in providers:
                     provider_conf = providers[provider_name]
-                    self.models[name] = ModelFactory.create(name, profile, provider_conf)
+                    # Merge `provider` name into config so providers know which one they are.
+                    merged_provider_conf = {**provider_conf, "provider": provider_name}
+                    self.models[name] = ModelFactory.create(name, profile, merged_provider_conf)
 
             preferred: Optional[LLMProvider] = None
             if default_profile in self.models:
@@ -900,4 +1060,145 @@ class ModelRouter:
             "default_model": default_name,
             "available_models": available,
             "unavailable_models": unavailable,
+            "budget": self.budget.snapshot() if self.budget is not None else {},
+        }
+
+    def apply_eval_signal(self, model_name: str, pass_rate: float) -> None:
+        """
+        Phase 2: feed eval-suite pass rates into the trust score so good evals
+        increase a model's priority on subsequent routing decisions.
+        """
+        model = self.models.get(model_name)
+        if model is None:
+            return
+        # Smooth update: blend current trust with eval pass rate.
+        prev = float(getattr(model, "trust_score", 1.0))
+        # Pull trust toward pass_rate by 30%.
+        updated = max(0.0, min(1.0, 0.7 * prev + 0.3 * float(pass_rate)))
+        model.trust_score = updated
+
+    def get_failover_chain(self, capabilities: Optional[List[str]] = None, max_models: int = 4) -> List[LLMProvider]:
+        """
+        Ranked list of allowed models for the given capabilities.
+        Used by `chat_with_failover` and the cross-provider Ensemble.
+        """
+        scored: List[tuple] = []
+        for model in self.models.values():
+            if not self._model_allowed(model):
+                continue
+            model_caps = model.config.get('capabilities', [])
+            matched = sum(1 for cap in (capabilities or []) if cap in model_caps)
+            priority = model.config.get('priority', 2)
+            score = (matched * priority) + (model.trust_score * 0.5)
+            if model.call_count > 10:
+                error_rate = model.error_count / model.call_count
+                score -= error_rate * 5.0
+            scored.append((score, model))
+        scored.sort(key=lambda x: -x[0])
+        return [m for _, m in scored[:max_models]]
+
+    @staticmethod
+    def _looks_like_error(text: Any) -> bool:
+        if not isinstance(text, str):
+            return False
+        prefixes = (
+            "Error calling API Model:",
+            "Error calling Local Model:",
+            "Error calling Gemini Model:",
+            "Error calling Groq Model:",
+            "Error calling Mistral Model:",
+            "Error calling Bedrock Model:",
+            "Error: Model ",
+        )
+        return any(text.startswith(p) for p in prefixes)
+
+    @staticmethod
+    def _redact_messages_for_cloud(messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
+        """Apply secret redaction so credentials never leak across cloud boundaries."""
+        try:
+            from viki.core.safety import redact_secrets
+
+            redacted: List[Dict[str, str]] = []
+            for m in messages:
+                content = m.get("content")
+                if isinstance(content, str):
+                    redacted.append({**m, "content": redact_secrets(content)})
+                elif isinstance(content, list):
+                    parts = []
+                    for part in content:
+                        if isinstance(part, dict) and isinstance(part.get("text"), str):
+                            parts.append({**part, "text": redact_secrets(part["text"])})
+                        else:
+                            parts.append(part)
+                    redacted.append({**m, "content": parts})
+                else:
+                    redacted.append(m)
+            return redacted
+        except Exception:
+            return messages
+
+    async def chat_with_failover(
+        self,
+        messages: List[Dict[str, str]],
+        capabilities: Optional[List[str]] = None,
+        temperature: float = 0.7,
+        max_attempts: int = 3,
+    ) -> Dict[str, Any]:
+        """
+        Try the highest-scoring allowed model; on transient error, retry with the next one.
+        Returns a dict with `text`, `model_name`, `attempts`, `errors`.
+        """
+        chain = self.get_failover_chain(capabilities, max_models=max_attempts)
+        if not chain:
+            chain = [self.get_model(capabilities)]
+        errors: List[Dict[str, Any]] = []
+        for attempt, model in enumerate(chain):
+            try:
+                outbound = (
+                    self._redact_messages_for_cloud(messages) if model.is_cloud() else messages
+                )
+                if self.budget is not None and model.is_cloud():
+                    estimate = model.estimate_cost_usd(prompt_tokens=512, completion_tokens=256)
+                    allowed, reason = self.budget.can_spend(
+                        getattr(model, "provider_name", "unknown"),
+                        estimate,
+                        is_cloud=True,
+                    )
+                    if not allowed:
+                        errors.append({"model": model.model_name, "reason": reason})
+                        continue
+                t0 = time.perf_counter()
+                text = await model.chat(outbound, temperature=temperature)
+                latency = time.perf_counter() - t0
+
+                if self._looks_like_error(text):
+                    model.record_performance(latency, False)
+                    if self.budget is not None and model.is_cloud():
+                        self.budget.record_failure(getattr(model, "provider_name", "unknown"))
+                    errors.append({"model": model.model_name, "reason": text})
+                    continue
+
+                model.record_performance(latency, True)
+                if self.budget is not None and model.is_cloud():
+                    self.budget.record_success(getattr(model, "provider_name", "unknown"))
+                    self.budget.record_cost(
+                        getattr(model, "provider_name", "unknown"),
+                        getattr(model, "total_cost_usd", 0.0),
+                    )
+                return {
+                    "text": text,
+                    "model_name": model.model_name,
+                    "attempts": attempt + 1,
+                    "errors": errors,
+                }
+            except Exception as e:
+                if self.budget is not None and model.is_cloud():
+                    self.budget.record_failure(getattr(model, "provider_name", "unknown"))
+                errors.append({"model": model.model_name, "reason": str(e)})
+                model.record_performance(0.0, False)
+        return {
+            "text": "",
+            "model_name": None,
+            "attempts": len(chain),
+            "errors": errors,
         }

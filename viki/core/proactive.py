@@ -27,6 +27,10 @@ class WellnessPulse:
     """
     Proactive "Wellness Pulse".
     Periodically checks if the user needs anything via Nexus channels.
+
+    Cadence is settings-driven so low-end machines can stretch it out:
+        proactive.wellness_interval_s: 1800   (default 30 min)
+        proactive.wellness_idle_threshold_s: 7200  (default 2 h)
     """
     def __init__(self, controller):
         self.controller = controller
@@ -34,6 +38,9 @@ class WellnessPulse:
         self.disabled = False
         self.snoozed_until = 0
         self.dismissed_patterns = set()
+        proactive_cfg = (controller.settings.get("proactive", {}) if hasattr(controller, "settings") else {}) or {}
+        self.interval_s = max(60, int(proactive_cfg.get("wellness_interval_s", 1800)))
+        self.idle_threshold_s = max(60, int(proactive_cfg.get("wellness_idle_threshold_s", 7200)))
 
     def _should_trigger(self) -> bool:
         """Decide whether we should run a proactive check now."""
@@ -45,7 +52,7 @@ class WellnessPulse:
 
         last_active = getattr(self.controller, "last_interaction_time", time.time())
         idle_time = time.time() - last_active
-        return idle_time >= 7200  # 2 hours
+        return idle_time >= self.idle_threshold_s
 
     def _get_suggestions(self) -> list:
         """Compute currently suggested patterns (un-dismissed only)."""
@@ -77,8 +84,7 @@ class WellnessPulse:
         viki_logger.info("WellnessPulse: Awareness layer active.")
         
         while self.is_running:
-            # Check every 30 minutes
-            await asyncio.sleep(1800) 
+            await asyncio.sleep(self.interval_s)
             if not self._should_trigger():
                 continue
 

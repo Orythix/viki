@@ -49,11 +49,22 @@ class LayerTiming:
 # --------------------------------------------------------------------------- #
 
 class PatternTracker:
-    """Tracks successful input→action patterns for potential REFLEX promotion."""
-    def __init__(self, data_dir: str = None):
+    """Tracks successful input→action patterns for potential REFLEX promotion.
+
+    Memory-bounded: caps in-memory entries at `max_patterns` and evicts the
+    least-recently-seen rows. Saves are debounced (every `save_every` writes)
+    so that high-throughput hot paths don't pin a low-end disk with constant
+    JSON dumps.
+    """
+    DEFAULT_MAX_PATTERNS = int(os.environ.get("VIKI_PATTERN_TRACKER_MAX", "5000"))
+    DEFAULT_SAVE_EVERY = int(os.environ.get("VIKI_PATTERN_TRACKER_SAVE_EVERY", "10"))
+
+    def __init__(self, data_dir: str = None, max_patterns: int = None, save_every: int = None):
         self.patterns: Dict[str, Dict[str, Any]] = {}  # normalized_input -> {skill, params, count, last_confidence}
         self.data_dir = data_dir
-        
+        self.max_patterns = int(max_patterns or self.DEFAULT_MAX_PATTERNS)
+        self.save_every = max(1, int(save_every or self.DEFAULT_SAVE_EVERY))
+        self._writes_since_save = 0
         if data_dir:
             self._load_patterns()
     
@@ -70,7 +81,20 @@ class PatternTracker:
         self.patterns[key]["count"] += 1
         self.patterns[key]["total_confidence"] += confidence
         self.patterns[key]["last_seen"] = time.time()
-        self._save_patterns()
+        self._evict_if_needed()
+        self._writes_since_save += 1
+        if self._writes_since_save >= self.save_every:
+            self._writes_since_save = 0
+            self._save_patterns()
+
+    def _evict_if_needed(self) -> None:
+        """LRU-evict by `last_seen` once the cap is exceeded."""
+        if len(self.patterns) <= self.max_patterns:
+            return
+        excess = len(self.patterns) - self.max_patterns
+        ordered = sorted(self.patterns.items(), key=lambda kv: kv[1].get("last_seen", 0))
+        for k, _ in ordered[:excess]:
+            self.patterns.pop(k, None)
     
     def get_reflex_candidates(self, min_count: int = 3, min_avg_confidence: float = 0.7) -> List[Dict[str, Any]]:
         """Returns patterns that are stable enough to be promoted to REFLEX."""
@@ -316,11 +340,31 @@ class DeliberationLayer(CortexLayer):
         viki_logger.info("Layer 3 (Deliberation) starting Internal Debate...")
         intent = context.get('intent_type', 'conversation')
         sentiment = context.get('sentiment', 'neutral')
-        
+
         # 1. Get Model — now uses intent-recommended capabilities
         recommended_caps = context.get('recommended_capabilities', ['reasoning'])
         model = self.model_router.get_model(capabilities=recommended_caps)
         viki_logger.debug(f"Layer 3: Selected model '{model.model_name}' for capabilities {recommended_caps}")
+
+        # FAST STREAMING PATH (perceived-latency optimization).
+        # If the caller wired an event sink, the input is trivial / conversational,
+        # there are no prior tool results, and no image to attach, we skip the
+        # JSON-structured detour and stream tokens straight to the user. The
+        # accumulated text is then wrapped in a VIKIResponseLite so the rest of
+        # the cortex / controller pipeline behaves identically.
+        on_event = context.get("on_event")
+        action_results = context.get('action_results', []) or []
+        if (
+            on_event is not None
+            and not action_results
+            and getattr(model, "chat_stream", None) is not None
+        ):
+            from viki.core.utils.trivial_input import is_trivial_input
+            raw_input_for_check = context.get("raw_input", "")
+            if is_trivial_input(raw_input_for_check):
+                streamed = await self._streamed_conversational_reply(model, context, on_event)
+                if streamed is not None:
+                    return streamed
         
         # 2. Determine if we should use LITE schema (set by controller)
         use_lite = context.get('use_lite_schema', False)
@@ -482,7 +526,11 @@ class DeliberationLayer(CortexLayer):
         # Inject ensemble perspectives if any
         ensemble_block = ""
         if ensemble_trace and isinstance(ensemble_trace, dict):
-             e_perspectives = "\n".join([f"[{k.upper()}]: {v}" for k, v in ensemble_trace.items()])
+             e_perspectives = "\n".join([
+                 f"[{k.upper()}]: {v}"
+                 for k, v in ensemble_trace.items()
+                 if isinstance(v, str)
+             ])
              ensemble_block = (
                  f"\nINTERNAL SPECIALIST ENSEMBLE DEBATE (Incorporate these insights into your final synthesis):\n"
                  f"{e_perspectives}\n\n"
@@ -678,6 +726,82 @@ class DeliberationLayer(CortexLayer):
     def _judge(self, results: Any) -> VIKIResponse:
         return results
 
+    async def _streamed_conversational_reply(
+        self,
+        model,
+        context: Dict[str, Any],
+        on_event,
+    ) -> Optional[VIKIResponse]:
+        """
+        Perceived-latency fast path for trivial conversational turns.
+
+        Builds a minimal prompt (soul + working memory tail), streams tokens
+        from the model via `chat_stream`, forwards each chunk through
+        `on_event("partial", chunk)`, and returns a `VIKIResponse` whose
+        `final_response` is the accumulated text. Tool calls / structured JSON
+        are deliberately skipped — `is_trivial_input` already guarantees the
+        input isn't task-shaped.
+
+        Returns None if streaming was empty / errored, so the caller falls
+        back to the structured path.
+        """
+        try:
+            soul_prompt = self.soul_config.get(
+                "system_prompt",
+                "You are VIKI, a helpful and friendly AI assistant.",
+            )
+            raw_input = context.get("raw_input", "") or ""
+            history = context.get("conversation_history", []) or []
+            messages: List[Dict[str, str]] = [{"role": "system", "content": soul_prompt}]
+            for msg in history[-6:]:  # last few turns are plenty for smalltalk
+                if msg.get("role") in ("user", "assistant") and msg.get("content"):
+                    if msg.get("role") == "user" and msg.get("content") == raw_input:
+                        continue
+                    messages.append({"role": msg["role"], "content": msg["content"]})
+            messages.append({"role": "user", "content": raw_input})
+
+            chunks: List[str] = []
+            llm_start = time.time()
+            try:
+                if on_event:
+                    try:
+                        on_event("status", "STREAMING")
+                    except Exception:
+                        pass
+                async for chunk in model.chat_stream(messages, temperature=0.6):
+                    if not chunk:
+                        continue
+                    if isinstance(chunk, str) and chunk.startswith("Error"):
+                        viki_logger.warning(f"Streaming reported error: {chunk}")
+                        return None
+                    chunks.append(chunk)
+                    try:
+                        on_event("partial", chunk)
+                    except Exception as e:
+                        viki_logger.debug(f"on_event partial dispatch failed: {e}")
+            except Exception as e:
+                viki_logger.warning(f"Streaming fast-path errored: {e}")
+                return None
+
+            text = "".join(chunks).strip()
+            llm_latency = time.time() - llm_start
+            try:
+                model.record_performance(llm_latency, success=bool(text))
+            except Exception:
+                pass
+
+            if not text:
+                return None
+
+            lite = VIKIResponseLite(final_response=text, action=None, confidence=0.7)
+            resp = lite.to_full_response()
+            resp.intent_type = context.get("intent_type")
+            resp.sentiment = context.get("sentiment")
+            return resp
+        except Exception as e:
+            viki_logger.warning(f"_streamed_conversational_reply failed: {e}")
+            return None
+
 
 # --------------------------------------------------------------------------- #
 #  LAYER 4: REFLECTION                                                         #
@@ -862,7 +986,7 @@ class ConsciousnessStack:
                       url_context: str = "", use_lite_schema: bool = False,
                       world_context: str = "", signals_context: str = "",
                       evolution_log: str = "", action_results: list = None,
-                      use_ensemble: bool = True) -> VIKIResponse:
+                      use_ensemble: bool = True, on_event=None) -> VIKIResponse:
         start_time = time.time()
         data = user_input
         
@@ -889,6 +1013,7 @@ class ConsciousnessStack:
                     data["signals_context"] = signals_context
                     data["action_results"] = action_results or []
                     data["use_ensemble"] = use_ensemble
+                    data["on_event"] = on_event
                 elif isinstance(data, str):
                     data = {
                         "raw_input": data,
@@ -905,6 +1030,7 @@ class ConsciousnessStack:
                         "signals_context": signals_context,
                         "action_results": action_results or [],
                         "use_ensemble": use_ensemble,
+                        "on_event": on_event,
                     }
             
             data = await layer.process(data)

@@ -45,12 +45,77 @@ class _SuperAdminStage:
 
 
 class _AttachmentStage:
+    """
+    P1: pipe attachments through perception. Images run through the
+    `vision`/`look_at_screen` skill, audio runs through `whisper_skill`.
+    Text-like attachments are inlined verbatim. Captions / transcripts are
+    stitched into the user input so the deliberation layer sees them.
+    """
+
+    IMAGE_EXT = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff"}
+    AUDIO_EXT = {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".aac"}
+    TEXT_EXT = {".txt", ".md", ".rst", ".log", ".csv", ".json", ".yaml", ".yml"}
+
     async def run(self, ctrl: Any, ctx: RequestContext) -> Optional[str]:
-        if ctx.attachment_paths:
-            ctx.user_input = (
-                "Attached files: " + ", ".join(ctx.attachment_paths) + "\n\n" + ctx.user_input
-            )
+        if not ctx.attachment_paths:
+            return None
+        registry = getattr(ctrl, "skill_registry", None)
+        captions: List[str] = []
+        for path in ctx.attachment_paths:
+            try:
+                ext = self._extension(path)
+                if ext in self.IMAGE_EXT and registry is not None:
+                    captions.append(await self._caption_image(registry, path))
+                elif ext in self.AUDIO_EXT and registry is not None:
+                    captions.append(await self._transcribe_audio(registry, path))
+                elif ext in self.TEXT_EXT:
+                    captions.append(self._inline_text(path))
+                else:
+                    captions.append(f"[Attachment {path} (unrecognized type)]")
+            except Exception as e:
+                viki_logger.debug("attachment %s failed: %s", path, e)
+                captions.append(f"[Attachment {path}: error {e}]")
+        if captions:
+            ctx.user_input = "\n\n".join(captions) + "\n\n" + ctx.user_input
         return None
+
+    @staticmethod
+    def _extension(path: str) -> str:
+        import os
+        return os.path.splitext(path)[1].lower()
+
+    async def _caption_image(self, registry: Any, path: str) -> str:
+        skill = (
+            registry.get_skill("vision")
+            or registry.get_skill("look_at_screen")
+            or registry.get_skill("describe_image")
+        )
+        if skill is None:
+            return f"[Image {path} (no vision skill available)]"
+        try:
+            result = await skill.execute({"image_path": path, "path": path})
+        except TypeError:
+            result = await skill.execute({"image_path": path})
+        return f"[Image attachment: {path}]\n{str(result).strip()[:1500]}"
+
+    async def _transcribe_audio(self, registry: Any, path: str) -> str:
+        skill = registry.get_skill("whisper") or registry.get_skill("audio_transcribe")
+        if skill is None:
+            return f"[Audio {path} (no whisper skill available)]"
+        try:
+            result = await skill.execute({"audio_path": path, "path": path})
+        except TypeError:
+            result = await skill.execute({"audio_path": path})
+        return f"[Audio attachment: {path}]\nTranscript:\n{str(result).strip()[:2000]}"
+
+    @staticmethod
+    def _inline_text(path: str) -> str:
+        try:
+            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read(8000)
+        except Exception as e:
+            return f"[Text attachment {path}: {e}]"
+        return f"[Text attachment: {path}]\n{content}"
 
 
 class _GovernorStage:
