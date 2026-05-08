@@ -5,18 +5,19 @@
 
 **Polymorphic Intelligence | Recursive Governance | Autonomous Self-Forging**
 
-[![Version](https://img.shields.io/badge/version-7.3.1-blue.svg)](./CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-7.3.2-blue.svg)](./CHANGELOG.md)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Ollama](https://img.shields.io/badge/Ollama-Local_LLM-orange.svg)](https://ollama.ai)
-[![License: Proprietary](https://img.shields.io/badge/License-Proprietary-orange.svg)](./LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
+[![CI](https://github.com/toozuuu/viki/actions/workflows/ci.yml/badge.svg)](https://github.com/toozuuu/viki/actions/workflows/ci.yml)
 
 ---
 
-**VIKI** is a **proprietary** autonomous AI agent and **Sovereign Digital Intelligence** for absolute privacy and **local-first** operation. Run with **Ollama**, **Phi-3**, **Mistral**, or **DeepSeek**—no cloud required. Uses the **Orythix Cognitive Architecture** for deep reasoning, multi-tool orchestration, and recursive self-improvement without leaking your data.
+**VIKI** is an open-source autonomous AI agent and **Sovereign Digital Intelligence** for absolute privacy and **local-first** operation. Run with **Ollama**, **Phi-3**, **Mistral**, or **DeepSeek**—no cloud required. Uses the **Orythix Cognitive Architecture** for deep reasoning, multi-tool orchestration, and recursive self-improvement without leaking your data.
 
-[Features](#core-pillars-v730) • [Architecture](#technical-architecture) • [Quick Start](#quick-start) • [Security](#security--ethics)
+[Features](#core-pillars-v732) • [Architecture](#technical-architecture) • [Quick Start](#quick-start) • [Security](#security--ethics) • [Contributing](./CONTRIBUTING.md)
 
-**Pre-release:** VIKI is in active development. We welcome feedback and bug reports via [GitHub Issues](https://github.com/toozuuu/viki/issues). Set `VIKI_API_KEY` and see [SECURITY_SETUP.md](viki/SECURITY_SETUP.md) before exposing the API.
+**Pre-release:** VIKI is in active development. We welcome feedback and bug reports via [GitHub Issues](https://github.com/toozuuu/viki/issues) and questions via [GitHub Discussions](https://github.com/toozuuu/viki/discussions). Set `VIKI_API_KEY` and see [SECURITY_SETUP.md](viki/SECURITY_SETUP.md) before exposing the API.
 
 </div>
 
@@ -26,7 +27,7 @@
 
 VIKI is a **Sovereign Digital Intelligence** designed to be more than just an assistant—she is a partner that evolves alongside your workflow. Built on a foundation of **local-first privacy** and **deterministic governance**, VIKI balances the raw power of LLMs with the safety of a modular, capability-aware architecture.
 
-### Core Pillars (v7.3.1)
+### Core Pillars (v7.3.2)
 
 *   **Intelligence Governance**: Powered by the **Judgment Engine**. Every directive is filtered through a cognitive triage (Reflex, Shallow, Deep) to ensure the right model is used for the right task while maintaining absolute safety.
 *   **The Neural Forge**: A integrated pipeline in the core kernel. VIKI extracts "Wisdom" from her SQLite-backed semantic memory and automatically forges new, project-aware model variants (e.g., `viki-evolved`) based on **Phi-3**, **Mistral**, and **DeepSeek-R1**.
@@ -56,6 +57,25 @@ One codebase, multiple specialized “VIKIs”. Switch by setting `system.person
 
 Example: `VIKI_PERSONA=dev python viki/main.py` runs VIKI Dev with only dev-focused skills.
 
+### Engineering playbooks
+
+VIKI now includes 20 production engineering workflows grouped across Define, Plan, Build, Verify, Review, and Ship, sourced from [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills) under the MIT license.
+It also includes a second in-house wave of 20 original playbooks spanning Architecture, Reliability, Data, Platform, AI/Agents, and Crypto engineering domains.
+
+- Define: `idea_refine`, `spec_driven_development`
+- Plan: `planning_and_task_breakdown`
+- Build: `incremental_implementation`, `test_driven_development`, `context_engineering`, `source_driven_development`, `frontend_ui_engineering`, `api_and_interface_design`
+- Verify: `browser_testing_with_devtools`, `debugging_and_error_recovery`
+- Review: `code_review_and_quality`, `code_simplification`, `security_and_hardening`, `performance_optimization`
+- Ship: `git_workflow_and_versioning`, `ci_cd_and_automation`, `deprecation_and_migration`, `documentation_and_adrs`, `shipping_and_launch`
+
+Example skill invocations:
+
+- `engineering_playbook`:
+  `{"playbook":"spec_driven_development","section":"Process","format":"summary"}`
+- `coding_workflow`:
+  `{"phase":"build","task":"Add repository-level code search skill","context":"Files: viki/skills/builtins/code_search_skill.py, viki/tests/test_code_search.py"}`
+
 ### Task delivery and comparison (more than Manus)
 
 Like universal agents that deliver finished work (e.g. [Manus](https://www.manusai.info/)), VIKI delivers complete artifacts, not just suggestions:
@@ -81,11 +101,65 @@ VIKI is no longer confined to a single terminal. She is a multi-platform autonom
 
 VIKI operates on a **5-Layer Consciousness Stack**:
 
-1.  **Perception**: Ingests multi-modal inputs (Text, Visuals, Signals).
+1.  **Perception**: Ingests multi-modal inputs (Text, Vision via the `vision` skill, Audio via Whisper). Image/audio attachments are now piped through `_AttachmentStage` in `viki/core/request_pipeline.py`.
 2.  **Interpretation**: Judgment Engine classifies intent and risk.
 3.  **Deliberation**: The Cortex reasons across specialized local models.
 4.  **Reflection**: Evaluates the plan against safety and logic constraints.
-5.  **Execution**: Capability-gated skill deployment via the Controller.
+5.  **Execution**: Capability-gated skill deployment via the Controller, with optional Docker sandboxing for `python_interpreter`/`shell` (`viki/core/sandbox.py`).
+
+### Running on low-end PCs
+
+VIKI is designed to stay responsive on machines with 4 GB RAM and 2–4 cores. Two knobs do most of the work:
+
+1. **Backend low-resource mode** — set `system.low_resource_mode: true` in `viki/config/settings.yaml` (or export `VIKI_LOW_RESOURCE=1`). This:
+   - lazy-loads all heavy skills (vision, browser, whisper, pdf, image-gen, computer-use, plan-edit, …) so they only import on first use,
+   - skips the autonomous startup pulse, wellness pulse, dream cycle, reflector, watchdog, and continuous-learning loop,
+   - keeps the Cortex `PatternTracker` capped (`VIKI_PATTERN_TRACKER_MAX`, default 5000) with debounced disk writes.
+
+2. **UI lite mode** — append `?lite=1` to the dashboard URL or set `localStorage.viki_lite = '1'`. The 3D hologram view is replaced with a 60-line CSS orb, and `three.js` / `drei` are dynamically imported instead of bundled into the initial paint. Lite mode is also auto-enabled when the browser reports `navigator.hardwareConcurrency <= 4` or `navigator.deviceMemory <= 4 GB`.
+
+You can also tune individual cadences:
+
+```yaml
+proactive:
+  wellness_interval_s: 3600        # 1 h instead of 30 min
+  wellness_idle_threshold_s: 14400 # 4 h idle before any prompt
+
+forge:
+  continuous_learning_warmup_s: 1800     # 30 min
+  continuous_learning_interval_s: 43200  # 12 h
+```
+
+Other small wins for cold boot: leave `system.local_llm_only: true` (skip cloud DNS lookups), keep `system.security_scan_requests: false`, and turn `system.use_ensemble` off if you want first-token latency over depth-of-deliberation.
+
+#### Why is the first response slow?
+
+The very first turn after boot pays a stack of one-time costs that subsequent turns do not. If you typed "hello viki" and waited 15+ seconds, the cause is almost certainly one of these:
+
+1. **Ollama cold-loads the model on the first call.** A 4 GB Q4 model can take 5–15 s to read off disk. To shave this, leave the new flag `system.prewarm_default_model: true` on (default) — VIKI fires a 1-token ping at boot so the model is already resident when you hit Enter. Disabled automatically in `low_resource_mode` and `air_gap`.
+2. **`Runtime health: degraded`** in the welcome banner. If a configured model is missing, VIKI silently falls back to a slower one. The banner now prints the unavailable model name and a concrete `ollama pull <model>` hint — run it once and the warning goes away.
+3. **First sentence-transformer load**. The encoder weights (~150 MB) used by lessons / narrative recall are now lazy-loaded on first non-trivial query. Greetings, acks, and farewells skip them entirely thanks to the reflex layer.
+4. **Governor safety check**. The ethical governor still issues a semantic-veto LLM call on every input longer than ~5 chars; that is intentional and unchanged.
+5. **Token streaming**. For trivial conversational turns, deliberation now streams tokens through `chat_stream` so the first character lands in ~700 ms even though total wall-clock is unchanged. Set `system.use_ensemble: false` if you want the leanest possible deliberation prompt.
+6. **Long idle re-load**. Ollama unloads the model from RAM after `OLLAMA_KEEP_ALIVE` (default 5 min). The first request after a long idle pays the cold-load again. Either bump `OLLAMA_KEEP_ALIVE=24h` in your environment, or just send any cheap message (a greeting hits the reflex layer and is free) before the real question.
+
+If you really want the absolute lowest latency, combine: `low_resource_mode: true`, `use_ensemble: false`, `prewarm_default_model: true`, and a small Ollama model (`qwen2.5:1.5b` or similar).
+
+### Frontier wiring (2026)
+
+The pillars below are now actually wired (not just "Phase X complete" labels):
+
+- **MCP integration** loaded at boot (`viki/integrations/mcp_client.py`), exposed at `/api/mcp/servers`, configured via `viki/config/mcp_servers.yaml`.
+- **Real SSE chat streaming** at `/api/chat/stream`, consumed incrementally by `ui/src/App.jsx` with a stop button.
+- **WebSocket `/ws`** for live mission/sub-agent events and operator interrupts (`flask-sock`).
+- **LSP bridge**: hover, references, definition, and `publishDiagnostics` against real `pyright`/`typescript-language-server`.
+- **Computer-use grounding**: confidence-gated, with an OmniParser-V2 ONNX adapter (set `VIKI_OMNIPARSER_ONNX`).
+- **Best-of-N worktree runner** (`viki/core/worktree_runner.py`) for isolated parallel attempts.
+- **Capability Index (forge)**: bootstrap CIs, min-task thresholds, SHA256 provenance hashes; operator promote/rollback at `/api/forge/promote` and `/api/forge/rollback`.
+- **Persistent traces** with parent IDs, surfaced as a Gantt panel in the dashboard.
+- **Mission CRUD + sub-agent tree** in the dashboard (`/api/missions`, `/api/subagents`, `/api/missions/<id>/graph`, `/api/artifacts/<mission_id>`).
+- **Slash commands**: `/restore`, `/undo` (rolls back the most recent checkpoint).
+- **Bio sensing is now experimental by default**; opt into a real DeepFace path with `system.bio_backend: deepface` (or `VIKI_BIO_BACKEND=deepface`).
 
 ### Directory Structure
 
@@ -236,9 +310,18 @@ Unlike static bots, VIKI grows. Every 10 stable lessons learned, she initiates a
 
 ## Keywords and topics
 
-**Local AI agent** · **Autonomous AI** · **Ollama** · **LLM agent** · **Privacy-first AI** · **Sovereign AI** · **Licensed AI assistant** · **ReAct agent** · **Capability gating** · **Neural Forge** · **Self-improving AI** · **CLI AI** · **Python AI agent** · **Orythix** · **Local LLM** · **Air-gap AI** · **Tool-use agent** · **Reflex reasoning** · **Multi-model routing**
+**Local AI agent** · **Autonomous AI** · **Ollama** · **LLM agent** · **Privacy-first AI** · **Sovereign AI** · **Open-source AI assistant** · **ReAct agent** · **Capability gating** · **Neural Forge** · **Self-improving AI** · **CLI AI** · **Python AI agent** · **Orythix** · **Local LLM** · **Air-gap AI** · **Tool-use agent** · **Reflex reasoning** · **Multi-model routing**
 
 ---
 
-**VIKI: Virtual Intelligence, Real Evolution.**  
-Designed by Orythix001. 2026.
+## License
+
+VIKI is released under the [Apache License 2.0](./LICENSE). See [NOTICE](./NOTICE) for third-party attributions.
+
+## Contributing
+
+We welcome pull requests, bug reports, and feature ideas. Please read [CONTRIBUTING.md](./CONTRIBUTING.md) and our [Code of Conduct](./CODE_OF_CONDUCT.md) before opening a PR.
+
+---
+
+**VIKI: Virtual Intelligence, Real Evolution.**

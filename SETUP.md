@@ -1,4 +1,4 @@
-# Setting Up VIKI (v7.3.0 Sovereign)
+# Setting Up VIKI (v7.3.2 Sovereign)
 
 ## 📦 Prerequisites
 
@@ -14,7 +14,7 @@
 
 1.  **Clone the Repository**:
     ```powershell
-    git clone https://github.com/yourusername/viki.git
+    git clone https://github.com/toozuuu/viki.git
     cd viki
     ```
 

@@ -37,6 +37,8 @@ Desktop.ini
 viki/data/
 data/
 logs/
+workspace/
+FOCUS/
 *.log
 *.db
 viki/Modelfile.custom
@@ -44,6 +46,15 @@ viki/Modelfile.viki_evolved
 viki/Modelfile.bak
 test_result.txt
 viki/config/candidate_prompt.yaml
+
+# Eval / benchmark output
+data/eval_results/
+data/eval_fixtures/cache/
+viki/tests/viki_scorecard.json
+
+# Local OS/editor artifacts
+.cache/
+.tmp/
 
 # Node / UI (when present at root)
 node_modules/

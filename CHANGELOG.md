@@ -1,6 +1,38 @@
 # Changelog
 
 All notable changes to the VIKI Sovereign Intelligence project will be documented in this file.
+This project adheres to [Semantic Versioning](https://semver.org/) and the
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
+
+## [7.3.2] - 2026-05-08 (Public release prep)
+
+### Added
+- **Apache 2.0 license**: replaces the previous proprietary license; added `NOTICE` file with third-party attributions (engineering playbooks from `addyosmani/agent-skills`, MIT).
+- **`pyproject.toml` metadata**: explicit `license`, `authors`, and project URLs (Homepage, Changelog, Issues).
+- **GitHub templates**: `PULL_REQUEST_TEMPLATE.md` and `.github/ISSUE_TEMPLATE/config.yml` (private security advisories + Discussions surfaced from the new-issue page); refreshed `bug_report.md` to ask for VIKI-specific environment info.
+- **Engineering playbooks & coding workflow**: 20 production playbooks under `viki/skills/playbooks/engineering/`, plus `engineering_playbook` and `coding_workflow` skills exposed as lazy-loaded builtins.
+- **Eval harness**: `scripts/evals/{harness,run_all,humaneval_plus,livecodebench,gaia,swe_bench_verified,agentbench,datasets}.py` with execution-graded suites and a `Benchmarks` GitHub Actions workflow (PR fast-evals + weekly full run).
+- **Frontier wiring**: MCP integration (`viki/integrations/mcp_client.py` + `viki/config/mcp_servers.yaml`), real SSE streaming endpoint, WebSocket `/ws` for mission/sub-agent events, LSP bridge for `pyright` / `typescript-language-server`, OmniParser-V2 ONNX adapter for computer-use grounding, best-of-N worktree runner, planner / sub-agent / mission-graph modules, capability index with SHA-256 provenance, persistent traces, vector memory, sandbox, patch-verify, self-healer, preference forge, dynamic skills (AWS, Kubernetes, SQL).
+- **Coding persona**: `viki/config/personas/coding.yaml` for a coding-focused subset of skills.
+
+### Changed
+- **Branding & contacts**: documentation now uses neutral "VIKI Project Contributors" framing; contact channels point to GitHub Discussions and private security advisories instead of personal email.
+- **README**: updated badge to Apache 2.0 license, refreshed CI badge, restructured License/Contributing footer.
+- **`.gitignore`**: ignore `workspace/`, `FOCUS/`, `data/eval_results/`, `data/eval_fixtures/cache/`.
+- **CONTRIBUTING.md**: full rewrite with development setup, PR checklist, conventional-commits guidance, lint/test commands.
+
+### Security
+- **Rotated default `VIKI_API_KEY`**: the historical `REDACTED-OLD-KEY-ROTATE-VIKI_API_KEY` placeholder is invalid. The repository's git history was rewritten to scrub the string; every operator must generate their own key with `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
+- **`SECURITY.md`**: now documents the GitHub private-vulnerability-reporting flow with response SLAs, and the dead-default-key policy.
+- **Resolved merge conflict** in `viki/core/controller.py` (now registers the new `EngineeringPlaybookSkill` and `CodingWorkflowSkill` lazy proxies).
+
+### Migration
+- Operators upgrading from 7.3.1 must:
+  1. Generate fresh `VIKI_API_KEY` and `VIKI_ADMIN_SECRET` and update their `.env`.
+  2. Re-fetch their fork (history was rewritten — `git fetch --all && git reset --hard origin/main`).
+  3. If consuming the package metadata, note the license is now Apache-2.0.
+
+---
 
 ## [7.3.1] - 2026-02-17 (First public pre-release)
 

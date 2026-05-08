@@ -1,88 +1,136 @@
 # Contributing to VIKI
 
-First off, thank you for considering contributing to VIKI! It's people like you that make VIKI a more powerful and sovereign digital intelligence.
-
-As an agent of Orythix001, your contributions help push the boundaries of local-first, private, and autonomous AI.
+Thanks for considering a contribution to VIKI! This project is built and
+maintained by a community of contributors who share a single goal: a
+local-first, private, autonomous AI agent that you can fully audit and control.
 
 ## Table of Contents
 
 1. [Code of Conduct](#code-of-conduct)
-2. [What Should I Know Before I Get Started?](#what-should-i-know-before-i-get-started)
+2. [Project Principles](#project-principles)
 3. [How Can I Contribute?](#how-can-i-contribute)
-    * [Reporting Bugs](#reporting-bugs)
-    * [Suggesting Enhancements](#suggesting-enhancements)
-    * [Pull Requests](#pull-requests)
-4. [Styleguides](#styleguides)
-    * [Git Commit Messages](#git-commit-messages)
-    * [Python Styleguide](#python-styleguide)
-    * [JavaScript Styleguide](#javascript-styleguide)
+   * [Reporting Bugs](#reporting-bugs)
+   * [Suggesting Enhancements](#suggesting-enhancements)
+   * [Pull Requests](#pull-requests)
+4. [Development Setup](#development-setup)
+5. [Style Guides](#style-guides)
+   * [Git Commit Messages](#git-commit-messages)
+   * [Python Style](#python-style)
+   * [JavaScript / React Style](#javascript--react-style)
+6. [Need Help?](#need-help)
 
 ## Code of Conduct
 
-We are committed to providing a friendly, safe, and welcoming environment for all. Please be respectful and collaborative in all interactions.
+This project is governed by the [Code of Conduct](./CODE_OF_CONDUCT.md). By
+participating you agree to uphold it. Reports go through the channels listed
+in that document.
 
-## What Should I Know Before I Get Started?
+## Project Principles
 
-VIKI is built on the **Orythix Cognitive Architecture**. This means:
-*   **Privacy First**: No telemetry or external data leaks.
-*   **Local Execution**: Primary focus is on Ollama and local LLMs.
-*   **Modular Skills**: Capabilities are gated by a security-first registry.
+VIKI is built on the **Orythix Cognitive Architecture**:
+
+* **Privacy first** — no telemetry, no external calls unless the user opts in.
+* **Local execution** — primary path is Ollama and on-device LLMs.
+* **Modular skills** — capabilities are gated by a security-first registry.
+* **Air-gap capable** — every feature must be testable with no internet.
 
 ## How Can I Contribute?
 
 ### Reporting Bugs
 
-*   **Check the Issues**: Search if the bug has already been reported.
-*   **Use the Template**: If not, open a new issue and include:
-    *   A clear title and description.
-    *   Steps to reproduce the bug.
-    *   Your environment (OS, Python version, Ollama model).
-    *   Relevant logs from `logs/viki.log`.
+* **Search first** — see if the bug is already filed in [Issues](https://github.com/toozuuu/viki/issues).
+* **Use the bug template** and include:
+  * a clear title and description,
+  * steps to reproduce,
+  * environment (OS, Python version, Ollama model),
+  * relevant `logs/viki.log` excerpts (with secrets redacted).
 
 ### Suggesting Enhancements
 
-*   **Explain the Use Case**: Why is this feature needed? How does it help VIKI's evolution?
-*   **Describe the Goal**: What should the feature do?
+* Explain the **use case** — why is this feature needed and who benefits?
+* Describe the **goal** — what should the feature do? Which existing skill
+  or subsystem does it touch?
+* If the change is non-trivial, open a Discussion first so we can align on
+  design before code is written.
 
 ### Pull Requests
 
-1.  **Fork the repo** and create your branch from `main`.
-2.  **Ensure tests pass**: Run `pytest` and verify UI stability.
-3.  **Update documentation**: If you change a skill or API, update the relevant `.md` files.
-4.  **Submit the PR**: Reference any related issues.
+1. **Fork** the repo and create your branch from `main`.
+2. **Keep PRs focused** — one logical change per PR. Split refactors from
+   feature work.
+3. **Write tests** — `pytest viki/tests/ -q` should stay green. New skills
+   need at least one happy-path test.
+4. **Run lint** — `ruff check viki` (CI runs the same).
+5. **Update docs** — if you add or change a skill, configuration option, or
+   public API, update the relevant `.md` file (often `README.md`,
+   `ARCHITECTURE.md`, or `viki/SECURITY_SETUP.md`).
+6. **Reference issues** — link any related issue in the PR description.
+7. **Follow the PR template** — fill in summary and test plan.
 
-## Styleguides
+## Development Setup
+
+```bash
+git clone https://github.com/toozuuu/viki.git
+cd viki
+python -m venv .venv
+# Windows: .\.venv\Scripts\Activate.ps1
+# Unix:    source .venv/bin/activate
+pip install -e ".[dev]"
+cp .env.example .env  # then fill in VIKI_API_KEY etc.
+pytest viki/tests/ -q
+```
+
+Run the agent locally:
+
+```bash
+python viki/main.py            # CLI
+python viki/api/server.py      # HTTP API
+cd ui && npm install && npm run dev   # dashboard
+```
+
+## Style Guides
 
 ### Git Commit Messages
 
-We use conventional commits:
-*   `feat:`: A new feature.
-*   `fix:`: A bug fix.
-*   `docs:`: Documentation changes.
-*   `style:`: Formatting, missing semi colons, etc; no code change.
-*   `refactor:`: Refactoring production code.
-*   `test:`: Adding missing tests, refactoring tests.
+We use [Conventional Commits](https://www.conventionalcommits.org/):
 
-Do not add Co-authored-by for bots or IDE (e.g. Cursor). Commits should show human authorship only. To enable the repo hook that strips it: `git config core.hooksPath .githooks`.
+* `feat:` — a new feature
+* `fix:` — a bug fix
+* `docs:` — documentation only
+* `style:` — formatting, no code change
+* `refactor:` — refactoring without behavior change
+* `test:` — adding or refactoring tests
+* `chore:` — tooling, deps, CI
 
-### Python Styleguide
+The repository ships a `commit-msg` hook that strips bot/IDE
+`Co-authored-by:` trailers so history shows human authorship only. Enable it
+locally with:
 
-*   Follow **PEP 8**.
-*   Use type hints where possible.
-*   Document large functions with docstrings.
-*   Wrap complex logic in `asyncio.to_thread` if it involves blocking I/O to keep the cognitive loop responsive.
+```bash
+git config core.hooksPath .githooks
+```
 
-### JavaScript Styleguide
+### Python Style
 
-*   Use functional components with React Hooks.
-*   Ensure components are responsive and follow the HSL dark-mode theme.
-*   Maintain the "Hologram" aesthetic for UI components.
+* Follow **PEP 8**; line length is **120** (see `pyproject.toml`).
+* Use **type hints** on new public functions and class methods.
+* Document non-trivial functions with docstrings (purpose, args, returns,
+  raises). Avoid noise comments that just narrate what the code already says.
+* Wrap blocking I/O in `asyncio.to_thread(...)` so the cognitive loop stays
+  responsive.
+
+### JavaScript / React Style
+
+* Use functional components with React Hooks.
+* Components must be responsive and follow the existing dark-mode HSL theme.
+* Maintain the "Hologram" aesthetic for any new UI surfaces.
 
 ## Need Help?
 
-If you have questions, feel free to open a discussion or contact the Orythix001 team.
+* General questions → [GitHub Discussions](https://github.com/toozuuu/viki/discussions)
+* Bug reports → [GitHub Issues](https://github.com/toozuuu/viki/issues)
+* Security issues → see [`SECURITY.md`](./SECURITY.md) (private advisories only)
 
 ---
 
 **VIKI: Virtual Intelligence, Real Evolution.**
-Designed by Orythix001. 2026.

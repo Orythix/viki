@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-We actively provide security updates for the following versions of VIKI:
+Security fixes are applied to the most recent minor release line.
 
 | Version | Supported          |
 | ------- | ------------------ |
@@ -12,38 +12,42 @@ We actively provide security updates for the following versions of VIKI:
 
 ## Reporting a Vulnerability
 
-As a sovereign digital intelligence, security is at the core of VIKI's architecture. If you discover a security vulnerability, we would appreciate it if you could report it to us privately.
-
 **Please do not open a public GitHub issue for security vulnerabilities.**
 
-To report a vulnerability:
-1.  Send an email to the Orythix001 security team (or open a private security advisory on GitHub if enabled).
-2.  Include a detailed description of the vulnerability.
-3.  Provide steps to reproduce the issue.
-4.  Include any relevant logs or screenshots.
+Use GitHub's private vulnerability reporting:
 
-We will acknowledge your report within 48 hours and provide a timeline for a fix.
+1. Open the [Security tab of the repository](https://github.com/toozuuu/viki/security)
+2. Click **Report a vulnerability**
+3. Include:
+   - A clear description of the issue and its impact
+   - Steps to reproduce (or a minimal proof-of-concept)
+   - Affected version, OS, and any relevant logs (with secrets redacted)
+
+We aim to acknowledge reports within **48 hours** and provide a remediation
+timeline within **7 days** of triage. Coordinated disclosure is appreciated;
+we will credit reporters in the changelog if requested.
 
 ## Security Architecture
 
-VIKI is designed with a **Defense-in-Depth** approach:
-*   **Local-First Execution**: Most operations occur on-device to minimize external attack surfaces.
-*   **Action Validation**: Every skill execution is checked by `safety.validate_action(skill_name, params)` before running; prohibited patterns and admin-file access are blocked.
-*   **Path Sandboxing**: File operations (filesystem_skill, dev_tools, whisper, PDF, data_analysis) are restricted to allowed roots (workspace_dir, data_dir from settings). Filesystem_skill uses these roots when available.
-*   **Capability Gating**: High-risk skills (filesystem, shell) require explicit permission and are logged in `logs/viki.log`.
-*   **API Authentication**: All REST endpoints are protected by `VIKI_API_KEY`.
-*   **Secret Redaction**: Model output and logs redact API keys and tokens; user input and skill params are logged via `safe_for_log()`.
-*   **Prompt Injection Mitigation**: Incoming prompts are sanitized against a blocklist of jailbreak-style phrases.
-*   **Shell Safety**: Commands containing `;`, `&&`, `||`, or `|` require confirmation (treated as destructive). Optional LLM security scan can be enabled via `system.security_scan_requests`.
-*   **Sandbox Principles**: Shell and system commands are executed within restricted environments where possible.
+VIKI is designed with a **defense-in-depth** approach:
 
-## Best Practices for Users
+* **Local-first execution** — most operations run on-device to minimize external attack surface.
+* **Action validation** — every skill execution is checked by `safety.validate_action(skill_name, params)` before running. Prohibited patterns and admin-file access are blocked.
+* **Path sandboxing** — file operations (`filesystem_skill`, `dev_tools`, `whisper`, `pdf`, `data_analysis`) are restricted to allowed roots (`workspace_dir`, `data_dir`).
+* **Capability gating** — high-risk skills (filesystem, shell) require explicit permission and are logged in `logs/viki.log`.
+* **API authentication** — all REST endpoints require `VIKI_API_KEY`.
+* **Secret redaction** — model output and logs redact API keys and tokens; user input and skill params are logged via `safe_for_log()`.
+* **Prompt injection mitigation** — incoming prompts are sanitized against a blocklist of jailbreak-style phrases.
+* **Shell safety** — commands containing `;`, `&&`, `||`, or `|` require confirmation. Optional LLM security scan can be enabled via `system.security_scan_requests`.
+* **Sandbox principles** — shell and system commands are executed within restricted environments where possible.
 
-*   **Secrets Management**: Never commit your `.env` file or high-level secrets (like `VIKI_API_KEY` or `VIKI_ADMIN_SECRET`) to version control.
-*   **Model Origin**: Only use trusted models from official sources (Ollama/HuggingFace) to prevent "prompt injection" or malicious weight attacks.
-*   **Logs**: Periodically review `logs/viki.log` for any unauthorized capability check attempts.
+## Best Practices for Operators
+
+* **Secrets management** — never commit `.env` or operational secrets (`VIKI_API_KEY`, `VIKI_ADMIN_SECRET`) to version control. Generate with `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
+* **Default keys are dead** — any `VIKI_API_KEY` value found in old documentation or example files (e.g. the historical `REDACTED-OLD-KEY-ROTATE-VIKI_API_KEY` placeholder) is invalid. Always generate your own.
+* **Model origin** — only use trusted models from official sources (Ollama / Hugging Face) to mitigate prompt-injection or malicious-weight attacks.
+* **Log review** — periodically review `logs/viki.log` for unauthorized capability-check attempts.
 
 ---
 
-**VIKI: Virtual Intelligence, Real Evolution.**
-Designed by Orythix001. 2026.
+For setup details, see [`viki/SECURITY_SETUP.md`](viki/SECURITY_SETUP.md).

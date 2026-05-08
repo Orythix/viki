@@ -1,0 +1,34 @@
+VIKI — Sovereign Digital Intelligence
+Copyright 2026 VIKI Project Contributors
+
+This product is licensed under the Apache License, Version 2.0
+(the "License"); you may not use this product except in compliance
+with the License. A copy of the License is provided in the file
+"LICENSE" in the root of this repository, and is also available at
+http://www.apache.org/licenses/LICENSE-2.0
+
+================================================================================
+Third-Party Components
+================================================================================
+
+This product bundles material from the following third-party projects.
+The corresponding licenses are reproduced verbatim and apply only to those
+components, not to VIKI as a whole.
+
+1. addyosmani/agent-skills (engineering playbooks)
+   Source:  https://github.com/addyosmani/agent-skills
+   Files:   viki/skills/playbooks/**
+   License: MIT — see viki/skills/playbooks/LICENSE-AGENT-SKILLS
+
+================================================================================
+Runtime Dependencies
+================================================================================
+
+VIKI depends on a number of open-source Python and JavaScript packages
+declared in pyproject.toml and ui/package.json. Each dependency is licensed
+under its own terms by its respective copyright holders. Run
+
+    pip install -e ".[dev]" && pip-licenses
+
+(or your preferred SBOM tool) to enumerate dependency licenses for any
+distribution you build.

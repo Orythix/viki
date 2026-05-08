@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions & discussion
+    url: https://github.com/toozuuu/viki/discussions
+    about: Ask how to use VIKI, share configurations, or propose ideas before opening an issue.
+  - name: Security vulnerability
+    url: https://github.com/toozuuu/viki/security/advisories/new
+    about: Report a vulnerability privately. Do NOT open a public issue for security reports.
