@@ -57,6 +57,7 @@ Browser: typically `http://localhost:5173`. The UI must authenticate: set `VITE_
 | `VIKI_AIR_GAP` | `1` / `true` / `yes` — only **local** Ollama models in routing |
 | `VIKI_LOCAL_LLM_ONLY` | `true` / `false` — when `true`, OpenAI/Anthropic profiles are never selected |
 | `VIKI_FORGE_BASE_OLLAMA_MODEL` | Base Ollama tag for Neural Forge Modelfile `FROM` line |
+| `VIKI_FORGE_OUTPUT_OLLAMA_MODEL` | Output Ollama tag for prompt-bake / `internal_forge` (`ollama create`; default **`viki-neural-forge`** if unset) |
 | `VIKI_EMBED_GPU` | `1` / `true` — run sentence-transformers encoder on CUDA when available |
 | `VIKI_UNSLOTH_RUN_TRAIN` | `1` / `true` — allow GPU LoRA training inside `internal_forge` (requires Unsloth stack) |
 | `VIKI_GIT_CONTEXT` | `1` / `true` — append **git snapshot** (branch, status, recent commits) from `workspace_dir` to deliberation context |
@@ -73,7 +74,7 @@ Browser: typically `http://localhost:5173`. The UI must authenticate: set `VITE_
 
 | File | What to change |
 |------|----------------|
-| `viki/config/settings.yaml` | `system.*`, `memory.short_term_limit` (10–50), `system.use_ensemble`, `system.session_usage_log`, `system.forge_base_ollama_model`, `endpoint_guard.*`, timeouts |
+| `viki/config/settings.yaml` | `system.*`, `memory.short_term_limit` (10–50), `system.use_ensemble`, `system.session_usage_log`, `system.forge_base_ollama_model`, `system.forge_output_ollama_tag`, `endpoint_guard.*`, timeouts |
 | `viki/config/models.yaml` | `models.default` profile name; profile `model_name` must match `ollama list` exactly |
 | `.env` (optional) | `VIKI_API_KEY`, `VIKI_ADMIN_SECRET`, cloud keys if `local_llm_only: false` |
 
@@ -181,7 +182,7 @@ Use these levers together; they trade **latency** for **depth** where noted.
 | Stronger reasoning | In `viki/config/models.yaml`, set `models.default` to your **best** pulled Ollama tag; add cloud profiles only with real keys and `local_llm_only: false` if appropriate. |
 | Deeper multi-step “debate” | Keep `system.use_ensemble: true` in `viki/config/settings.yaml`. For **maximum speed**, set `use_ensemble: false`. |
 | Longer conversational context | Raise `memory.short_term_limit` (allowed range **10–50** after load). |
-| Baked-in lesson knowledge | Accumulate reinforced lessons, then run skill **`internal_forge`** (builds Ollama `viki-born-again` from `Modelfile.viki_evolved`). See [SETUP.md](SETUP.md) evolution notes. |
+| Baked-in lesson knowledge | Accumulate reinforced lessons, then run skill **`internal_forge`** (builds Ollama `viki-neural-forge` from `Modelfile.viki_evolved` by default; override via `forge_output_ollama_tag` / `VIKI_FORGE_OUTPUT_OLLAMA_MODEL`). See [SETUP.md](SETUP.md) evolution notes. |
 | GPU LoRA (optional) | CUDA + Unsloth stack; set `VIKI_UNSLOTH_RUN_TRAIN=1` and use forge `strategy: lora` or `auto` when Unsloth is available. |
 | Faster embeddings | Set `VIKI_EMBED_GPU=true` if CUDA is available (shared MiniLM encoder). |
 | Right tool surface | Set `VIKI_PERSONA` / `system.persona` (`dev`, `research`, etc.) so the skill registry matches the workload. |
@@ -210,7 +211,7 @@ Disable internet training by **`VIKI_AIR_GAP=1`** (no outbound search).
 The **base Ollama GGUF** for a given tag has an essentially **fixed on-disk size** (for example ~9 GiB for a quantised 7B-class model). VIKI does **not** automatically swell that blob. What grows is:
 
 - the **SQLite lesson store** (facts, including web snippets), and  
-- the **Modelfile `SYSTEM` block** when you **prompt-bake** (`internal_forge` / `build_viki_model.py`), which re-embeds consolidated lessons into the derived image `viki-born-again`.
+- the **Modelfile `SYSTEM` block** when you **prompt-bake** (`internal_forge` / `build_viki_model.py`), which re-embeds consolidated lessons into the derived image (default tag `viki-neural-forge`).
 
 Optional **LoRA adapters** add a separate small adapter directory; moving to a **larger base model** (new `ollama pull`) is a manual upgrade.
 

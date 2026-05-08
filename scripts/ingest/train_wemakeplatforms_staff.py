@@ -16,6 +16,7 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if REPO_ROOT not in sys.path:
     sys.path.append(REPO_ROOT)
 
+from viki.core.forge_config import DEFAULT_FORGE_OUTPUT_OLLAMA_TAG
 from viki.core.learning import LearningModule
 from viki.core.llm import LocalLLM
 from viki.skills.builtins.research_skill import ResearchSkill
@@ -75,7 +76,7 @@ def _build_components(settings_path: str):
     local_config = {
         "type": provider.get("type", "local"),
         "base_url": provider.get("base_url", "http://127.0.0.1:11434"),
-        "model_name": profile.get("model_name", "viki-born-again"),
+        "model_name": profile.get("model_name", DEFAULT_FORGE_OUTPUT_OLLAMA_TAG),
     }
 
     learning = LearningModule(data_dir=data_dir)

@@ -15,7 +15,7 @@ Strategies:
     prompt_bake (default, CPU-only)
         Writes data/Modelfile.viki_evolved with FROM <base> + a SYSTEM block
         carrying the top reinforced lessons, then runs `ollama create`.
-        Produces an Ollama tag (default: viki-born-again).
+        Produces an Ollama tag (default: viki-neural-forge; see settings / VIKI_FORGE_OUTPUT_OLLAMA_MODEL).
 
     lora (CUDA required)
         Runs Unsloth + TRL 4-bit LoRA SFT on the exported JSONL.
@@ -56,6 +56,8 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 import yaml  # noqa: E402
+
+from viki.core.forge_config import resolve_forge_output_ollama_tag  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Console helpers
@@ -419,7 +421,11 @@ def parse_args() -> argparse.Namespace:
         default="prompt_bake",
         help="Training strategy. prompt_bake works on CPU; lora/dpo/orpo require CUDA.",
     )
-    p.add_argument("--name", default="viki-born-again", help="Output Ollama tag (prompt_bake only).")
+    p.add_argument(
+        "--name",
+        default=None,
+        help="Output Ollama tag (prompt_bake). Default: forge_output_ollama_tag / VIKI_FORGE_OUTPUT_OLLAMA_MODEL / viki-neural-forge.",
+    )
     p.add_argument("--base", default=None, help="Base Ollama model (FROM line). Defaults to settings/env.")
     p.add_argument("--steps", type=int, default=60, help="Training steps (lora/dpo/orpo).")
     p.add_argument(
@@ -443,12 +449,13 @@ def main() -> int:
     settings = load_settings()
     data_dir = resolve_data_dir(args.data_dir, settings)
     base_model = resolve_base_model(args.base, settings)
+    forge_tag = (args.name or "").strip() or resolve_forge_output_ollama_tag(settings)
 
     info(f"strategy   : {args.strategy}")
     info(f"data dir   : {data_dir}")
     info(f"base model : {base_model}")
     if args.strategy == "prompt_bake":
-        info(f"output tag : {args.name}")
+        info(f"output tag : {forge_tag}")
 
     total_steps = 4 + (1 if args.set_default else 0)
 
@@ -499,7 +506,7 @@ def main() -> int:
     if args.strategy == "prompt_bake":
         rc = strategy_prompt_bake(
             base_model=base_model,
-            tag=args.name,
+            tag=forge_tag,
             data_dir=data_dir,
             min_count=args.min_count,
             dry_run=args.dry_run,
@@ -531,10 +538,10 @@ def main() -> int:
 
     step(4, total_steps, "Verify build")
     if args.strategy == "prompt_bake" and not args.dry_run:
-        details = ollama_show(args.name)
+        details = ollama_show(forge_tag)
         if details and "Error" not in details.split("\n", 1)[0]:
             print(_c("90", details[:600]))
-            ok(f"Verified: ollama tag '{args.name}' exists.")
+            ok(f"Verified: ollama tag '{forge_tag}' exists.")
         else:
             warn("Could not verify Ollama tag (see output above).")
     else:
@@ -547,7 +554,7 @@ def main() -> int:
     print(_c("1;32", "\nDone."))
     print(_c("90", "Next steps:"))
     if args.strategy == "prompt_bake":
-        print(f"  - Try it directly: ollama run {args.name}")
+        print(f"  - Try it directly: ollama run {forge_tag}")
         if not args.set_default:
             print("  - To use it as VIKI's default, edit viki/config/models.yaml:")
             print("       default: viki-evolved")

@@ -8,6 +8,7 @@ import json
 import asyncio
 from typing import Dict, Any, Optional
 from viki.config.logger import viki_logger
+from viki.core.forge_config import resolve_forge_output_ollama_tag
 
 
 class ContinuousLearner:
@@ -91,7 +92,7 @@ class ContinuousLearner:
             
             # 3. Validate new model (if successfully created)
             if "SUCCESS" in result.upper() or "COMPLETE" in result.upper():
-                new_model_name = "viki-born-again"  # Default forge output
+                new_model_name = resolve_forge_output_ollama_tag(self.controller.settings)
                 viki_logger.info(f"ContinuousLearner: Validating {new_model_name}...")
 
                 is_valid = await self._validate_model(new_model_name)

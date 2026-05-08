@@ -36,7 +36,7 @@ Following the **Cortex Upgrade**, VIKI follows a "Professional Intelligence" des
 *   **Performance API**: `GET /api/models/performance` (trust score, latency, error rate per model).
 *   **Continuous Learner** (`viki/core/continuous_learning.py`): Optional periodic training cycles with validation.
 
-See [viki/skills/creation/forge.py](viki/skills/creation/forge.py) (Neural Forge / Ollama Modelfile and optional LoRA) and [viki/SECURITY_SETUP.md](viki/SECURITY_SETUP.md) for operational details.
+See [viki/skills/creation/forge.py](viki/skills/creation/forge.py) (Neural Forge: prompt-bake writes `data/Modelfile.viki_evolved`, then `ollama create` with default tag **`viki-neural-forge`**, overridable via `system.forge_output_ollama_tag` / `VIKI_FORGE_OUTPUT_OLLAMA_MODEL`; optional LoRA) and [viki/SECURITY_SETUP.md](viki/SECURITY_SETUP.md) for operational details. CLI entry: [scripts/build_viki_model.py](scripts/build_viki_model.py).
 
 ## Cognitive Data Flow
 ```mermaid

@@ -1,6 +1,7 @@
 # User-specific config: use .env (copy from .env.example) instead of editing this file.
 # Env overrides: VIKI_DATA_DIR, VIKI_WORKSPACE_DIR, VIKI_PERSONA, VIKI_SHADOW_MODE, VIKI_AIR_GAP, VIKI_LOCAL_LLM_ONLY,
-#   VIKI_FORGE_BASE_OLLAMA_MODEL, VIKI_OLLAMA_THINK (1/true enables Ollama reasoning trace; default off for speed + cleaner UX),
+#   VIKI_FORGE_BASE_OLLAMA_MODEL, VIKI_FORGE_OUTPUT_OLLAMA_MODEL (Ollama tag for prompt-bake output; default viki-neural-forge),
+#   VIKI_OLLAMA_THINK (1/true enables Ollama reasoning trace; default off for speed + cleaner UX),
 #   VIKI_EMBED_GPU (1/true for CUDA sentence-transformers), VIKI_UNSLOTH_RUN_TRAIN (LoRA),
 #   VIKI_GIT_CONTEXT (1/true appends git snapshot to project context).
 #   VIKI_SESSION_USAGE_LOG (1/true/false) — append JSONL usage events under data_dir (usage_session.jsonl).
@@ -71,6 +72,9 @@ system:
 
   # Ollama tag for Neural Forge Modelfile `FROM` line (e.g. qwen3.5:latest). Override with VIKI_FORGE_BASE_OLLAMA_MODEL.
   forge_base_ollama_model: "gemma4:latest"
+
+  # Ollama image name created by prompt-bake / internal_forge (ollama create). Override with VIKI_FORGE_OUTPUT_OLLAMA_MODEL.
+  forge_output_ollama_tag: "viki-neural-forge"
 
   # When true, BioModule opens the default webcam (OpenCV). Default false avoids Windows MSMF errors without a camera.
   bio_webcam_enabled: false

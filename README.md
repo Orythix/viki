@@ -60,7 +60,7 @@ VIKI is a **Sovereign Digital Intelligence** designed to be more than just an as
 ### Core Pillars (v7.3.2)
 
 *   **Intelligence Governance**: Powered by the **Judgment Engine**. Every directive is filtered through a cognitive triage (Reflex, Shallow, Deep) to ensure the right model is used for the right task while maintaining absolute safety.
-*   **The Neural Forge**: A integrated pipeline in the core kernel. VIKI extracts "Wisdom" from her SQLite-backed semantic memory and automatically forges new, project-aware model variants (e.g., `viki-evolved`) based on **Phi-3**, **Mistral**, and **DeepSeek-R1**.
+*   **The Neural Forge**: A integrated pipeline in the core kernel. VIKI extracts "Wisdom" from her SQLite-backed semantic memory and bakes it into a local **Ollama** image (default tag **`viki-neural-forge`**, profile **`viki-evolved`** in `models.yaml`) on top of bases such as **Phi-3**, **Mistral**, **Qwen**, or **DeepSeek-R1**.
 *   **Capability-Aware Execution**: Granular permission gating. Skills like `filesystem_write` and `shell_exec` are managed by a centralized `CapabilityRegistry`, ensuring high-risk actions never bypass security protocols.
 *   **Recursive Self-Reflection**: Utilizing the **Reflection Layer**, VIKI critiques her own plans before execution, reducing hallucinations and improving tool-use accuracy.
 *   **Unified Persistence Layer**: A multi-tiered SQLite architecture that allows VIKI to retain project context, user preferences, and historical lessons without the overhead of legacy JSON files.
@@ -318,7 +318,7 @@ Install the `viki` command so you can run it from any directory with the current
 
 ### What gets built (default: `prompt_bake`)
 
-The script [`scripts/build_viki_model.py`](scripts/build_viki_model.py) exports a small JSONL dataset, writes `data/Modelfile.viki_evolved` with `FROM <your-base-model>` plus a **SYSTEM** block of top lessons, then runs `ollama create` to produce an Ollama **tag** (default: `viki-born-again`). No GPU is required for this path.
+The script [`scripts/build_viki_model.py`](scripts/build_viki_model.py) exports a small JSONL dataset, writes `data/Modelfile.viki_evolved` with `FROM <your-base-model>` plus a **SYSTEM** block of top lessons, then runs `ollama create` to produce an Ollama **tag** (default: `viki-neural-forge`; configurable in `settings.yaml` / `VIKI_FORGE_OUTPUT_OLLAMA_MODEL`). No GPU is required for this path.
 
 Optional **GPU** strategies (`--strategy lora`, `dpo`, `orpo`) are documented in the script header and need CUDA plus env flags (`VIKI_UNSLOTH_RUN_TRAIN`, etc.).
 
@@ -334,21 +334,22 @@ Set the bake base in **`viki/config/settings.yaml`**:
 
 ```yaml
 system:
-  forge_base_ollama_model: "qwen3.5:latest"   # or gemma4:latest, etc.
+  forge_base_ollama_model: "qwen3.5:latest"   # or gemma4:latest, etc. (Modelfile FROM)
+  forge_output_ollama_tag: "viki-neural-forge"  # ollama create tag; override with VIKI_FORGE_OUTPUT_OLLAMA_MODEL
 ```
 
-Override for one session: `$env:VIKI_FORGE_BASE_OLLAMA_MODEL = "gemma4:latest"` (PowerShell).
+Override for one session: `$env:VIKI_FORGE_BASE_OLLAMA_MODEL = "gemma4:latest"` or `$env:VIKI_FORGE_OUTPUT_OLLAMA_MODEL = "my-viki-tag"` (PowerShell).
 
 ### Build commands (repo root)
 
 ```powershell
 cd D:\path\to\VIKI   # your clone
 
-# Prompt-bake using settings / env base → creates Ollama tag viki-born-again
+# Prompt-bake using settings / env base → creates Ollama tag viki-neural-forge (default)
 python scripts/build_viki_model.py
 
 # Same, but force a specific base and output tag (keep multiple variants side by side)
-python scripts/build_viki_model.py --base gemma4:latest --name viki-born-gemma
+python scripts/build_viki_model.py --base gemma4:latest --name viki-neural-forge-gemma
 
 # Bake and set models.yaml default profile to viki-evolved (see below)
 python scripts/build_viki_model.py --set-default
@@ -358,15 +359,15 @@ Useful flags: `--min-count N` (only lessons seen at least *N* times), `--no-expo
 
 ### Wire the image into VIKI
 
-- The Ollama **image name** is whatever you passed as `--name` (default **`viki-born-again`**).
-- The **`viki-evolved`** entry in [`viki/config/models.yaml`](viki/config/models.yaml) maps the profile to that image via `model_name` (by default `viki-born-again`).
+- The Ollama **image name** is whatever you passed as `--name` (otherwise **`forge_output_ollama_tag`** in settings, env **`VIKI_FORGE_OUTPUT_OLLAMA_MODEL`**, or **`viki-neural-forge`**).
+- The **`viki-evolved`** entry in [`viki/config/models.yaml`](viki/config/models.yaml) maps the profile to that image via `model_name` (by default `viki-neural-forge`).
 - **`python scripts/build_viki_model.py --set-default`** sets `models.default: viki-evolved` so the app prefers your forged model.
 - If you used a custom `--name`, either update `model_name` under `viki-evolved` or add another profile and set `default:` to it.
 
 ### Try it
 
 ```powershell
-ollama run viki-born-again
+ollama run viki-neural-forge
 ```
 
 In the **VIKI app**, local Ollama calls default to **`think: false`** (see `system.ollama_enable_thinking` in `settings.yaml`) so end users do not see long reasoning traces; the raw `ollama run` CLI may still show thinking unless you pass flags such as `--hidethinking` / `--think=false` for your model.

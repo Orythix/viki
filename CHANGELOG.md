@@ -7,6 +7,7 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 ## [Unreleased]
 
 ### Changed
+- **Neural Forge default Ollama tag**: prompt-bake / `internal_forge` now use **`viki-neural-forge`** by default (was `viki-born-again`). Override with `system.forge_output_ollama_tag` or `VIKI_FORGE_OUTPUT_OLLAMA_MODEL`. **`viki-evolved`** in `models.yaml` points at the new tag.
 - **Documentation**: added [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md) as the canonical index; cross-linked `README`, `SETUP`, `VIKI_RUNBOOK`, `ARCHITECTURE`, `CONTRIBUTING`, `DOCKER`, `security-lab`, `qa-automation`, and related docs; fixed a broken `docs/PLAN.md` reference in `ARCHITECTURE.md`.
 - **SEO / discoverability**: README overview + FAQ; richer `keywords` in README, `pyproject.toml`, and `ui/package.json`; `ui/index.html` meta/OG/Twitter/JSON-LD aligned to the GitHub repo (removed placeholder `viki.ai` and missing `og:image`); `ui/public/robots.txt` and `sitemap.xml` no longer point at a non-owned domain.
 
@@ -118,7 +119,7 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 ### The Governance Pillar
 - **CapabilityRegistry**: Implemented a granular permission system. Skills like `filesystem_write` and `shell_exec` are now strictly gated behind capability checks.
 - **Judgment Engine v20**: Refined the cognitive triage (Reflex/Shallow/Deep) with post-judgment gates, ensuring required capabilities exist before deliberation begins.
-- **The Ollama Oven**: Created an automated model-forging pipeline. VIKI can now "bake" her learned wisdom directly into a custom **Mistral/DeepSeek** Modelfile, forging `viki-born-again`.
+- **The Ollama Oven**: Created an automated model-forging pipeline. VIKI can now "bake" her learned wisdom directly into a custom **Mistral/DeepSeek** Modelfile, producing a local Ollama image (default tag **`viki-neural-forge`**; see `system.forge_output_ollama_tag` / `VIKI_FORGE_OUTPUT_OLLAMA_MODEL`).
 - **Structured Auditing**: Added high-fidelity logging for every decision. Every action is now logged with its `CapabilityCheckResult` (Exists, Enabled, Allowed, Reason).
 - **Dataset Extraction**: Integrated `scripts/export_viki_dataset.py` for training set generation in ALPACA and ShareGPT formats.
 - **Model Stability**: Standardized Mistral/Ollama instruction templates to eliminate "Schema Echo" errors and improve JSON compliance.

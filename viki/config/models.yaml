@@ -72,7 +72,7 @@ models:
       description: "Gemma 4 \u2014 local alternative when pulled as gemma4:latest."
     viki-evolved:
       provider: ollama
-      model_name: viki-born-again
+      model_name: viki-neural-forge
       temperature: 0.6
       priority: 3
       capabilities:
@@ -85,7 +85,7 @@ models:
       - chatter
       - tool_use
       supports_native_tools: false
-      description: VIKI Modelfile image (viki-born-again) with baked-in lessons after
+      description: VIKI Modelfile image (viki-neural-forge) with baked-in lessons after
         internal_forge.
     phi3:
       provider: ollama

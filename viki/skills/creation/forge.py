@@ -4,6 +4,7 @@ from typing import Any, Dict
 
 from viki.skills.base import BaseSkill
 from viki.config.logger import viki_logger
+from viki.core.forge_config import resolve_forge_output_ollama_tag
 
 
 def _strip_env(name: str) -> str:
@@ -303,7 +304,8 @@ class ModelForgeSkill(BaseSkill):
         viki_logger.info(f"Forge: Modelfile written ({len(lessons)} facts) -> {modelfile_path}")
 
         try:
-            cmd = ["ollama", "create", "viki-born-again", "-f", modelfile_path]
+            out_tag = resolve_forge_output_ollama_tag(self.controller.settings)
+            cmd = ["ollama", "create", out_tag, "-f", modelfile_path]
             process = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
@@ -312,11 +314,11 @@ class ModelForgeSkill(BaseSkill):
             _, stderr = await process.communicate()
 
             if process.returncode == 0:
-                viki_logger.info("Forge SUCCESS: viki-born-again model updated.")
+                viki_logger.info(f"Forge SUCCESS: {out_tag} model updated.")
                 return (
-                    f"Self-Evolution Complete. Integrated {len(lessons)} insights into Ollama model 'viki-born-again'. "
+                    f"Self-Evolution Complete. Integrated {len(lessons)} insights into Ollama model '{out_tag}'. "
                     f"Set models.default to 'viki-evolved' in viki/config/models.yaml (or keep using qwen35). "
-                    f"Verify: ollama run viki-born-again"
+                    f"Verify: ollama run {out_tag}"
                 )
             return f"Forge Failed: {stderr.decode()}"
 

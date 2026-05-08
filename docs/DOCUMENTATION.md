@@ -6,7 +6,7 @@ Central map of **first-party** docs in this monorepo (engineering playbooks unde
 
 | Document | Description |
 |----------|-------------|
-| [README.md](../README.md) | Product overview, quick start, architecture summary |
+| [README.md](../README.md) | Product overview, quick start, Neural Forge bake (`viki-neural-forge` default Ollama tag), architecture summary |
 | [SETUP.md](../SETUP.md) | Install, env, first run |
 | [VIKI_RUNBOOK.md](../VIKI_RUNBOOK.md) | Operations, troubleshooting, RAG eval, boot evolution |
 | [ARCHITECTURE.md](../ARCHITECTURE.md) | System design, data flow, frontier wiring |

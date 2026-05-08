@@ -80,6 +80,10 @@ To verify key systems:
 3.  **Visual Test**: Ask "What's on my screen right now?"
 4.  **Evolution Test**: Type `/evolve` to trigger a dry run of the Neural Forge.
 
+### Baking lessons into a local Ollama model (Neural Forge)
+
+After you have **lessons** in `data/` and a **base** model pulled (`ollama pull …`), run from repo root: `python scripts/build_viki_model.py`. That creates an Ollama image whose default tag is **`viki-neural-forge`** (set `system.forge_output_ollama_tag` or `VIKI_FORGE_OUTPUT_OLLAMA_MODEL` to change it). Wire it up via profile **`viki-evolved`** in `viki/config/models.yaml` (`model_name` must match `ollama list`). Full steps: [README.md — Build your VIKI model](README.md#build-your-viki-model).
+
 ## Related folders in this repo
 
 These ship beside `viki/` but are separate entry points:
