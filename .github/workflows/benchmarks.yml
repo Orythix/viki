@@ -45,7 +45,7 @@ jobs:
 
       - name: Upload eval results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: eval-results-pr
           path: data/eval_results/
@@ -82,7 +82,7 @@ jobs:
           python -c "from viki.core.capability_index import CapabilityIndex; import json; print(json.dumps(CapabilityIndex('data/eval_results').compute(), indent=2))"
 
       - name: Upload eval results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: eval-results-weekly
           path: data/eval_results/
