@@ -81,12 +81,19 @@ def export_mirror(manifest_path: Path, dry_run: bool) -> int:
 
     print(f"Manifest : {manifest_path}")
     print(f"Dest     : {dest}")
+    readme_override = (m.get("readme_override") or "").strip()
+
     print(f"Items    : {len(include)}")
+    if readme_override:
+        print(f"README   : {readme_override} -> README.md (after include list)")
 
     if dry_run:
         for item in include:
             src = REPO_ROOT / item
             print(f"  [dry-run] would sync {item} -> {dest / item} (exists={src.exists()})")
+        if readme_override:
+            ro = REPO_ROOT / readme_override
+            print(f"  [dry-run] would write README.md <- {readme_override} (exists={ro.is_file()})")
         return 0
 
     dest.mkdir(parents=True, exist_ok=True)
@@ -109,6 +116,14 @@ def export_mirror(manifest_path: Path, dry_run: bool) -> int:
         else:
             shutil.copy2(src, dst)
         print(f"  OK {item}")
+
+    if readme_override:
+        ro = REPO_ROOT / readme_override
+        if not ro.is_file():
+            print(f"  FAIL readme_override not found: {readme_override}", file=sys.stderr)
+            return 3
+        shutil.copy2(ro, dest / "README.md")
+        print(f"  OK README.md <- {readme_override}")
 
     print("Done. Next: cd to destination, git init (once), add remote, commit, push.")
     return 0

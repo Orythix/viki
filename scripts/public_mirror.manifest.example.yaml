@@ -4,9 +4,12 @@
 # destination: folder for the PUBLIC tree (ideally outside this repo, e.g. sibling dir).
 destination: ../VIKI-public
 
+# After export, optional: copy this file to destination README.md (fixes broken links on GitHub).
+readme_override: docs/README_VIKI_PUBLIC.md
+
 # Repository-root-relative paths to copy (files or directories).
+# Omit README.md here when using readme_override (root README comes from the override).
 include:
-  - README.md
   - SETUP.md
   - ARCHITECTURE.md
   - VIKI_RUNBOOK.md
