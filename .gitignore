@@ -68,6 +68,9 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 
+# Local public-mirror manifest (may list custom paths; keep private if needed)
+scripts/public_mirror.manifest.yaml
+
 # Backup and temp
 *.bak
 *.tmp

@@ -1,0 +1,32 @@
+# Copy to public_mirror.manifest.yaml (gitignored) and edit paths.
+# Run from repo root: python scripts/export_public_mirror.py
+#
+# destination: folder for the PUBLIC tree (ideally outside this repo, e.g. sibling dir).
+destination: ../VIKI-public
+
+# Repository-root-relative paths to copy (files or directories).
+include:
+  - README.md
+  - SETUP.md
+  - ARCHITECTURE.md
+  - VIKI_RUNBOOK.md
+  - CONTRIBUTING.md
+  - CHANGELOG.md
+  - DOCKER.md
+  - SECURITY.md
+  - CODE_OF_CONDUCT.md
+  - LICENSE
+  - NOTICE
+  - pyproject.toml
+  - requirements.txt
+  - docs
+  # Add thin code slices if you want outsiders to read real modules, e.g.:
+  # - viki/main.py
+  # - viki/__init__.py
+
+# When copying directories, ignore these entry names (fnmatch on basename).
+ignore_globs:
+  - __pycache__
+  - .pytest_cache
+  - "*.pyc"
+  - .DS_Store

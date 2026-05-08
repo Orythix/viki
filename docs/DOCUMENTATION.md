@@ -13,6 +13,7 @@ Central map of **first-party** docs in this monorepo (engineering playbooks unde
 | [DOCKER.md](../DOCKER.md) | Container run |
 | [CONTRIBUTING.md](../CONTRIBUTING.md) | How to contribute |
 | [CHANGELOG.md](../CHANGELOG.md) | Version history |
+| [REPOSITORY_VISIBILITY_AND_BRANCHES.md](REPOSITORY_VISIBILITY_AND_BRANCHES.md) | Public vs private repos; why “secret” branches on a public remote are not secret |
 | [SECURITY.md](../SECURITY.md) | Security policy |
 | [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) | Community standards |
 | [viki/SECURITY_SETUP.md](../viki/SECURITY_SETUP.md) | API keys, UI auth, capabilities |
