@@ -1,17 +1,57 @@
-import win32gui
-import win32con
-import re
-import asyncio
-from typing import Dict, Any, List, Tuple
+"""
+Windows desktop window manager skill.
+
+`pypiwin32` (`win32gui`, `win32con`) is Windows-only. We import lazily so the
+module can still be imported on non-Windows hosts (Linux/macOS CI runners,
+Docker base images, etc.) without raising `ImportError`. Calls to
+`execute()` on those platforms return a clear error string instead of
+crashing the controller.
+"""
+from __future__ import annotations
+
+import re  # noqa: F401  (kept for backward compatibility)
+import asyncio  # noqa: F401  (kept for backward compatibility)
+import sys
+from typing import Dict, Any, List, Optional, Tuple
+
 from viki.skills.base import BaseSkill
 from viki.config.logger import viki_logger
+
+_WIN32_AVAILABLE = sys.platform == "win32"
+_win32gui = None
+_win32con = None
+_win32_import_error: Optional[Exception] = None
+
+
+def _ensure_win32() -> bool:
+    """Lazily import the win32 modules. Returns True on success."""
+    global _win32gui, _win32con, _win32_import_error
+    if _win32gui is not None and _win32con is not None:
+        return True
+    if not _WIN32_AVAILABLE:
+        return False
+    try:
+        import win32gui  # type: ignore
+        import win32con  # type: ignore
+        _win32gui = win32gui
+        _win32con = win32con
+        return True
+    except ImportError as e:
+        _win32_import_error = e
+        viki_logger.warning(
+            "WindowManagerSkill: pywin32 not installed (%s). "
+            "Install with `pip install -e \".[windows]\"` to enable.",
+            e,
+        )
+        return False
+
 
 class WindowManagerSkill(BaseSkill):
     """
     Control Windows desktop windows.
     List open windows, focus, minimize, maximize, close specific applications.
     """
-    
+
     @property
     def name(self) -> str:
         return "window_manager"
@@ -44,20 +84,22 @@ class WindowManagerSkill(BaseSkill):
 
     def _get_windows(self) -> List[Tuple[int, str]]:
         """Return list of (hwnd, title) for visible windows."""
-        windows = []
+        windows: List[Tuple[int, str]] = []
+
         def callback(hwnd, _):
-            if win32gui.IsWindowVisible(hwnd):
-                title = win32gui.GetWindowText(hwnd)
+            if _win32gui.IsWindowVisible(hwnd):
+                title = _win32gui.GetWindowText(hwnd)
                 if title and title.strip():
                     windows.append((hwnd, title))
-        win32gui.EnumWindows(callback, None)
+
+        _win32gui.EnumWindows(callback, None)
         return windows
 
     def _find_window(self, partial_title: str) -> int:
         """Find first window matching partial title (case-insensitive)."""
         if not partial_title:
             return 0
-        
+
         target = partial_title.lower()
         for hwnd, title in self._get_windows():
             if target in title.lower():
@@ -65,6 +107,17 @@ class WindowManagerSkill(BaseSkill):
         return 0
 
     async def execute(self, params: Dict[str, Any]) -> str:
+        if not _ensure_win32():
+            if not _WIN32_AVAILABLE:
+                return (
+                    f"WindowManagerSkill is Windows-only (current platform: {sys.platform}). "
+                    "Use the equivalent OS-native tools on macOS / Linux."
+                )
+            return (
+                "WindowManagerSkill requires pywin32. "
+                "Install with `pip install -e \".[windows]\"`."
+            )
+
         action = params.get('action')
         title_query = params.get('title')
 
@@ -72,43 +125,43 @@ class WindowManagerSkill(BaseSkill):
             if action == 'list':
                 windows = self._get_windows()
                 titles = [t for _, t in windows]
-                return f"Open Windows ({len(titles)}):\n" + "\n".join([f"- {t}" for t in titles[:20]]) + ("\n...(truncated)" if len(titles) > 20 else "")
+                return (
+                    f"Open Windows ({len(titles)}):\n"
+                    + "\n".join([f"- {t}" for t in titles[:20]])
+                    + ("\n...(truncated)" if len(titles) > 20 else "")
+                )
 
             if not title_query:
                 return f"Error: '{action}' requires a 'title' parameter."
 
-            # Find target window
             hwnd = self._find_window(title_query)
             if not hwnd:
                 return f"Error: No window found matching '{title_query}'."
 
-            full_title = win32gui.GetWindowText(hwnd)
+            full_title = _win32gui.GetWindowText(hwnd)
 
             if action == 'focus':
                 try:
-                    # Generic way to force focus often requires attaching thread inputs or using brute force
-                    # Simplest robust way is minimize then maximize sometimes, or specialized flags
-                    # Here we try simple Show + SetForeground
-                    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-                    win32gui.SetForegroundWindow(hwnd)
+                    _win32gui.ShowWindow(hwnd, _win32con.SW_RESTORE)
+                    _win32gui.SetForegroundWindow(hwnd)
                     return f"Focused window: '{full_title}'"
                 except Exception as e:
-                     return f"Failed to focus '{full_title}': {e}"
+                    return f"Failed to focus '{full_title}': {e}"
 
             elif action == 'minimize':
-                win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
+                _win32gui.ShowWindow(hwnd, _win32con.SW_MINIMIZE)
                 return f"Minimized '{full_title}'"
 
             elif action == 'maximize':
-                win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
+                _win32gui.ShowWindow(hwnd, _win32con.SW_MAXIMIZE)
                 return f"Maximized '{full_title}'"
 
             elif action == 'restore':
-                win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                _win32gui.ShowWindow(hwnd, _win32con.SW_RESTORE)
                 return f"Restored '{full_title}'"
 
             elif action == 'close':
-                win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
+                _win32gui.PostMessage(hwnd, _win32con.WM_CLOSE, 0, 0)
                 return f"Sent close signal to '{full_title}'"
 
             else:
