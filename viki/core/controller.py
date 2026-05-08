@@ -99,6 +99,10 @@ class VIKIController:
             raw = os.environ.get("VIKI_SESSION_USAGE_LOG", "").strip().lower()
             system["session_usage_log"] = raw in ("1", "true", "yes")
 
+        if os.environ.get("VIKI_AUTO_WEB_RESEARCH") is not None:
+            raw = os.environ.get("VIKI_AUTO_WEB_RESEARCH", "").strip().lower()
+            system["auto_web_research_when_uncertain"] = raw in ("1", "true", "yes", "on")
+
         # Bio webcam: unset = keep YAML default; explicit 0/1 overrides
         if os.environ.get("VIKI_BIO_WEBCAM") is not None:
             system["bio_webcam_enabled"] = os.environ.get("VIKI_BIO_WEBCAM", "").strip().lower() in (
@@ -992,6 +996,7 @@ class VIKIController:
             ("viki.skills.builtins.shell_skill", "ShellSkill", ()),
             ("viki.skills.builtins.notification_skill", "NotificationSkill", ()),
             ("viki.skills.builtins.engineering_playbook_skill", "EngineeringPlaybookSkill", ()),
+            ("viki.skills.builtins.megatron_lm_playbook_skill", "MegatronLmPlaybookSkill", ()),
             ("viki.skills.builtins.coding_workflow_skill", "CodingWorkflowSkill", ()),
         ]
         all_skills = []
@@ -1696,6 +1701,20 @@ class VIKIController:
             self._last_response_meta_by_session[session_id] = {"subtasks": action_results, "total_steps": max_react_steps}
             break
 
+        # Uncertainty fallback: web search + synthesis when the model appears not to know.
+        if final_output:
+            try:
+                final_output = await self._maybe_auto_web_research(
+                    safe_input,
+                    final_output,
+                    viki_resp,
+                    action_results,
+                    session_id,
+                    on_event=on_event,
+                )
+            except Exception as e:
+                viki_logger.warning("auto_web_research: %s", e)
+
         # --- ORYTHIX REFLECTION (v22) ---
         # --- ORYTHIX MEMORY REINFORCEMENT (v23) ---
         try:
@@ -1824,6 +1843,155 @@ class VIKIController:
     def _is_explanation_requested(self, input_text: str) -> bool:
         explanation_keywords = ["why", "explain", "details", "elaborate", "how", "what happened", "reason"]
         return any(k in input_text.lower() for k in explanation_keywords)
+
+    _KNOWLEDGE_GAP_MARKERS = (
+        "i don't know",
+        "i do not know",
+        "not sure",
+        "i'm not sure",
+        "i am not sure",
+        "cannot say",
+        "can't say",
+        "no information",
+        "beyond my knowledge",
+        "outside my knowledge",
+        "not in my training",
+        "i wasn't trained",
+        "i was not trained",
+        "unable to verify",
+        "i cannot verify",
+        "can't verify",
+        "would need to search",
+        "i don't have access to",
+        "i have no access to",
+        "not certain",
+        "unclear to me",
+        "i lack",
+        "don't have current",
+        "do not have current",
+        "cannot find any",
+        "can't find any",
+    )
+
+    def _auto_web_research_setting_enabled(self) -> bool:
+        if getattr(self, "air_gap", False) or getattr(self, "shadow_mode", False):
+            return False
+        sys = self.settings.get("system") or {}
+        return bool(sys.get("auto_web_research_when_uncertain", True))
+
+    def _response_indicates_knowledge_gap(self, text: str) -> bool:
+        if not text or len(text.strip()) < 8:
+            return False
+        low = text.lower()
+        if "--- search results" in low or "web lookup (automatic)" in low:
+            return False
+        return any(m in low for m in self._KNOWLEDGE_GAP_MARKERS)
+
+    async def _synthesize_answer_with_web_snippets(
+        self, question: str, draft: str, web: str
+    ) -> Optional[str]:
+        if not self.model_router or not web.strip():
+            return None
+        web_trunc = web[:7000] if len(web) > 7000 else web
+        try:
+            model = self.model_router.get_model(["reasoning"])
+        except Exception:
+            try:
+                model = self.model_router.get_model(["general"])
+            except Exception:
+                return None
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are VIKI. The user asked a question. A draft answer may lack current facts. "
+                    "Web search results follow. Write ONE updated answer: use snippets for facts, "
+                    "cite source domains or URLs briefly, and do not invent details not in the snippets. "
+                    "If snippets are irrelevant, say so in one sentence and keep the draft answer."
+                ),
+            },
+            {
+                "role": "user",
+                "content": f"Question:\n{question}\n\nDraft answer:\n{draft}\n\nWeb results:\n{web_trunc}",
+            },
+        ]
+        try:
+            text = await asyncio.wait_for(model.chat(messages, temperature=0.25), timeout=120.0)
+        except Exception as e:
+            viki_logger.debug("Auto web synthesis LLM failed: %s", e)
+            return None
+        text = (text or "").strip()
+        if len(text) < 20:
+            return None
+        return text
+
+    async def _maybe_auto_web_research(
+        self,
+        safe_input: str,
+        final_output: str,
+        viki_resp: Optional[VIKIResponse],
+        action_results: List[Dict[str, Any]],
+        session_id: str,
+        on_event=None,
+    ) -> str:
+        if not self._auto_web_research_setting_enabled():
+            return final_output
+        if not safe_input or len(safe_input.strip()) < 8:
+            return final_output
+
+        rs = self.skill_registry.get_skill("research")
+        if not rs:
+            return final_output
+
+        for r in action_results:
+            act = (r.get("action") or "").lower()
+            if act.startswith("research("):
+                return final_output
+
+        conf = 1.0
+        if viki_resp and viki_resp.final_thought:
+            try:
+                conf = float(getattr(viki_resp.final_thought, "confidence", 1.0) or 1.0)
+            except (TypeError, ValueError):
+                conf = 1.0
+
+        uncertain_phrase = self._response_indicates_knowledge_gap(final_output)
+        if conf >= 0.5 and not uncertain_phrase:
+            return final_output
+
+        query = safe_input.strip()[:500]
+        viki_logger.info(
+            "Auto web research: triggered (confidence=%.2f, uncertain_phrase=%s).",
+            conf,
+            uncertain_phrase,
+        )
+        if on_event:
+            on_event("status", "AUTO WEB RESEARCH (uncertain answer)")
+
+        try:
+            web = await asyncio.wait_for(rs.execute({"query": query}), timeout=28.0)
+        except asyncio.TimeoutError:
+            viki_logger.warning("Auto web research timed out.")
+            return final_output
+        except Exception as e:
+            viki_logger.warning("Auto web research failed: %s", e)
+            return final_output
+
+        if not web or "No results found" in web or web.startswith("Search error") or web.startswith("Error:"):
+            return final_output
+
+        synthesized = await self._synthesize_answer_with_web_snippets(safe_input, final_output, web)
+        if synthesized:
+            meta = self._last_response_meta_by_session.get(session_id) or {}
+            meta["auto_web_research"] = True
+            self._last_response_meta_by_session[session_id] = meta
+            return synthesized
+
+        meta = self._last_response_meta_by_session.get(session_id) or {}
+        meta["auto_web_research"] = True
+        self._last_response_meta_by_session[session_id] = meta
+        appendix = web[:8000] if len(web) > 8000 else web
+        return f"{final_output}\n\n---\n**Web lookup (automatic)**\n{appendix}"
 
     def _get_skills_context(self) -> str:
         return self.skill_registry.get_context_description()

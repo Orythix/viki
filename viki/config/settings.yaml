@@ -4,6 +4,7 @@
 #   VIKI_EMBED_GPU (1/true for CUDA sentence-transformers), VIKI_UNSLOTH_RUN_TRAIN (LoRA),
 #   VIKI_GIT_CONTEXT (1/true appends git snapshot to project context).
 #   VIKI_SESSION_USAGE_LOG (1/true/false) — append JSONL usage events under data_dir (usage_session.jsonl).
+#   VIKI_AUTO_WEB_RESEARCH (1/true/yes/on or 0/false/no/off) — force on/off auto web lookup when the answer looks uncertain.
 system:
   log_level: "INFO"
   data_dir: "./data"
@@ -47,6 +48,11 @@ system:
 
   # When true, run a quick web research pulse at startup. Set false to avoid competing with first user request.
   startup_research: false
+
+  # When true (default), if the reply looks uncertain or model confidence is low, run a web search and
+  # rewrite the answer using snippets. Disabled when air_gap or shadow_mode is on, or when the research
+  # skill is not registered. Override with env VIKI_AUTO_WEB_RESEARCH.
+  auto_web_research_when_uncertain: true
 
   # When true, fire a 1-token Ollama "ping" at boot to load the default model into RAM/VRAM.
   # Cuts ~5-15s off the cold first-reply on a 4 GB / 4-core box. Disabled in low_resource_mode and air_gap.

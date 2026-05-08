@@ -31,3 +31,5 @@ skill_allowlist:
   - window_manager
   - security_tools
   - shell
+  - research
+  - megatron_lm_playbook

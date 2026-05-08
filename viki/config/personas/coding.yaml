@@ -38,7 +38,9 @@ skill_allowlist:
   - clipboard
   - window_manager
   - shell
+  - research
   - engineering_playbook
+  - megatron_lm_playbook
   - coding_workflow
 
 # Phase 3 model bindings (router-level hints; the router will fall back if a model is missing).
