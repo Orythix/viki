@@ -372,6 +372,22 @@ ollama run viki-neural-forge
 
 In the **VIKI app**, local Ollama calls default to **`think: false`** (see `system.ollama_enable_thinking` in `settings.yaml`) so end users do not see long reasoning traces; the raw `ollama run` CLI may still show thinking unless you pass flags such as `--hidethinking` / `--think=false` for your model.
 
+### Publish to ollama.com (optional)
+
+After you have a local tag (e.g. **`viki-neural-forge:latest`** from `build_viki_model.py`), you can push it under your Ollama namespace. Example for username **`orythix`**:
+
+1. **Sign in** to Ollama from the CLI (one-time): `ollama signin` — follow the browser flow ([CLI docs](https://docs.ollama.com/cli)).
+2. **Copy** the local image to your namespace (name must be `yourname/model`):
+   ```powershell
+   ollama cp viki-neural-forge:latest orythix/viki-neural-forge:latest
+   ```
+3. **Upload** (large; may take a while):
+   ```powershell
+   ollama push orythix/viki-neural-forge
+   ```
+
+Others can then run: `ollama pull orythix/viki-neural-forge` and `ollama run orythix/viki-neural-forge`. Your listing will appear under `https://ollama.com/orythix/viki-neural-forge`. Review the **base model license** and any **baked `SYSTEM` text** before publishing.
+
 ### Ongoing evolution
 
 Unlike static bots, VIKI also grows during normal use: interact, lessons accumulate, then **re-run** `build_viki_model.py` when you want a fresh `ollama create` with updated baked-in knowledge.
