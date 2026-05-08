@@ -185,7 +185,42 @@ Use these levers together; they trade **latency** for **depth** where noted.
 
 ---
 
-## 11. References
+## 11. Internet-sourced training (lessons → Neural Forge)
+
+VIKI does not scrape the whole web for pretraining. **Internet → SQLite lessons → export JSONL → Ollama bake / LoRA** is the supported path.
+
+| Step | What to do |
+|------|------------|
+| Grow lessons from the web | Use the **research** skill in chat (persona must allow `research`: sovereign, research, coding, dev, …), paste URLs, or run **`python scripts/ingest_web_topics.py --file topics.txt`** (one DuckDuckGo query per line). Requires `duckduckgo-search` or `ddgs` (see `pyproject.toml`). |
+| Auto-lookup on uncertainty | With `system.auto_web_research_when_uncertain: true` (and not air-gap/shadow), uncertain replies trigger search; snippets can still feed lessons via the research path. |
+| Export threshold | `export_training_dataset` includes lessons with `access_count >= N`. Set **`system.lesson_export_min_access_count`** (default **2**), **`VIKI_LESSON_EXPORT_MIN_ACCESS`**, or **`python scripts/build_viki_model.py --min-count`** so JSONL and prompt-bake stay aligned. |
+| Import curated JSONL | From Python or a small harness: `LearningModule.import_lessons_from_jsonl(path, reinforce=True)` to load `trigger`/`fact` (or Alpaca / chat) lines; `reinforce=True` saves twice so new rows reach `access_count` **2**. |
+| Bake a model | From repo root: **`python scripts/build_viki_model.py`** (CPU prompt-bake) or **`--strategy lora`** with **`VIKI_UNSLOTH_RUN_TRAIN=1`** and CUDA. See script docstring and §10 above. |
+
+Disable internet training by **`VIKI_AIR_GAP=1`** (no outbound search).
+
+### Model size vs “growing like a human”
+
+The **base Ollama GGUF** for a given tag has an essentially **fixed on-disk size** (for example ~9 GiB for a quantised 7B-class model). VIKI does **not** automatically swell that blob. What grows is:
+
+- the **SQLite lesson store** (facts, including web snippets), and  
+- the **Modelfile `SYSTEM` block** when you **prompt-bake** (`internal_forge` / `build_viki_model.py`), which re-embeds consolidated lessons into the derived image `viki-born-again`.
+
+Optional **LoRA adapters** add a separate small adapter directory; moving to a **larger base model** (new `ollama pull`) is a manual upgrade.
+
+### Boot-time background evolution (optional)
+
+| Goal | Action |
+|------|--------|
+| Evolve while the main UI runs | Set **`forge.background_evolution_at_boot: true`** in `viki/config/settings.yaml` (or **`VIKI_BACKGROUND_EVOLUTION_AT_BOOT=1`**). After **`boot_evolution_delay_s`**, VIKI runs a few DuckDuckGo queries (from **`boot_topics_file`** and/or **`boot_research_queries`**) then **`internal_forge`** with **`prompt_bake`** by default (CPU). |
+| Evolve at Windows logon without opening the CLI | Run **`scripts\Register-VikiBootTask.ps1`** once, or schedule **`python scripts/viki_headless_boot_evolve.py`** with **`VIKI_SKIP_STARTUP_PULSE=1`** implied. Use **`VIKI_BOOT_EVOLVE_FORCE=1`** in the task environment to run even if YAML keeps `background_evolution_at_boot` false. |
+| Topic list | Copy [`viki/config/boot_topics.txt.example`](viki/config/boot_topics.txt.example) to **`data/boot_topics.txt`** (under your `VIKI_DATA_DIR`). |
+
+Keep **`low_resource_mode`** or **`air_gap`** on hosts that must not do this work at boot.
+
+---
+
+## 12. References
 
 - [SETUP.md](SETUP.md) — install and first run  
 - [README.md](README.md) — product overview and architecture pointers  

@@ -103,6 +103,21 @@ class VIKIController:
             raw = os.environ.get("VIKI_AUTO_WEB_RESEARCH", "").strip().lower()
             system["auto_web_research_when_uncertain"] = raw in ("1", "true", "yes", "on")
 
+        if os.environ.get("VIKI_LESSON_EXPORT_MIN_ACCESS") is not None:
+            raw = os.environ.get("VIKI_LESSON_EXPORT_MIN_ACCESS", "").strip()
+            try:
+                system["lesson_export_min_access_count"] = max(1, int(raw))
+            except ValueError:
+                pass
+
+        if os.environ.get("VIKI_BACKGROUND_EVOLUTION_AT_BOOT") is not None:
+            raw = os.environ.get("VIKI_BACKGROUND_EVOLUTION_AT_BOOT", "").strip().lower()
+            forge = self.settings.setdefault("forge", {})
+            if not isinstance(forge, dict):
+                forge = {}
+                self.settings["forge"] = forge
+            forge["background_evolution_at_boot"] = raw in ("1", "true", "yes", "on")
+
         # Bio webcam: unset = keep YAML default; explicit 0/1 overrides
         if os.environ.get("VIKI_BIO_WEBCAM") is not None:
             system["bio_webcam_enabled"] = os.environ.get("VIKI_BIO_WEBCAM", "").strip().lower() in (
@@ -375,8 +390,11 @@ class VIKIController:
         )
         self.dream = DreamModule(self)
 
-        # v13: Autonomous Startup Pulse — skipped entirely in low_resource_mode.
-        if not getattr(self, "low_resource_mode", False):
+        # v13: Autonomous Startup Pulse — skipped in low_resource_mode or VIKI_SKIP_STARTUP_PULSE (headless evolve).
+        _skip_pulse = os.environ.get("VIKI_SKIP_STARTUP_PULSE", "").strip().lower() in ("1", "true", "yes")
+        if _skip_pulse:
+            viki_logger.info("VIKI_SKIP_STARTUP_PULSE: startup pulse disabled (headless / scheduled worker).")
+        elif not getattr(self, "low_resource_mode", False):
             try:
                 asyncio.get_running_loop()
                 self._create_tracked_task(self._startup_pulse(), "startup_pulse")
@@ -442,13 +460,22 @@ class VIKIController:
             except Exception as e:
                 viki_logger.debug(f"Startup research pulse failed: {e}")
             
-        # 2. Check for pending evolution
+        # 2. Check for pending evolution (defer if background boot evolution will run later)
+        forge_cfg = self.settings.get("forge") or {}
+        defer_boot_evolution = bool(forge_cfg.get("background_evolution_at_boot"))
         new_lessons = self.learning.get_total_lesson_count()
-        if new_lessons >= 5: # Lower threshold at startup for quick optimization
-             viki_logger.info(f"Startup: {new_lessons} lessons found. Triggering neural optimization.")
-             forge = self.skill_registry.get_skill('internal_forge')
-             if forge:
-                 await forge.execute({"steps": 20}) # Very quick pulse
+        if not defer_boot_evolution and new_lessons >= 5:
+            viki_logger.info(f"Startup: {new_lessons} lessons found. Triggering neural optimization.")
+            forge = self.skill_registry.get_skill("internal_forge")
+            if forge:
+                await forge.execute({"steps": 20})
+        elif defer_boot_evolution:
+            delay_s = max(0, int(forge_cfg.get("boot_evolution_delay_s", 180)))
+            viki_logger.info(
+                "Startup: background_evolution_at_boot enabled — deferring ingest+forge by %ss.",
+                delay_s,
+            )
+            self._create_tracked_task(self._boot_evolution_after_delay(delay_s), "boot_evolution")
 
         # 3. Autonomous World Discovery (v22) — gated to skip on low-resource hosts.
         workspace_dir = self.settings.get('system', {}).get('workspace_dir', self.DEFAULT_WORKSPACE_DIR)
@@ -463,6 +490,101 @@ class VIKIController:
         
         # 5. Start Continuous Learning Monitor (checks periodically for training)
         self._create_tracked_task(self._continuous_learning_loop(), "continuous_learning")
+
+    async def _boot_evolution_after_delay(self, delay_s: int) -> None:
+        await asyncio.sleep(delay_s)
+        try:
+            msg = await self.run_boot_evolution_work(force=False)
+            viki_logger.info("Boot evolution: %s", msg)
+        except Exception as e:
+            viki_logger.warning("Boot evolution failed: %s", e)
+
+    async def run_boot_evolution_work(self, force: bool = False) -> str:
+        """
+        Background web ingest + prompt-bake forge. Grows lesson DB and Modelfile SYSTEM block;
+        does not change the byte size of the base GGUF weights.
+
+        Use force=True from headless scripts (see scripts/viki_headless_boot_evolve.py).
+        """
+        forge_cfg = self.settings.get("forge") or {}
+        if not force and not bool(forge_cfg.get("background_evolution_at_boot")):
+            return "skipped (background_evolution_at_boot false)"
+        if getattr(self, "air_gap", False):
+            return "skipped (air_gap)"
+        if getattr(self, "low_resource_mode", False):
+            return "skipped (low_resource_mode)"
+        if getattr(self, "shadow_mode", False):
+            return "skipped (shadow_mode)"
+
+        research_skill = self.skill_registry.get_skill("research")
+        if not research_skill:
+            return "skipped (research skill not registered)"
+
+        data_dir = self.settings.get("system", {}).get("data_dir", self.DEFAULT_DATA_DIR)
+        topics: List[str] = []
+        extra = forge_cfg.get("boot_research_queries") or []
+        if isinstance(extra, list):
+            topics.extend(str(t).strip() for t in extra if str(t).strip())
+        topics_file = str(forge_cfg.get("boot_topics_file") or "boot_topics.txt").strip()
+        tp = os.path.join(data_dir, topics_file)
+
+        def _read_topics_file(path: str) -> List[str]:
+            out: List[str] = []
+            try:
+                with open(path, encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith("#"):
+                            out.append(line)
+            except OSError as e:
+                viki_logger.debug("boot_topics_file read: %s", e)
+            return out
+
+        if os.path.isfile(tp):
+            topics.extend(await asyncio.to_thread(_read_topics_file, tp))
+
+        if not topics:
+            topics = [
+                "recent science and technology news summary",
+                "one notable AI or software release this month",
+            ]
+
+        cap = max(1, min(int(forge_cfg.get("boot_research_query_count", 3)), 10))
+        lessons_before = self.learning.get_total_lesson_count()
+
+        for q in topics[:cap]:
+            try:
+                viki_logger.info("Boot evolution: research query: %s", q[:80])
+                await asyncio.wait_for(research_skill.execute({"query": q}), timeout=45.0)
+            except asyncio.TimeoutError:
+                viki_logger.warning("Boot evolution: research timeout for query.")
+            except Exception as e:
+                viki_logger.debug("Boot evolution research: %s", e)
+            await asyncio.sleep(2.0)
+
+        lessons_after = self.learning.get_total_lesson_count()
+        min_lessons = max(1, int(forge_cfg.get("boot_forge_min_lessons", 3)))
+        if lessons_after < min_lessons:
+            return (
+                f"ingested web snippets (lessons {lessons_before}->{lessons_after}); "
+                f"forge skipped (need>={min_lessons} lessons)"
+            )
+
+        forge = self.skill_registry.get_skill("internal_forge")
+        if not forge:
+            return "lessons updated; forge skill missing"
+
+        steps = max(5, min(int(forge_cfg.get("boot_forge_steps", 25)), 120))
+        allow_gpu = bool(forge_cfg.get("allow_auto_gpu_training_at_boot"))
+        params: Dict[str, Any] = {"steps": steps}
+        if allow_gpu:
+            params["strategy"] = "auto"
+        else:
+            params["strategy"] = "prompt_bake"
+
+        viki_logger.info("Boot evolution: running internal_forge %s", params)
+        result = await forge.execute(params)
+        return f"forge result: {result[:500]} (lessons {lessons_before}->{self.learning.get_total_lesson_count()})"
 
     async def _prewarm_default_model(self):
         """

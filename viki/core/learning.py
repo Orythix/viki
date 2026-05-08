@@ -478,18 +478,54 @@ class LearningModule:
         cur.execute("SELECT COUNT(*) FROM lessons WHERE access_count > 1")
         return cur.fetchone()[0]
 
-    def export_training_dataset(self, output_path: str, format: str = "jsonl") -> str:
+    @staticmethod
+    def resolve_export_min_access_count(
+        explicit: Optional[int] = None,
+        settings: Optional[Dict[str, Any]] = None,
+    ) -> int:
+        """Threshold for export_training_dataset: YAML system.lesson_export_min_access_count, then env, then default 2."""
+        if explicit is not None:
+            try:
+                return max(1, int(explicit))
+            except (TypeError, ValueError):
+                pass
+        sys = (settings or {}).get("system") or {}
+        raw = sys.get("lesson_export_min_access_count")
+        if raw is not None:
+            try:
+                return max(1, int(raw))
+            except (TypeError, ValueError):
+                pass
+        env = (os.environ.get("VIKI_LESSON_EXPORT_MIN_ACCESS") or "").strip()
+        if env:
+            try:
+                return max(1, int(env))
+            except ValueError:
+                pass
+        return 2
+
+    def export_training_dataset(
+        self,
+        output_path: str,
+        format: str = "jsonl",
+        min_access_count: Optional[int] = None,
+        settings: Optional[Dict[str, Any]] = None,
+    ) -> str:
         """
-        Export reinforced lessons (access_count >= 2) for LoRA / external trainers.
+        Export reinforced lessons for LoRA / external trainers.
+        Rows include lessons with access_count >= min_access_count (default from settings/env, usually 2).
         format: jsonl (default, one object per line with \"text\" for TRL/Unsloth), alpaca, openai
         """
+        min_ac = self.resolve_export_min_access_count(min_access_count, settings)
         cur = self.conn.cursor()
         cur.execute(
-            "SELECT text_representation, content, access_count, source_task, reliability FROM lessons WHERE access_count >= 2 ORDER BY last_accessed DESC"
+            "SELECT text_representation, content, access_count, source_task, reliability FROM lessons "
+            "WHERE access_count >= ? ORDER BY last_accessed DESC",
+            (min_ac,),
         )
         rows = cur.fetchall()
         if not rows:
-            return "No lessons with access_count >= 2 to export."
+            return f"No lessons with access_count >= {min_ac} to export."
 
         parent = os.path.dirname(os.path.abspath(output_path))
         if parent:
@@ -541,7 +577,77 @@ class LearningModule:
 
         with open(output_path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
-        return f"Exported {len(lines)} rows to {output_path} ({format})."
+        return f"Exported {len(lines)} rows to {output_path} ({format}, min_access_count={min_ac})."
+
+    def import_lessons_from_jsonl(
+        self,
+        path: str,
+        *,
+        reinforce: bool = False,
+        source_task: str = "jsonl_import",
+    ) -> str:
+        """
+        Import lessons from a JSONL file (curated facts for training).
+        Supported shapes per line: {\"trigger\",\"fact\"}, {\"instruction\",\"input\",\"output\"},
+        {\"messages\":[{\"role\",\"content\"},...]}, or {\"text\": \"...\"}.
+        If reinforce=True, each imported row is saved twice so access_count reaches 2 when new.
+        """
+        if not os.path.isfile(path):
+            return f"import_lessons_from_jsonl: file not found: {path}"
+        n = 0
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(obj, dict):
+                    continue
+                trigger: Optional[str] = None
+                fact: Optional[str] = None
+                if "text" in obj and isinstance(obj["text"], str):
+                    trigger = "imported_block"
+                    fact = obj["text"].strip()
+                elif "trigger" in obj and "fact" in obj:
+                    trigger = str(obj.get("trigger") or "").strip() or "imported"
+                    fact = str(obj.get("fact") or "").strip()
+                elif "instruction" in obj and "output" in obj:
+                    trigger = str(obj.get("input") or obj.get("instruction") or "imported").strip()
+                    fact = str(obj.get("output") or "").strip()
+                elif "messages" in obj and isinstance(obj["messages"], list):
+                    user_txt = ""
+                    asst_txt = ""
+                    for m in obj["messages"]:
+                        if not isinstance(m, dict):
+                            continue
+                        role = (m.get("role") or "").lower()
+                        content = m.get("content")
+                        if not isinstance(content, str):
+                            content = json.dumps(content) if content is not None else ""
+                        if role == "user":
+                            user_txt = content.strip()
+                        elif role == "assistant":
+                            asst_txt = content.strip()
+                    if user_txt and asst_txt:
+                        trigger, fact = user_txt, asst_txt
+                if not fact or len(fact) < 3:
+                    continue
+                self.save_lesson(
+                    trigger=trigger or "imported",
+                    fact=fact,
+                    source_task=source_task,
+                )
+                if reinforce:
+                    self.save_lesson(
+                        trigger=trigger or "imported",
+                        fact=fact,
+                        source_task=source_task,
+                    )
+                n += 1
+        return f"Imported {n} lesson row(s) from {path}."
 
     async def analyze_session(self, model, trace: List[Dict[str, str]], outcome: str):
         """

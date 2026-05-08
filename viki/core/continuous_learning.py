@@ -71,7 +71,11 @@ class ContinuousLearner:
             # 1. Export dataset
             dataset_path = "./data/training_dataset.jsonl"
             viki_logger.info("ContinuousLearner: Exporting training dataset...")
-            export_result = self.controller.learning.export_training_dataset(dataset_path, format='jsonl')
+            export_result = self.controller.learning.export_training_dataset(
+                dataset_path,
+                format="jsonl",
+                settings=self.controller.settings,
+            )
             viki_logger.info(f"ContinuousLearner: {export_result}")
             
             # 2. Trigger forge

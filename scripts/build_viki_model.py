@@ -5,7 +5,7 @@ This is a thin, dependency-light orchestrator on top of the existing Neural
 Forge pipeline (see viki/skills/creation/forge.py + viki/core/preference_forge.py):
 
   1. Pre-flight checks   -- Ollama daemon, base model, lesson count
-  2. Dataset export      -- viki/core/learning.py:export_training_dataset
+  2. Dataset export      -- viki/core/learning.py:export_training_dataset (min access_count: --min-count, settings, VIKI_LESSON_EXPORT_MIN_ACCESS)
   3. Build               -- prompt-bake (default) | lora | dpo | orpo
   4. Verify              -- ollama show <tag>
   5. (optional) Promote  -- patch viki/config/models.yaml -> models.default
@@ -181,12 +181,22 @@ def ollama_show(tag: str) -> str:
 # Strategies
 # ---------------------------------------------------------------------------
 
-def export_dataset(data_dir: Path) -> Tuple[Path, str]:
+def export_dataset(
+    data_dir: Path,
+    *,
+    min_access_count: int,
+    settings: Dict[str, Any],
+) -> Tuple[Path, str]:
     from viki.core.learning import LearningModule  # type: ignore
 
     dataset_path = data_dir / "training_dataset_lora.jsonl"
     learning = LearningModule(str(data_dir))
-    summary = learning.export_training_dataset(str(dataset_path), format="jsonl")
+    summary = learning.export_training_dataset(
+        str(dataset_path),
+        format="jsonl",
+        min_access_count=min_access_count,
+        settings=settings,
+    )
     return dataset_path, summary
 
 
@@ -412,7 +422,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--name", default="viki-born-again", help="Output Ollama tag (prompt_bake only).")
     p.add_argument("--base", default=None, help="Base Ollama model (FROM line). Defaults to settings/env.")
     p.add_argument("--steps", type=int, default=60, help="Training steps (lora/dpo/orpo).")
-    p.add_argument("--min-count", type=int, default=2, help="Min lesson access_count to include.")
+    p.add_argument(
+        "--min-count",
+        type=int,
+        default=2,
+        help="Min lesson access_count for prompt-bake and for JSONL export (unless overridden in settings/env).",
+    )
     p.add_argument("--data-dir", default=None, help="VIKI data dir. Defaults to settings/env.")
     p.add_argument("--no-export", action="store_true", help="Skip JSONL dataset export step.")
     p.add_argument("--set-default", action="store_true", help="Patch models.yaml -> default: viki-evolved.")
@@ -471,7 +486,11 @@ def main() -> int:
     if args.no_export:
         warn("--no-export: skipped.")
     else:
-        dataset_path, summary = export_dataset(data_dir)
+        dataset_path, summary = export_dataset(
+            data_dir,
+            min_access_count=args.min_count,
+            settings=settings,
+        )
         info(summary)
         ok(f"Dataset -> {dataset_path}")
 
@@ -488,7 +507,11 @@ def main() -> int:
     elif args.strategy == "lora":
         dataset_path = data_dir / "training_dataset_lora.jsonl"
         if not dataset_path.exists():
-            dataset_path, _ = export_dataset(data_dir)
+            dataset_path, _ = export_dataset(
+                data_dir,
+                min_access_count=args.min_count,
+                settings=settings,
+            )
         rc = strategy_lora(
             data_dir=data_dir,
             dataset_path=dataset_path,

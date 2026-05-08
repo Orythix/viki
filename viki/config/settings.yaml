@@ -5,6 +5,9 @@
 #   VIKI_GIT_CONTEXT (1/true appends git snapshot to project context).
 #   VIKI_SESSION_USAGE_LOG (1/true/false) — append JSONL usage events under data_dir (usage_session.jsonl).
 #   VIKI_AUTO_WEB_RESEARCH (1/true/yes/on or 0/false/no/off) — force on/off auto web lookup when the answer looks uncertain.
+#   VIKI_LESSON_EXPORT_MIN_ACCESS — integer min access_count for LoRA/JSONL export (default 2).
+#   VIKI_BACKGROUND_EVOLUTION_AT_BOOT — enable forge.background_evolution_at_boot from env.
+#   VIKI_SKIP_STARTUP_PULSE — skip startup pulse (headless boot evolve script).
 system:
   log_level: "INFO"
   data_dir: "./data"
@@ -54,6 +57,10 @@ system:
   # skill is not registered. Override with env VIKI_AUTO_WEB_RESEARCH.
   auto_web_research_when_uncertain: true
 
+  # Minimum access_count for export_training_dataset (LoRA JSONL). Lower to 1 to export single-hit lessons.
+  # Env: VIKI_LESSON_EXPORT_MIN_ACCESS.
+  lesson_export_min_access_count: 2
+
   # When true, fire a 1-token Ollama "ping" at boot to load the default model into RAM/VRAM.
   # Cuts ~5-15s off the cold first-reply on a 4 GB / 4-core box. Disabled in low_resource_mode and air_gap.
   prewarm_default_model: true
@@ -100,6 +107,19 @@ forge:
   continuous_learning_interval_s: 21600   # how often to re-score candidate models (default 6 h)
   capability_index_min_tasks: 0           # 0 = back-compat; raise for stricter promotion thresholds
   capability_index_bootstrap_iters: 0     # 0 = skip CIs (cheap); 200+ for confidence intervals
+
+  # Background evolution after boot (VIKI running): web snippets -> lessons -> Ollama Modelfile prompt-bake.
+  # Does not increase the base GGUF size; it grows the SYSTEM knowledge block and SQLite lessons.
+  # Off by default (network + CPU). Env: VIKI_BACKGROUND_EVOLUTION_AT_BOOT=true
+  background_evolution_at_boot: false
+  boot_evolution_delay_s: 180            # seconds after startup pulse begins before ingest+forge
+  boot_research_query_count: 3           # max DuckDuckGo queries per boot cycle
+  boot_research_queries: []              # optional fixed queries (list of strings)
+  boot_topics_file: "boot_topics.txt"    # under data_dir: one search query per line (# comments ok)
+  boot_forge_min_lessons: 3              # minimum total lessons before running forge at boot
+  boot_forge_steps: 25                   # passed to internal_forge (prompt-bake path ignores heavy steps)
+  # When false (default), boot forge uses strategy prompt_bake only (CPU). If true, uses strategy auto (may run GPU stacks if installed + env gates).
+  allow_auto_gpu_training_at_boot: false
 
 skills:
   auto_discover: true

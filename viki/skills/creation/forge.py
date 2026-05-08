@@ -329,7 +329,11 @@ class ModelForgeSkill(BaseSkill):
         os.makedirs(data_dir, exist_ok=True)
         dataset_path = os.path.join(data_dir, "training_dataset_lora.jsonl")
         try:
-            summary = self.controller.learning.export_training_dataset(dataset_path, format="jsonl")
+            summary = self.controller.learning.export_training_dataset(
+                dataset_path,
+                format="jsonl",
+                settings=self.controller.settings,
+            )
         except Exception as e:
             return f"LoRA: dataset export failed: {e}"
 
