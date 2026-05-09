@@ -52,6 +52,11 @@ class BaseSkill(ABC):
         return "safe"
 
     @property
+    def requires_user_confirmation(self) -> bool:
+        """If True, controller should treat execution like a medium-severity action (confirm flow)."""
+        return False
+
+    @property
     def triggers(self) -> List[str]:
         """List of keywords or regex triggers for this skill."""
         return []

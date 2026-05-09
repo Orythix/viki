@@ -320,7 +320,7 @@ class DeliberationLayer(CortexLayer):
             "TOOL USE:\n"
             "- Use tools only when they materially improve accuracy or are required to complete the task.\n"
             "- For current events, recent facts, or shared URLs, use the 'research' tool instead of guessing.\n"
-            "- For file or code operations, stay within approved workspace/data roots and describe the action honestly.\n"
+            "- For file or code operations, use the dev_tools or filesystem_skill to read/write files. You CAN access files in the current working directory and workspace. If the user mentions a filename, try to read it before saying you can't.\n"
             "- If no tool is needed, answer directly.\n"
             "- Pure arithmetic, simple definitions, or other common-knowledge facts: answer in final_response with action=null; "
             "do not invoke shell, filesystem, or other execution tools unless the user explicitly asked you to run something.\n"

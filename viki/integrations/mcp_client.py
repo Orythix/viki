@@ -8,34 +8,67 @@ as if their tools were native VIKI skills. Each MCP tool is wrapped in a tiny
 Configuration lives in `viki/config/mcp_servers.yaml`:
 
     servers:
-      figma:
-        command: ["npx", "-y", "@figma/mcp-server"]
+      local_demo:
+        transport: stdio
+        command: ["npx", "-y", "@some/mcp-server"]
         env:
-          FIGMA_TOKEN: ${FIGMA_TOKEN}
-      supabase:
-        command: ["npx", "-y", "@supabase/mcp-server"]
+          TOKEN: ${TOKEN}
+      remote:
+        transport: http
+        url: https://example.com/mcp
+        headers:
+          Authorization: Bearer ${MCP_TOKEN}
+        timeout: 45
+        safety_tier: medium
+        requires_confirmation: false
+        tools:
+          delete_stuff:
+            safety_tier: destructive
+            requires_confirmation: true
+
+Transports (Python MCP SDK):
+  - stdio: spawn a subprocess (default)
+  - http / streamable_http: Streamable HTTP per MCP spec
+  - sse: legacy SSE MCP endpoint
 
 This module deliberately depends on `mcp` lazily: a missing dependency disables
-MCP support but never breaks the controller.
+MCP support but never breaks the controller. Integration follows the public MCP
+spec and the official Python SDK — not third-party proprietary sources.
 """
 
 from __future__ import annotations
 
 import asyncio
 import os
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from contextlib import AsyncExitStack
+from dataclasses import dataclass, field, replace
+from typing import Any, Dict, List, Optional, Tuple
 
 from viki.config.logger import viki_logger
 from viki.skills.base import BaseSkill
 
 
+def _normalize_transport(raw: Optional[str]) -> str:
+    t = (raw or "stdio").strip().lower()
+    if t in ("streamable_http", "streamable-http"):
+        return "http"
+    return t
+
+
 @dataclass
 class MCPServerSpec:
     name: str
-    command: List[str]
+    transport: str = "stdio"
+    command: List[str] = field(default_factory=list)
+    url: str = ""
     env: Dict[str, str] = field(default_factory=dict)
     args: List[str] = field(default_factory=list)
+    headers: Dict[str, str] = field(default_factory=dict)
+    timeout_s: float = 30.0
+    enabled: bool = True
+    default_safety_tier: str = "medium"
+    default_requires_confirmation: bool = False
+    tool_policies: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
 
 class MCPClient:
@@ -51,6 +84,7 @@ class MCPClient:
         self._tools: Dict[str, Dict[str, Any]] = {}  # full tool key -> tool dict
         self._lock = asyncio.Lock()
         self._sdk_available = self._import_sdk()
+        self._server_status: Dict[str, Dict[str, Any]] = {}
 
     @staticmethod
     def _import_sdk() -> bool:
@@ -61,57 +95,160 @@ class MCPClient:
             viki_logger.debug("MCP SDK not installed; MCP integration is no-op.")
             return False
 
+    def get_server_status(self) -> List[Dict[str, Any]]:
+        """Last-known connection status per server (for HTTP API / health)."""
+        return [dict(v) for v in self._server_status.values()]
+
+    def _set_status(
+        self,
+        spec: MCPServerSpec,
+        *,
+        connected: bool,
+        tool_count: int = 0,
+        error: Optional[str] = None,
+    ) -> None:
+        self._server_status[spec.name] = {
+            "name": spec.name,
+            "transport": spec.transport,
+            "connected": connected,
+            "tool_count": tool_count,
+            "error": error,
+        }
+
     async def connect(self, spec: MCPServerSpec) -> bool:
         if not self._sdk_available:
+            self._set_status(spec, connected=False, error="MCP SDK not installed")
             return False
-        try:
-            from mcp import ClientSession  # type: ignore
-            from mcp.client.stdio import StdioServerParameters, stdio_client  # type: ignore
-        except Exception as e:
-            viki_logger.debug("MCP SDK incompatible: %s", e)
+        if not spec.enabled:
+            self._set_status(spec, connected=False, error="disabled in config")
             return False
 
-        try:
-            params = StdioServerParameters(
-                command=spec.command[0],
-                args=list(spec.command[1:]) + spec.args,
-                env={**os.environ, **spec.env},
-            )
-            stdio_ctx = stdio_client(params)
-            read, write = await stdio_ctx.__aenter__()
-            session = ClientSession(read, write)
-            await session.__aenter__()
-            await session.initialize()
+        transport = _normalize_transport(spec.transport)
+        spec = replace(spec, transport=transport)
 
-            tools_resp = await session.list_tools()
-            self._sessions[spec.name] = {
-                "session": session,
-                "stdio_ctx": stdio_ctx,
-                "spec": spec,
-            }
-            for tool in getattr(tools_resp, "tools", []) or []:
-                tool_dict = {
-                    "name": tool.name,
-                    "description": tool.description or "",
-                    "input_schema": getattr(tool, "inputSchema", {}) or {},
-                }
-                key = f"{spec.name}::{tool.name}"
-                self._tools[key] = tool_dict
-            viki_logger.info(
-                "MCP: connected '%s' (%d tools).",
-                spec.name,
-                len([k for k in self._tools if k.startswith(f"{spec.name}::")]),
-            )
-            return True
+        try:
+            if transport == "stdio":
+                ok = await self._connect_stdio(spec)
+            elif transport == "http":
+                ok = await self._connect_streamable_http(spec)
+            elif transport == "sse":
+                ok = await self._connect_sse(spec)
+            else:
+                viki_logger.warning("MCP: unknown transport '%s' for '%s'", transport, spec.name)
+                self._set_status(spec, connected=False, error=f"unknown transport: {transport}")
+                return False
+            return ok
         except Exception as e:
             viki_logger.warning("MCP: failed to connect '%s': %s", spec.name, e)
+            self._set_status(spec, connected=False, error=str(e))
             return False
+
+    async def _connect_stdio(self, spec: MCPServerSpec) -> bool:
+        from mcp import ClientSession  # type: ignore
+        from mcp.client.stdio import StdioServerParameters, stdio_client  # type: ignore
+
+        params = StdioServerParameters(
+            command=spec.command[0],
+            args=list(spec.command[1:]) + spec.args,
+            env={**os.environ, **spec.env},
+        )
+        stdio_ctx = stdio_client(params)
+        read, write = await stdio_ctx.__aenter__()
+        session = ClientSession(read, write)
+        await session.__aenter__()
+        await session.initialize()
+
+        tools_resp = await session.list_tools()
+        n = self._ingest_tools(spec.name, tools_resp)
+        self._sessions[spec.name] = {
+            "session": session,
+            "stdio_ctx": stdio_ctx,
+            "spec": spec,
+            "transport": "stdio",
+        }
+        viki_logger.info("MCP: connected '%s' (stdio, %d tools).", spec.name, n)
+        self._set_status(spec, connected=True, tool_count=n)
+        return True
+
+    async def _connect_streamable_http(self, spec: MCPServerSpec) -> bool:
+        import httpx
+        from mcp import ClientSession  # type: ignore
+        from mcp.client.streamable_http import streamable_http_client  # type: ignore
+
+        read_timeout = max(float(spec.timeout_s) * 2, 120.0)
+        to = httpx.Timeout(float(spec.timeout_s), read=read_timeout)
+        headers = dict(spec.headers)
+        http_client = httpx.AsyncClient(headers=headers, timeout=to)
+        stack = AsyncExitStack()
+        await stack.enter_async_context(http_client)
+        read, write = await stack.enter_async_context(
+            streamable_http_client(spec.url, http_client=http_client)
+        )
+        session = await stack.enter_async_context(ClientSession(read, write))
+        await session.initialize()
+        tools_resp = await session.list_tools()
+        n = self._ingest_tools(spec.name, tools_resp)
+        self._sessions[spec.name] = {
+            "session": session,
+            "stack": stack,
+            "spec": spec,
+            "transport": "http",
+        }
+        viki_logger.info("MCP: connected '%s' (http, %d tools).", spec.name, n)
+        self._set_status(spec, connected=True, tool_count=n)
+        return True
+
+    async def _connect_sse(self, spec: MCPServerSpec) -> bool:
+        import httpx
+        from mcp import ClientSession  # type: ignore
+        from mcp.client.sse import sse_client  # type: ignore
+
+        headers = dict(spec.headers) if spec.headers else None
+        sse_read = max(60.0, float(spec.timeout_s) * 3)
+        stack = AsyncExitStack()
+        read, write = await stack.enter_async_context(
+            sse_client(
+                spec.url,
+                headers=headers,
+                timeout=float(spec.timeout_s),
+                sse_read_timeout=sse_read,
+            )
+        )
+        session = await stack.enter_async_context(ClientSession(read, write))
+        await session.initialize()
+        tools_resp = await session.list_tools()
+        n = self._ingest_tools(spec.name, tools_resp)
+        self._sessions[spec.name] = {
+            "session": session,
+            "stack": stack,
+            "spec": spec,
+            "transport": "sse",
+        }
+        viki_logger.info("MCP: connected '%s' (sse, %d tools).", spec.name, n)
+        self._set_status(spec, connected=True, tool_count=n)
+        return True
+
+    def _ingest_tools(self, server_name: str, tools_resp: Any) -> int:
+        count = 0
+        for tool in getattr(tools_resp, "tools", []) or []:
+            tool_dict = {
+                "name": tool.name,
+                "description": tool.description or "",
+                "input_schema": getattr(tool, "inputSchema", {}) or {},
+            }
+            key = f"{server_name}::{tool.name}"
+            self._tools[key] = tool_dict
+            count += 1
+        return count
 
     async def disconnect_all(self) -> None:
         for name, entry in list(self._sessions.items()):
             try:
-                await entry["session"].__aexit__(None, None, None)
-                await entry["stdio_ctx"].__aexit__(None, None, None)
+                if entry.get("stack") is not None:
+                    await entry["stack"].aclose()
+                else:
+                    await entry["session"].__aexit__(None, None, None)
+                    await entry["stdio_ctx"].__aexit__(None, None, None)
             except Exception as e:
                 viki_logger.debug("MCP: disconnect '%s' failed: %s", name, e)
         self._sessions.clear()
@@ -144,14 +281,23 @@ class MCPClient:
 class MCPSkillProxy(BaseSkill):
     """Wrap a single MCP tool as a VIKI BaseSkill so the planner can invoke it."""
 
-    def __init__(self, client: MCPClient, server: str, tool: Dict[str, Any]):
+    def __init__(
+        self,
+        client: MCPClient,
+        server: str,
+        tool: Dict[str, Any],
+        *,
+        safety_tier: str = "medium",
+        requires_confirmation: bool = False,
+    ):
         self._client = client
         self._server = server
         self._tool = tool
+        self._safety_tier = safety_tier
+        self._requires_confirmation = bool(requires_confirmation)
 
     @property
     def name(self) -> str:
-        # Use a stable, namespaced name so two servers can expose tools with the same name.
         return f"mcp_{self._server}_{self._tool['name']}".replace("-", "_")
 
     @property
@@ -164,8 +310,11 @@ class MCPSkillProxy(BaseSkill):
 
     @property
     def safety_tier(self) -> str:
-        # MCP tools that mutate external state should be tagged via mcp_servers.yaml in a future iteration.
-        return "medium"
+        return self._safety_tier
+
+    @property
+    def requires_user_confirmation(self) -> bool:
+        return self._requires_confirmation
 
     async def execute(self, params: Dict[str, Any]) -> str:
         result = await self._client.call_tool(self._server, self._tool["name"], params or {})
@@ -174,8 +323,20 @@ class MCPSkillProxy(BaseSkill):
         return str(result.get("result") or "")
 
 
+def _resolve_tool_policy(spec: MCPServerSpec, tool_name: str) -> Tuple[str, bool]:
+    tier = spec.default_safety_tier or "medium"
+    confirm = bool(spec.default_requires_confirmation)
+    pol = spec.tool_policies.get(tool_name) or spec.tool_policies.get(tool_name.replace("_", "-"))
+    if isinstance(pol, dict):
+        if pol.get("safety_tier"):
+            tier = str(pol["safety_tier"])
+        if pol.get("requires_confirmation") is not None:
+            confirm = bool(pol["requires_confirmation"])
+    return tier, confirm
+
+
 def load_specs_from_yaml(path: str) -> List[MCPServerSpec]:
-    """Read a Cursor-style MCP server config and return MCPServerSpec list."""
+    """Read MCP server config (stdio, http, sse) and return MCPServerSpec list."""
     import yaml
 
     if not os.path.isfile(path):
@@ -185,14 +346,71 @@ def load_specs_from_yaml(path: str) -> List[MCPServerSpec]:
     servers = data.get("servers", {}) or {}
     out: List[MCPServerSpec] = []
     for name, cfg in servers.items():
-        cmd = cfg.get("command")
-        if isinstance(cmd, str):
-            cmd = [cmd]
-        elif not isinstance(cmd, list):
+        if not isinstance(cfg, dict):
             continue
+        if cfg.get("enabled") is False:
+            continue
+        transport = _normalize_transport(cfg.get("transport"))
+        cmd: List[str] = []
+        if isinstance(cfg.get("command"), str):
+            cmd = [cfg["command"]]
+        elif isinstance(cfg.get("command"), list):
+            cmd = [str(x) for x in cfg["command"]]
+
+        url = str(cfg.get("url") or "").strip()
+        if transport == "stdio":
+            if not cmd:
+                viki_logger.warning("MCP: skip '%s' — stdio transport requires non-empty command.", name)
+                continue
+        elif transport in ("http", "sse"):
+            if not url:
+                viki_logger.warning("MCP: skip '%s' — %s transport requires url.", name, transport)
+                continue
+        else:
+            viki_logger.warning("MCP: skip '%s' — unknown transport '%s'.", name, transport)
+            continue
+
         env = {k: os.path.expandvars(str(v)) for k, v in (cfg.get("env") or {}).items()}
+        raw_headers = cfg.get("headers") or {}
+        headers = (
+            {k: os.path.expandvars(str(v)) for k, v in raw_headers.items()}
+            if isinstance(raw_headers, dict)
+            else {}
+        )
         args = cfg.get("args") or []
-        out.append(MCPServerSpec(name=name, command=list(cmd), env=env, args=list(args)))
+        if not isinstance(args, list):
+            args = []
+        timeout = cfg.get("timeout")
+        try:
+            timeout_s = float(timeout) if timeout is not None else 30.0
+        except (TypeError, ValueError):
+            timeout_s = 30.0
+
+        tier = str(cfg.get("safety_tier") or "medium")
+        def_confirm = bool(cfg.get("requires_confirmation", False))
+        tools_raw = cfg.get("tools") or {}
+        tool_policies: Dict[str, Dict[str, Any]] = {}
+        if isinstance(tools_raw, dict):
+            for tname, pol in tools_raw.items():
+                if isinstance(pol, dict):
+                    tool_policies[str(tname)] = dict(pol)
+
+        out.append(
+            MCPServerSpec(
+                name=name,
+                transport=transport,
+                command=cmd,
+                url=url,
+                env=env,
+                args=[str(x) for x in args],
+                headers=headers,
+                timeout_s=timeout_s,
+                enabled=cfg.get("enabled", True) is not False,
+                default_safety_tier=tier,
+                default_requires_confirmation=def_confirm,
+                tool_policies=tool_policies,
+            )
+        )
     return out
 
 
@@ -217,6 +435,8 @@ async def attach_mcp_skills(controller, mcp_config_path: Optional[str] = None) -
     if not client._sdk_available:
         return 0
     controller.mcp_client = client
+    cap = getattr(controller, "capabilities", None)
+    mcp_cap = cap.get("mcp_tools") if cap is not None else None
     installed = 0
     for spec in specs:
         ok = await client.connect(spec)
@@ -225,7 +445,16 @@ async def attach_mcp_skills(controller, mcp_config_path: Optional[str] = None) -
         for tool_meta in client.list_tools():
             if tool_meta["server"] != spec.name:
                 continue
-            proxy = MCPSkillProxy(client, spec.name, tool_meta)
+            tier, req_c = _resolve_tool_policy(spec, tool_meta["tool"])
+            proxy = MCPSkillProxy(
+                client,
+                spec.name,
+                tool_meta,
+                safety_tier=tier,
+                requires_confirmation=req_c,
+            )
             controller.skill_registry.register_skill(proxy)
+            if mcp_cap is not None and proxy.name not in mcp_cap.linked_skills:
+                mcp_cap.linked_skills.append(proxy.name)
             installed += 1
     return installed

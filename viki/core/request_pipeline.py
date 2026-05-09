@@ -224,6 +224,89 @@ class _PendingActionStage:
         return "Please confirm with yes/confirm or cancel with no/reject."
 
 
+class _FileReferenceStage:
+    """
+    P2: Detect file references in user input (e.g. 'password_crack_local.py')
+    and auto-read them from CWD or workspace, inlining the content so the LLM
+    has the code available without needing to invoke a tool first.
+    """
+
+    # Extensions we auto-read when mentioned in user input
+    CODE_EXT = {
+        ".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".c", ".cpp", ".h",
+        ".cs", ".go", ".rs", ".rb", ".php", ".swift", ".kt", ".scala",
+        ".sh", ".bash", ".ps1", ".bat", ".cmd",
+        ".html", ".css", ".scss", ".sass", ".less",
+        ".json", ".yaml", ".yml", ".toml", ".xml", ".ini", ".cfg", ".conf",
+        ".md", ".txt", ".rst", ".log", ".csv", ".sql", ".env",
+        ".dockerfile", ".makefile",
+    }
+
+    # Max file size to inline (8KB keeps context manageable)
+    MAX_INLINE_SIZE = 8192
+
+    def _extract_file_refs(self, text: str) -> List[str]:
+        """Extract potential filenames from user input."""
+        import re
+        # Match words that look like filenames with known extensions
+        pattern = r'[\w./-]+\.(?:' + '|'.join(
+            ext.lstrip('.') for ext in self.CODE_EXT
+        ) + r')\b'
+        return re.findall(pattern, text, re.IGNORECASE)
+
+    def _resolve_file(self, filename: str, search_dirs: List[str]) -> Optional[str]:
+        """Try to find the file in search directories."""
+        import os
+        # If it's already an absolute path
+        if os.path.isabs(filename) and os.path.isfile(filename):
+            return filename
+        # Search in each directory
+        for directory in search_dirs:
+            candidate = os.path.join(directory, filename)
+            if os.path.isfile(candidate):
+                return os.path.abspath(candidate)
+        return None
+
+    async def run(self, ctrl: Any, ctx: RequestContext) -> Optional[str]:
+        import os
+
+        file_refs = self._extract_file_refs(ctx.user_input)
+        if not file_refs:
+            return None
+
+        # Build search directories: CWD first, then workspace, then data
+        search_dirs = [os.path.abspath(os.getcwd())]
+        if getattr(ctrl, "settings", None):
+            system = ctrl.settings.get("system", {})
+            ws = system.get("workspace_dir")
+            if ws:
+                search_dirs.append(os.path.abspath(os.path.expanduser(ws)))
+            dd = system.get("data_dir")
+            if dd:
+                search_dirs.append(os.path.abspath(os.path.expanduser(dd)))
+
+        inlined: List[str] = []
+        for ref in file_refs[:3]:  # Cap at 3 files per request
+            resolved = self._resolve_file(ref, search_dirs)
+            if not resolved:
+                continue
+            try:
+                with open(resolved, "r", encoding="utf-8", errors="ignore") as f:
+                    content = f.read(self.MAX_INLINE_SIZE)
+                truncated = " (truncated)" if len(content) >= self.MAX_INLINE_SIZE else ""
+                inlined.append(
+                    f"[Auto-loaded file: {resolved}{truncated}]\n"
+                    f"```\n{content}\n```"
+                )
+                viki_logger.debug("FileReferenceStage: auto-inlined %s (%d bytes)", resolved, len(content))
+            except Exception as e:
+                viki_logger.debug("FileReferenceStage: failed to read %s: %s", resolved, e)
+
+        if inlined:
+            ctx.user_input = "\n\n".join(inlined) + "\n\n" + ctx.user_input
+        return None
+
+
 class RequestPipeline:
     """Runs ordered preflight stages until one returns a terminal response."""
 
@@ -232,6 +315,7 @@ class RequestPipeline:
             stages = [
                 _SuperAdminStage(),
                 _AttachmentStage(),
+                _FileReferenceStage(),
                 _GovernorStage(),
                 _SafetyStage(),
                 _SignalsResetStage(),
@@ -250,3 +334,4 @@ class RequestPipeline:
 
 def build_default_preflight_pipeline() -> RequestPipeline:
     return RequestPipeline()
+

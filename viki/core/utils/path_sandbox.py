@@ -15,14 +15,17 @@ BLOCKED_PATHS = [
 def get_allowed_roots(controller: Any = None) -> List[str]:
     """Return list of allowed root directories for output files."""
     roots = []
+    # Always include CWD so the user can access files in the directory
+    # they launched VIKI from (e.g., their project root).
+    roots.append(os.path.abspath(os.getcwd()))
     if controller and getattr(controller, "settings", None):
         system = controller.settings.get("system", {})
         for key in ("workspace_dir", "data_dir"):
             val = system.get(key)
             if val:
                 roots.append(os.path.abspath(os.path.expanduser(val)))
-    if not roots:
-        roots.append(os.path.abspath(os.getcwd()))
+    if len(roots) <= 1:
+        # No controller or empty settings — fall back to env / CWD-relative defaults
         data = os.environ.get("VIKI_DATA_DIR") or os.path.join(os.getcwd(), "data")
         workspace = os.environ.get("VIKI_WORKSPACE_DIR") or os.path.join(os.getcwd(), "workspace")
         roots.append(os.path.abspath(data))

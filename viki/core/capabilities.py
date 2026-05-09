@@ -121,6 +121,15 @@ class CapabilityRegistry:
             requires_confirmation=False,
             linked_skills=["code_search", "plan_edit"],
         ))
+        # MCP proxy skills (mcp_*) are linked at runtime in attach_mcp_skills.
+        self.register(Capability(
+            name="mcp_tools",
+            description="Model Context Protocol tools from configured MCP servers.",
+            safety_tier="medium",
+            read_only=False,
+            requires_confirmation=False,
+            linked_skills=[],
+        ))
         # Phase 0/3: low-risk utilities are default-allow so reflex/cortex can use them
         # without forcing the user to install an explicit capability.
         self.register(Capability(
@@ -175,12 +184,18 @@ class CapabilityRegistry:
             "window_manager": "desktop_control",
             "clipboard": "desktop_control",
             "system_control": "desktop_control",
-            "dev_tools": "filesystem_write",
             "email": "email_calendar",
             "calendar": "email_calendar",
         }
         if skill_name in fixed:
             return fixed[skill_name]
+
+        # dev_tools: distinguish read vs write operations
+        if skill_name == "dev_tools":
+            action = params.get("action", "").lower()
+            if action in {"read_file", "list_files"}:
+                return "filesystem_read"
+            return "filesystem_write"
 
         external_services = {
             "twitter",

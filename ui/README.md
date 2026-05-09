@@ -6,11 +6,14 @@ Modern, premium dashboard for interacting with VIKI (Virtual Intelligence Knowle
 
 - **Hologram Face (default view)** - Voice conversation with VIKI: hologram-style avatar, browser speech-to-text (microphone), and text-to-speech for responses. Best in Chrome or Edge.
 - **Real-time Chat Interface** - Full dashboard: send directives and receive responses (switch via "Full dashboard").
-- **Skill Monitor** - View all active skills and their capabilities
-- **Model Overview** - See available LLM providers
-- **Memory Management** - Clear conversation history
-- **Status Monitoring** - Real-time connection status
-- **Premium Design** - Dark cyberpunk aesthetic with smooth animations
+- **MCP Server Monitor** - View connected Model Context Protocol servers, their health, and tool counts.
+- **Session Usage Tracker** - Track exact LLM input/output tokens and estimated session costs in real-time.
+- **Code Search Explorer** - Index and query your codebase natively via semantic search from the dashboard.
+- **Skill Monitor** - View all active skills and their capabilities.
+- **Model Overview** - See available LLM providers.
+- **Memory Management** - Reset VIKI's cognitive state via the dedicated "Clear Memory" button.
+- **Status Monitoring** - Real-time connection and websocket status.
+- **Premium Design** - Dark cyberpunk aesthetic with glassmorphism primitives, hover-sensitive card animations, and a cohesive typography system.
 
 ## Tech Stack
 

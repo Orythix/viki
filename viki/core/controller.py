@@ -5,7 +5,7 @@ import yaml
 import re
 import json
 import importlib
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from viki.core.soul import Soul
 from viki.core.safety import SafetyLayer, safe_for_log
 from viki.core.llm import APILLM, ModelRouter, StructuredPrompt
@@ -343,6 +343,8 @@ class VIKIController:
         self.pending_actions = {} # For confirmation flow, keyed by session
         self.pending_ops_plans = {}  # For ops approval flow, keyed by session
         self._last_response_meta_by_session = {}
+        # Cumulative LLM token/cost totals per chat session (API/SSE exposure).
+        self._session_llm_usage: Dict[str, Dict[str, Any]] = {}
         
         # Point 4: Cognitive Budget Allocator
         self.budgets = {
@@ -727,7 +729,7 @@ class VIKIController:
                 if name == default_name:
                     continue
                 inst = self.model_router.models.get(name)
-                if inst is not None and isinstance(inst, APILLM):
+                if inst is not None and inst.is_cloud():
                     unavailable_models.pop(name, None)
         model_health["unavailable_models"] = unavailable_models
         registered_skills = sorted(self.skill_registry.list_skills()) if self.skill_registry else []
@@ -1197,7 +1199,100 @@ class VIKIController:
 
     def get_last_response_meta(self, session_id: Optional[str] = None) -> Dict[str, Any]:
         session_id = self._normalize_session_id(session_id)
-        return self._last_response_meta_by_session.get(session_id, {})
+        meta = dict(self._last_response_meta_by_session.get(session_id, {}))
+        usage = self._session_llm_usage.get(session_id)
+        if usage:
+            meta["usage"] = {
+                "input_tokens": usage.get("input_tokens", 0),
+                "output_tokens": usage.get("output_tokens", 0),
+                "total_cost_usd": round(float(usage.get("total_cost_usd", 0.0)), 6),
+                "by_model": dict(usage.get("by_model") or {}),
+            }
+        return meta
+
+    def get_session_usage(self, session_id: Optional[str] = None) -> Dict[str, Any]:
+        """Rolling LLM usage for this session (tokens + estimated USD)."""
+        session_id = self._normalize_session_id(session_id)
+        u = self._session_llm_usage.get(session_id)
+        if not u:
+            return {
+                "session_id": session_id,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "total_cost_usd": 0.0,
+                "by_model": {},
+            }
+        return {
+            "session_id": session_id,
+            "input_tokens": int(u.get("input_tokens", 0)),
+            "output_tokens": int(u.get("output_tokens", 0)),
+            "total_cost_usd": round(float(u.get("total_cost_usd", 0.0)), 6),
+            "by_model": dict(u.get("by_model") or {}),
+        }
+
+    def reset_session_usage(self, session_id: Optional[str] = None) -> None:
+        session_id = self._normalize_session_id(session_id)
+        self._session_llm_usage.pop(session_id, None)
+
+    def _router_usage_snapshot(self) -> Dict[str, Tuple[int, int, float]]:
+        snap: Dict[str, Tuple[int, int, float]] = {}
+        try:
+            for name, model in (self.model_router.models or {}).items():
+                snap[name] = (
+                    int(getattr(model, "input_tokens", 0) or 0),
+                    int(getattr(model, "output_tokens", 0) or 0),
+                    float(getattr(model, "total_cost_usd", 0.0) or 0.0),
+                )
+        except Exception as e:
+            viki_logger.debug("_router_usage_snapshot: %s", e)
+        return snap
+
+    def _accumulate_session_usage_from_delta(
+        self,
+        session_id: str,
+        baseline: Dict[str, Tuple[int, int, float]],
+    ) -> None:
+        sid = self._normalize_session_id(session_id)
+        bucket = self._session_llm_usage.setdefault(
+            sid,
+            {"input_tokens": 0, "output_tokens": 0, "total_cost_usd": 0.0, "by_model": {}},
+        )
+        by_model: Dict[str, Any] = bucket.setdefault("by_model", {})
+        try:
+            for name, model in (self.model_router.models or {}).items():
+                cur = (
+                    int(getattr(model, "input_tokens", 0) or 0),
+                    int(getattr(model, "output_tokens", 0) or 0),
+                    float(getattr(model, "total_cost_usd", 0.0) or 0.0),
+                )
+                b = baseline.get(name, (0, 0, 0.0))
+                di, dout, dc = cur[0] - b[0], cur[1] - b[1], cur[2] - b[2]
+                if di or dout or dc:
+                    bucket["input_tokens"] = int(bucket.get("input_tokens", 0)) + di
+                    bucket["output_tokens"] = int(bucket.get("output_tokens", 0)) + dout
+                    bucket["total_cost_usd"] = float(bucket.get("total_cost_usd", 0.0)) + dc
+                    bm = by_model.setdefault(
+                        name,
+                        {"input_tokens": 0, "output_tokens": 0, "total_cost_usd": 0.0},
+                    )
+                    bm["input_tokens"] = int(bm.get("input_tokens", 0)) + di
+                    bm["output_tokens"] = int(bm.get("output_tokens", 0)) + dout
+                    bm["total_cost_usd"] = float(bm.get("total_cost_usd", 0.0)) + dc
+        except Exception as e:
+            viki_logger.debug("_accumulate_session_usage_from_delta: %s", e)
+
+    def _skill_action_severity(self, skill_name: str, params: Dict[str, Any]) -> str:
+        skill_obj = self.skill_registry.get_skill(skill_name) if self.skill_registry else None
+        if skill_obj is not None and skill_name.startswith("mcp_"):
+            st = (getattr(skill_obj, "safety_tier", None) or "medium").lower()
+            if st == "destructive":
+                return "destructive"
+            if st == "medium":
+                return "medium"
+            if getattr(skill_obj, "requires_user_confirmation", False):
+                return "medium"
+            return "safe"
+        return self.safety.get_action_severity(skill_name, params)
 
     def get_router_telemetry(self) -> Dict[str, Any]:
         """Return cognitive routing telemetry (reflex hit rate, per-outcome counts)."""
@@ -1214,12 +1309,17 @@ class VIKIController:
         attachment_paths: Optional[List[str]] = None,
         session_id: Optional[str] = None,
     ) -> str:
-        return await self._process_request_impl(
-            user_input,
-            on_event=on_event,
-            attachment_paths=attachment_paths,
-            session_id=session_id,
-        )
+        norm_session = self._normalize_session_id(session_id)
+        baseline = self._router_usage_snapshot()
+        try:
+            return await self._process_request_impl(
+                user_input,
+                on_event=on_event,
+                attachment_paths=attachment_paths,
+                session_id=norm_session,
+            )
+        finally:
+            self._accumulate_session_usage_from_delta(norm_session, baseline)
 
     async def _process_request_impl(  #NOSONAR
         self,
@@ -1549,7 +1649,7 @@ class VIKIController:
             params = (reflex_action_override.parameters or {}).copy()
             check_res = self.capabilities.check_permission(skill_name, params=params)
             if check_res.allowed and self.safety.validate_action(skill_name, params):
-                severity = self.safety.get_action_severity(skill_name, params)
+                severity = self._skill_action_severity(skill_name, params)
                 if severity in ("medium", "destructive"):
                     # Bounce to confirmation flow rather than auto-running.
                     self.pending_actions[session_id] = reflex_action_override
@@ -1704,7 +1804,7 @@ class VIKIController:
                     continue
 
                 # Safety Confirmation
-                severity = self.safety.get_action_severity(skill_name, params)
+                severity = self._skill_action_severity(skill_name, params)
                 if severity in ["medium", "destructive"]:
                     self.pending_actions[session_id] = viki_resp.action
                     reply = (viki_resp.final_response or "").strip()

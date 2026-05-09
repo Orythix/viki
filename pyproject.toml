@@ -87,6 +87,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-asyncio", "ruff"]
+# Model Context Protocol (remote stdio/http/sse servers). See viki/config/mcp_servers.yaml.
+mcp = ["mcp>=1.12.0"]
 # Optional stacks (install on top of the base package). See README "Install profiles".
 windows = ["pypiwin32"]
 optional-network = ["scapy"]

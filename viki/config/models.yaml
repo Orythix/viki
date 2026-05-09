@@ -85,8 +85,8 @@ models:
       - chatter
       - tool_use
       supports_native_tools: false
-      description: VIKI Modelfile image (viki-neural-forge) with baked-in lessons after
-        internal_forge.
+      description: VIKI Modelfile image (viki-neural-forge) with baked-in lessons
+        after internal_forge.
     phi3:
       provider: ollama
       model_name: phi3:latest

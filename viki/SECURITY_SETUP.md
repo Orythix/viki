@@ -253,6 +253,10 @@ For issues or questions:
 
 ---
 
+## Third-party code and MCP
+
+When integrating external agent or IDE codebases as **design reference only**, prefer reimplementation against public specifications (for example the [Model Context Protocol](https://modelcontextprotocol.io)) and VIKI’s existing modules. Do not copy proprietary or license-incompatible sources into this repository without confirming rights and compatibility with Apache-2.0. VIKI’s MCP client (`viki/integrations/mcp_client.py`) uses the official `mcp` Python SDK optional extra (`pip install "viki-sdi[mcp]"`).
+
 ## Compliance Notes
 
 **CFAA Compliance:** Security skill now enforces local network-only scanning.

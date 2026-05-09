@@ -45,6 +45,21 @@ def _make_stub_controller():
                 "subtasks": [{"action": "echo", "step": 1}],
                 "total_steps": 1,
                 "cognitive_route": {"outcome": "shallow"},
+                "usage": {
+                    "input_tokens": 10,
+                    "output_tokens": 20,
+                    "total_cost_usd": 0.001,
+                    "by_model": {"mock": {"input_tokens": 10, "output_tokens": 20, "total_cost_usd": 0.001}},
+                },
+            }
+
+        def get_session_usage(self, session_id=None):
+            return {
+                "session_id": session_id or "default",
+                "input_tokens": 5,
+                "output_tokens": 7,
+                "total_cost_usd": 0.0002,
+                "by_model": {},
             }
 
         @property
@@ -109,6 +124,24 @@ class TestSSEStreaming(_ApiTestBase):
         self.assertIn("event: final", body)
         self.assertIn("event: done", body)
         self.assertIn("echo:ping", body)
+
+
+class TestUsageEndpoint(_ApiTestBase):
+    def test_get_usage(self):
+        r = self.client.get("/api/usage", headers=self.headers)
+        self.assertEqual(r.status_code, 200)
+        data = r.get_json()
+        self.assertEqual(data.get("input_tokens"), 5)
+        self.assertEqual(data.get("output_tokens"), 7)
+
+
+class TestMcpStatusEndpoint(_ApiTestBase):
+    def test_mcp_status_without_client(self):
+        r = self.client.get("/api/mcp/status", headers=self.headers)
+        self.assertEqual(r.status_code, 200)
+        data = r.get_json()
+        self.assertFalse(data.get("sdk_available"))
+        self.assertEqual(data.get("skill_count"), 0)
 
 
 if __name__ == "__main__":

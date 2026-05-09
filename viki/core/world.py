@@ -220,6 +220,9 @@ class WorldModel:
         graph_size = len(self.state.codebase_graph)
 
         lines: List[str] = ["WORLD MODEL AWARENESS:"]
+        # Always show CWD so the LLM knows what directory it can read files from
+        cwd = os.path.abspath(os.getcwd())
+        lines.append(f"- Current Working Directory: {cwd}")
         if apps:
             lines.append(f"- Identified Apps: {apps}")
         if paths:

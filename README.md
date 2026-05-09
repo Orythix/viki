@@ -25,7 +25,7 @@
 
 ## Overview (what VIKI is)
 
-**VIKI** (**Virtual Intelligence Knowledge Interface**) is an **open-source AI agent** and **self-hosted autonomous assistant** written in **Python**. It targets **local-first** and **air-gapped** setups using **Ollama** (Phi, Mistral, Qwen, DeepSeek, and other local models), with optional cloud profiles when you opt in. The stack includes a **CLI**, **Flask REST API** (chat with **SSE streaming**, missions, forge, traces), **MCP** tool integration, **RAG-style** semantic memory over SQLite, **Neural Forge** baking of lessons into custom **Ollama** images, and a **React + Vite** operator **dashboard** (text chat, hologram voice UI, sub-agents). Governance uses **capability gating**, an ethical governor, and structured logging—not a multi-tenant SaaS; you run it on **your** machine or **Docker**.
+**VIKI** (**Virtual Intelligence Knowledge Interface**) is an **open-source AI agent** and **self-hosted autonomous assistant** written in **Python**. It targets **local-first** and **air-gapped** setups using **Ollama** (Phi, Mistral, Qwen, DeepSeek, and other local models), with optional cloud profiles when you opt in. The stack includes an intuitive **CLI**, **Flask REST API** (chat with **SSE streaming**, missions, forge, traces), **MCP** tool integration, **RAG-style** semantic memory over SQLite, **Neural Forge** baking of lessons into custom **Ollama** images, and a comprehensive **React + Vite** operator **dashboard** (text chat, hologram voice UI, token usage tracking, code search, MCP monitors, sub-agents). Governance uses **capability gating**, an ethical governor, and structured logging—not a multi-tenant SaaS; you run it on **your** machine or **Docker**.
 
 **Repository:** [github.com/Orythix/viki](https://github.com/Orythix/viki) · **License:** Apache 2.0
 
@@ -274,8 +274,10 @@ Install the `viki` command so you can run it from any directory with the current
 
 - **Install**: From the repo root, run `pip install -e .` (or use the one-line install scripts below).
 - **Run**:
-  - `viki` — use current directory as workspace.
-  - `viki /path/to/project` — use that directory as workspace.
+  - `viki` — use current directory as workspace and enter the interactive REPL.
+  - `viki /path/to/project` — use that directory as workspace and enter the interactive REPL.
+  - `viki "fix the bug"` — execute a single-shot query in the current directory, apply changes, and exit.
+  - `viki /path/to/project "add logging"` — run a single-shot query in a specific directory.
   - `VIKI_PERSONA=dev viki` — run with the dev persona (coding-focused skills).
 - **Confirm/reject**: When VIKI asks "Confirm to proceed" for a medium or destructive action, reply `yes` or `confirm` to run it, or `no` or `reject` to cancel. You can also use `/confirm` or `/reject`.
 - **Useful in-chat commands**: `/help`, `/skills`, `/shadow` (simulate only), `/scan` (re-scan workspace codebase).

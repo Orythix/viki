@@ -164,7 +164,7 @@ function PerformancePanel({ performance, error }) {
   )
 }
 
-function BrainPanel({ brain, error }) {
+function BrainPanel({ brain, error, onClearMemory }) {
   return (
     <Panel
       error={error}
@@ -194,6 +194,17 @@ function BrainPanel({ brain, error }) {
               node: typeof t === 'string' ? t : JSON.stringify(t),
             })}
           />
+        )}
+        {onClearMemory && (
+          <div className="forge-controls" style={{marginTop: '1rem'}}>
+            <button
+              type="button"
+              className="dashboard-btn ghost"
+              onClick={onClearMemory}
+            >
+              Clear Memory
+            </button>
+          </div>
         )}
       </div>
     </Panel>
@@ -591,6 +602,139 @@ function TraceTimelinePanel({ traces, error }) {
   )
 }
 
+function MCPPanel({ mcp, error }) {
+  return (
+    <Panel
+      error={error}
+      isEmpty={!mcp || !mcp.enabled}
+      emptyMessage={mcp?.reason || "MCP not configured"}
+    >
+      <div className="dashboard-system">
+        <Row label="Skill Count" value={mcp?.skill_count || 0} />
+        <ListBlock
+          label="Servers"
+          items={mcp?.servers || []}
+          render={(s) => ({
+            key: s.name,
+            node: (
+              <>
+                <strong>{s.name}</strong> ({s.tools?.length || 0} tools)
+              </>
+            ),
+          })}
+        />
+        {mcp?.connection_status && mcp.connection_status.length > 0 && (
+          <ListBlock
+            label="Connections"
+            items={mcp.connection_status}
+            render={(s) => ({
+              key: s.name,
+              node: (
+                <>
+                  <strong>{s.name}</strong>: <span className={`badge ${s.connected ? 'online' : 'offline'}`}>{s.connected ? 'connected' : 'disconnected'}</span>
+                  {s.error && <span className="dashboard-error"> ({s.error})</span>}
+                </>
+              ),
+            })}
+          />
+        )}
+      </div>
+    </Panel>
+  )
+}
+
+function UsagePanel({ usage, error }) {
+  return (
+    <Panel
+      error={error}
+      isEmpty={!usage}
+      emptyMessage="No usage data"
+    >
+      <div className="dashboard-system">
+        <Row label="Session" value={usage?.session_id} />
+        <Row label="Input Tokens" value={usage?.input_tokens} />
+        <Row label="Output Tokens" value={usage?.output_tokens} />
+        <Row label="Cost (USD)" value={`$${(usage?.total_cost_usd || 0).toFixed(4)}`} />
+        {usage?.by_model && Object.keys(usage.by_model).length > 0 && (
+          <ListBlock
+            label="By Model"
+            items={Object.entries(usage.by_model)}
+            render={([m, u]) => ({
+              key: m,
+              node: `${m}: ${u.calls} calls, ${u.input_tokens} in, ${u.output_tokens} out ($${(u.cost_usd || 0).toFixed(4)})`,
+            })}
+          />
+        )}
+      </div>
+    </Panel>
+  )
+}
+
+function CodeSearchPanel({ scan, error }) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState(null)
+  const [searching, setSearching] = useState(false)
+
+  const handleSearch = async (e) => {
+    e.preventDefault()
+    if (!query.trim()) return
+    setSearching(true)
+    try {
+      const res = await fetch(`${API_BASE}/code/search?q=${encodeURIComponent(query)}&top_k=5`, {
+        headers: getApiHeaders()
+      })
+      const data = await res.json()
+      setResults(data.chunks || [])
+    } catch {
+      setResults([])
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  return (
+    <Panel
+      error={error}
+      isEmpty={!scan}
+      emptyMessage="Code index not available"
+    >
+      <div className="dashboard-system">
+        <Row label="Indexed Files" value={scan?.n_files || 0} />
+        <Row label="Indexed Chunks" value={scan?.n_chunks || 0} />
+        <Row label="Indexed Symbols" value={scan?.n_symbols || 0} />
+        
+        <form className="forge-controls" onSubmit={handleSearch} style={{marginTop: '1rem'}}>
+          <input 
+            type="text" 
+            placeholder="Search code..." 
+            value={query} 
+            onChange={(e) => setQuery(e.target.value)} 
+          />
+          <button type="button" className="dashboard-btn primary" onClick={handleSearch} disabled={!query.trim() || searching}>
+            {searching ? '...' : 'Search'}
+          </button>
+        </form>
+
+        {results && (
+          <ListBlock
+            label="Results"
+            items={results}
+            render={(r) => ({
+              key: r.chunk_id || Math.random(),
+              node: (
+                <div style={{fontSize: '0.9em', marginTop: '4px'}}>
+                  <strong>{r.file_path}</strong>
+                  {r.score && <span style={{color: '#888'}}> ({(r.score).toFixed(2)})</span>}
+                </div>
+              ),
+            })}
+          />
+        )}
+      </div>
+    </Panel>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Data layer
 // ---------------------------------------------------------------------------
@@ -611,6 +755,9 @@ const ENDPOINTS = [
   { key: 'promotion', path: '/forge/promotion', extract: (d) => d },
   { key: 'traces', path: '/traces?limit=20', extract: (d) => d.spans || [] },
   { key: 'tracesGrouped', path: '/traces/grouped?limit=10', extract: (d) => d.traces || [] },
+  { key: 'mcpServers', path: '/mcp/servers', extract: (d) => d },
+  { key: 'usage', path: '/usage', extract: (d) => d },
+  { key: 'codeScan', path: '/code/search?action=scan', extract: (d) => d },
 ]
 
 async function fetchSection(spec) {
@@ -646,6 +793,9 @@ const INITIAL_DATA = {
   promotion: null,
   traces: [],
   tracesGrouped: [],
+  mcpServers: null,
+  usage: null,
+  codeScan: null,
 }
 
 // ---------------------------------------------------------------------------
@@ -693,8 +843,11 @@ SystemPanel.propTypes = { health: apiObject, error: errorProp }
 SkillsPanel.propTypes = { skills: PropTypes.array, error: errorProp }
 ModelsPanel.propTypes = { models: PropTypes.array, error: errorProp }
 PerformancePanel.propTypes = { performance: PropTypes.array, error: errorProp }
-BrainPanel.propTypes = { brain: apiObject, error: errorProp }
+BrainPanel.propTypes = { brain: apiObject, error: errorProp, onClearMemory: PropTypes.func }
 WorldPanel.propTypes = { world: apiObject, error: errorProp }
+MCPPanel.propTypes = { mcp: apiObject, error: errorProp }
+UsagePanel.propTypes = { usage: apiObject, error: errorProp }
+CodeSearchPanel.propTypes = { scan: apiObject, error: errorProp }
 MissionsPanel.propTypes = {
   missions: PropTypes.shape({
     queue: PropTypes.array,
@@ -796,6 +949,18 @@ export default function Dashboard({ onNavigateChat, onNavigateHologram }) {
     }
   }, [fetchAll])
 
+  const clearMemory = useCallback(async () => {
+    try {
+      await fetch(`${API_BASE}/memory`, {
+        method: 'DELETE',
+        headers: getApiHeaders(),
+      })
+      fetchAll()
+    } catch (e) {
+      console.error('memory clear failed', e)
+    }
+  }, [fetchAll])
+
   const forgePromote = useCallback(async (model) => {
     try {
       await fetch(`${API_BASE}/forge/promote`, {
@@ -894,7 +1059,7 @@ export default function Dashboard({ onNavigateChat, onNavigateHologram }) {
 
         <Section title="Brain (Cognitive State)">
           <Card>
-            <BrainPanel brain={data.brain} error={errors.brain} />
+            <BrainPanel brain={data.brain} error={errors.brain} onClearMemory={clearMemory} />
           </Card>
         </Section>
 
@@ -969,6 +1134,24 @@ export default function Dashboard({ onNavigateChat, onNavigateHologram }) {
         <Section title="Trace Timeline (Gantt)" className="span-2">
           <Card>
             <TraceTimelinePanel traces={data.tracesGrouped} error={errors.tracesGrouped} />
+          </Card>
+        </Section>
+
+        <Section title="MCP Servers">
+          <Card>
+            <MCPPanel mcp={data.mcpServers} error={errors.mcpServers} />
+          </Card>
+        </Section>
+
+        <Section title="Session Usage">
+          <Card>
+            <UsagePanel usage={data.usage} error={errors.usage} />
+          </Card>
+        </Section>
+
+        <Section title="Code Search" className="span-2">
+          <Card>
+            <CodeSearchPanel scan={data.codeScan} error={errors.codeScan} />
           </Card>
         </Section>
       </div>

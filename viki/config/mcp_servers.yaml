@@ -1,11 +1,25 @@
-# MCP server configuration for VIKI (Phase 3).
-# Each entry boots an MCP server and exposes its tools as VIKI skills.
-# Disabled by default — set `command:` and ensure the official `mcp` SDK is installed.
-
+# MCP server configuration for VIKI (Phase 3 + remote transports).
+# Install optional dependency: pip install "viki-sdi[mcp]" (or pip install mcp).
+#
+# Transports:
+#   stdio (default) — command spawns the server process
+#   http / streamable_http — Streamable HTTP endpoint (url + optional headers)
+#   sse — SSE MCP endpoint (url + optional headers)
+#
+# Per-server options:
+#   safety_tier: safe | medium | destructive  (default medium)
+#   requires_confirmation: true | false
+#   tools:  # optional per-tool overrides
+#     some_tool:
+#       safety_tier: destructive
+#       requires_confirmation: true
+#
+# Example (remote):
+#   myremote:
+#     transport: http
+#     url: https://mcp.example.com/v1/mcp
+#     headers:
+#       Authorization: Bearer ${MCP_BEARER_TOKEN}
+#     timeout: 45
+#
 servers: {}
-  # figma:
-  #   command: ["npx", "-y", "@figma/mcp-server"]
-  #   env:
-  #     FIGMA_TOKEN: ${FIGMA_TOKEN}
-  # supabase:
-  #   command: ["npx", "-y", "@supabase/mcp-server"]

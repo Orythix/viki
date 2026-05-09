@@ -523,7 +523,10 @@ def get_memory():
 def clear_memory():
     """Clear conversation memory"""
     controller = get_controller()
-    controller.memory.working.clear_trace(session_id=get_session_id())
+    sid = get_session_id()
+    controller.memory.working.clear_trace(session_id=sid)
+    if hasattr(controller, "reset_session_usage"):
+        controller.reset_session_usage(session_id=sid)
     return jsonify({'status': 'cleared'})
 
 @app.route('/api/skills', methods=['GET'])
@@ -533,11 +536,16 @@ def get_skills():
     controller = get_controller()
     skills = []
     for name, skill in controller.skill_registry.skills.items():
-        skills.append({
+        entry = {
             'name': name,
             'description': skill.description if hasattr(skill, 'description') else "No description",
-            'triggers': skill.triggers if hasattr(skill, 'triggers') else []
-        })
+            'triggers': skill.triggers if hasattr(skill, 'triggers') else [],
+        }
+        if hasattr(skill, 'safety_tier'):
+            entry['safety_tier'] = skill.safety_tier
+        if hasattr(skill, 'requires_user_confirmation'):
+            entry['requires_user_confirmation'] = bool(skill.requires_user_confirmation)
+        skills.append(entry)
     return jsonify({'skills': skills})
 
 @app.route('/api/models', methods=['GET'])
@@ -1066,11 +1074,61 @@ def get_mcp_servers():
             "description": t.get('description', ''),
         })
     servers = [{"name": name, "tools": tlist} for name, tlist in by_server.items()]
+    status_list = []
+    if hasattr(client, "get_server_status"):
+        try:
+            status_list = client.get_server_status()
+        except Exception:
+            status_list = []
     return jsonify({
         "enabled": True,
         "servers": servers,
         "skill_count": int(getattr(controller, 'mcp_skill_count', 0) or 0),
+        "connection_status": status_list,
     })
+
+
+@app.route('/api/mcp/status', methods=['GET'])
+@require_api_key
+def get_mcp_status():
+    """Per-server MCP health: transport, connected flag, tool count, last error."""
+    controller = get_controller()
+    client = getattr(controller, "mcp_client", None)
+    if client is None:
+        return jsonify({
+            "sdk_available": False,
+            "skill_count": 0,
+            "servers": [],
+        })
+    servers = []
+    if hasattr(client, "get_server_status"):
+        try:
+            servers = client.get_server_status()
+        except Exception as e:
+            servers = [{"name": "?", "error": str(e), "connected": False}]
+    return jsonify({
+        "sdk_available": True,
+        "skill_count": int(getattr(controller, "mcp_skill_count", 0) or 0),
+        "servers": servers,
+    })
+
+
+@app.route('/api/usage', methods=['GET'])
+@require_api_key
+def get_usage():
+    """Rolling session LLM usage (tokens + estimated USD) for the current API session."""
+    controller = get_controller()
+    if hasattr(controller, "get_session_usage"):
+        return jsonify(controller.get_session_usage(session_id=get_session_id()))
+    return jsonify(
+        {
+            "session_id": get_session_id(),
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_cost_usd": 0.0,
+            "by_model": {},
+        }
+    )
 
 if _sock is not None:
     @_sock.route('/ws')

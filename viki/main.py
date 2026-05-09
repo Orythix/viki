@@ -65,64 +65,21 @@ class SimpleInterface:
     def print_action(self, text):
         self.console.print(f"[yellow]   Action: {text}[/]")
 
-async def main(workspace_path=None):
-    interface = SimpleInterface()
-    # Keep the interactive console clean by default (Claude-like).
-    # Use `/debug` to re-enable verbose internal logging.
-    viki_logger.setLevel(logging.ERROR)
-    debug_mode = False
-
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    settings_path = os.path.join(script_dir, "config", "settings.yaml")
-    soul_path = get_soul_path(settings_path)
-
+async def _shutdown_controller(controller):
+    controller.watchdog.stop()
+    controller.bio.stop()
+    controller.nexus.stop()
     try:
-        controller = VIKIController(settings_path, soul_path, workspace_override=workspace_path)
+        for bridge_name in ("discord", "telegram", "slack", "whatsapp"):
+            bridge = getattr(controller, bridge_name, None)
+            if bridge is not None and hasattr(bridge, "stop"):
+                await bridge.stop()
     except Exception as e:
-        interface.print_error(f"Initialization Failed: {e}")
-        return
+        viki_logger.debug(f"Error stopping bridges: {e}")
+    await controller.shutdown()
+
+async def _start_background_tasks(controller, on_event, loop, interface):
     try:
-        controller.attach_mcp_skills_sync()
-    except Exception as e:
-        viki_logger.debug(f"MCP attach skipped: {e}")
-    controller.check_skill_health()
-    interface.welcome(controller)
-
-    # Event Handler for linear logging.
-    # `_streaming_state` toggles between "header not yet drawn" and "actively
-    # rendering tokens" so we only print "VIKI > " once per turn even if
-    # multiple `partial` events fire.
-    _streaming_state = {"active": False}
-
-    def on_event(event_type, data):
-        if event_type == "thought":
-            if debug_mode:
-                interface.print_thought(data)
-        elif event_type == "action":
-            if debug_mode:
-                interface.print_action(str(data))
-        elif event_type == "partial":
-            # Stream tokens straight to the console as they arrive. We use
-            # `console.print(..., end="")` to avoid newlines per chunk.
-            try:
-                if not _streaming_state["active"]:
-                    interface.console.print("[bold cyan]VIKI > [/]", end="")
-                    _streaming_state["active"] = True
-                interface.console.print(str(data), end="")
-            except Exception:
-                pass
-        elif event_type == "final":
-            if _streaming_state["active"]:
-                interface.console.print("")  # close streamed line
-                _streaming_state["active"] = False
-        elif event_type == "status":
-            pass
-        elif event_type == "error":
-            interface.print_error(data)
-
-    try:
-        # Background Tasks
-        loop = asyncio.get_running_loop()
         await controller.bio.start()
         controller._create_tracked_task(controller.nexus.start_processing(on_event=on_event), "nexus_processing")
         try:
@@ -143,29 +100,40 @@ async def main(workspace_path=None):
     except Exception as e:
         interface.print_error(f"Task Launch Error: {e}")
 
-    # Main Interaction Loop
+async def _run_single_query(controller, interface, query, on_event, streaming_state):
+    try:
+        interface.print_user(query)
+        start_t = time.time()
+        streaming_state["active"] = False
+        response = await controller.process_request(query, on_event=on_event)
+        elapsed = time.time() - start_t
+
+        if streaming_state["active"]:
+            interface.console.print("")
+            streaming_state["active"] = False
+            interface.console.print(f"[dim]   ({elapsed:.2f}s)[/]")
+        else:
+            interface.console.print(f"[dim]   ({elapsed:.2f}s)[/]")
+            interface.print_viki(response)
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        interface.print_error(str(e))
+    finally:
+        interface.console.print("[yellow]Query completed. Shutting down...[/]")
+        await _shutdown_controller(controller)
+
+async def _run_interactive_loop(controller, interface, on_event, streaming_state, debug_state):
     while True:
         try:
-            # Clean Input
             user_input = interface.console.input("[bold green]USER > [/]").strip()
             
             if not user_input: continue
             if user_input.lower() in ["exit", "quit", "/exit"]:
                 interface.console.print("[yellow]Shutting down...[/]")
-                controller.watchdog.stop()
-                controller.bio.stop()
-                controller.nexus.stop()
-                try:
-                    for bridge_name in ("discord", "telegram", "slack", "whatsapp"):
-                        bridge = getattr(controller, bridge_name, None)
-                        if bridge is not None and hasattr(bridge, "stop"):
-                            await bridge.stop()
-                except Exception as e:
-                    viki_logger.debug(f"Error stopping bridges: {e}")
-                await controller.shutdown()
+                await _shutdown_controller(controller)
                 break
             
-            # --- CLI Commands ---
             if user_input.lower() == "/help":
                 interface.console.print("[bold cyan]Available Commands:[/]")
                 interface.console.print("  [green]/help[/]     — Show this help")
@@ -203,24 +171,22 @@ async def main(workspace_path=None):
             if user_input.lower() == "/debug":
                 if viki_logger.level == logging.DEBUG:
                     viki_logger.setLevel(logging.ERROR)
-                    debug_mode = False
+                    debug_state["active"] = False
                     interface.console.print("[yellow]Debug Mode: OFF (ERROR level)[/]")
                 else:
                     viki_logger.setLevel(logging.DEBUG)
-                    debug_mode = True
+                    debug_state["active"] = True
                     interface.console.print("[yellow]Debug Mode: ON (DEBUG level)[/]")
                 continue
                 
             start_t = time.time()
-            _streaming_state["active"] = False
+            streaming_state["active"] = False
             response = await controller.process_request(user_input, on_event=on_event)
             elapsed = time.time() - start_t
 
-            # If we already streamed tokens, close the line; otherwise print
-            # the full response in the usual VIKI > block.
-            if _streaming_state["active"]:
+            if streaming_state["active"]:
                 interface.console.print("")
-                _streaming_state["active"] = False
+                streaming_state["active"] = False
                 interface.console.print(f"[dim]   ({elapsed:.2f}s)[/]")
             else:
                 interface.console.print(f"[dim]   ({elapsed:.2f}s)[/]")
@@ -231,21 +197,85 @@ async def main(workspace_path=None):
         except Exception as e:
             interface.print_error(str(e))
 
+async def main(workspace_path=None, query=None):
+    interface = SimpleInterface()
+    viki_logger.setLevel(logging.ERROR)
+    
+    debug_state = {"active": False}
+    streaming_state = {"active": False}
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    settings_path = os.path.join(script_dir, "config", "settings.yaml")
+    soul_path = get_soul_path(settings_path)
+
+    try:
+        controller = VIKIController(settings_path, soul_path, workspace_override=workspace_path)
+    except Exception as e:
+        interface.print_error(f"Initialization Failed: {e}")
+        return
+    try:
+        controller.attach_mcp_skills_sync()
+    except Exception as e:
+        viki_logger.debug(f"MCP attach skipped: {e}")
+    controller.check_skill_health()
+    interface.welcome(controller)
+
+    def on_event(event_type, data):
+        if event_type == "thought":
+            if debug_state["active"]:
+                interface.print_thought(data)
+        elif event_type == "action":
+            if debug_state["active"]:
+                interface.print_action(str(data))
+        elif event_type == "partial":
+            try:
+                if not streaming_state["active"]:
+                    interface.console.print("[bold cyan]VIKI > [/]", end="")
+                    streaming_state["active"] = True
+                interface.console.print(str(data), end="")
+            except Exception:
+                pass
+        elif event_type == "final":
+            if streaming_state["active"]:
+                interface.console.print("")
+                streaming_state["active"] = False
+        elif event_type == "status":
+            pass  # Ignored by design
+        elif event_type == "error":
+            interface.print_error(data)
+
+    loop = asyncio.get_running_loop()
+    await _start_background_tasks(controller, on_event, loop, interface)
+
+    if query:
+        await _run_single_query(controller, interface, query, on_event, streaming_state)
+    else:
+        await _run_interactive_loop(controller, interface, on_event, streaming_state, debug_state)
+
 def run():
     """Synchronous entry point for the `viki` console script."""
     parser = argparse.ArgumentParser(description="VIKI Sovereign Intelligence")
-    parser.add_argument("path", nargs="?", default=".", help="Project directory to use as workspace (default: current directory)")
     parser.add_argument("--ui", "--face-ui", dest="ui", action="store_true", help="Start API server and open hologram face UI in browser")
-    args = parser.parse_args()
+    parser.add_argument("args", nargs="*", help="Optional: [path] [query...]")
+    parsed_args = parser.parse_args()
 
     workspace_path = None
-    if args.path:
-        resolved = os.path.abspath(os.path.expanduser(args.path))
+    query_parts = []
+    
+    if parsed_args.args:
+        # Check if first argument is an existing directory
+        first_arg = parsed_args.args[0]
+        resolved = os.path.abspath(os.path.expanduser(first_arg))
         if os.path.isdir(resolved):
             workspace_path = resolved
+            query_parts = parsed_args.args[1:]
+        else:
+            query_parts = parsed_args.args
+
+    query_str = " ".join(query_parts).strip() if query_parts else None
 
     api_process = None
-    if args.ui:
+    if parsed_args.ui:
         # Start Flask API server in background so the UI can talk to VIKI
         script_dir = os.path.dirname(os.path.abspath(__file__))
         parent_dir = os.path.dirname(script_dir)
@@ -269,7 +299,7 @@ def run():
             viki_logger.warning(f"Could not start API server or open browser: {e}")
 
     try:
-        asyncio.run(main(workspace_path=workspace_path))
+        asyncio.run(main(workspace_path=workspace_path, query=query_str))
     except KeyboardInterrupt:
         pass
     finally:

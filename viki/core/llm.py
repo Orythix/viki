@@ -548,9 +548,10 @@ class LocalLLM(LLMProvider):
                         messages[i]["images"] = [base64_image]
                         break
 
-            async with aiohttp.ClientSession() as session:
+            timeout = aiohttp.ClientTimeout(total=300)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
                 try:
-                    async with session.post(f"{self.base_url}/api/chat", json=data, timeout=120) as resp:
+                    async with session.post(f"{self.base_url}/api/chat", json=data) as resp:
                         if resp.status == 404:
                             return f"Error: Model '{self.model_name}' not found."
                         resp_json = await resp.json()
@@ -587,9 +588,10 @@ class LocalLLM(LLMProvider):
             "tools": tools,
         }
 
-        async with aiohttp.ClientSession() as session:
+        timeout = aiohttp.ClientTimeout(total=300)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
             try:
-                async with session.post(f"{self.base_url}/api/chat", json=data, timeout=120) as resp:
+                async with session.post(f"{self.base_url}/api/chat", json=data) as resp:
                     if resp.status == 404:
                         raise ValueError(f"Model '{self.model_name}' not found.")
 
