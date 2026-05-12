@@ -1,16 +1,16 @@
-# VIKI Architecture (v7.3.0 Cortex)
+# VIKI Architecture (v8.0.0 Industrial)
 
 ## Core Philosophy
-Following the **Cortex Upgrade**, VIKI follows a "Professional Intelligence" design pattern:
-1.  **Priority-Based Ingress (The One True Event Loop)**: All IO (Terminal, Discord, Telegram, Voice) is funneled into a single `asyncio.PriorityQueue`. Urgent user inputs are prioritized over background proactive suggestions.
-2.  **Polymorphic Intelligence**: Cognition is split into three tiers:
-    *   **Reflex**: High-speed intent detection (Regex + Phi-3).
-    *   **Chatter**: Natural conversational flow (Llama 3).
-    *   **Planning**: Multi-step task solving and tool use (DeepSeek R1).
-3.  **Model Routing**: `get_model()` uses config priority, latency penalty for fast responses, and error-rate penalty; all LLM calls record performance for adaptive routing.
-4.  **Autonomous Safety**: All actions pass through a **Safety Envelope** that enforces tiered authorization (Safe/Medium/Destructive). Reflex path runs the full security pipeline.
-5.  **Mistake Prevention**: A **Failure Memory** layer records unsuccessful attempts; **relevant failures** are injected into deliberation context. Reflex failures call `reflex.report_failure()`.
-6.  **Continuous Learning**: Session analysis on shutdown, knowledge-gap–driven dream research, optional continuous training cycles, and LoRA/export for external training.
+Following the **Industrial Restructuring**, VIKI follows a **Clean Architecture (Hexagonal)** and **Domain-Driven Design (DDD)** pattern:
+1.  **Dependency Injection (Inversion of Control)**: All core services and use cases are managed by a central `Container` (`viki/container.py`). This decouples object creation from business logic.
+2.  **Layered Separation of Concerns**:
+    *   **Domain**: Pure business logic, entities, and repository interfaces. No external dependencies.
+    *   **Application**: Orchestrates use cases and application services (e.g., `SafetyService`).
+    *   **Infrastructure**: Concrete implementations of domain interfaces (e.g., `SqlAlchemyLearningRepository`).
+    *   **Presentation**: External interfaces (CLI, REST API, Event Bus).
+3.  **Repository Pattern**: Data access is abstracted through interfaces, allowing seamless swapping of persistence layers (SQLite, PostgreSQL, etc.).
+4.  **Autonomous Safety**: Safety logic is encapsulated in an application service and injected into the execution pipeline, ensuring consistent policy enforcement.
+5.  **Polymorphic Intelligence**: Cognition remains tiered (Reflex, Chatter, Planning), but orchestrated through clean use-case boundaries.
 
 ## Module Breakdown
 
@@ -18,17 +18,21 @@ Following the **Cortex Upgrade**, VIKI follows a "Professional Intelligence" des
 *   **Role**: Central Processing Unit.
 *   **Function**: Manages the "Think-Action-Learn" loop with integrated **Latency Budgeting** to maintain system responsiveness during high-complexity tasks.
 
-### 2. The Nexus (`viki/api/nexus.py`)
-*   **Role**: Priority Dispatcher.
-*   **Function**: Aggregates inputs into a single `PriorityQueue`. Implements explicit task cancellation and lifecycle management for background processes.
+### 1. The Container (`viki/container.py`)
+*   **Role**: Composition Root.
+*   **Function**: Manages the lifecycle and wiring of all application components. Uses `dependency-injector` to provide singleton services to the controller and presentation layers.
 
-### 3. Safety Layer (`viki/core/safety.py`)
-*   **Role**: Executive Constraint.
-*   **Function**: Validates every skill run via `validate_action(skill_name, params)`; classifies tool calls by risk. Intercepts "Medium" and "Destructive" actions for mandatory user confirmation (`/confirm`). Sanitizes prompts (injection blocklist), redacts secrets in output; optional LLM security scan when `system.security_scan_requests` is enabled.
+### 2. The Controller (`viki/core/controller.py`)
+*   **Role**: Application Coordinator.
+*   **Function**: Acts as the primary entry point for the "Think-Action-Learn" loop. Dependencies (Safety, Memory Recall, Model Router) are injected from the Container.
 
-### 4. Learning & Failure Memory (`viki/core/learning.py`)
-*   **Role**: Long-Term Stability (SQLite v3).
-*   **Function**: Houses both **Semantic Lessons** (facts) and **Failure Logs** in a unified SQLite database. Uses semantic search to retrieve relevant past errors before planning new actions. Exposes `export_training_dataset()` and supports session analysis and user-correction lessons.
+### 3. Application Services (`viki/application/`)
+*   **Safety Service**: Encapsulates the safety envelope and action validation.
+*   **Memory Recall Use Case**: Orchestrates semantic retrieval from the learning repository.
+
+### 4. Infrastructure Adapters (`viki/infrastructure/`)
+*   **Learning Repository**: SQLAlchemy-based implementation for managing lessons and failures in SQLite.
+*   **MCP Client**: Integration with external MCP servers.
 
 ### 5. Model Enhancement & Observability
 *   **Knowledge Gaps** (`viki/core/knowledge_gaps.py`): Records low-confidence responses; dream research uses `get_research_topics()`.

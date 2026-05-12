@@ -63,7 +63,8 @@ VIKI is a **Sovereign Digital Intelligence** designed to be more than just an as
 *   **The Neural Forge**: A integrated pipeline in the core kernel. VIKI extracts "Wisdom" from her SQLite-backed semantic memory and bakes it into a local **Ollama** image (default tag **`viki-neural-forge`**, profile **`viki-evolved`** in `models.yaml`) on top of bases such as **Phi-3**, **Mistral**, **Qwen**, or **DeepSeek-R1**.
 *   **Capability-Aware Execution**: Granular permission gating. Skills like `filesystem_write` and `shell_exec` are managed by a centralized `CapabilityRegistry`, ensuring high-risk actions never bypass security protocols.
 *   **Recursive Self-Reflection**: Utilizing the **Reflection Layer**, VIKI critiques her own plans before execution, reducing hallucinations and improving tool-use accuracy.
-*   **Unified Persistence Layer**: A multi-tiered SQLite architecture that allows VIKI to retain project context, user preferences, and historical lessons without the overhead of legacy JSON files.
+*   **Unified Persistence Layer**: A **SQLAlchemy-backed** multi-tiered architecture that allows VIKI to retain project context, user preferences, and historical lessons through a modern Repository pattern.
+*   **Industrial Clean Architecture**: A decoupled, testable system powered by **Dependency Injection**, ensuring VIKI is ready for enterprise-grade expansion and isolated module evolution.
 
 ### What makes VIKI specific
 

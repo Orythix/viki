@@ -18,7 +18,7 @@ The **full implementation** (application source, UI, tests, `scripts/`, private 
 
 ## What is VIKI?
 
-**VIKI** (**Virtual Intelligence Knowledge Interface**) is a **Python** AI agent for **local-first** and **air-gapped** use with **Ollama** and optional cloud profiles. It includes a **CLI**, **REST API** (SSE chat, missions), **MCP** tools, **SQLite**-backed lessons and memory, **Neural Forge** (baked **Ollama** images, default tag **`viki-neural-forge`**), and a **React** operator UI.
+**VIKI** (**Virtual Intelligence Knowledge Interface**) is a **Python** AI agent for **local-first** and **air-gapped** use with **Ollama** and optional cloud profiles. Following the **Industrial Restructuring**, it uses a **Clean Architecture (Hexagonal)** and **Domain-Driven Design (DDD)** pattern, featuring a centralized **Dependency Injection** container, **SQLAlchemy-backed** repository memory, **REST API** (SSE chat, missions), **MCP** tools, **Neural Forge** (baked **Ollama** images, default tag **`viki-neural-forge`**), and a **React** operator UI.
 
 **License (software):** Apache 2.0 — see [LICENSE](./LICENSE) and [NOTICE](./NOTICE).
 
