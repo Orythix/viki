@@ -52,7 +52,7 @@ class TestMissionGraphSchema(unittest.TestCase):
 
 class TestMissionGraphRunner(unittest.TestCase):
     def test_runs_in_order_and_persists(self):
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             persist = os.path.join(td, "graph.json")
             g = MissionGraph(mission_id="m", goal="ship feature")
             a = g.add(title="search", skill="search")

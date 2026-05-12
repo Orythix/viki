@@ -28,6 +28,7 @@ sys.path.append(parent_dir)
 from viki.core.controller import VIKIController
 from viki.config.logger import viki_logger
 from viki.config.resolve import get_soul_path
+from viki.container import Container
 
 console = Console()
 
@@ -209,7 +210,19 @@ async def main(workspace_path=None, query=None):
     soul_path = get_soul_path(settings_path)
 
     try:
+        # Initialize Dependency Injection Container
+        container = Container()
+        # Wire configuration to the container
+        container.config.from_yaml(settings_path)
+        
         controller = VIKIController(settings_path, soul_path, workspace_override=workspace_path)
+        
+        # Inject dependencies into the controller (partial migration)
+        # Note: Eventually VIKIController will be fully managed by the container.
+        controller.container = container
+        controller.safety_service = container.safety_service()
+        controller.recall_use_case = container.recall_memory_use_case()
+        
     except Exception as e:
         interface.print_error(f"Initialization Failed: {e}")
         return

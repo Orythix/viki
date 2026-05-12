@@ -11,6 +11,7 @@ from viki.core.tracing import (
     init_persistent_traces,
     start_span,
     get_persistent_traces,
+    close_persistent_traces,
 )
 
 
@@ -21,6 +22,7 @@ class TestTracingPersistence(unittest.TestCase):
         init_persistent_traces(self.db_path)
 
     def tearDown(self):
+        close_persistent_traces()
         try:
             self._td.cleanup()
         except Exception:

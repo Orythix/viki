@@ -71,12 +71,27 @@ class EngineeringPlaybookSkill(BaseSkill):
         if not self._playbooks_dir.exists():
             viki_logger.warning("engineering_playbook: playbooks dir not found at %s", self._playbooks_dir)
             return slug_to_path
+
+        # 1. Original logic for legacy folders
         for folder in ("engineering", "references", "personas"):
             target = self._playbooks_dir / folder
             if not target.exists():
                 continue
             for path in target.glob("*.md"):
                 slug_to_path[path.stem] = path
+
+        # 2. ECC playbooks (subdirectories containing SKILL.md or other .md)
+        for target in self._playbooks_dir.iterdir():
+            if target.is_dir() and target.name not in ("engineering", "references", "personas"):
+                skill_file = target / "SKILL.md"
+                if skill_file.exists():
+                    slug_to_path[target.name] = skill_file
+                else:
+                    # Fallback to the first available .md file in the folder
+                    md_files = list(target.glob("*.md"))
+                    if md_files:
+                        slug_to_path[target.name] = md_files[0]
+
         return slug_to_path
 
     def _load_playbook(self, slug: str) -> Optional[str]:

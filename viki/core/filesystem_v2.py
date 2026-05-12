@@ -42,13 +42,19 @@ class SemanticFS:
                 # We'll try os.symlink first
                 os.symlink(path, link_path)
             except OSError:
-                # Fallback to creating a Windows shortcut (.url or .lnk) or shell command
+                # Fallback: use cmd /c mklink without shell=True so arguments are not
+                # re-parsed by the shell (prevents command injection via path contents).
                 try:
-                    # Shell command for Hard Link or Junction if privilege fails
                     if os.path.isdir(path):
-                        subprocess.run(['mklink', '/J', link_path, path], shell=True, capture_output=True)
+                        subprocess.run(
+                            ['cmd', '/c', 'mklink', '/J', link_path, path],
+                            capture_output=True, text=True, check=False,
+                        )
                     else:
-                        subprocess.run(['mklink', link_path, path], shell=True, capture_output=True)
+                        subprocess.run(
+                            ['cmd', '/c', 'mklink', link_path, path],
+                            capture_output=True, text=True, check=False,
+                        )
                 except Exception as e:
                     viki_logger.error(f"Failed to mount {path}: {e}")
         

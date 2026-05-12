@@ -118,7 +118,7 @@ class TestLLMJudge(unittest.TestCase):
 
 class TestCapabilityIndex(unittest.TestCase):
     def test_geometric_mean_with_two_axes(self):
-        with tempfile.TemporaryDirectory() as root:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as root:
             # humaneval_plus -> coding axis, all pass
             os.makedirs(os.path.join(root, "humaneval_plus"))
             with open(os.path.join(root, "humaneval_plus", "20260101_120000_aaa.jsonl"), "w") as f:

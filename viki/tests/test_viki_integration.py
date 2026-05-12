@@ -7,6 +7,7 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.getcwd(), '..')))
 
 from viki.core.controller import VIKIController
+from viki.core.tracing import close_persistent_traces
 
 class TestVIKIIntegration(unittest.TestCase):
     def setUp(self):
@@ -20,7 +21,7 @@ class TestVIKIIntegration(unittest.TestCase):
         
         # Use a temporary data directory for tests to avoid locking main DB
         import tempfile
-        self.test_dir = tempfile.TemporaryDirectory()
+        self.test_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.test_data_path = self.test_dir.name
         
         # Instantiate Controller with overridden data_dir if possible
@@ -49,6 +50,7 @@ class TestVIKIIntegration(unittest.TestCase):
                     asyncio.run(self.controller.shutdown())
             except Exception:
                 pass
+        close_persistent_traces()
     
     def async_test(coro):
         """Decorator to run async tests."""

@@ -15,7 +15,7 @@ from viki.core.patch_verify import PatchVerify
 
 class TestPatchVerify(unittest.TestCase):
     def test_passing_patch_is_kept(self):
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             target = os.path.join(ws, "ok.py")
             with open(target, "w") as f:
                 f.write("x = 1\n")
@@ -32,7 +32,7 @@ class TestPatchVerify(unittest.TestCase):
             self.assertIn("+x = 2", result.diff)
 
     def test_failing_patch_rolls_back(self):
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             target = os.path.join(ws, "ok.py")
             original = "ORIGINAL\n"
             with open(target, "w") as f:
@@ -47,13 +47,13 @@ class TestPatchVerify(unittest.TestCase):
                 self.assertEqual(f.read(), original)
 
     def test_path_escape_blocked(self):
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             pv = PatchVerify(workspace_dir=ws, verify_cmd=[sys.executable, "-c", "import sys; sys.exit(0)"])
             with self.assertRaises(PermissionError):
                 pv.apply_and_verify(os.path.join("..", "escape.py"), "x = 0")
 
     def test_new_file_creation_on_success(self):
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             target = os.path.join(ws, "newfile.py")
             pv = PatchVerify(workspace_dir=ws, verify_cmd=[sys.executable, "-c", "import sys; sys.exit(0)"])
             result = pv.apply_and_verify(target, "y = 9\n")

@@ -289,3 +289,16 @@ def get_persistent_traces(limit: int = 50) -> List[Dict[str, Any]]:
 
 def clear_local_spans() -> None:
     _LOCAL_RECORDS.clear()
+
+
+def close_persistent_traces() -> None:
+    """Close the SQLite connection used for persistent traces."""
+    global _TRACE_DB, _TRACE_DB_PATH
+    with _TRACE_DB_LOCK:
+        if _TRACE_DB is not None:
+            try:
+                _TRACE_DB.close()
+            except Exception:
+                pass
+            _TRACE_DB = None
+            _TRACE_DB_PATH = None

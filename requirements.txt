@@ -1,10 +1,2 @@
-# Runtime and version pins live in pyproject.toml (single source of truth).
-#
-# Install application:
-#   pip install -e .
-#
-# Install with dev tools (pytest, ruff, pytest-asyncio):
-#   pip install -e ".[dev]"
-#
-# Optional stacks: see README "Install profiles" (e.g. .[windows], .[agent-full], .[qt]).
+# Use pip install -e . to install dependencies from pyproject.toml
 -e .

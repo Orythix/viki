@@ -5,6 +5,7 @@ Config: tasks.provider = file | things3
 import os
 import json
 import asyncio
+import subprocess
 from typing import Dict, Any
 from viki.skills.base import BaseSkill
 from viki.config.logger import viki_logger
@@ -71,7 +72,7 @@ class TasksSkill(BaseSkill):
                 try:
                     import urllib.parse
                     url = "things:///add?title=" + urllib.parse.quote(title)
-                    await asyncio.to_thread(os.system, f'open "{url}"')
+                    await asyncio.to_thread(subprocess.run, ["open", url], check=False)
                     return f"Added to Things 3: {title}"
                 except Exception as e:
                     return f"Things 3 error: {e}"

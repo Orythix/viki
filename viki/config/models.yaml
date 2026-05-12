@@ -38,7 +38,7 @@ models:
       region: us-east-1
     mock:
       type: mock
-  default: viki-evolved
+  default: viki-base
   profiles:
     qwen35:
       provider: ollama

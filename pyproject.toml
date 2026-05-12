@@ -83,6 +83,8 @@ dependencies = [
     "openpyxl",
     "matplotlib",
     "python-pptx",
+    "dependency-injector",
+    "sqlalchemy",
 ]
 
 [project.optional-dependencies]

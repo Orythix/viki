@@ -23,3 +23,229 @@
 #     timeout: 45
 #
 servers: {}
+
+# Imported from everything-claude-code-main
+servers:
+  jira:
+    transport: stdio
+    command: uvx
+    args:
+    - mcp-atlassian==0.21.0
+    env:
+      JIRA_URL: YOUR_JIRA_URL_HERE
+      JIRA_EMAIL: YOUR_JIRA_EMAIL_HERE
+      JIRA_API_TOKEN: YOUR_JIRA_API_TOKEN_HERE
+    safety_tier: medium
+    requires_confirmation: true
+  github:
+    transport: stdio
+    command: npx
+    args:
+    - -y
+    - '@modelcontextprotocol/server-github'
+    env:
+      GITHUB_PERSONAL_ACCESS_TOKEN: YOUR_GITHUB_PAT_HERE
+    safety_tier: medium
+    requires_confirmation: true
+  firecrawl:
+    transport: stdio
+    command: npx
+    args:
+    - -y
+    - firecrawl-mcp
+    env:
+      FIRECRAWL_API_KEY: YOUR_FIRECRAWL_KEY_HERE
+    safety_tier: medium
+    requires_confirmation: true
+  supabase:
+    transport: stdio
+    command: npx
+    args:
+    - -y
+    - '@supabase/mcp-server-supabase@latest'
+    - --project-ref=YOUR_PROJECT_REF
+    safety_tier: medium
+    requires_confirmation: true
+  memory:
+    transport: stdio
+    command: npx
+    args:
+    - -y
+    - '@modelcontextprotocol/server-memory'
+    safety_tier: medium
+    requires_confirmation: true
+  omega-memory:
+    transport: stdio
+    command: uvx
+    args:
+    - omega-memory
+    - serve
+    safety_tier: medium
+    requires_confirmation: true
+  longhand:
+    transport: stdio
+    command: longhand
+    args:
+    - mcp-server
+    safety_tier: medium
+    requires_confirmation: true
+  sequential-thinking:
+    transport: stdio
+    command: npx
+    args:
+    - -y
+    - '@modelcontextprotocol/server-sequential-thinking'
+    safety_tier: medium
+    requires_confirmation: true
+  vercel:
+    transport: http
+    url: https://mcp.vercel.com
+    safety_tier: medium
+    requires_confirmation: true
+  railway:
+    transport: stdio
+    command: npx
+    args:
+    - -y
+    - '@railway/mcp-server'
+    safety_tier: medium
+    requires_confirmation: true
+  cloudflare-docs:
+    transport: http
+    url: https://docs.mcp.cloudflare.com/mcp
+    safety_tier: medium
+    requires_confirmation: true
+  cloudflare-workers-builds:
+    transport: http
+    url: https://builds.mcp.cloudflare.com/mcp
+    safety_tier: medium
+    requires_confirmation: true
+  cloudflare-workers-bindings:
+    transport: http
+    url: https://bindings.mcp.cloudflare.com/mcp
+    safety_tier: medium
+    requires_confirmation: true
+  cloudflare-observability:
+    transport: http
+    url: https://observability.mcp.cloudflare.com/mcp
+    safety_tier: medium
+    requires_confirmation: true
+  clickhouse:
+    transport: http
+    url: https://mcp.clickhouse.cloud/mcp
+    safety_tier: medium
+    requires_confirmation: true
+  exa-web-search:
+    transport: stdio
+    command: npx
+    args:
+    - -y
+    - exa-mcp-server
+    env:
+      EXA_API_KEY: YOUR_EXA_API_KEY_HERE
+    safety_tier: medium
+    requires_confirmation: true
+  context7:
+    transport: stdio
+    command: npx
+    args:
+    - -y
+    - '@upstash/context7-mcp@latest'
+    safety_tier: medium
+    requires_confirmation: true
+  magic:
+    transport: stdio
+    command: npx
+    args:
+    - -y
+    - '@magicuidesign/mcp@latest'
+    safety_tier: medium
+    requires_confirmation: true
+  filesystem:
+    transport: stdio
+    command: npx
+    args:
+    - -y
+    - '@modelcontextprotocol/server-filesystem'
+    - /path/to/your/projects
+    safety_tier: medium
+    requires_confirmation: true
+  playwright:
+    transport: stdio
+    command: npx
+    args:
+    - -y
+    - '@playwright/mcp'
+    - --browser
+    - chrome
+    safety_tier: medium
+    requires_confirmation: true
+  fal-ai:
+    transport: stdio
+    command: npx
+    args:
+    - -y
+    - fal-ai-mcp-server
+    env:
+      FAL_KEY: YOUR_FAL_KEY_HERE
+    safety_tier: medium
+    requires_confirmation: true
+  browserbase:
+    transport: stdio
+    command: npx
+    args:
+    - -y
+    - '@browserbasehq/mcp-server-browserbase'
+    env:
+      BROWSERBASE_API_KEY: YOUR_BROWSERBASE_KEY_HERE
+    safety_tier: medium
+    requires_confirmation: true
+  browser-use:
+    transport: http
+    url: https://api.browser-use.com/mcp
+    headers:
+      x-browser-use-api-key: YOUR_BROWSER_USE_KEY_HERE
+    safety_tier: medium
+    requires_confirmation: true
+  devfleet:
+    transport: http
+    url: http://localhost:18801/mcp
+    safety_tier: medium
+    requires_confirmation: true
+  token-optimizer:
+    transport: stdio
+    command: npx
+    args:
+    - -y
+    - token-optimizer-mcp
+    safety_tier: medium
+    requires_confirmation: true
+  laraplugins:
+    transport: http
+    url: https://laraplugins.io/mcp/plugins
+    safety_tier: medium
+    requires_confirmation: true
+  confluence:
+    transport: stdio
+    command: npx
+    args:
+    - -y
+    - confluence-mcp-server
+    env:
+      CONFLUENCE_BASE_URL: YOUR_CONFLUENCE_URL_HERE
+      CONFLUENCE_EMAIL: YOUR_EMAIL_HERE
+      CONFLUENCE_API_TOKEN: YOUR_CONFLUENCE_TOKEN_HERE
+    safety_tier: medium
+    requires_confirmation: true
+  evalview:
+    transport: stdio
+    command: python3
+    args:
+    - -m
+    - evalview
+    - mcp
+    - serve
+    env:
+      OPENAI_API_KEY: YOUR_OPENAI_API_KEY_HERE
+    safety_tier: medium
+    requires_confirmation: true

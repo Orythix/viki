@@ -114,11 +114,53 @@ class ExecutionEvaluator:
                     return rest[:end].strip("\n").strip()
         return s.strip()
 
+    @staticmethod
+    def _validate_code_safety(code: str, test_code: str) -> Optional[str]:
+        """Return an error string if dangerous patterns are found, else None."""
+        full = code + "\n" + test_code
+        dangerous_patterns = [
+            "os.system", "subprocess", "eval(", "exec(", "compile(",
+            "__import__", "importlib", "ctypes", "multiprocessing",
+            "pickle.loads", "marshal.loads", "open(",
+        ]
+        for pat in dangerous_patterns:
+            if pat in full:
+                return f"Dangerous pattern detected: {pat}"
+        try:
+            import ast
+            tree = ast.parse(full)
+        except SyntaxError as e:
+            return f"Syntax error: {e}"
+        dangerous_calls = {"eval", "exec", "compile", "__import__", "open"}
+        dangerous_attrs = {"__globals__", "__code__", "__builtins__", "__class__",
+                           "__mro__", "__subclasses__", "__reduce__", "__reduce_ex__"}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name in {"subprocess", "os", "sys", "ctypes", "importlib", "pickle", "marshal"}:
+                        return f"Dangerous import: {alias.name}"
+            if isinstance(node, ast.ImportFrom) and node.module:
+                if node.module in {"subprocess", "os", "ctypes", "importlib", "pickle", "marshal"}:
+                    return f"Dangerous import from: {node.module}"
+                for alias in node.names:
+                    if alias.name in dangerous_calls:
+                        return f"Dangerous function import: {alias.name}"
+            if isinstance(node, ast.Call):
+                if isinstance(node.func, ast.Name) and node.func.id in dangerous_calls:
+                    return f"Dangerous function call: {node.func.id}()"
+            if isinstance(node, ast.Attribute) and node.attr in dangerous_attrs:
+                return f"Dangerous attribute access: {node.attr}"
+        return None
+
     def _run_python(self, code: str, task: Dict[str, Any], timeout: int) -> EvalScore:
         """Run candidate Python code under hidden checks in a fresh subprocess."""
         test_code = task.get("test_code") or ""
         stdin = task.get("stdin") or ""
         expected_stdout = (task.get("expected_stdout") or "").strip()
+
+        safety_err = self._validate_code_safety(code, test_code)
+        if safety_err:
+            return EvalScore(score=0.0, passed=False, reason=f"Security rejection: {safety_err}")
 
         prelude = textwrap.dedent(
             """

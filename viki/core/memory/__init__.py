@@ -157,7 +157,7 @@ class WorkingMemory:
             if self.db:
                 try:
                     self.db.conn.close()
-                except:
+                except Exception:
                     pass
 
 class HierarchicalMemory:
