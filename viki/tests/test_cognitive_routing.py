@@ -16,8 +16,8 @@ from viki.core.cognitive_loop import (
     CognitiveRouter,
     RouterTelemetry,
 )
-from viki.core.judgment import JudgmentEngine, JudgmentOutcome
-from viki.core.reflex import ReflexBrain
+from viki.core.output_verifier import JudgmentEngine, JudgmentOutcome
+from viki.core.rapid_response_system import ReflexBrain
 from viki.core.schema import ActionCall
 
 

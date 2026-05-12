@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import unittest
 
-from viki.core.cortex import InterpretationLayer, PerceptionLayer
+from viki.core.cognitive_processor import InterpretationLayer, PerceptionLayer
 
 
 def _run(coro):

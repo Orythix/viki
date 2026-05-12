@@ -144,3 +144,7 @@ If **`remote origin already exists`**, use `git remote set-url origin https://gi
 Later updates: re-run **`export_public_mirror.py`**, then `git add -A`, `commit`, `push` from **VIKI-public**.
 
 **Security before every public push:** search the export for secrets; ensure **`destination`** is **not** inside the private repo (the script refuses that layout).
+
+---
+
+*Runbook version: aligned with VIKI v8.0.0 (Industrial). Update this file when default ports, flags, or critical architecture patterns change.*

@@ -95,4 +95,5 @@ These ship beside `viki/` but are separate entry points:
 Full map: [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md).
 
 ---
-**Enjoy your new digital partner.**
+
+*Runbook version: aligned with VIKI v8.0.0 (Industrial). Update this file when default ports, flags, or critical architecture patterns change.*

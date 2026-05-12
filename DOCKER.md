@@ -82,3 +82,7 @@ Then the agent can run `docker ps`, `docker images`, `docker run ...`, etc. thro
 | `OLLAMA_HOST` | Ollama API URL. Set to `http://host.docker.internal:11434` when VIKI runs in Docker and Ollama is on the host (Windows/Mac). |
 
 See `.env.example` for more options.
+
+---
+
+*Runbook version: aligned with VIKI v8.0.0 (Industrial). Update this file when default ports, flags, or critical architecture patterns change.*

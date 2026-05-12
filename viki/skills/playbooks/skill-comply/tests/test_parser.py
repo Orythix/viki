@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.parser import (
+from ..scripts.parser import (
     ComplianceSpec,
     Detector,
     ObservationEvent,

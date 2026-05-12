@@ -8,7 +8,7 @@ from pathlib import Path
 
 import yaml
 
-from scripts.utils import extract_yaml
+from .utils import extract_yaml
 
 PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 

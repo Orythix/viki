@@ -99,7 +99,7 @@ class TestPromotionEndpoint(_ApiTestBase):
 
 class TestTracesEndpoint(_ApiTestBase):
     def test_traces_listing(self):
-        from viki.core.tracing import init_tracing, start_span
+        from viki.core.telemetry_service import init_tracing, start_span
 
         init_tracing(service_name="viki-test", export_to_stdout=False)
         with start_span("api.test"):

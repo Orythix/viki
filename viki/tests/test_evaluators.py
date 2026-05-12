@@ -12,7 +12,7 @@ import unittest
 
 from viki.core.capability_index import CapabilityIndex
 from viki.core.evaluators import ExecutionEvaluator, LLMJudgeEvaluator
-from viki.core.llm import LLMProvider
+from viki.core.inference_gateway import LLMProvider
 
 
 class TestExecutionEvaluator(unittest.TestCase):

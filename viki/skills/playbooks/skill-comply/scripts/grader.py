@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from scripts.classifier import classify_events
-from scripts.parser import ComplianceSpec, ObservationEvent, Step
+from .classifier import classify_events
+from .parser import ComplianceSpec, ObservationEvent, Step
 
 
 @dataclass(frozen=True)

@@ -8,7 +8,7 @@ import yaml
 
 sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "..")))
 
-from viki.core.controller import VIKIController
+from viki.core.orchestrator import VIKIController
 
 
 class TestOpsPlanEventOps(unittest.TestCase):

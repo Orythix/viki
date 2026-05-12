@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import unittest
 
-from viki.core.sandbox import SubprocessSandbox, DockerSandbox, get_sandbox
+from viki.core.execution_environment import SubprocessSandbox, DockerSandbox, get_sandbox
 
 
 def _run(coro):

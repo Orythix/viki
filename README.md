@@ -1,33 +1,38 @@
 # VIKI: Sovereign Digital Intelligence
-> **Autonomous AI Agent System | Orythix Cognitive Architecture | Virtual Intelligence Knowledge Interface**
+> **Open-Source Autonomous AI Agent | Local-First Cognitive Architecture | Private AI Assistant**
 
 <div align="center">
 
-**Polymorphic Intelligence | Recursive Governance | Autonomous Self-Forging**
+**Local LLM Orchestration | Private Knowledge Retrieval | Autonomous Self-Evolution**
 
 [![Version](https://img.shields.io/badge/version-8.0.0-blue.svg)](./CHANGELOG.md)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Ollama](https://img.shields.io/badge/Ollama-Local_LLM-orange.svg)](https://ollama.ai)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
-[![CI](https://github.com/Orythix/viki/actions/workflows/ci.yml/badge.svg)](https://github.com/Orythix/viki/actions/workflows/ci.yml)
+[![Pinokio](https://img.shields.io/badge/Install-Pinokio-blue.svg)](https://pinokio.computer)
 
 ---
 
-**VIKI** is an open-source autonomous AI agent and **Sovereign Digital Intelligence** for absolute privacy and **local-first** operation. Run with **Ollama**, **Phi-3**, **Mistral**, or **DeepSeek**—no cloud required. Uses the **Orythix Cognitive Architecture** for deep reasoning, multi-tool orchestration, and recursive self-improvement without leaking your data.
+**VIKI** is a high-performance **autonomous AI agent** and **sovereign digital intelligence** built for maximum privacy and **local-first** execution. Designed to run natively with **Ollama** (Phi-3, Mistral, Llama 3, DeepSeek), VIKI provides an air-gapped alternative to cloud-based assistants. Powered by the **Orythix Cognitive Architecture**, it features deep reasoning, multi-tool orchestration, and recursive learning through its unique **Neural Forge** pipeline.
 
-[Features](#core-pillars-v800) • [Architecture](#technical-architecture) • [Quick Start](#quick-start) • [Build the VIKI model](#build-your-viki-model) • [Security](#security--ethics) • [Contributing](./CONTRIBUTING.md)
-
-**Pre-release:** VIKI is in active development. We welcome feedback and bug reports via [GitHub Issues](https://github.com/Orythix/viki/issues) and questions via [GitHub Discussions](https://github.com/Orythix/viki/discussions). Set `VIKI_API_KEY` and see [SECURITY_SETUP.md](viki/SECURITY_SETUP.md) before exposing the API.
+[Core Features](#core-pillars-v800) • [Technical Architecture](#technical-architecture) • [Quick Start](#quick-start) • [Build Your Model](#build-your-viki-model) • [Security & Ethics](#security--ethics) • [Contributing](./CONTRIBUTING.md)
 
 </div>
 
 ---
 
-## Overview (what VIKI is)
+## What is VIKI? (Project Overview)
 
-**VIKI** (**Virtual Intelligence Knowledge Interface**) is an **open-source AI agent** and **self-hosted autonomous assistant** written in **Python**. It targets **local-first** and **air-gapped** setups using **Ollama** (Phi, Mistral, Qwen, DeepSeek, and other local models), with optional cloud profiles when you opt in. The stack includes an intuitive **CLI**, **Flask REST API** (chat with **SSE streaming**, missions, forge, traces), **MCP** tool integration, **RAG-style** semantic memory over SQLite, **Neural Forge** baking of lessons into custom **Ollama** images, and a comprehensive **React + Vite** operator **dashboard** (text chat, hologram voice UI, token usage tracking, code search, MCP monitors, sub-agents). Governance uses **capability gating**, an ethical governor, and structured logging—not a multi-tenant SaaS; you run it on **your** machine or **Docker**.
+**VIKI** (**Virtual Intelligence Knowledge Interface**) is a **self-hosted autonomous AI assistant** and **developer-first agent system** written in Python. It excels in **local-first** environments, allowing users to leverage advanced AI capabilities without data leakage.
 
-**Repository:** [github.com/Orythix/viki](https://github.com/Orythix/viki) · **License:** Apache 2.0
+### The Sovereign Stack:
+*   **Modular CLI & API**: An intuitive command-line interface and a robust **Flask REST API** with **SSE streaming**.
+*   **Neural Forge**: A specialized pipeline that bakes your personal lessons and "wisdom" into custom **Ollama** images.
+*   **RAG Memory**: Persistent **SQLite-backed** semantic memory for deep context retrieval.
+*   **Agentic Orchestration**: Integrated **MCP** (Model Context Protocol) support for seamless tool and service integration.
+*   **Operator Dashboard**: A modern **React + Vite** dashboard featuring 3D hologram UI, mission tracking, and real-time traces.
+
+**Main Repository:** [github.com/Orythix/viki](https://github.com/Orythix/viki)
 
 ## Frequently asked questions
 

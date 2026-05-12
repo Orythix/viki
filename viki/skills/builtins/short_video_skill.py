@@ -4,7 +4,7 @@ from typing import Dict, Any, List
 from pydantic import BaseModel, Field
 from viki.skills.base import BaseSkill
 from viki.config.logger import viki_logger
-from viki.core.llm import StructuredPrompt
+from viki.core.inference_gateway import StructuredPrompt
 
 class VideoScene(BaseModel):
     scene_number: int

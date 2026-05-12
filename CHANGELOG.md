@@ -210,3 +210,7 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 - Basic RAG Memory.
 - Voice Interaction (Sync).
 - Simple Terminal Interface.
+
+---
+
+*Runbook version: aligned with VIKI v8.0.0 (Industrial). Update this file when default ports, flags, or critical architecture patterns change.*

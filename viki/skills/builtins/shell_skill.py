@@ -4,7 +4,7 @@ import re
 from typing import Dict, Any
 from viki.skills.base import BaseSkill
 from viki.config.logger import viki_logger
-from viki.core.safety import safe_for_log
+from viki.core.security_guard import safe_for_log
 
 class ShellSkill(BaseSkill):
     """

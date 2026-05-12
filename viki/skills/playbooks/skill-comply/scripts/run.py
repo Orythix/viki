@@ -10,11 +10,11 @@ from typing import Any
 
 import yaml
 
-from scripts.grader import grade
-from scripts.report import generate_report
-from scripts.runner import run_scenario
-from scripts.scenario_generator import generate_scenarios
-from scripts.spec_generator import generate_spec
+from .grader import grade
+from .report import generate_report
+from .runner import run_scenario
+from .scenario_generator import generate_scenarios
+from .spec_generator import generate_spec
 
 logger = logging.getLogger(__name__)
 

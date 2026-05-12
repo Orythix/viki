@@ -17,7 +17,7 @@ import os
 from typing import Any, Dict
 
 from viki.skills.base import BaseSkill
-from viki.core.planner import PlannerExecutor, TaskType
+from viki.core.task_planner import PlannerExecutor, TaskType
 from viki.core.patch_verify import PatchVerify
 
 

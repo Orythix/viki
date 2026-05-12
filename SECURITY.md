@@ -8,9 +8,9 @@ Security fixes are applied to the most recent minor release line.
 
 | Version | Supported          |
 | ------- | ------------------ |
+| 8.0.x   | :white_check_mark: |
 | 7.3.x   | :white_check_mark: |
-| 7.2.x   | :white_check_mark: |
-| < 7.2.0 | :x:                |
+| < 7.3.0 | :x:                |
 
 ## Reporting a Vulnerability
 
@@ -61,3 +61,7 @@ VIKI is designed with a **defense-in-depth** approach:
 ---
 
 For setup details, see [`viki/SECURITY_SETUP.md`](viki/SECURITY_SETUP.md).
+
+---
+
+*Runbook version: aligned with VIKI v8.0.0 (Industrial). Update this file when default ports, flags, or critical architecture patterns change.*

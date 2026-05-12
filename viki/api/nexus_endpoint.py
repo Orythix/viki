@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 VIKI API Server
 Provides RESTful endpoints for the React dashboard
@@ -17,14 +18,11 @@ from dotenv import load_dotenv
 import threading
 import time
 import queue
-from typing import Any, Dict
+from typing import Any, Dict, TYPE_CHECKING
+if TYPE_CHECKING:
+    from viki.core.orchestrator import VIKIController
 
 load_dotenv()
-
-# Add parent directory to path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
-from viki.core.orchestrator import VIKIController
 from viki.core.security_guard import safe_for_log
 from viki.config.logger import viki_logger
 from viki.config.resolve import get_soul_path
@@ -48,14 +46,14 @@ _controller_lock = threading.Lock()
 
 def get_controller() -> VIKIController:
     global _controller
-    if _controller is None:
-        with _controller_lock:
-            if _controller is None:
-                _controller = VIKIController(settings_path=settings_path, soul_path=soul_path)
-                try:
-                    _controller.attach_mcp_skills_sync()
-                except Exception as e:
-                    viki_logger.debug(f"MCP attach skipped: {e}")
+    with _controller_lock:
+        if _controller is None:
+            from viki.core.orchestrator import VIKIController
+            _controller = VIKIController(settings_path=settings_path, soul_path=soul_path)
+            try:
+                _controller.attach_mcp_skills_sync()
+            except Exception as e:
+                viki_logger.debug(f"MCP attach skipped: {e}")
     return _controller
 
 

@@ -5,8 +5,8 @@ from unittest.mock import patch
 
 import pytest
 
-from scripts.grader import ComplianceResult, StepResult, grade
-from scripts.parser import ComplianceSpec, Detector, ObservationEvent, Step, parse_spec, parse_trace
+from ..scripts.grader import ComplianceResult, StepResult, grade
+from ..scripts.parser import ComplianceSpec, Detector, ObservationEvent, Step, parse_spec, parse_trace
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
 

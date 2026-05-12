@@ -51,7 +51,7 @@ class InterpreterSkill(BaseSkill):
 
     async def _execute_sandboxed(self, code: str) -> str:
         """Runs python code via the configured sandbox backend (docker or subprocess)."""
-        from viki.core.sandbox import get_sandbox
+        from viki.core.execution_environment import get_sandbox
 
         viki_logger.info("Executing Python in Sandbox...")
         timeout_sec = self._get_timeout()

@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from scripts.runner import _setup_sandbox, run_scenario
+from ..scripts.runner import _setup_sandbox, run_scenario
 
 
 @dataclass(frozen=True)

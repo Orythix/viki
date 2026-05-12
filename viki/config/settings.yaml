@@ -21,8 +21,8 @@ system:
   # Fill in your own details. All fields are optional but the more you add,
   # the more naturally VIKI will reference them.
   owner:
-    name: "Sachin"                          # Your preferred name / call-sign
-    full_name: "Sachin Dilshan De Silva"                          # Optional full name
+    name: "Orythix"                          # Your preferred name / call-sign
+    full_name: "Orythix"                          # Optional full name
     role: "Developer & AI Engineer"        # How you describe yourself
     location: "Sri Lanka"                      # Where you're based
     timezone: "Asia/Colombo"               # IANA tz (used for time-aware replies)

@@ -7,7 +7,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import MagicMock, patch
 
-from viki.core.reflex import ReflexBrain
+from viki.core.rapid_response_system import ReflexBrain
 
 
 class TestConversationalReflex(unittest.TestCase):
@@ -56,8 +56,8 @@ class TestConversationalReflex(unittest.TestCase):
 
     def test_reflex_does_not_call_model_router(self):
         """Greetings must never even reach a model router."""
-        with patch("viki.core.reflex.viki_logger"):
-            with patch("viki.core.llm.ModelRouter", MagicMock()) as router_cls:
+        with patch("viki.core.rapid_response_system.viki_logger"):
+            with patch("viki.core.inference_gateway.ModelRouter", MagicMock()) as router_cls:
                 router = router_cls.return_value
                 reply, _ = self.brain.think("hello viki")
                 self.assertIsNotNone(reply)

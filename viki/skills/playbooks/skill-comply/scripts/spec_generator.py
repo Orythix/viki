@@ -8,8 +8,8 @@ from pathlib import Path
 
 import yaml
 
-from scripts.parser import ComplianceSpec, parse_spec
-from scripts.utils import extract_yaml
+from .parser import ComplianceSpec, parse_spec
+from .utils import extract_yaml
 
 PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 

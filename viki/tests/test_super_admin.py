@@ -7,7 +7,7 @@ import shutil
 sys.path.append(os.path.abspath(os.path.join(os.getcwd(), '..')))
 
 from viki.core.super_admin import SuperAdminLayer
-from viki.core.controller import VIKIController
+from viki.core.orchestrator import VIKIController
 
 class TestSuperAdmin(unittest.TestCase):
     def setUp(self):

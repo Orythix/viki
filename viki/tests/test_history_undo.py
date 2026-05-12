@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from types import SimpleNamespace
 
-from viki.core.history import TimeTravelModule
+from viki.core.temporal_memory import TimeTravelModule
 
 
 class _FakeWorking:

@@ -10,8 +10,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from scripts.parser import ObservationEvent
-from scripts.scenario_generator import Scenario
+from .parser import ObservationEvent
+from .scenario_generator import Scenario
 
 SANDBOX_BASE = Path("/tmp/skill-comply-sandbox")
 ALLOWED_MODELS = frozenset({"haiku", "sonnet", "opus"})

@@ -5,9 +5,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
-from scripts.grader import ComplianceResult
-from scripts.parser import ComplianceSpec, ObservationEvent
-from scripts.scenario_generator import Scenario
+from .grader import ComplianceResult
+from .parser import ComplianceSpec, ObservationEvent
+from .scenario_generator import Scenario
 
 
 def generate_report(

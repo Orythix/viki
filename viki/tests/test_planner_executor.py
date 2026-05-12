@@ -9,7 +9,7 @@ import json
 import unittest
 from typing import Any, Dict, List
 
-from viki.core.planner import PlannerExecutor, TaskGraph, TaskStatus, TaskType, PlanTask
+from viki.core.task_planner import PlannerExecutor, TaskGraph, TaskStatus, TaskType, PlanTask
 
 
 class _StubModel:

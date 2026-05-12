@@ -6,7 +6,7 @@ import shutil
 # Add project root (parent of viki folder) to path
 sys.path.append(os.path.abspath(os.path.join(os.getcwd(), '..')))
 
-from viki.core.controller import VIKIController
+from viki.core.orchestrator import VIKIController
 
 class TestVIKISecurityLayer(unittest.TestCase):
     def setUp(self):

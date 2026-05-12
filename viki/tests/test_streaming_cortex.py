@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import unittest
 
-from viki.core.cortex import DeliberationLayer
+from viki.core.cognitive_processor import DeliberationLayer
 
 
 class _FakeStreamingModel:

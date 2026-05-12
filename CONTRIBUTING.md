@@ -138,3 +138,7 @@ Changes to **`security-lab/`** or **`qa-automation/`** should keep those folders
 ---
 
 **VIKI: Virtual Intelligence, Real Evolution.**
+
+---
+
+*Runbook version: aligned with VIKI v8.0.0 (Industrial). Update this file when default ports, flags, or critical architecture patterns change.*

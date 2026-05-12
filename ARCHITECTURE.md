@@ -6,17 +6,13 @@ Following the **Industrial Restructuring**, VIKI follows a **Clean Architecture 
 2.  **Layered Separation of Concerns**:
     *   **Domain**: Pure business logic, entities, and repository interfaces. No external dependencies.
     *   **Application**: Orchestrates use cases and application services (e.g., `SafetyService`).
-    *   **Infrastructure**: Concrete implementations of domain interfaces (e.g., `SqlAlchemyLearningRepository`).
+    *   **Infrastructure**: Concrete implementations of domain interfaces.
     *   **Presentation**: External interfaces (CLI, REST API, Event Bus).
-3.  **Repository Pattern**: Data access is abstracted through interfaces, allowing seamless swapping of persistence layers (SQLite, PostgreSQL, etc.).
+3.  **Repository Pattern**: Data access is abstracted through interfaces, allowing seamless swapping of persistence layers.
 4.  **Autonomous Safety**: Safety logic is encapsulated in an application service and injected into the execution pipeline, ensuring consistent policy enforcement.
 5.  **Polymorphic Intelligence**: Cognition remains tiered (Reflex, Chatter, Planning), but orchestrated through clean use-case boundaries.
 
 ## Module Breakdown
-
-### 1. The Controller (`viki/core/controller.py`)
-*   **Role**: Central Processing Unit.
-*   **Function**: Manages the "Think-Action-Learn" loop with integrated **Latency Budgeting** to maintain system responsiveness during high-complexity tasks.
 
 ### 1. The Container (`viki/container.py`)
 *   **Role**: Composition Root.
@@ -24,15 +20,16 @@ Following the **Industrial Restructuring**, VIKI follows a **Clean Architecture 
 
 ### 2. The Controller (`viki/core/controller.py`)
 *   **Role**: Application Coordinator.
-*   **Function**: Acts as the primary entry point for the "Think-Action-Learn" loop. Dependencies (Safety, Memory Recall, Model Router) are injected from the Container.
+*   **Function**: Acts as the primary entry point for the "Think-Action-Learn" loop. Dependencies (Safety, Memory Recall, Model Router) are injected from the Container. It manages **Latency Budgeting** to maintain system responsiveness during high-complexity tasks.
 
 ### 3. Application Services (`viki/application/`)
 *   **Safety Service**: Encapsulates the safety envelope and action validation.
 *   **Memory Recall Use Case**: Orchestrates semantic retrieval from the learning repository.
 
 ### 4. Infrastructure Adapters (`viki/infrastructure/`)
-*   **Learning Repository**: SQLAlchemy-based implementation for managing lessons and failures in SQLite.
-*   **MCP Client**: Integration with external MCP servers.
+*   **Learning Repository**: SQLAlchemy-based implementation for managing lessons and failures in SQLite with WAL mode.
+*   **Inference Gateway**: Bridge to Ollama and cloud providers.
+*   **Event Bus**: Asynchronous message passing.
 
 ### 5. Model Enhancement & Observability
 *   **Knowledge Gaps** (`viki/core/knowledge_gaps.py`): Records low-confidence responses; dream research uses `get_research_topics()`.
@@ -116,3 +113,7 @@ These directories ship in the same repository but are **optional** sidecars:
 | [`qa-automation/`](qa-automation/) | Learning-oriented API/UI/perf test examples and CI samples |
 
 They do not change runtime imports for `python viki/main.py`; see each folder’s README for setup.
+
+---
+
+*Runbook version: aligned with VIKI v8.0.0 (Industrial). Update this file when default ports, flags, or critical architecture patterns change.*

@@ -9,7 +9,7 @@ import unittest
 from typing import Any, Dict, List
 
 from viki.core.ensemble import EnsembleEngine
-from viki.core.llm import LLMProvider
+from viki.core.inference_gateway import LLMProvider
 
 
 class _StubProvider(LLMProvider):
