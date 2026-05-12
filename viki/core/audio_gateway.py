@@ -8,8 +8,15 @@ except Exception as e:
     np = None
     viki_logger.warning(f"NumPy unavailable during VoiceModule import ({e}). Voice sonar will be disabled.")
 
+import os
+VOICE_ENABLED = os.getenv("VIKI_VOICE_ENABLED", "1").lower() in ("1", "true", "yes")
+
 try:
-    import sounddevice as sd
+    if VOICE_ENABLED:
+        import sounddevice as sd
+    else:
+        sd = None
+        viki_logger.debug("VoiceModule: sounddevice skipped (VIKI_VOICE_ENABLED=0).")
 except Exception as e:
     sd = None
     viki_logger.warning(f"sounddevice unavailable during VoiceModule import ({e}). Voice sonar will be disabled.")
