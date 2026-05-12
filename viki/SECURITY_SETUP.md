@@ -19,14 +19,7 @@ export VIKI_API_KEY="your-generated-key-here"
 $env:VIKI_API_KEY="your-generated-key-here"
 ```
 
-**Usage:**
-```bash
-# All API requests must include the key
-curl -H "Authorization: Bearer your-generated-key-here" \
-  http://127.0.0.1:5000/api/health
-```
-
-**Dashboard and Hologram Face UI:** The React app (dashboard and hologram voice view) must send the same API key. Set `VITE_VIKI_API_KEY` in `ui/.env` (or your build environment) to the same value as `VIKI_API_KEY`. See [ui/README.md](../../ui/README.md) for details.
+**Messaging Gateways:** The Discord, Telegram, Slack, and WhatsApp bridges use this key to authenticate with the core nexus when running in distributed mode.
 
 ### 2. Admin Secret (Required for Admin Commands)
 
@@ -131,75 +124,33 @@ Cached reflex actions now undergo:
 
 ---
 
-## Quick Start
-
-### Development Setup
+### CLI Setup
 
 ```bash
 # Clone and install
 git clone https://github.com/Orythix/viki.git
 cd viki
 
-# Install dependencies
-pip install -r requirements.txt
-
-# Set environment variables
-export VIKI_API_KEY=$(python -c "import secrets; print(secrets.token_urlsafe(32))")
-export VIKI_ADMIN_SECRET=$(python -c "import secrets; print(secrets.token_urlsafe(32))")
-
-# Save your keys!
-echo "API Key: $VIKI_API_KEY"
-echo "Admin Secret: $VIKI_ADMIN_SECRET"
-
-# Run CLI
-python viki/main.py
-
-# Run API server (separate terminal)
-python viki/api/server.py
-```
-
-### Production Setup
-
-```bash
 # Create .env file (DO NOT commit to git!)
 cat > .env << EOF
 VIKI_API_KEY=your-secure-api-key-here
 VIKI_ADMIN_SECRET=your-secure-admin-secret-here
-FLASK_DEBUG=False
 EOF
 
-# Load environment
-source .env  # or use dotenv in Python
+# Install dependencies
+pip install -e .
 
-# Run with production settings
-python viki/api/server.py
+# Run CLI
+viki
 ```
 
 ---
 
 ## Migration Notes
 
-### Breaking Changes
-
-1. **API Authentication Required**
-   - Old: No authentication
-   - New: Must provide API key in Authorization header
-   - **Action:** Update all API clients to include key
-
-2. **File System Access Restricted**
-   - Old: Unrestricted file access
-   - New: Sandboxed to specific directories
-   - **Action:** Ensure file operations target allowed directories
-
-3. **Admin Secret Changed**
-   - Old: Hardcoded in admin.yaml
-   - New: Must be set via environment variable
-   - **Action:** Set `VIKI_ADMIN_SECRET` before using admin commands
-
-4. **Server Binding Changed**
-   - Old: Binds to `0.0.0.0:5000` (all interfaces)
-   - New: Binds to `127.0.0.1:5000` (localhost only)
-   - **Action:** Use reverse proxy (nginx, etc.) for external access
+1. **CLI-First Architecture**
+   - The React Dashboard and Flask REST API have been removed to reduce surface area and dependency overhead.
+   - **Action:** Use the `viki` command or `python viki/bootstrap.py` for all interactions.
 
 ### Non-Breaking Changes
 

@@ -32,7 +32,7 @@
 4.  **Set Up Environment Variables**:
     Create a `.env` file in the root directory (or set in your shell):
     ```env
-    # Required for API server: all endpoints require this key
+    # Required for API security: all gateway endpoints (Discord, etc.) require this key
     VIKI_API_KEY=your_api_key_here
 
     # Required for super-admin / admin commands
@@ -57,14 +57,7 @@ python viki/main.py
 
 VIKI will initialize her **Nexus** and begin listening on all channels.
 
-### Running with the Hologram Face UI
-
-To show the **hologram face** and **talk to VIKI** with voice:
-
-1. In one terminal, start the React UI: `cd ui && npm run dev`
-2. In another terminal, run: `python viki/main.py --ui`
-
-The `--ui` flag starts the API server and opens your browser to `http://localhost:5173`. The default view is the **Hologram** (voice conversation); switch to **Full dashboard** for text chat. The UI needs the API key: create `ui/.env` with `VITE_VIKI_API_KEY=<same value as VIKI_API_KEY>` so the dashboard and hologram view can authenticate. See [viki/SECURITY_SETUP.md](viki/SECURITY_SETUP.md).
+VIKI will initialize her **Nexus** and begin listening on all channels. Use the CLI interface to interact with the core cognitive engine.
 
 ### Troubleshooting (Windows)
 
@@ -88,7 +81,7 @@ After you have **lessons** in `data/` and a **base** model pulled (`ollama pull 
 
 These ship beside `viki/` but are separate entry points:
 
-- **`ui/`** — React dashboard; needs `VITE_VIKI_API_KEY` matching `VIKI_API_KEY`.
+- **`viki/`** — Core system including the Nexus and Cognitive Kernel.
 - **`security-lab/`** — Standalone FastAPI defensive lab; see [security-lab/README.md](security-lab/README.md).
 - **`qa-automation/`** — Test-framework examples (pytest, Java, Playwright, k6); see [qa-automation/README.md](qa-automation/README.md).
 

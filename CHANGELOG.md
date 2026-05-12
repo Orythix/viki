@@ -6,6 +6,17 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 
 ## [Unreleased]
 
+## [8.1.0] - 2026-05-13 (CLI-First Sovereignty)
+
+### Removed
+- **React Dashboard**: Removed the Vite-based operator dashboard and 3D hologram UI to focus on a high-performance CLI-first experience.
+- **REST API Server**: Phased out the Flask-based Nexus endpoint to reduce surface area and dependency overhead.
+- **Hologram & Voice UI**: Discontinued the browser-based hologram interface.
+
+### Changed
+- **CLI Optimization**: Refactored `bootstrap.py` to remove `--ui` flags and focus on the authoritative terminal loop.
+- **Documentation**: Updated all READMEs and setup guides to reflect the transition to a pure CLI-driven architecture.
+
 ## [8.0.0] - 2026-05-13 (Industrial Restructuring)
 
 ### Added

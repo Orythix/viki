@@ -282,7 +282,6 @@ async def main(workspace_path=None, query=None):
 def run():
     """Synchronous entry point for the `viki` console script."""
     parser = argparse.ArgumentParser(description="VIKI Sovereign Intelligence")
-    parser.add_argument("--ui", "--face-ui", dest="ui", action="store_true", help="Start API server and open hologram face UI in browser")
     parser.add_argument("--low-resource", dest="low_resource", action="store_true", help="Optimize for local hardware: skip background cognitive loops")
     parser.add_argument("args", nargs="*", help="Optional: [path] [query...]")
     parsed_args = parser.parse_args()
@@ -305,38 +304,10 @@ def run():
 
     query_str = " ".join(query_parts).strip() if query_parts else None
 
-    api_process = None
-    if parsed_args.ui:
-        # Start Flask API server in background so the UI can talk to VIKI
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        parent_dir = os.path.dirname(script_dir)
-        server_script = os.path.join(script_dir, "api", "server.py")
-        try:
-            api_process = subprocess.Popen(
-                [sys.executable, server_script],
-                cwd=parent_dir,
-                env=os.environ.copy(),
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.PIPE,
-            )
-            time.sleep(2.5)
-            console.print("[dim]API server started. Hologram UI: http://localhost:5173[/]")
-            console.print("[dim]Start the UI with: cd ui && npm run dev[/]\n")
-            try:
-                webbrowser.open("http://localhost:5173")
-            except Exception as e:
-                viki_logger.debug("Open browser: %s", e)
-        except Exception as e:
-            viki_logger.warning(f"Could not start API server or open browser: {e}")
-
     try:
         asyncio.run(main(workspace_path=workspace_path, query=query_str))
     except KeyboardInterrupt:
         pass
-    finally:
-        if api_process is not None and api_process.poll() is None:
-            api_process.terminate()
-            api_process.wait(timeout=5)
 
 
 if __name__ == "__main__":

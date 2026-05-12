@@ -26,11 +26,10 @@
 **VIKI** (**Virtual Intelligence Knowledge Interface**) is a **self-hosted autonomous AI assistant** and **developer-first agent system** written in Python. It excels in **local-first** environments, allowing users to leverage advanced AI capabilities without data leakage.
 
 ### The Sovereign Stack:
-*   **Modular CLI & API**: An intuitive command-line interface and a robust **Flask REST API** with **SSE streaming**.
+*   **Sovereign Stack**: An intuitive command-line interface powered by the Orythix Cognitive Architecture.
 *   **Neural Forge**: A specialized pipeline that bakes your personal lessons and "wisdom" into custom **Ollama** images.
 *   **RAG Memory**: Persistent **SQLite-backed** semantic memory for deep context retrieval.
 *   **Agentic Orchestration**: Integrated **MCP** (Model Context Protocol) support for seamless tool and service integration.
-*   **Operator Dashboard**: A modern **React + Vite** dashboard featuring 3D hologram UI, mission tracking, and real-time traces.
 
 **Main Repository:** [github.com/Orythix/viki](https://github.com/Orythix/viki)
 
@@ -50,7 +49,7 @@ You can run in **air-gap** mode (`VIKI_AIR_GAP=1`) so routing sticks to local mo
 
 ### How is VIKI different from LangChain, AutoGPT, or “ChatGPT desktop”?
 
-VIKI ships as a **single opinionated agent system**: judgment/reflex layers, SQLite-backed **lessons**, **forge** pipeline to **Ollama** Modelfiles, first-class **dashboard** and **API**, and a broad **builtin skill** set. It is not a thin wrapper library; it is a runnable **sovereign agent** product you deploy yourself.
+VIKI ships as a **single opinionated agent system**: judgment/reflex layers, SQLite-backed **lessons**, **forge** pipeline to **Ollama** Modelfiles, and a broad **builtin skill** set. It is not a thin wrapper library; it is a runnable **sovereign agent** product you deploy yourself.
 
 ### What are the minimum requirements?
 
@@ -152,7 +151,7 @@ VIKI is designed to stay responsive on machines with 4 GB RAM and 2–4 cores. T
    - skips the autonomous startup pulse, wellness pulse, dream cycle, reflector, watchdog, and continuous-learning loop,
    - keeps the Cortex `PatternTracker` capped (`VIKI_PATTERN_TRACKER_MAX`, default 5000) with debounced disk writes.
 
-2. **UI lite mode** — append `?lite=1` to the dashboard URL or set `localStorage.viki_lite = '1'`. The 3D hologram view is replaced with a 60-line CSS orb, and `three.js` / `drei` are dynamically imported instead of bundled into the initial paint. Lite mode is also auto-enabled when the browser reports `navigator.hardwareConcurrency <= 4` or `navigator.deviceMemory <= 4 GB`.
+2. **Low-resource Tuning** — Use individual cadences to optimize background processing for your specific hardware.
 
 You can also tune individual cadences:
 
@@ -185,15 +184,13 @@ If you really want the absolute lowest latency, combine: `low_resource_mode: tru
 
 The pillars below are now actually wired (not just "Phase X complete" labels):
 
-- **MCP integration** loaded at boot (`viki/integrations/mcp_client.py`), exposed at `/api/mcp/servers`, configured via `viki/config/mcp_servers.yaml`.
-- **Real SSE chat streaming** at `/api/chat/stream`, consumed incrementally by `ui/src/App.jsx` with a stop button.
-- **WebSocket `/ws`** for live mission/sub-agent events and operator interrupts (`flask-sock`).
+- **MCP integration** loaded at boot (`viki/integrations/mcp_client.py`), configured via `viki/config/mcp_servers.yaml`.
 - **LSP bridge**: hover, references, definition, and `publishDiagnostics` against real `pyright`/`typescript-language-server`.
 - **Computer-use grounding**: confidence-gated, with an OmniParser-V2 ONNX adapter (set `VIKI_OMNIPARSER_ONNX`).
 - **Best-of-N worktree runner** (`viki/core/worktree_runner.py`) for isolated parallel attempts.
-- **Capability Index (forge)**: bootstrap CIs, min-task thresholds, SHA256 provenance hashes; operator promote/rollback at `/api/forge/promote` and `/api/forge/rollback`.
-- **Persistent traces** with parent IDs, surfaced as a Gantt panel in the dashboard.
-- **Mission CRUD + sub-agent tree** in the dashboard (`/api/missions`, `/api/subagents`, `/api/missions/<id>/graph`, `/api/artifacts/<mission_id>`).
+- **Capability Index (forge)**: bootstrap CIs, min-task thresholds, SHA256 provenance hashes.
+- **Persistent traces** with parent IDs and detailed metadata for CLI logging.
+- **Mission CRUD + sub-agent tree**: Managed via the internal agent loop and exposed in `logs/`.
 - **Slash commands**: `/restore`, `/undo` (rolls back the most recent checkpoint).
 - **Bio sensing is now experimental by default**; opt into a real DeepFace path with `system.bio_backend: deepface` (or `VIKI_BIO_BACKEND=deepface`).
 
@@ -201,14 +198,12 @@ The pillars below are now actually wired (not just "Phase X complete" labels):
 
 ```text
 VIKI/
-├── viki/
-│   ├── core/               # Cognitive Kernel (Judgment, Cortex, Learning)
-│   ├── config/             # Orchestration & Soul profiles
-│   ├── skills/             # Modular Ability System (FS, Shell, Research)
-│   ├── api/                # Unified Nexus (Discord, Telegram, Web)
-│   ├── eval/               # RAG eval fixtures + README
-│   └── main.py             # Authoritative entry point
-├── ui/                     # Vite + React dashboard (chat, hologram, operator UI)
+├── viki/               # Cognitive Kernel (Judgment, Cortex, Learning)
+│   ├── core/           # Core AI logic and decision making
+│   ├── config/         # Orchestration & Soul profiles
+│   ├── skills/         # Modular Ability System (FS, Shell, Research)
+│   ├── api/            # Unified Nexus (Discord, Telegram, Slack)
+│   └── main.py         # Authoritative entry point
 ├── security-lab/           # Standalone defensive AI security lab (FastAPI + Docker)
 ├── qa-automation/          # Multi-stack QA learning tracks (pytest, Java, Playwright, k6, …)
 ├── docs/                   # Repo-wide documentation index (see DOCUMENTATION.md)
@@ -293,30 +288,13 @@ Install the `viki` command so you can run it from any directory with the current
 - Windows: `irm https://raw.githubusercontent.com/Orythix/viki/main/install.ps1 | iex` (or from repo: `.\install.ps1`)
 - Unix: `curl -fsSL https://raw.githubusercontent.com/Orythix/viki/main/install.sh | bash` (or from repo: `./install.sh`)
 
-4.  **Launch with Hologram Face UI** (talk to VIKI with voice):
-    ```powershell
-    # Terminal 1: start the UI
-    cd ui && npm run dev
-
-    # Terminal 2: start VIKI with API and open browser to the hologram
-    python viki/main.py --ui
-    ```
-    The app opens at `http://localhost:5173` with the **Hologram** view by default: a hologram-style face and voice conversation (browser speech-to-text and text-to-speech). Use **Full dashboard** to switch to the text chat view. The UI requires the same API key: set `VITE_VIKI_API_KEY` in `ui/.env` (or in your shell when building) to match `VIKI_API_KEY`. See [viki/SECURITY_SETUP.md](viki/SECURITY_SETUP.md).
-
-5.  **Launch Dashboard (UI) only**:
-    Open two terminals:
-    - Terminal 1 (API): `python viki/api/server.py` — API requires `Authorization: Bearer $VIKI_API_KEY` for all requests.
-    - Terminal 2 (UI): `cd ui; npm run dev`
-    Access at `http://localhost:5173`
-
-6.  **Run with Docker**:
-    Build and run the API in a container. Ollama should be running on the host (or in another container). See [DOCKER.md](DOCKER.md) for details.
+4.  **Run with Docker**:
+    Build and run the VIKI CLI in a container. Ollama should be running on the host (or in another container). See [DOCKER.md](DOCKER.md) for details.
     ```powershell
     copy .env.example .env
     # Edit .env and set VIKI_API_KEY (required)
     docker compose up --build
     ```
-    Then run the UI on the host: `cd ui && npm run dev`, and set `VITE_VIKI_API_BASE=http://localhost:5000/api` in `ui/.env`. On Windows/Mac the compose file sets `OLLAMA_HOST=http://host.docker.internal:11434` so the container can reach Ollama on the host.
 
 ---
 
@@ -411,7 +389,7 @@ Unlike static bots, VIKI also grows during normal use: interact, lessons accumul
 
 ## Documentation
 
-**Full index:** [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md) (core VIKI, UI, `security-lab`, `qa-automation`, eval, playbooks).
+**Full index:** [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md) (core VIKI, `security-lab`, `qa-automation`, eval, playbooks).
 
 | Document | Description |
 |----------|-------------|
@@ -432,7 +410,7 @@ Unlike static bots, VIKI also grows during normal use: interact, lessons accumul
 
 ## Keywords and topics
 
-**Local AI agent** · **Self-hosted AI assistant** · **Open-source AI agent** · **Autonomous AI** · **Ollama agent** · **Python AI agent** · **LLM agent** · **ReAct agent** · **Tool-use agent** · **MCP integration** · **RAG** · **Semantic memory** · **Private AI** · **Privacy-first AI** · **Air-gapped AI** · **Sovereign AI** · **Local LLM** · **Offline LLM** · **Neural Forge** · **Ollama Modelfile** · **Capability gating** · **AI agent dashboard** · **Voice AI assistant** · **CLI AI** · **Self-improving AI** · **Orythix** · **Multi-model routing** · **Agentic workflow** · **Windows AI agent** · **Linux AI agent**
+**Local AI agent** · **Self-hosted AI assistant** · **Open-source AI agent** · **Autonomous AI** · **Ollama agent** · **Python AI agent** · **LLM agent** · **ReAct agent** · **Tool-use agent** · **MCP integration** · **RAG** · **Semantic memory** · **Private AI** · **Privacy-first AI** · **Air-gapped AI** · **Sovereign AI** · **Local LLM** · **Offline LLM** · **Neural Forge** · **Ollama Modelfile** · **Capability gating** · **CLI AI** · **Self-improving AI** · **Orythix** · **Multi-model routing** · **Agentic workflow** · **Windows AI agent** · **Linux AI agent**
 
 ---
 
