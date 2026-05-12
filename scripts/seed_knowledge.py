@@ -18,7 +18,7 @@ _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
-from viki.core.learning import LearningModule  # noqa: E402
+from viki.core.knowledge_ingestion import LearningModule  # noqa: E402
 
 
 def main() -> int:

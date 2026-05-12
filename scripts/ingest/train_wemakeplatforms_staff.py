@@ -17,7 +17,7 @@ if REPO_ROOT not in sys.path:
     sys.path.append(REPO_ROOT)
 
 from viki.core.forge_config import DEFAULT_FORGE_OUTPUT_OLLAMA_TAG
-from viki.core.learning import LearningModule
+from viki.core.knowledge_ingestion import LearningModule
 from viki.core.llm import LocalLLM
 from viki.skills.builtins.research_skill import ResearchSkill
 

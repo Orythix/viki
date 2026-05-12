@@ -32,7 +32,7 @@ class TestLazyEncoder(unittest.TestCase):
 
     def test_learning_module_does_not_eager_load_encoder(self):
         """Constructing LearningModule shouldn't touch the encoder property."""
-        from viki.core.learning import LearningModule
+        from viki.core.knowledge_ingestion import LearningModule
 
         # The encoder should still be unloaded after init.
         lm = LearningModule(self._td.name)
@@ -46,7 +46,7 @@ class TestLazyEncoder(unittest.TestCase):
 
     def test_encoder_loads_on_first_access(self):
         """Accessing the property triggers `get_encoder`."""
-        from viki.core.learning import LearningModule
+        from viki.core.knowledge_ingestion import LearningModule
 
         lm = LearningModule(self._td.name)
         with patch("viki.core.embeddings.get_encoder", return_value=object()) as mock_get:

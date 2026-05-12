@@ -39,7 +39,7 @@ async def _ingest_topics(
     data_dir: Path,
     delay_s: float,
 ) -> None:
-    from viki.core.learning import LearningModule  # noqa: E402
+    from viki.core.knowledge_ingestion import LearningModule  # noqa: E402
     from viki.skills.builtins.research_skill import ResearchSkill, HAS_DDG  # noqa: E402
 
     if not HAS_DDG:

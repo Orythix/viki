@@ -59,7 +59,7 @@ class TestLearningCheapRetrieve(unittest.TestCase):
             pass
 
     def test_trivial_input_returns_empty_lessons_without_db_hit(self):
-        from viki.core.learning import LearningModule
+        from viki.core.knowledge_ingestion import LearningModule
         lm = LearningModule(self._td.name)
 
         # The cheap-retrieve fast path must NOT touch the encoder property.
@@ -69,7 +69,7 @@ class TestLearningCheapRetrieve(unittest.TestCase):
             mock_get.assert_not_called()
 
     def test_non_trivial_input_does_query_db(self):
-        from viki.core.learning import LearningModule
+        from viki.core.knowledge_ingestion import LearningModule
         lm = LearningModule(self._td.name)
         # No lessons in the DB; should still return [] but exercises the
         # SQL path. We only assert it doesn't crash.
@@ -89,7 +89,7 @@ class TestMemoryCheapRetrieve(unittest.TestCase):
 
     def test_trivial_input_skips_semantic_query(self):
         from viki.core.memory import HierarchicalMemory
-        from viki.core.learning import LearningModule
+        from viki.core.knowledge_ingestion import LearningModule
 
         learning = LearningModule(self._td.name)
         config = {

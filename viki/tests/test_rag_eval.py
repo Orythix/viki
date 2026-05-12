@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from viki.core.learning import LearningModule
+from viki.core.knowledge_ingestion import LearningModule
 from viki.eval.rag_eval import (
     GoldRow,
     evaluate_rag_retrieval,
