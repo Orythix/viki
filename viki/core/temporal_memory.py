@@ -6,7 +6,7 @@ import shutil
 import uuid
 from typing import Dict, Any, List, Optional, Tuple
 from viki.config.logger import viki_logger
-from viki.core.safety import safe_for_log
+from viki.core.security_guard import safe_for_log
 
 class TimeTravelModule:
     """
@@ -17,7 +17,8 @@ class TimeTravelModule:
         self.db_path = os.path.join(data_dir, "history.db")
         # v21: Explicitly handle multi-threading
         import sqlite3 as _sqlite3
-        conn = _sqlite3.connect(self.db_path, check_same_thread=False)
+        conn = _sqlite3.connect(self.db_path, check_same_thread=False, timeout=30.0)
+        conn.execute("PRAGMA journal_mode=WAL")
         self.db = sqlite_utils.Database(conn)
         self.backup_dir = os.path.join(data_dir, "backups")
         os.makedirs(self.backup_dir, exist_ok=True)

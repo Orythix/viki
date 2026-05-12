@@ -6,6 +6,16 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 
 ## [Unreleased]
 
+## [8.0.0] - 2026-05-13 (Industrial Restructuring)
+
+### Added
+- **Industrial Refactoring**: Migrated to a **Clean Architecture (Hexagonal)** with **Domain-Driven Design (DDD)** principles.
+- **Dependency Injection**: Centralized service management via `viki/container.py` and the `dependency-injector` framework.
+- **SQLite Resilience**: Implemented **Write-Ahead Logging (WAL)** and tuned connection arguments to eliminate "database is locked" errors under concurrent load.
+- **Service-Oriented Core**: Replaced legacy controllers and bridges with specialized Application Services (Safety, Orchestration, Event Bus) and Infrastructure Gateways.
+- **Relationship Modeling**: Added support for directed, weighted relationships between lessons in the Learning Repository for advanced concept mapping.
+- **Low-Resource Optimizations**: Standardized the `--low-resource` flag to skip proactive loops and lazy-load heavy modules (Vision, Browser, etc.).
+
 ### Changed
 - **Neural Forge default Ollama tag**: prompt-bake / `internal_forge` now use **`viki-neural-forge`** by default (was `viki-born-again`). Override with `system.forge_output_ollama_tag` or `VIKI_FORGE_OUTPUT_OLLAMA_MODEL`. **`viki-evolved`** in `models.yaml` points at the new tag.
 - **Documentation**: added [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md) as the canonical index; cross-linked `README`, `SETUP`, `VIKI_RUNBOOK`, `ARCHITECTURE`, `CONTRIBUTING`, `DOCKER`, `security-lab`, `qa-automation`, and related docs; fixed a broken `docs/PLAN.md` reference in `ARCHITECTURE.md`.

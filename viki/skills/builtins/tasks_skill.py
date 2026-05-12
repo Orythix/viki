@@ -65,24 +65,29 @@ class TasksSkill(BaseSkill):
             provider = (self._controller.settings.get("tasks") or {}).get("provider", "file")
 
         if provider == "things3" and os.name != "nt":
-            if action == "add":
-                title = params.get("title") or ""
-                if not title:
-                    return "Provide title for add."
-                try:
-                    import urllib.parse
-                    url = "things:///add?title=" + urllib.parse.quote(title)
-                    await asyncio.to_thread(subprocess.run, ["open", url], check=False)
-                    return f"Added to Things 3: {title}"
-                except Exception as e:
-                    return f"Things 3 error: {e}"
-            if action == "list":
-                return "Things 3 list: open Things app for full list (URL scheme does not support list)."
-            if action == "complete":
-                return "Things 3 complete: use Things app or provide task id if supported."
-            return "Unknown action."
+            return await self._execute_things3(action, params)
 
-        # File provider
+        return await self._execute_file(action, params)
+
+    async def _execute_things3(self, action: str, params: Dict[str, Any]) -> str:
+        if action == "add":
+            title = params.get("title") or ""
+            if not title:
+                return "Provide title for add."
+            try:
+                import urllib.parse
+                url = "things:///add?title=" + urllib.parse.quote(title)
+                await asyncio.to_thread(subprocess.run, ["open", url], check=False)
+                return f"Added to Things 3: {title}"
+            except Exception as e:
+                return f"Things 3 error: {e}"
+        if action == "list":
+            return "Things 3 list: open Things app for full list (URL scheme does not support list)."
+        if action == "complete":
+            return "Things 3 complete: use Things app or provide task id if supported."
+        return "Unknown action."
+
+    async def _execute_file(self, action: str, params: Dict[str, Any]) -> str:
         tasks = await asyncio.to_thread(self._read_tasks)
         if action == "add":
             title = params.get("title") or ""
@@ -107,4 +112,4 @@ class TasksSkill(BaseSkill):
                     await asyncio.to_thread(self._write_tasks, tasks)
                     return f"Completed: {t.get('title', '')}"
             return f"Task id {tid} not found."
-        return "Unknown action. Use add, list, complete."
+        return "Unknown action. Use add, list, complete."

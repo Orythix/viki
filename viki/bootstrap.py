@@ -25,10 +25,10 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
-from viki.core.controller import VIKIController
+from viki.core.orchestrator import VIKIController
 from viki.config.logger import viki_logger
 from viki.config.resolve import get_soul_path
-from viki.container import Container
+from viki.service_registry import Container
 
 console = Console()
 
@@ -38,7 +38,7 @@ class SimpleInterface:
         self.status_spinner = None
         
     def welcome(self, controller=None):
-        self.console.print("[bold magenta]VIKI v7.0[/] [dim]System Online[/]")
+        self.console.print("[bold magenta]VIKI v8.0.0[/] [dim]System Online[/]")
         if controller is not None:
             persona = getattr(controller, "persona", "sovereign")
             diff = controller.get_differentiators() if hasattr(controller, "get_differentiators") else []
@@ -200,7 +200,7 @@ async def _run_interactive_loop(controller, interface, on_event, streaming_state
 
 async def main(workspace_path=None, query=None):
     interface = SimpleInterface()
-    viki_logger.setLevel(logging.ERROR)
+    viki_logger.setLevel(logging.INFO)
     
     debug_state = {"active": False}
     streaming_state = {"active": False}
@@ -222,8 +222,22 @@ async def main(workspace_path=None, query=None):
         controller.container = container
         controller.safety_service = container.safety_service()
         controller.recall_use_case = container.recall_memory_use_case()
+        controller.swarm = container.swarm_orchestrator()
+        
+        # Self-Healing wiring
+        self_healing = container.self_healing_service()
+        self_healing.controller = controller
+        controller.self_healing = self_healing
+        
+        # Forge wiring
+        forge_orchestrator = container.forge_orchestrator()
+        forge_orchestrator.controller = controller
+        controller.forge_orchestrator = forge_orchestrator
         
     except Exception as e:
+        import traceback
+        viki_logger.error(f"Initialization Failed: {e}")
+        viki_logger.error(traceback.format_exc())
         interface.print_error(f"Initialization Failed: {e}")
         return
     try:
@@ -269,8 +283,12 @@ def run():
     """Synchronous entry point for the `viki` console script."""
     parser = argparse.ArgumentParser(description="VIKI Sovereign Intelligence")
     parser.add_argument("--ui", "--face-ui", dest="ui", action="store_true", help="Start API server and open hologram face UI in browser")
+    parser.add_argument("--low-resource", dest="low_resource", action="store_true", help="Optimize for local hardware: skip background cognitive loops")
     parser.add_argument("args", nargs="*", help="Optional: [path] [query...]")
     parsed_args = parser.parse_args()
+
+    if parsed_args.low_resource:
+        os.environ["VIKI_LOW_RESOURCE"] = "true"
 
     workspace_path = None
     query_parts = []

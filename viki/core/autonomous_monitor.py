@@ -15,13 +15,21 @@ class ProactiveHandler(FileSystemEventHandler):
             filename = os.path.basename(event.src_path)
             viki_logger.info(f"Proactive: Detected new file '{filename}'")
             
-            # Trigger VIKI processing for the file
-            # We must use run_coroutine_threadsafe because watchdog runs in its own thread
-            instruction = f"I detected a new file: {event.src_path}. Please analyze it and tell me what it is."
-            asyncio.run_coroutine_threadsafe(
-                self.controller.process_request(instruction),
-                self.loop
-            )
+            # Trigger self-healing analysis
+            if hasattr(self.controller, "self_healing"):
+                asyncio.run_coroutine_threadsafe(
+                    self.controller.self_healing.analyze_file(event.src_path),
+                    self.loop
+                )
+
+    def on_modified(self, event):
+        if not event.is_directory:
+            # Trigger self-healing on modification as well
+            if hasattr(self.controller, "self_healing"):
+                asyncio.run_coroutine_threadsafe(
+                    self.controller.self_healing.analyze_file(event.src_path),
+                    self.loop
+                )
 
 class WellnessPulse:
     """
@@ -126,5 +134,8 @@ class WatchdogModule:
         viki_logger.info(f"Watchdog started on {self.watch_dir}")
 
     def stop(self):
-        self.observer.stop()
-        self.observer.join()
+        # Only stop/join if the observer thread was actually started; otherwise
+        # watchdog (e.g. in --low-resource mode) will raise on join().
+        if getattr(self.observer, "_started", False) and self.observer.is_alive():
+            self.observer.stop()
+            self.observer.join()

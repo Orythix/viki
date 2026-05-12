@@ -381,7 +381,7 @@ class DeliberationLayer(CortexLayer):
                     param_tools.append(skill.get_tool_definition())
         
         # 3. Build Structured Prompt with Soul Identity + Skills
-        from viki.core.llm import StructuredPrompt
+        from viki.core.inference_gateway import StructuredPrompt
         raw_input = context.get('raw_input', '')
         conversation_history = context.get('conversation_history', [])
         url_context = context.get('url_context', '')

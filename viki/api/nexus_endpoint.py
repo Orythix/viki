@@ -24,8 +24,8 @@ load_dotenv()
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from viki.core.controller import VIKIController
-from viki.core.safety import safe_for_log
+from viki.core.orchestrator import VIKIController
+from viki.core.security_guard import safe_for_log
 from viki.config.logger import viki_logger
 from viki.config.resolve import get_soul_path
 from viki.api.events import get_event_bus
@@ -696,7 +696,7 @@ def get_scorecard_trends():
 def get_traces():
     """Phase 6: in-memory trace records for the OpenTelemetry-style flame graph."""
     try:
-        from viki.core.tracing import get_local_spans
+        from viki.core.telemetry_service import get_local_spans
 
         limit = int(request.args.get("limit", 100))
         return jsonify({"spans": get_local_spans(limit=limit)})
@@ -710,7 +710,7 @@ def get_traces():
 def get_traces_grouped():
     """P1: persistent traces grouped by trace_id with parent/child links for Gantt rendering."""
     try:
-        from viki.core.tracing import get_persistent_traces
+        from viki.core.telemetry_service import get_persistent_traces
 
         limit = int(request.args.get("limit", 50))
         return jsonify({"traces": get_persistent_traces(limit=limit)})

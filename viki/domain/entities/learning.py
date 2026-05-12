@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any
 
 @dataclass
@@ -21,3 +21,11 @@ class FailureRecord:
     error: str
     context: str
     timestamp: float
+
+@dataclass
+class Relationship:
+    source_id: str
+    target_id: str
+    type: str  # depends_on, extends, implements, related_to
+    weight: float = 1.0
+    metadata: Dict[str, Any] = field(default_factory=dict)

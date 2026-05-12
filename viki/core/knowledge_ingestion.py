@@ -87,7 +87,8 @@ class LearningModule:
 
     def _init_db(self):
         """Initialize SQLite schema for all knowledge types."""
-        self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        self.conn = sqlite3.connect(self.db_path, check_same_thread=False, timeout=30.0)
+        self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.row_factory = sqlite3.Row
         cur = self.conn.cursor()
         

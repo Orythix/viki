@@ -5,6 +5,7 @@ import time
 import yaml
 import asyncio
 import aiohttp
+import urllib.request
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional, Type, TypeVar
 from pydantic import BaseModel
@@ -236,7 +237,7 @@ class MockLLM(LLMProvider):
 
             # Support for Learning Analysis
             try:
-                from viki.core.learning import VIKILessonBatch, VIKILesson
+                from viki.core.knowledge_ingestion import VIKILessonBatch, VIKILesson
 
                 if response_model == VIKILessonBatch:
                     success = True
@@ -450,9 +451,26 @@ class APILLM(LLMProvider):
             yield f"Error streaming API Model: {e}"
 
 
+def _ollama_model_exists(base_url: str, model_name: str) -> bool:
+    """Check whether a model tag exists in the local Ollama instance."""
+    try:
+        req = urllib.request.Request(
+            f"{base_url}/api/tags",
+            headers={"Accept": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        for m in data.get("models", []):
+            if m.get("name") == model_name or m.get("model") == model_name:
+                return True
+    except Exception:
+        pass
+    return False
+
+
 class LocalLLM(LLMProvider):
     """Ollama provider with Async support and JSON mode."""
-    
+
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
         self.base_url = self.config.get('base_url', 'http://127.0.0.1:11434').rstrip('/')
@@ -461,6 +479,18 @@ class LocalLLM(LLMProvider):
         self._ollama_enable_thinking = bool(config.get("ollama_enable_thinking", False))
         _oo = config.get("ollama_options")
         self._ollama_options: Dict[str, Any] = dict(_oo) if isinstance(_oo, dict) else {}
+        # Verify the model actually exists in Ollama so the router can fall back.
+        if not _ollama_model_exists(self.base_url, self.model_name):
+            self.available = False
+            self.unavailable_reason = (
+                f"Ollama model '{self.model_name}' not found. "
+                f"Run: ollama pull {self.model_name.split(':')[0]}"
+            )
+            viki_logger.warning(
+                "Model '%s' (provider: ollama) disabled: %s",
+                self.model_name,
+                self.unavailable_reason,
+            )
 
     def _ollama_options_merged(self, temperature: float) -> Dict[str, Any]:
         o: Dict[str, Any] = {"temperature": float(temperature)}
@@ -952,16 +982,16 @@ class ModelFactory:
             merged_config.setdefault("supports_native_tools", False)
             return LocalLLM(merged_config)
         if provider_type in ("gemini", "google", "vertex"):
-            from viki.core.llm_providers import GeminiLLM
+            from viki.core.inference_providers import GeminiLLM
             return GeminiLLM(merged_config)
         if provider_type == "groq":
-            from viki.core.llm_providers import GroqLLM
+            from viki.core.inference_providers import GroqLLM
             return GroqLLM(merged_config)
         if provider_type == "mistral":
-            from viki.core.llm_providers import MistralLLM
+            from viki.core.inference_providers import MistralLLM
             return MistralLLM(merged_config)
         if provider_type in ("bedrock", "aws_bedrock"):
-            from viki.core.llm_providers import BedrockLLM
+            from viki.core.inference_providers import BedrockLLM
             return BedrockLLM(merged_config)
         raise ValueError(f"Unknown provider type: {provider_type}")
 
@@ -1028,7 +1058,7 @@ class ModelRouter:
             # Build a default LLMBudget if the controller didn't pass one in.
             if self.budget is None and self._budget_config:
                 try:
-                    from viki.core.llm_budget import LLMBudget
+                    from viki.core.resource_budget import LLMBudget
 
                     self.budget = LLMBudget(self._budget_config)
                 except Exception as e:
@@ -1186,7 +1216,7 @@ class ModelRouter:
     def _redact_messages_for_cloud(messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
         """Apply secret redaction so credentials never leak across cloud boundaries."""
         try:
-            from viki.core.safety import redact_secrets
+            from viki.core.security_guard import redact_secrets
 
             redacted: List[Dict[str, str]] = []
             for m in messages:

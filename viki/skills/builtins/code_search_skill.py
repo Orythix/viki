@@ -112,7 +112,8 @@ class CodeSearchSkill(BaseSkill):
             data_dir = self._data_dir()
             os.makedirs(data_dir, exist_ok=True)
             self._index_db_path = os.path.join(data_dir, "code_index.db")
-            self._index_db = sqlite3.connect(self._index_db_path, check_same_thread=False)
+            self._index_db = sqlite3.connect(self._index_db_path, check_same_thread=False, timeout=30.0)
+            self._index_db.execute("PRAGMA journal_mode=WAL")
             self._index_db.row_factory = sqlite3.Row
             self._index_db.executescript(
                 """

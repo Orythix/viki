@@ -158,10 +158,11 @@ class ModelForgeSkill(BaseSkill):
     Uses Unsloth for high-efficiency 4-bit LoRA training.
     """
 
-    def __init__(self, controller):
+    def __init__(self, orchestrator: Any, controller: Any):
+        self._orchestrator = orchestrator
         self.controller = controller
         self._name = "internal_forge"
-        self._description = "Initiate neural fine-tuning (Self-Evolution) on learned lessons. Usage: internal_forge()"
+        self._description = "Initiate neural fine-tuning or bake specialized model profiles. Usage: internal_forge(action='bake', profile='security')"
 
     @property
     def name(self) -> str:
@@ -176,25 +177,41 @@ class ModelForgeSkill(BaseSkill):
         return {
             "type": "object",
             "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["evolve", "bake", "list", "switch"],
+                    "default": "evolve",
+                    "description": "The forge action to perform."
+                },
+                "profile": {
+                    "type": "string",
+                    "description": "Profile to bake or switch to (e.g., 'security', 'gpt4').",
+                    "default": "general"
+                },
                 "steps": {
                     "type": "integer",
-                    "description": "Training steps (default: 60). Higher = more learning.",
+                    "description": "Training steps for evolution (default: 60).",
                     "default": 60,
                 }
             },
         }
 
     async def execute(self, params: Dict[str, Any]) -> str:
-        """
-        Phase 5: preference optimization (DPO/ORPO) is the default Forge path.
+        action = params.get("action", "evolve")
+        
+        if action == "list":
+            profiles = list(self._orchestrator.profiles.keys())
+            return f"Available Forge Profiles: {profiles}"
+            
+        if action == "bake":
+            profile = params.get("profile", "general")
+            return await self._orchestrator.bake_profile(profile)
 
-        strategy:
-            - "auto" (default): try DPO/ORPO with TRL; fall back to LoRA SFT;
-              fall back to prompt-bake (Modelfile).
-            - "dpo" / "orpo": preference optimization.
-            - "lora": classic supervised LoRA.
-            - "prompt_bake" / "modelfile": cold-start prompt injection.
-        """
+        if action == "switch":
+            profile = params.get("profile", "general")
+            return await self._orchestrator.switch_to_profile(profile)
+
+        # Legacy Evolution path
         from viki.core.preference_forge import trl_dpo_available
 
         uns = _unsloth_stack_available()

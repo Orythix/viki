@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
 from viki.config.logger import viki_logger
-from viki.core.judgment import JudgmentEngine, JudgmentOutcome, JudgmentResult
+from viki.core.output_verifier import JudgmentEngine, JudgmentOutcome, JudgmentResult
 from viki.core.schema import ActionCall
 
 
@@ -92,7 +92,7 @@ class CognitiveRouter:
         context: Optional[Dict[str, Any]] = None,
         skill_registry: Optional[Any] = None,
     ) -> CognitiveRoute:
-        from viki.core.tracing import start_span
+        from viki.core.telemetry_service import start_span
 
         t0 = time.perf_counter()
         context = context or {}

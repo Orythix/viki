@@ -238,4 +238,4 @@ Keep **`low_resource_mode`** or **`air_gap`** on hosts that must not do this wor
 
 ---
 
-*Runbook version: aligned with VIKI v7.x tree. Update this file when default ports, flags, or critical paths change.*
+*Runbook version: aligned with VIKI v8.0.0 tree. Update this file when default ports, flags, or critical paths change.*

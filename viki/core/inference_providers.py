@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional, Type, TypeVar
 from pydantic import BaseModel
 
 from viki.config.logger import viki_logger
-from viki.core.llm import LLMProvider
+from viki.core.inference_gateway import LLMProvider
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -144,7 +144,6 @@ class GeminiLLM(LLMProvider):
         finally:
             try:
                 from viki.core.usage_log import emit_llm_inference
-
                 emit_llm_inference(self, time.perf_counter() - t0, success, "chat")
             except Exception:
                 pass

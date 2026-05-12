@@ -16,6 +16,29 @@ system:
   workspace_dir: "./workspace"
   # Persona: sovereign (full), dev, research, home. Override with env VIKI_PERSONA.
   persona: sovereign
+
+  # Owner / User Identity — VIKI uses this to personalise every interaction.
+  # Fill in your own details. All fields are optional but the more you add,
+  # the more naturally VIKI will reference them.
+  owner:
+    name: "Sachin"                          # Your preferred name / call-sign
+    full_name: "Sachin Dilshan De Silva"                          # Optional full name
+    role: "Developer & AI Engineer"        # How you describe yourself
+    location: "Sri Lanka"                      # Where you're based
+    timezone: "Asia/Colombo"               # IANA tz (used for time-aware replies)
+    interests:                             # Topics VIKI should know you care about
+      - AI & machine learning
+      - software architecture
+      - local LLMs
+    preferences:
+      language: "en"                       # Preferred response language
+      verbosity: "balanced"                # brief | balanced | detailed
+      code_style: "pythonic"               # coding style preference
+    custom_context: >-                     # Free-form extra context (anything goes)
+      You are VIKI, my personal sovereign AI. I built and operate you.
+      Always address me by name when relevant. You know my development
+      environment is Windows 11 with Python 3.11 and a local Ollama setup.
+
   
   # Execution Mode: "live" = real actions, "shadow" = simulate only (safe for testing)
   shadow_mode: false
@@ -26,7 +49,7 @@ system:
   #   - continuous-learning loop is disabled,
   #   - mission control still runs only on explicit /missions.
   # Override at runtime with VIKI_LOW_RESOURCE=1.
-  low_resource_mode: false
+  low_resource_mode: true
 
   # When true, OpenAI/Anthropic API profiles are never selected; use Ollama (models.yaml) only.
   # Set false and configure real keys when you want cloud models. Env: VIKI_LOCAL_LLM_ONLY=true|false.
@@ -42,7 +65,7 @@ system:
   security_scan_requests: false
 
   # When true, run internal specialist ensemble (critic/explorer/aligner) for complex intents. Set false for lower latency.
-  use_ensemble: true
+  use_ensemble: false
 
   # Ollama (local): when false, API sends think=false — hides reasoning traces and usually responds faster on thinking models.
   # Per-profile override: set ollama_enable_thinking on a models.yaml profile. Env: VIKI_OLLAMA_THINK=1 to force on.
@@ -98,7 +121,7 @@ security_layer_path: "./viki/config/security_layer.md"
 
 memory:
   # Working-memory turns kept for conversation context (clamped 10–50 in code). Raise for longer threads.
-  short_term_limit: 28
+  short_term_limit: 10
   long_term_enabled: false
 
 # Background poll cadences. Bigger numbers = lower idle CPU on low-end PCs.

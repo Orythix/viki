@@ -39,7 +39,7 @@ def _validate_select(query: str) -> str:
 def _run_sqlite(db_path: str, query: str, limit: int, offset: int) -> Tuple[List[Dict[str, Any]], int]:
     if not db_path or not os.path.isfile(db_path):
         raise FileNotFoundError(f"sqlite db not found: {db_path}")
-    with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as conn:
+    with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=10.0) as conn:
         conn.row_factory = sqlite3.Row
         cur = conn.execute(f"{query} LIMIT {limit} OFFSET {offset}")
         rows = [dict(r) for r in cur.fetchall()]

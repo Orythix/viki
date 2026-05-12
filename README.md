@@ -5,7 +5,7 @@
 
 **Polymorphic Intelligence | Recursive Governance | Autonomous Self-Forging**
 
-[![Version](https://img.shields.io/badge/version-7.3.2-blue.svg)](./CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-8.0.0-blue.svg)](./CHANGELOG.md)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Ollama](https://img.shields.io/badge/Ollama-Local_LLM-orange.svg)](https://ollama.ai)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
@@ -15,7 +15,7 @@
 
 **VIKI** is an open-source autonomous AI agent and **Sovereign Digital Intelligence** for absolute privacy and **local-first** operation. Run with **Ollama**, **Phi-3**, **Mistral**, or **DeepSeek**—no cloud required. Uses the **Orythix Cognitive Architecture** for deep reasoning, multi-tool orchestration, and recursive self-improvement without leaking your data.
 
-[Features](#core-pillars-v732) • [Architecture](#technical-architecture) • [Quick Start](#quick-start) • [Build the VIKI model](#build-your-viki-model) • [Security](#security--ethics) • [Contributing](./CONTRIBUTING.md)
+[Features](#core-pillars-v800) • [Architecture](#technical-architecture) • [Quick Start](#quick-start) • [Build the VIKI model](#build-your-viki-model) • [Security](#security--ethics) • [Contributing](./CONTRIBUTING.md)
 
 **Pre-release:** VIKI is in active development. We welcome feedback and bug reports via [GitHub Issues](https://github.com/Orythix/viki/issues) and questions via [GitHub Discussions](https://github.com/Orythix/viki/discussions). Set `VIKI_API_KEY` and see [SECURITY_SETUP.md](viki/SECURITY_SETUP.md) before exposing the API.
 
@@ -57,7 +57,7 @@ VIKI ships as a **single opinionated agent system**: judgment/reflex layers, SQL
 
 VIKI is a **Sovereign Digital Intelligence** designed to be more than just an assistant—she is a partner that evolves alongside your workflow. Built on a foundation of **local-first privacy** and **deterministic governance**, VIKI balances the raw power of LLMs with the safety of a modular, capability-aware architecture.
 
-### Core Pillars (v7.3.2)
+### Core Pillars (v8.0.0)
 
 *   **Intelligence Governance**: Powered by the **Judgment Engine**. Every directive is filtered through a cognitive triage (Reflex, Shallow, Deep) to ensure the right model is used for the right task while maintaining absolute safety.
 *   **The Neural Forge**: A integrated pipeline in the core kernel. VIKI extracts "Wisdom" from her SQLite-backed semantic memory and bakes it into a local **Ollama** image (default tag **`viki-neural-forge`**, profile **`viki-evolved`** in `models.yaml`) on top of bases such as **Phi-3**, **Mistral**, **Qwen**, or **DeepSeek-R1**.

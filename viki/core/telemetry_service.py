@@ -183,7 +183,8 @@ def init_persistent_traces(db_path: str) -> None:
         return
     try:
         os.makedirs(os.path.dirname(os.path.abspath(db_path)) or ".", exist_ok=True)
-        conn = sqlite3.connect(db_path, check_same_thread=False)
+        conn = sqlite3.connect(db_path, check_same_thread=False, timeout=30.0)
+        conn.execute("PRAGMA journal_mode=WAL")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS spans (

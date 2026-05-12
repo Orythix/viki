@@ -38,7 +38,8 @@ class WorkingMemory:
         self._lock = threading.RLock()  # Reentrant lock for nested calls
         
         if Database:
-            conn = sqlite3.connect(self.db_path, check_same_thread=False)
+            conn = sqlite3.connect(self.db_path, check_same_thread=False, timeout=30.0)
+            conn.execute("PRAGMA journal_mode=WAL")
             self.db = Database(conn)
             self._init_tables()
         else:

@@ -1,8 +1,8 @@
 from typing import List, Optional
-from sqlalchemy import Column, String, Float, Integer, Text, create_engine
+from sqlalchemy import Column, String, Float, Integer, Text, create_engine, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from viki.domain.entities.learning import Lesson, FailureRecord
+from sqlalchemy.orm import sessionmaker, relationship as sqlalchemy_relationship
+from viki.domain.entities.learning import Lesson, FailureRecord, Relationship
 from viki.domain.interfaces.learning_repository import ILearningRepository
 import json
 import time
@@ -31,9 +31,30 @@ class FailureModel(Base):
     context = Column(Text)
     timestamp = Column(Float)
 
+class RelationshipModel(Base):
+    __tablename__ = 'relationships'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    source_id = Column(String, ForeignKey('lessons.id'))
+    target_id = Column(String, ForeignKey('lessons.id'))
+    type = Column(String)
+    weight = Column(Float, default=1.0)
+    metadata_json = Column(Text)
+
+from sqlalchemy import event
+
 class SqlAlchemyLearningRepository(ILearningRepository):
     def __init__(self, db_url: str):
-        self.engine = create_engine(db_url)
+        self.engine = create_engine(
+            db_url, 
+            connect_args={"check_same_thread": False}
+        )
+        
+        @event.listens_for(self.engine, "connect")
+        def set_sqlite_pragma(dbapi_connection, connection_record):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.close()
+            
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
 
@@ -113,5 +134,39 @@ class SqlAlchemyLearningRepository(ILearningRepository):
                     error=m.error,
                     context=m.context,
                     timestamp=m.timestamp
+                ) for m in models
+            ]
+
+    def save_relationship(self, relationship: Relationship) -> None:
+        with self.Session() as session:
+            model = RelationshipModel(
+                source_id=relationship.source_id,
+                target_id=relationship.target_id,
+                type=relationship.type,
+                weight=relationship.weight,
+                metadata_json=json.dumps(relationship.metadata)
+            )
+            session.add(model)
+            session.commit()
+
+    def get_related_concepts(self, lesson_id: str) -> List[Lesson]:
+        with self.Session() as session:
+            # Find lessons targeted by relationships from the source lesson
+            target_ids = session.query(RelationshipModel.target_id).filter_by(source_id=lesson_id).all()
+            target_ids = [t[0] for t in target_ids]
+            
+            models = session.query(LessonModel).filter(LessonModel.id.in_(target_ids)).all()
+            return [
+                Lesson(
+                    id=m.id,
+                    content=m.content,
+                    text_representation=m.text_representation,
+                    embedding=json.loads(m.embedding) if m.embedding else None,
+                    created_at=m.created_at,
+                    last_accessed=m.last_accessed,
+                    access_count=m.access_count,
+                    author=m.author,
+                    source_task=m.source_task,
+                    reliability=m.reliability
                 ) for m in models
             ]

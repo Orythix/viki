@@ -6,33 +6,33 @@ import re
 import json
 import importlib
 from typing import Dict, Any, List, Optional, Tuple
-from viki.core.soul import Soul
-from viki.core.safety import SafetyLayer, safe_for_log
-from viki.core.llm import APILLM, ModelRouter, StructuredPrompt
+from viki.core.identity_profile import Soul
+from viki.core.security_guard import SafetyLayer, safe_for_log
+from viki.core.inference_gateway import APILLM, ModelRouter, StructuredPrompt
 from viki.core.schema import VIKIResponse, ActionCall
 from viki.skills.registry import SkillRegistry
-from viki.core.learning import LearningModule
+from viki.core.knowledge_ingestion import LearningModule
 from viki.core.super_admin import SuperAdminLayer
-from viki.core.voice import VoiceModule
-from viki.core.proactive import WatchdogModule, WellnessPulse
-from viki.core.reflector import ReflectorModule
-from viki.core.bio import BioModule
-from viki.core.dream import DreamModule
+from viki.core.audio_gateway import VoiceModule
+from viki.core.autonomous_monitor import WatchdogModule, WellnessPulse
+from viki.core.meta_cognition import ReflectorModule
+from viki.core.biometric_service import BioModule
+from viki.core.state_consolidation import DreamModule
 from viki.core.filesystem_v2 import SemanticFS
-from viki.core.history import TimeTravelModule
+from viki.core.temporal_memory import TimeTravelModule
 from viki.core.knowledge_gaps import KnowledgeGapDetector
 from viki.core.continuous_learning import ContinuousLearner
-from viki.core.ab_testing import ModelABTest
-from viki.api.nexus import MessagingNexus
-from viki.core.reflex import ReflexBrain
-from viki.core.signals import CognitiveSignals
+from viki.core.variant_optimizer import ModelABTest
+from viki.api.central_nexus import MessagingNexus
+from viki.core.rapid_response_system import ReflexBrain
+from viki.core.event_bus import CognitiveSignals
 from viki.core.world import WorldModel
-from viki.core.cortex import ConsciousnessStack
-from viki.core.judgment import JudgmentEngine, JudgmentOutcome, JudgmentResult
+from viki.core.cognitive_processor import ConsciousnessStack
+from viki.core.output_verifier import JudgmentEngine, JudgmentOutcome, JudgmentResult
 from viki.core.cognitive_loop import CognitiveRouter, RouterTelemetry, CognitiveRoute
 from viki.core.capabilities import CapabilityRegistry
 from viki.core.scorecard import IntelligenceScorecard
-from viki.core.benchmark import ControlledBenchmark
+from viki.core.performance_benchmark import ControlledBenchmark
 
 # Orythix Cognitive Subsystems
 from viki.core.governor import EthicalGovernor
@@ -49,6 +49,7 @@ from viki.core.git_context import get_git_workspace_snapshot
 from viki.core.endpoint_guard import EndpointGuardService
 
 from viki.config.logger import viki_logger, thought_logger
+from viki.core.telemetry_service import close_persistent_traces
 
 
 class VIKIController:
@@ -95,6 +96,8 @@ class VIKIController:
             )
         if os.environ.get("VIKI_GIT_CONTEXT", "").lower() in ("1", "true", "yes"):
             system["git_workspace_context"] = True
+        if os.environ.get("VIKI_LOW_RESOURCE", "").lower() in ("1", "true", "yes"):
+            system["low_resource_mode"] = True
 
         if os.environ.get("VIKI_SESSION_USAGE_LOG") is not None:
             raw = os.environ.get("VIKI_SESSION_USAGE_LOG", "").strip().lower()
@@ -235,6 +238,7 @@ class VIKIController:
         # Overlay environment variables so users can configure via .env without editing YAML
         system = self.settings.setdefault("system", {})
         self._apply_system_overrides(system, workspace_override)
+        self.low_resource_mode = system.get("low_resource_mode", False)
         # 0. Fast Perception Layer (Reflex Brain)
         data_dir = system.get("data_dir", self.DEFAULT_DATA_DIR)
         self.reflex = ReflexBrain(data_dir=data_dir)
@@ -255,8 +259,37 @@ class VIKIController:
         
         self.soul = Soul(soul_path)
         self.persona = self._persona_from_soul_path(soul_path)
+
+        # Merge owner profile from settings into soul.config so cortex can
+        # reference it in every deliberation prompt.
+        _owner = self.settings.get("system", {}).get("owner", {})
+        if _owner and isinstance(_owner, dict):
+            self.soul.config["owner"] = _owner
+            # Build a concise identity string and prepend to system_prompt
+            _name = _owner.get("name", "")
+            _role = _owner.get("role", "")
+            _loc  = _owner.get("location", "")
+            _ctx  = _owner.get("custom_context", "")
+            _interests = ", ".join(_owner.get("interests", []))
+            _owner_block = (
+                f"OPERATOR IDENTITY:\n"
+                f"  Name: {_name}\n"
+                + (f"  Role: {_role}\n" if _role else "")
+                + (f"  Location: {_loc}\n" if _loc else "")
+                + (f"  Interests: {_interests}\n" if _interests else "")
+                + (f"  Context: {_ctx}\n" if _ctx else "")
+            )
+            _base_prompt = self.soul.config.get(
+                "system_prompt",
+                "You are VIKI, a helpful and friendly AI assistant.",
+            )
+            self.soul.config["system_prompt"] = (
+                _owner_block + "\n" + _base_prompt
+            )
+
         self.safety = SafetyLayer(self.settings)
         self.nexus = MessagingNexus(request_processor=self)
+
 
         self.learning = LearningModule(self.settings.get('system', {}).get('data_dir', self.DEFAULT_DATA_DIR))
         
@@ -300,7 +333,7 @@ class VIKIController:
             pass
 
         # Phase 1: Budget enforcement for cloud calls (daily/per-call cost cap + circuit breaker).
-        from viki.core.llm_budget import LLMBudget
+        from viki.core.resource_budget import LLMBudget
         budget_state_path = os.path.join(
             self.settings.get("system", {}).get("data_dir", self.DEFAULT_DATA_DIR),
             "llm_budget.json",
@@ -1079,7 +1112,7 @@ class VIKIController:
         ("look_at_screen",     "Capture and describe screen content.",       "viki.skills.builtins.vision_skill",        "VisionSkill",         False, "safe"),
         ("python_interpreter", "Execute Python in a sandbox.",                "viki.skills.builtins.interpreter_skill",  "InterpreterSkill",    True,  "medium"),
         ("browser",       "Headless browser navigation and scraping.",       "viki.skills.builtins.browser_skill",       "BrowserSkill",        False, "medium"),
-        ("swarm_council", "Multi-agent swarm orchestration.",                 "viki.skills.builtins.swarm_skill",         "SwarmSkill",          True,  "safe"),
+        ("swarm_control", "Multi-agent swarm orchestration.",                 "viki.skills.builtins.swarm_skill",         "SwarmSkill",          True,  "medium"),
         ("draw_overlay",  "Floating overlay UI.",                             "viki.skills.builtins.overlay_skill",       "OverlaySkill",        False, "safe"),
         ("short_video_agent", "Generate short videos.",                       "viki.skills.builtins.short_video_skill",   "ShortVideoSkill",     True,  "safe"),
         ("calendar",      "Google Calendar integration.",                    "viki.skills.builtins.calendar_skill",      "CalendarSkill",       True,  "safe"),
@@ -1156,14 +1189,17 @@ class VIKIController:
         # but only import when first invoked.
         for spec in self._LAZY_SKILL_SPECS:
             sname, sdesc, smod, scls, needs_ctrl, stier = spec
-            ctor = (lambda c, _needs_ctrl=needs_ctrl: ((c,) if _needs_ctrl else ()))
+            def _ctor(ctrl):
+                if scls == "SwarmSkill":
+                    return (ctrl.swarm, ctrl)
+                return (ctrl,) if needs_ctrl else ()
             try:
                 proxy = LazySkillProxy(
                     name=sname,
                     description=sdesc,
                     module_path=smod,
                     class_name=scls,
-                    ctor_args=ctor,
+                    ctor_args=_ctor,
                     controller=self,
                     safety_tier=stier,
                 )
@@ -2386,6 +2422,12 @@ class VIKIController:
         try:
             if hasattr(self, "scorecard") and hasattr(self.scorecard, "flush"):
                 self.scorecard.flush()
+        except Exception:
+            pass
+
+        # Phase 6/7: Persistent Traces
+        try:
+            close_persistent_traces()
         except Exception:
             pass
 

@@ -3,7 +3,7 @@ import asyncio
 import json
 from typing import List, Dict, Any, Optional, Tuple
 from viki.config.logger import viki_logger
-from viki.core.llm import LLMProvider
+from viki.core.inference_gateway import LLMProvider
 
 class DeliberationEngine:
     """
