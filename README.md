@@ -1,11 +1,10 @@
-# VIKI: Sovereign Digital Intelligence
-> **Open-Source Autonomous AI Agent | Local-First Cognitive Architecture | Private AI Assistant**
+> **Sovereign Digital Intelligence. An advanced AI agent system with cognitive architecture (Orythix), autonomous mission control, and a high-performance terminal interface.**
 
 <div align="center">
 
 **Local LLM Orchestration | Private Knowledge Retrieval | Autonomous Self-Evolution**
 
-[![Version](https://img.shields.io/badge/version-8.0.0-blue.svg)](./CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-8.1.0-blue.svg)](./CHANGELOG.md)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Ollama](https://img.shields.io/badge/Ollama-Local_LLM-orange.svg)](https://ollama.ai)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
@@ -13,7 +12,7 @@
 
 ---
 
-**VIKI** is a high-performance **autonomous AI agent** and **sovereign digital intelligence** built for maximum privacy and **local-first** execution. Designed to run natively with **Ollama** (Phi-3, Mistral, Llama 3, DeepSeek), VIKI provides an air-gapped alternative to cloud-based assistants. Powered by the **Orythix Cognitive Architecture**, it features deep reasoning, multi-tool orchestration, and recursive learning through its unique **Neural Forge** pipeline.
+**VIKI** is a high-performance **autonomous AI agent** and **sovereign digital intelligence** built for maximum privacy and **local-first** execution. Designed to run natively with **Ollama** (Phi-3, Mistral, Llama 3, DeepSeek), VIKI provides an air-gapped alternative to cloud-based assistants. Powered by the **Orythix Cognitive Architecture**, it features deep reasoning, multi-tool orchestration, and recursive learning through its unique **Neural Forge** pipeline—all accessible through a streamlined **CLI-first** experience.
 
 [Core Features](#core-pillars-v800) • [Technical Architecture](#technical-architecture) • [Quick Start](#quick-start) • [Build Your Model](#build-your-viki-model) • [Security & Ethics](#security--ethics) • [Contributing](./CONTRIBUTING.md)
 
