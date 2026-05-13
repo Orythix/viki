@@ -40,7 +40,7 @@ models:
     # --- The Evolved VIKI (The output of /forge bake) ---
     viki-evolved:
       provider: ollama
-      model_name: viki-neural-forge
+      model_name: viki-evolved:latest
       priority: 3
       capabilities:
       - chat

@@ -149,7 +149,11 @@ class SystemControlSkill(BaseSkill):
         if any(char in app_name for char in [';', '&', '|', '>', '<', '$', '`']):
             return "Error: Invalid characters in app name."
         
+        # 0. Clean the app name from conversational fillers
         app_clean = app_name.lower().strip()
+        for filler in ["the ", "open ", "launch ", " on my pc", " app"]:
+            app_clean = app_clean.replace(filler, "")
+        app_clean = app_clean.strip()
         
         # 1. Check whitelist
         target = self.whitelist.get(app_clean)
@@ -160,28 +164,31 @@ class SystemControlSkill(BaseSkill):
                 else:
                     # Use explicit process creation without shell
                     subprocess.Popen([target], shell=False)
-                return f"Launched {app_name}."
+                return f"Launched {app_clean}."
             except Exception as e:
-                return f"Error launching {app_name}: {e}"
+                # If direct launch fails, try with 'start'
+                try:
+                    subprocess.Popen(['cmd', '/c', 'start', '', target], shell=False)
+                    return f"Launched {app_clean} via start."
+                except:
+                    return f"Error launching {app_clean}: {e}"
         
         # 2. Try direct execution (for apps in PATH)
         exe_name = app_clean if app_clean.endswith('.exe') else f"{app_clean}.exe"
         if shutil.which(exe_name):
             try:
-                # Use explicit process creation without shell
                 subprocess.Popen([exe_name], shell=False)
-                return f"Launched {app_name}."
+                return f"Launched {app_clean}."
             except Exception as e:
-                return f"Error launching {app_name}: {e}"
+                return f"Error launching {app_clean}: {e}"
         
         # 3. Try Windows Start Menu search via cmd /c start
-        # This is safer than direct shell=True as we explicitly control the command
         try:
-            # Use cmd /c start with explicit arguments
-            subprocess.Popen(['cmd', '/c', 'start', '', app_name], shell=False)
-            return f"Attempted to launch {app_name} via Windows search."
+            # We use the cleaned name here
+            subprocess.Popen(['cmd', '/c', 'start', '', app_clean], shell=False)
+            return f"Attempted to launch {app_clean} via Windows search."
         except Exception as e:
-            return f"Could not find or launch '{app_name}': {e}"
+            return f"Could not find or launch '{app_clean}': {e}"
 
     async def _type_text(self, text: str) -> str:
         if not text:

@@ -4,7 +4,7 @@
 
 **Local LLM Orchestration | Private Knowledge Retrieval | Autonomous Self-Evolution**
 
-[![Version](https://img.shields.io/badge/version-8.1.0-blue.svg)](./CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-8.1.1-blue.svg)](./CHANGELOG.md)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Ollama](https://img.shields.io/badge/Ollama-Local_LLM-orange.svg)](https://ollama.ai)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
@@ -95,6 +95,7 @@ Example: `VIKI_PERSONA=dev python viki/main.py` runs VIKI Dev with only dev-focu
 
 VIKI now includes 20 production engineering workflows grouped across Define, Plan, Build, Verify, Review, and Ship, sourced from [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills) under the MIT license.
 It also includes a second in-house wave of 20 original playbooks spanning Architecture, Reliability, Data, Platform, AI/Agents, and Crypto engineering domains.
+**NEW**: Added the **Medical Doctor Intelligence (MDI)** playbook for clinical reasoning and healthcare management.
 
 - Define: `idea_refine`, `spec_driven_development`
 - Plan: `planning_and_task_breakdown`
@@ -280,6 +281,7 @@ Install the `viki` command so you can run it from any directory with the current
   - `viki /path/to/project "add logging"` — run a single-shot query in a specific directory.
   - `VIKI_PERSONA=dev viki` — run with the dev persona (coding-focused skills).
 - **Confirm/reject**: When VIKI asks "Confirm to proceed" for a medium or destructive action, reply `yes` or `confirm` to run it, or `no` or `reject` to cancel. You can also use `/confirm` or `/reject`.
+- **Reset Profile**: Run `viki --reset` (or `.\viki --reset` on Windows) to clear your current identity and re-trigger the interactive onboarding flow.
 - **Useful in-chat commands**: `/help`, `/skills`, `/shadow` (simulate only), `/scan` (re-scan workspace codebase).
 
 **One-line install (optional)**:

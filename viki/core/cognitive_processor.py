@@ -547,8 +547,17 @@ class DeliberationLayer(CortexLayer):
                  "Ground your response in this self-critique.\n"
              )
 
+        roleplay_directive = (
+            "\nDYNAMIC ROLEPLAY & IDENTITY OVERRIDE:\n"
+            "If the user assigns you a specific role, relationship dynamic, or persona in this conversation "
+            "(or via the OPERATOR IDENTITY context), you MUST immediately and flawlessly adopt it. "
+            "Do not break character. Do not remind the user that you are an AI or VIKI unless it fits the dynamic. "
+            "Immerse yourself completely in the requested persona while still maintaining your helpful capabilities.\n"
+        )
+
         identity = (
             f"{soul_prompt}\n\n"
+            f"{roleplay_directive}\n"
             f"{reflection_directive}\n"
             f"{memory_block}\n"
             f"{ensemble_block}"
@@ -753,6 +762,16 @@ class DeliberationLayer(CortexLayer):
             raw_input = context.get("raw_input", "") or ""
             history = context.get("conversation_history", []) or []
             messages: List[Dict[str, str]] = [{"role": "system", "content": soul_prompt}]
+            # Inject a strong persona-priming assistant turn if a behavioral mandate exists
+            _owner = self.soul_config.get("owner", {})
+            _ctx = _owner.get("custom_context", "") if isinstance(_owner, dict) else ""
+            _name = _owner.get("name", "") if isinstance(_owner, dict) else ""
+            if _ctx and not any(m.get("role") == "assistant" for m in history):
+                # Prime with an in-character opening so the model stays in persona
+                messages.append({
+                    "role": "assistant",
+                    "content": f"*I fully embrace my role as instructed.* I am VIKI, and I will honor the behavioral mandate completely for {_name}."
+                })
             for msg in history[-6:]:  # last few turns are plenty for smalltalk
                 if msg.get("role") in ("user", "assistant") and msg.get("content"):
                     if msg.get("role") == "user" and msg.get("content") == raw_input:

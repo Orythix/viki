@@ -1,4 +1,4 @@
-# VIKI Architecture (v8.0.0 Industrial)
+# VIKI Architecture (v8.1.1 Industrial)
 
 ## Core Philosophy
 Following the **Industrial Restructuring**, VIKI follows a **Clean Architecture (Hexagonal)** and **Domain-Driven Design (DDD)** pattern:
@@ -107,4 +107,4 @@ They do not change runtime imports for `python viki/main.py`; see each folder’
 
 ---
 
-*Runbook version: aligned with VIKI v8.0.0 (Industrial). Update this file when default ports, flags, or critical architecture patterns change.*
+*Runbook version: aligned with VIKI v8.1.1 (Industrial). Update this file when default ports, flags, or critical architecture patterns change.*

@@ -1,5 +1,22 @@
 import os
 import sys
+import warnings
+
+# Aggressively suppress HuggingFace and Transformers noise
+os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
+warnings.filterwarnings("ignore", category=UserWarning, module="huggingface_hub")
+warnings.filterwarnings("ignore", module="sentence_transformers")
+warnings.filterwarnings("ignore", module="transformers")
+
+# Force transformers logging level directly if the library is loaded
+try:
+    import transformers
+    transformers.logging.set_verbosity_error()
+except ImportError:
+    pass
 import asyncio
 import time
 import argparse
@@ -29,105 +46,90 @@ from viki.core.orchestrator import VIKIController
 from viki.config.logger import viki_logger
 from viki.config.resolve import get_soul_path
 from viki.service_registry import Container
+from viki.core.utils.onboarding import run_onboarding
 
 console = Console()
 
 class SimpleInterface:
     def __init__(self):
         self.console = Console()
-        self.status_spinner = None
+        self.status = None
         
     def welcome(self, controller=None):
-        self.console.print("[bold magenta]VIKI v8.0.0[/] [dim]System Online[/]")
-        if controller is not None:
-            persona = getattr(controller, "persona", "sovereign")
-            diff = controller.get_differentiators() if hasattr(controller, "get_differentiators") else []
-            first_diff = diff[0] if diff else "Orythix"
-            self.console.print(f"[dim]Persona: {persona} | {first_diff}[/]")
-            if hasattr(controller, "get_runtime_health_summary"):
-                health_summary = controller.get_runtime_health_summary()
-                style = "yellow" if "degraded" in health_summary else "dim"
-                self.console.print(f"[{style}]{health_summary}[/]")
+        import os
+        username = os.getlogin() if hasattr(os, "getlogin") else "User"
+        cwd = os.getcwd()
+        
+        from rich.table import Table
+        from rich import box
+        
+        main_table = Table(box=box.SIMPLE_HEAD, expand=True, show_header=True, padding=(0, 2))
+        main_table.add_column("System Vitals", style="bold cyan")
+        main_table.add_column("Capabilities", style="bold blue")
+        main_table.add_column("Shortcuts", style="bold magenta")
+        
+        net = "[bold green]ONLINE[/]"
+        shell = "[bold green]ENABLED[/]"
+        if controller:
+            status = controller.get_sovereign_status()
+            net = "[bold red]AIR-GAPPED[/]" if status["network"]["air_gap"] else "[bold green]ONLINE[/]"
+            shell = "[bold green]ENABLED[/]" if status["shell"]["enabled"] else "[bold red]DISABLED[/]"
             
-            # Show the boundary dashboard at welcome
-            self.render_boundary_dashboard(controller)
-            
-        self.console.print("[dim]Type 'exit' to quit. Type '/help' for boundary controls.[/]\n")
+        main_table.add_row(
+            f"Operator: [white]{username}[/]",
+            f"Network: {net}",
+            "[dim]/help - All commands[/]"
+        )
+        main_table.add_row(
+            f"Workspace: [white]{cwd}[/]",
+            f"Shell: {shell}",
+            "[dim]/skills - Registered skills[/]"
+        )
+        main_table.add_row(
+            f"Mode: [yellow]Sovereign[/]",
+            f"Version: [white]8.1.0[/]",
+            "[dim]/boundary - Security status[/]"
+        )
+        
+        self.console.print("\n[bold cyan]*** O R Y T H I X   N E X U S ***[/]")
+        self.console.print(main_table)
+        self.console.print("")
 
     def print_user(self, text):
-        self.console.print(f"[bold green]USER >[/] {text}")
+        pass # Input prompt handles this cleanly now
 
     def print_viki(self, text):
-        self.console.print(f"[bold cyan]VIKI >[/] {text}\n")
+        self.console.print(f"{text}\n")
         
     def print_error(self, text):
-        self.console.print(f"[bold red]ERROR >[/] {text}")
+        self.console.print(f"[bold red]Error:[/] {text}\n")
         
     def print_thought(self, text):
-        # Subtle thought logging
-        self.console.print(f"[dim italic]   Thinking: {text}[/]")
+        pass # Handled by spinner
 
     def print_action(self, text):
-        self.console.print(f"[yellow]   Action: {text}[/]")
+        pass # Handled by spinner
 
     def render_boundary_dashboard(self, controller):
-        """Renders a dashboard panel showing the current security boundaries."""
+        """Renders the dashboard panel showing the current security boundaries when requested."""
         status = controller.get_sovereign_status()
         
-        # Filesystem Table
         fs_table = Table.grid(expand=True)
         fs_table.add_column(style="cyan", justify="left")
         fs_table.add_column(style="white", justify="left")
         fs_table.add_row("Workspace:", status["filesystem"]["workspace"])
-        fs_table.add_row("Data:", status["filesystem"]["data"])
         fs_table.add_row("Scope:", f"{status['filesystem']['allowed_roots_count']} Allowed Roots")
 
-        # Network & Shell Table
         net_table = Table.grid(expand=True)
         net_table.add_column(style="cyan", justify="left")
         net_table.add_column(style="white", justify="left")
-        
         net_val = "[bold red]AIR-GAPPED[/]" if status["network"]["air_gap"] else "[bold green]ONLINE[/]"
         net_table.add_row("Network:", net_val)
-        net_table.add_row("Allowlist:", f"{status['network']['allowlist_count']} Domains")
-        
         shell_val = "[bold green]ENABLED[/]" if status["shell"]["enabled"] else "[bold red]DISABLED[/]"
         net_table.add_row("Shell:", shell_val)
-        net_table.add_row("Approval:", "[bold yellow]ON[/]" if status["shell"]["approval_required"] else "[dim]OFF[/]")
 
-        # History / Run Log
-        history = status["history"]
-        history_text = Text()
-        if history["touched_files"]:
-            history_text.append("\nFiles Touched:\n", style="bold yellow")
-            for f in history["touched_files"][:3]:
-                history_text.append(f"  • {f}\n", style="dim")
-        if history["executed_commands"]:
-            history_text.append("Commands Executed:\n", style="bold yellow")
-            for c in history["executed_commands"][:3]:
-                history_text.append(f"  • {c}\n", style="dim")
-        
-        # Main Layout
         panel_content = Columns([fs_table, net_table])
-        
-        full_content = Panel(
-            history_text if history_text else panel_content,
-            title="[bold blue]SOVEREIGN BOUNDARY[/]",
-            subtitle="[dim]Local Enforcement Active[/]",
-            border_style="blue"
-        )
-        
-        if history_text:
-             # If we have history, show it in a more detailed layout
-             from rich.layout import Layout
-             l = Layout()
-             l.split_row(
-                 Layout(Panel(panel_content, title="[bold]Status[/]", border_style="dim"), name="status"),
-                 Layout(Panel(history_text, title="[bold]Activity Log[/]", border_style="dim"), name="log")
-             )
-             self.console.print(Panel(l, title="[bold blue]SOVEREIGN BOUNDARY[/]", border_style="blue", height=10))
-        else:
-             self.console.print(full_content)
+        self.console.print(Panel(panel_content, title="[bold blue]SOVEREIGN BOUNDARY[/]", border_style="blue"))
 
 async def _shutdown_controller(controller):
     controller.watchdog.stop()
@@ -169,15 +171,24 @@ async def _run_single_query(controller, interface, query, on_event, streaming_st
         interface.print_user(query)
         start_t = time.time()
         streaming_state["active"] = False
+        
+        if interface.status is None:
+            interface.status = interface.console.status("[dim]Thinking...[/]", spinner="dots")
+            interface.status.start()
+            
         response = await controller.process_request(query, on_event=on_event)
         elapsed = time.time() - start_t
+
+        if interface.status is not None:
+            interface.status.stop()
+            interface.status = None
 
         if streaming_state["active"]:
             interface.console.print("")
             streaming_state["active"] = False
-            interface.console.print(f"[dim]   ({elapsed:.2f}s)[/]")
+            interface.console.print(f"\n[dim]   ({elapsed:.2f}s)[/]")
         else:
-            interface.console.print(f"[dim]   ({elapsed:.2f}s)[/]")
+            interface.console.print(f"\n[dim]   ({elapsed:.2f}s)[/]")
             interface.print_viki(response)
     except KeyboardInterrupt:
         pass
@@ -190,7 +201,7 @@ async def _run_single_query(controller, interface, query, on_event, streaming_st
 async def _run_interactive_loop(controller, interface, on_event, streaming_state, debug_state):
     while True:
         try:
-            user_input = interface.console.input("[bold green]USER > [/]").strip()
+            user_input = interface.console.input("\n> ").strip()
             
             if not user_input: continue
             if user_input.lower() in ["exit", "quit", "/exit"]:
@@ -250,15 +261,24 @@ async def _run_interactive_loop(controller, interface, on_event, streaming_state
                 
             start_t = time.time()
             streaming_state["active"] = False
+            
+            if interface.status is None:
+                interface.status = interface.console.status("[dim]Thinking...[/]", spinner="dots")
+                interface.status.start()
+                
             response = await controller.process_request(user_input, on_event=on_event)
             elapsed = time.time() - start_t
+
+            if interface.status is not None:
+                interface.status.stop()
+                interface.status = None
 
             if streaming_state["active"]:
                 interface.console.print("")
                 streaming_state["active"] = False
-                interface.console.print(f"[dim]   ({elapsed:.2f}s)[/]")
+                interface.console.print(f"\n[dim]   ({elapsed:.2f}s)[/]")
             else:
-                interface.console.print(f"[dim]   ({elapsed:.2f}s)[/]")
+                interface.console.print(f"\n[dim]   ({elapsed:.2f}s)[/]")
                 interface.print_viki(response)
             
         except KeyboardInterrupt:
@@ -275,6 +295,11 @@ async def main(workspace_path=None, query=None):
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     settings_path = os.path.join(script_dir, "config", "settings.yaml")
+    
+    # Run interactive onboarding for first-time users
+    if not query:
+        run_onboarding(settings_path)
+        
     soul_path = get_soul_path(settings_path)
 
     try:
@@ -316,27 +341,41 @@ async def main(workspace_path=None, query=None):
     interface.welcome(controller)
 
     def on_event(event_type, data):
-        if event_type == "thought":
+        if event_type in ["thought", "action"]:
+            if interface.status is None:
+                interface.status = interface.console.status(f"[dim]{data}...[/]", spinner="dots")
+                interface.status.start()
+            else:
+                interface.status.update(f"[dim]{data}...[/]")
+            
             if debug_state["active"]:
-                interface.print_thought(data)
-        elif event_type == "action":
-            if debug_state["active"]:
-                interface.print_action(str(data))
+                interface.console.print(f"[dim italic]{event_type}: {data}[/]")
+                
+        elif event_type == "status":
+            pass  # Ignored by design to prevent background loop spinners
+            
         elif event_type == "partial":
+            if interface.status is not None:
+                interface.status.stop()
+                interface.status = None
             try:
                 if not streaming_state["active"]:
-                    interface.console.print("[bold cyan]VIKI > [/]", end="")
+                    interface.console.print("\n", end="")
                     streaming_state["active"] = True
                 interface.console.print(str(data), end="")
             except Exception:
                 pass
         elif event_type == "final":
+            if interface.status is not None:
+                interface.status.stop()
+                interface.status = None
             if streaming_state["active"]:
-                interface.console.print("")
+                interface.console.print("\n")
                 streaming_state["active"] = False
-        elif event_type == "status":
-            pass  # Ignored by design
         elif event_type == "error":
+            if interface.status is not None:
+                interface.status.stop()
+                interface.status = None
             interface.print_error(data)
 
     loop = asyncio.get_running_loop()
@@ -351,11 +390,36 @@ def run():
     """Synchronous entry point for the `viki` console script."""
     parser = argparse.ArgumentParser(description="VIKI Sovereign Intelligence")
     parser.add_argument("--low-resource", dest="low_resource", action="store_true", help="Optimize for local hardware: skip background cognitive loops")
+    parser.add_argument("--reset", action="store_true", help="Reset user profile and trigger onboarding")
     parser.add_argument("args", nargs="*", help="Optional: [path] [query...]")
     parsed_args = parser.parse_args()
 
     if parsed_args.low_resource:
         os.environ["VIKI_LOW_RESOURCE"] = "true"
+
+    if parsed_args.reset:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        settings_path = os.path.join(script_dir, "config", "settings.yaml")
+        if os.path.exists(settings_path):
+            try:
+                import yaml
+                with open(settings_path, "r", encoding="utf-8") as f:
+                    settings = yaml.safe_load(f)
+                
+                # Reset owner details
+                system = settings.get("system", {})
+                owner = system.get("owner", {})
+                owner["name"] = "User"
+                owner["role"] = "Developer"
+                owner["custom_context"] = ""
+                owner["interests"] = []
+                
+                with open(settings_path, "w", encoding="utf-8") as f:
+                    yaml.dump(settings, f, default_flow_style=False, sort_keys=False)
+                
+                print("[bold yellow]Profile reset requested. Triggering onboarding...[/]")
+            except Exception as e:
+                print(f"[red]Error during reset: {e}[/]")
 
     workspace_path = None
     query_parts = []

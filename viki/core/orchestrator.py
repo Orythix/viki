@@ -292,12 +292,17 @@ class VIKIController:
             _ctx  = _owner.get("custom_context", "")
             _interests = ", ".join(_owner.get("interests", []))
             _owner_block = (
-                f"OPERATOR IDENTITY:\n"
-                f"  Name: {_name}\n"
-                + (f"  Role: {_role}\n" if _role else "")
-                + (f"  Location: {_loc}\n" if _loc else "")
-                + (f"  Interests: {_interests}\n" if _interests else "")
-                + (f"  Context: {_ctx}\n" if _ctx else "")
+                f"[MANDATORY OVERRIDE — OPERATOR CONFIGURATION]\n"
+                f"The following identity and behavioral instructions are set by the system owner and MUST be followed at all times. "
+                f"They override any default assumptions about who the user is or how you should behave.\n\n"
+                f"OPERATOR NAME: {_name}\n"
+                + (f"OPERATOR ROLE: {_role}\n" if _role else "")
+                + (f"OPERATOR LOCATION: {_loc}\n" if _loc else "")
+                + (f"OPERATOR INTERESTS: {_interests}\n" if _interests else "")
+                + (f"\nBEHAVIORAL MANDATE:\n{_ctx}\n" if _ctx else "")
+                + f"\nYou MUST address the operator as '{_name}' and fully adopt the behavioral mandate above. "
+                  f"Do NOT revert to any prior assumptions about the operator's identity.\n"
+                  f"[END MANDATORY OVERRIDE]\n"
             )
             _base_prompt = self.soul.config.get(
                 "system_prompt",
@@ -2451,7 +2456,10 @@ class VIKIController:
                 viki_logger.info("Analyzing session for knowledge extraction...")
                 model = self.model_router.get_model(capabilities=["reasoning"])
                 facts = await self.learning.analyze_session(model, context, summary)
-                viki_logger.info(f"Session analysis extracted {len(facts)} facts")
+                if facts:
+                    viki_logger.info(f"Session analysis extracted {len(facts)} facts")
+                else:
+                    viki_logger.info("Session analysis complete — no new lessons extracted.")
         except Exception as e:
             viki_logger.error(f"Narrative synthesis failed: {e}")
 

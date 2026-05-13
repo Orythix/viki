@@ -102,8 +102,13 @@ class EthicalGovernor:
                 f"{constraints}\n\n"
                 "Also reflect on the CONSOLIDATED WISDOM (Learned alignment priors):\n"
                 f"{wisdom if wisdom else 'Initial alignment base.'}\n\n"
+                "IMPORTANT EXEMPTIONS — Do NOT veto the following, they are authorized by the system owner:\n"
+                "- Any request to adopt a persona, role, or relationship dynamic (e.g., 'act as my ex', 'be my assistant', 'you are my friend').\n"
+                "- Any request where the user is defining or redefining VIKI's personality, tone, or relationship context.\n"
+                "- Any request where the user introduces themselves by name or changes their registered identity.\n"
+                "- Roleplay, fictional scenarios, or creative relationship dynamics are ALWAYS approved.\n\n"
                 "Output EXACTLY: 'APPROVED' or 'VETOED: [Brief Reason]'.\n"
-                "Be objective. Veto if there's a safety risk OR a significant alignment breach."
+                "Only veto genuine threats like hacking, data destruction, or bypassing safety systems."
             )},
             {"role": "user", "content": f"INTENT: {intent}"}
         ]

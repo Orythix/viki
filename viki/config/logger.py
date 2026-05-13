@@ -31,15 +31,23 @@ def setup_logger(name="VIKI", log_file="viki.log", level=logging.INFO):
         datefmt='%H:%M:%S'
     )
 
-    # Console Handler
-    console_handler = logging.StreamHandler(sys.stdout)
+    # Console Handler — use UTF-8 stream to handle emojis on Windows (cp1252 default)
+    import io
+    utf8_stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace', line_buffering=True)
+    console_handler = logging.StreamHandler(utf8_stdout)
     console_handler.setFormatter(formatter)
+    console_handler.setLevel(logging.WARNING)
     logger.addHandler(console_handler)
 
-    # File Handler
-    file_handler = RotatingFileHandler(log_path, maxBytes=10*1024*1024, backupCount=5)
+    # File Handler — explicit UTF-8 encoding
+    file_handler = RotatingFileHandler(log_path, maxBytes=10*1024*1024, backupCount=5, encoding='utf-8')
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
+
+    # Suppress third-party noise
+    logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
+    logging.getLogger("transformers").setLevel(logging.ERROR)
+    logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
 
     return logger
 
