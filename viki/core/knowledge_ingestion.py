@@ -268,8 +268,18 @@ class LearningModule:
              time.time(), time.time(), 1, author, effective_source, kwargs.get('reliability', 0.8)))
         
         if relationship:
-            cur.execute("INSERT INTO relationships (lesson_id, subj, pred, obj) VALUES (?, ?, ?, ?)",
-                       (lid, relationship.get('subject'), relationship.get('predicate'), relationship.get('object')))
+            if isinstance(relationship, list) and len(relationship) >= 3:
+                subj, pred, obj = relationship[0], relationship[1], relationship[2]
+            elif isinstance(relationship, dict):
+                subj = relationship.get('subject') or relationship.get('subj')
+                pred = relationship.get('predicate') or relationship.get('pred')
+                obj = relationship.get('object') or relationship.get('obj')
+            else:
+                subj, pred, obj = None, None, None
+
+            if subj and pred and obj:
+                cur.execute("INSERT INTO relationships (lesson_id, subj, pred, obj) VALUES (?, ?, ?, ?)",
+                           (lid, str(subj), str(pred), str(obj)))
         
         self.conn.commit()
         self.mark_vector_dirty()
@@ -698,6 +708,13 @@ class LearningModule:
                 content = content[start:end+1]
                 try:
                     data = json.loads(content)
+                    if isinstance(data, list) and len(data) > 0:
+                        data = data[0]
+                    
+                    if not isinstance(data, dict):
+                         viki_logger.debug(f"Learning: Expected dict from JSON, got {type(data)}")
+                         return
+
                     fact = data.get('fact')
                     rel = data.get('rel')
                     conf = data.get('confidence', 0.0)
@@ -731,6 +748,7 @@ class LearningModule:
         if hasattr(self, 'conn') and self.conn:
             try:
                 self.conn.close()
+                self.conn = None
                 viki_logger.info("Learning: SQLite connection closed.")
             except Exception as e:
                 viki_logger.debug(f"Learning: Failed to close SQLite: {e}")

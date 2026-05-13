@@ -256,5 +256,6 @@ class NarrativeMemory:
         if hasattr(self, 'conn') and self.conn:
             try:
                 self.conn.close()
+                self.conn = None
             except Exception:
                 pass

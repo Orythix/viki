@@ -158,6 +158,7 @@ class WorkingMemory:
             if self.db:
                 try:
                     self.db.conn.close()
+                    self.db = None
                 except Exception:
                     pass
 

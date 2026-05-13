@@ -2335,6 +2335,9 @@ class VIKIController:
         return self.mcp_skill_count
 
     async def shutdown(self):
+        if getattr(self, "_shutting_down", False):
+            return
+        self._shutting_down = True
         viki_logger.info("Shutting down...")
 
         if getattr(self, "mcp_client", None) is not None:
