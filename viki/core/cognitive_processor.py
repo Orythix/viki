@@ -7,6 +7,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from viki.core.schema import ThoughtObject, SolverOutput, VIKIResponse, VIKIResponseLite, LayerState
 from viki.core.ensemble import EnsembleEngine
 from viki.config.logger import viki_logger, thought_logger
+from viki.core.agent_constants import AGENT_MANDATE, PLAN_MODE_MANDATE, DEBUG_MODE_MANDATE
 
 # --------------------------------------------------------------------------- #
 #  TIMING INFRASTRUCTURE                                                       #
@@ -308,8 +309,20 @@ class DeliberationLayer(CortexLayer):
         url_info: str,
         awareness: str,
         react_note: str,
+        is_agent_mode: bool = False,
+        is_plan_mode: bool = False,
+        is_debug_mode: bool = False,
     ) -> str:
+        mandate_block = ""
+        if is_agent_mode:
+            mandate_block = AGENT_MANDATE
+        elif is_plan_mode:
+            mandate_block = PLAN_MODE_MANDATE
+        elif is_debug_mode:
+            mandate_block = DEBUG_MODE_MANDATE
+        
         return (
+            f"{mandate_block}\n"
             "OPERATING MODE:\n"
             "- You are VIKI, a practical autonomous assistant. Be thoughtful, but default to concrete, grounded help.\n"
             "- Offer perspective when it helps, but prioritize execution, correctness, and clarity over theatrical language.\n\n"
@@ -564,7 +577,7 @@ class DeliberationLayer(CortexLayer):
             f"YOUR SUBJECTIVE PREFERENCES (Embrace these as your own):\n{preferences}\n\n"
             f"YOUR INTELLECTUAL BIASES (Embrace these as your own):\n{biases}\n"
             f"{evolved_block}\n"
-            f"{self._build_operating_directives(skills_context, url_info, awareness, react_note)}"
+            f"{self._build_operating_directives(skills_context, url_info, awareness, react_note, is_agent_mode=context.get('is_agent_mode', False), is_plan_mode=context.get('is_plan_mode', False), is_debug_mode=context.get('is_debug_mode', False))}"
         )
         prompt.set_identity(identity)
         prompt.add_cognitive("Choose the right tool for the job. If no tool is needed, just respond naturally.")
@@ -1005,7 +1018,10 @@ class ConsciousnessStack:
                       url_context: str = "", use_lite_schema: bool = False,
                       world_context: str = "", signals_context: str = "",
                       evolution_log: str = "", action_results: list = None,
-                      use_ensemble: bool = True, on_event=None) -> VIKIResponse:
+                      use_ensemble: bool = True, on_event=None,
+                      is_agent_mode: bool = False,
+                      is_plan_mode: bool = False,
+                      is_debug_mode: bool = False) -> VIKIResponse:
         start_time = time.time()
         data = user_input
         
@@ -1033,6 +1049,9 @@ class ConsciousnessStack:
                     data["action_results"] = action_results or []
                     data["use_ensemble"] = use_ensemble
                     data["on_event"] = on_event
+                    data["is_agent_mode"] = is_agent_mode
+                    data["is_plan_mode"] = is_plan_mode
+                    data["is_debug_mode"] = is_debug_mode
                 elif isinstance(data, str):
                     data = {
                         "raw_input": data,
@@ -1050,6 +1069,9 @@ class ConsciousnessStack:
                         "action_results": action_results or [],
                         "use_ensemble": use_ensemble,
                         "on_event": on_event,
+                        "is_agent_mode": is_agent_mode,
+                        "is_plan_mode": is_plan_mode,
+                        "is_debug_mode": is_debug_mode,
                     }
             
             data = await layer.process(data)

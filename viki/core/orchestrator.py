@@ -45,6 +45,7 @@ from viki.application.services.forge_orchestrator import ForgeOrchestrator
 
 # Phase 6: Autonomy
 from viki.core.mission_control import MissionControl
+from viki.core.agent_constants import AGENT_MANDATE, DEFAULT_AGENT_MAX_STEPS
 from viki.core.request_pipeline import RequestContext, build_default_preflight_pipeline
 from viki.core.git_context import get_git_workspace_snapshot
 from viki.core.endpoint_guard import EndpointGuardService
@@ -56,7 +57,7 @@ from viki.core.telemetry_service import close_persistent_traces
 class VIKIController:
     # Centralize default paths/tokens to avoid duplicated literals and keep behavior consistent.
     DEFAULT_DATA_DIR = "./data"
-    DEFAULT_WORKSPACE_DIR = "./workspace"
+    DEFAULT_WORKSPACE_DIR = "."
     CONFIRM_TOKEN = "/confirm"
     REJECT_TOKEN = "/reject"
 
@@ -268,6 +269,9 @@ class VIKIController:
         
         # Task tracking for proper cleanup
         self._background_tasks = set()
+        self.is_agent_mode = False
+        self.is_plan_mode = False
+        self.is_debug_mode = False
         
         # --- SECURITY FIX: HIGH-005 - Recursion depth tracking ---
         self._reflex_recursion_depth = 0
@@ -392,7 +396,7 @@ class VIKIController:
         # Phase 7 (P1): persistent trace store with parent IDs for the
         # dashboard Gantt view. Failure is non-fatal.
         try:
-            from viki.core.tracing import init_persistent_traces
+            from viki.core.telemetry_service import init_persistent_traces
             data_dir = (self.settings.get("system") or {}).get("data_dir", self.DEFAULT_DATA_DIR)
             init_persistent_traces(os.path.join(data_dir, "traces.db"))
         except Exception as e:
@@ -1509,6 +1513,36 @@ class VIKIController:
             except Exception as e:
                 viki_logger.warning(f"URL fetch failed: {e}")
         
+        # v26: Agent Mode (Autonomous)
+        self.is_agent_mode = user_input.strip().lower().startswith("/agent")
+        if self.is_agent_mode:
+            viki_logger.info("AGENT MODE ACTIVATED: Engaging autonomous engineering loop.")
+            # Strip the command prefix
+            user_input = re.sub(r"^/agent\s*", "", user_input, flags=re.IGNORECASE).strip()
+            if not user_input:
+                return "Agent Mode activated. Please provide a task (e.g., /agent implement feature X)."
+            safe_input = self.safety.validate_request(user_input)
+
+        # v26: Plan Mode (Architecture & Strategy)
+        self.is_plan_mode = user_input.strip().lower().startswith("/plan")
+        if self.is_plan_mode:
+            viki_logger.info("PLAN MODE ACTIVATED: Engaging senior architect loop.")
+            # Strip the command prefix
+            user_input = re.sub(r"^/plan\s*", "", user_input, flags=re.IGNORECASE).strip()
+            if not user_input:
+                return "Plan Mode activated. Please provide a request for architectural analysis or implementation strategy."
+            safe_input = self.safety.validate_request(user_input)
+
+        # v26: Debug Mode (Root Cause & Repair)
+        self.is_debug_mode = user_input.strip().lower().startswith("/debug")
+        if self.is_debug_mode:
+            viki_logger.info("DEBUG MODE ACTIVATED: Engaging diagnostic loop.")
+            # Strip the command prefix
+            user_input = re.sub(r"^/debug\s*", "", user_input, flags=re.IGNORECASE).strip()
+            if not user_input:
+                return "Debug Mode activated. Please provide an error message, log, or issue description to diagnose."
+            safe_input = self.safety.validate_request(user_input)
+
         # v19: Research vs Production Mode
         is_research = "/research" in user_input
         if is_research: 
@@ -1749,7 +1783,15 @@ class VIKIController:
         agency_weights = self.evolution.get_agent_weightings()
 
         # --- ReAct LOOP: Reason → Act → Observe → Reason → ... ---
-        max_react_steps = 5  # Safety limit
+        if self.is_agent_mode:
+            max_react_steps = DEFAULT_AGENT_MAX_STEPS
+        elif self.is_plan_mode:
+            max_react_steps = 10 # Allow research steps for planning
+        elif self.is_debug_mode:
+            max_react_steps = 20 # Debugging can be iterative
+        else:
+            max_react_steps = 5
+        
         action_results = []  # Accumulated results from previous steps
         final_output = None
 
@@ -1837,6 +1879,9 @@ class VIKIController:
                     action_results=action_results,
                     use_ensemble=use_ensemble_setting,
                     on_event=on_event,
+                    is_agent_mode=self.is_agent_mode,
+                    is_plan_mode=self.is_plan_mode,
+                    is_debug_mode=self.is_debug_mode,
                 )
                 self.internal_trace.append({
                     "strategy": viki_resp.final_thought.primary_strategy,
