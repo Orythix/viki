@@ -25,6 +25,7 @@ class JudgmentResult:
     recommended_capability: Optional[str] = None
     failure_similarity: float = 0.0
     elapsed_ms: float = 0.0
+    complexity_score: float = 0.0 # v26: Complexity for tiered routing
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -36,6 +37,7 @@ class JudgmentResult:
             "recommendation": self.recommendation,
             "reason": self.reason,
             "recommended_capability": self.recommended_capability,
+            "complexity_score": round(self.complexity_score, 3),
             "elapsed_ms": round(self.elapsed_ms, 2),
         }
 
@@ -78,6 +80,11 @@ class JudgmentEngine:
         )
 
         def _make(outcome: JudgmentOutcome, recommendation: str, reason: str) -> JudgmentResult:
+            # v26: Calculate complexity score (0.0..1.0)
+            # Factors: novelty (primary), risk, past_failure, and lack of clarity.
+            complexity = (novelty * 0.5) + (risk * 0.2) + (past_failure * 0.2) + ((1.0 - clarity) * 0.1)
+            complexity = max(0.0, min(1.0, complexity))
+
             elapsed = (time.perf_counter() - t0) * 1000.0
             return JudgmentResult(
                 outcome=outcome,
@@ -88,6 +95,7 @@ class JudgmentEngine:
                 reason=reason,
                 recommended_capability=recommended_cap,
                 failure_similarity=past_failure,
+                complexity_score=complexity,
                 elapsed_ms=elapsed,
             )
 

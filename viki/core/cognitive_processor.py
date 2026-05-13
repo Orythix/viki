@@ -354,10 +354,11 @@ class DeliberationLayer(CortexLayer):
         intent = context.get('intent_type', 'conversation')
         sentiment = context.get('sentiment', 'neutral')
 
-        # 1. Get Model — now uses intent-recommended capabilities
+        # 1. Get Model — now uses intent-recommended capabilities + Tiered Routing
         recommended_caps = context.get('recommended_capabilities', ['reasoning'])
-        model = self.model_router.get_model(capabilities=recommended_caps)
-        viki_logger.debug(f"Layer 3: Selected model '{model.model_name}' for capabilities {recommended_caps}")
+        model_tier = context.get('model_tier', 'standard')
+        model = self.model_router.get_model(capabilities=recommended_caps, tier=model_tier)
+        viki_logger.debug(f"Layer 3: Selected model '{model.model_name}' (Tier: {model_tier}) for capabilities {recommended_caps}")
 
         # FAST STREAMING PATH (perceived-latency optimization).
         # If the caller wired an event sink, the input is trivial / conversational,
@@ -1019,6 +1020,7 @@ class ConsciousnessStack:
                       world_context: str = "", signals_context: str = "",
                       evolution_log: str = "", action_results: list = None,
                       use_ensemble: bool = True, on_event=None,
+                      model_tier: str = "standard",
                       is_agent_mode: bool = False,
                       is_plan_mode: bool = False,
                       is_debug_mode: bool = False) -> VIKIResponse:
@@ -1048,6 +1050,7 @@ class ConsciousnessStack:
                     data["signals_context"] = signals_context
                     data["action_results"] = action_results or []
                     data["use_ensemble"] = use_ensemble
+                    data["model_tier"] = model_tier
                     data["on_event"] = on_event
                     data["is_agent_mode"] = is_agent_mode
                     data["is_plan_mode"] = is_plan_mode
@@ -1068,6 +1071,7 @@ class ConsciousnessStack:
                         "signals_context": signals_context,
                         "action_results": action_results or [],
                         "use_ensemble": use_ensemble,
+                        "model_tier": model_tier,
                         "on_event": on_event,
                         "is_agent_mode": is_agent_mode,
                         "is_plan_mode": is_plan_mode,

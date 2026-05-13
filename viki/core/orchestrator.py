@@ -428,9 +428,10 @@ class VIKIController:
         # Phase 0: Cognitive routing — wires Reflex + Judgment into the hot path.
         self.router_telemetry = RouterTelemetry()
         self.cognitive_router = CognitiveRouter(
-            judgment=self.judgment,
-            reflex=self.reflex,
+            self.reflex,
+            self.judgment,
             telemetry=self.router_telemetry,
+            data_dir=self.settings.get('system', {}).get('data_dir', self.DEFAULT_DATA_DIR)
         )
         self.scorecard = IntelligenceScorecard(self.settings.get('system', {}).get('data_dir', self.DEFAULT_DATA_DIR))
         
@@ -438,6 +439,11 @@ class VIKIController:
         from viki.core.evolution import EvolutionEngine
         self.evolution = EvolutionEngine(self.settings.get('system', {}).get('data_dir', self.DEFAULT_DATA_DIR))
         self.evolution.set_reflex_module(self.reflex)
+
+        # v26: Context Retriever (RAG)
+        from viki.core.utils.context_retriever import ContextRetriever
+        _ws_dir = system.get("workspace_dir", self.DEFAULT_WORKSPACE_DIR)
+        self.context_retriever = ContextRetriever(_ws_dir)
         self.evolution.set_model_router(self.model_router)
         self.evolution.set_skill_registry(self.skill_registry)
         
@@ -1702,9 +1708,20 @@ class VIKIController:
             p = os.path.join(workspace_dir, name)
             if os.path.isfile(p):
                 try:
-                    project_instructions = await asyncio.to_thread(
-                        self._read_text_truncated, p, 32768
+                    # v26: Context Pruning
+                    # General tasks don't need the full 32KB of project context.
+                    trunc_limit = 32768
+                    if task_type == "general" and not (self.is_agent_mode or self.is_plan_mode or self.is_debug_mode):
+                        trunc_limit = 4096
+                        # Pull relevant snippets via RAG if we are pruning.
+                        rag_context = await self.context_retriever.get_relevant_context(safe_input)
+                        if rag_context:
+                            project_instructions = (project_instructions or "") + rag_context
+                    
+                    project_instructions_raw = await asyncio.to_thread(
+                        self._read_text_truncated, p, trunc_limit
                     )
+                    project_instructions = (project_instructions or "") + project_instructions_raw
                     break
                 except Exception as e:
                     viki_logger.debug(f"Could not read {p}: {e}")
@@ -1879,6 +1896,7 @@ class VIKIController:
                     action_results=action_results,
                     use_ensemble=use_ensemble_setting,
                     on_event=on_event,
+                    model_tier=cognitive_route.model_tier if cognitive_route else "standard",
                     is_agent_mode=self.is_agent_mode,
                     is_plan_mode=self.is_plan_mode,
                     is_debug_mode=self.is_debug_mode,
@@ -2120,6 +2138,15 @@ class VIKIController:
 
         # --- ORYTHIX REFLECTION (v22) ---
         # --- ORYTHIX MEMORY REINFORCEMENT (v23) ---
+        # v26: Semantic Cache Storage
+        if 'viki_resp' in locals() and viki_resp and cognitive_route and cognitive_route.source != "cache":
+            try:
+                # Pydantic v1 uses .dict(), v2 uses .model_dump()
+                resp_data = viki_resp.dict() if hasattr(viki_resp, 'dict') else viki_resp.model_dump()
+                self.cognitive_router.store_response(safe_input, resp_data)
+            except Exception as e:
+                viki_logger.debug(f"Failed to cache response: {e}")
+
         try:
              intent_summ = "General Interaction"
              confidence = 1.0

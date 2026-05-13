@@ -54,7 +54,14 @@ class SimpleInterface:
     def __init__(self):
         self.console = Console()
         self.status = None
+        self.session_usage = {"input": 0, "output": 0}
+        self.last_thought = "Thinking"
         
+    def format_count(self, count):
+        if count >= 1_000_000:
+            return f"{count / 1_000_000:.2f}M"
+        return f"{count / 1_000:.3f}K"
+
     def welcome(self, controller=None):
         import os
         username = os.getlogin() if hasattr(os, "getlogin") else "User"
@@ -276,9 +283,13 @@ async def _run_interactive_loop(controller, interface, on_event, streaming_state
             if streaming_state["active"]:
                 interface.console.print("")
                 streaming_state["active"] = False
-                interface.console.print(f"\n[dim]   ({elapsed:.2f}s)[/]")
+                in_fmt = interface.format_count(interface.session_usage['input'])
+                out_fmt = interface.format_count(interface.session_usage['output'])
+                interface.console.print(f"\n[dim]   ({elapsed:.2f}s | Tokens: [bold cyan]{in_fmt}[/] in, [bold cyan]{out_fmt}[/] out)[/]")
             else:
-                interface.console.print(f"\n[dim]   ({elapsed:.2f}s)[/]")
+                in_fmt = interface.format_count(interface.session_usage['input'])
+                out_fmt = interface.format_count(interface.session_usage['output'])
+                interface.console.print(f"\n[dim]   ({elapsed:.2f}s | Tokens: [bold cyan]{in_fmt}[/] in, [bold cyan]{out_fmt}[/] out)[/]")
                 interface.print_viki(response)
             
         except KeyboardInterrupt:
@@ -342,14 +353,28 @@ async def main(workspace_path=None, query=None):
 
     def on_event(event_type, data):
         if event_type in ["thought", "action"]:
+            interface.last_thought = data
+            in_fmt = interface.format_count(interface.session_usage['input'])
+            out_fmt = interface.format_count(interface.session_usage['output'])
+            tokens_str = f" [bold cyan]({in_fmt} | {out_fmt})[/]"
             if interface.status is None:
-                interface.status = interface.console.status(f"[dim]{data}...[/]", spinner="dots")
+                interface.status = interface.console.status(f"[dim]{data}...[/]{tokens_str}", spinner="dots")
                 interface.status.start()
             else:
-                interface.status.update(f"[dim]{data}...[/]")
+                interface.status.update(f"[dim]{data}...[/]{tokens_str}")
             
             if debug_state["active"]:
                 interface.console.print(f"[dim italic]{event_type}: {data}[/]")
+        
+        elif event_type == "usage":
+            # Direct usage event from orchestrator or other components
+            interface.session_usage["input"] += data.get("input", 0)
+            interface.session_usage["output"] += data.get("output", 0)
+            if interface.status:
+                in_fmt = interface.format_count(interface.session_usage['input'])
+                out_fmt = interface.format_count(interface.session_usage['output'])
+                tokens_str = f" [bold cyan]({in_fmt} | {out_fmt})[/]"
+                interface.status.update(f"[dim]{interface.last_thought}...[/]{tokens_str}")
                 
         elif event_type == "status":
             pass  # Ignored by design to prevent background loop spinners
@@ -379,6 +404,25 @@ async def main(workspace_path=None, query=None):
             interface.print_error(data)
 
     loop = asyncio.get_running_loop()
+    
+    # Start Usage Listener
+    async def _usage_listener():
+        from viki.api.events import get_event_bus
+        import json
+        bus = get_event_bus()
+        sub = bus.subscribe(channels=["system"])
+        while True:
+            try:
+                msg = await sub.queue.get()
+                payload = json.loads(msg)
+                if payload.get("event") == "usage":
+                    usage = payload.get("data", {})
+                    on_event("usage", usage)
+            except Exception:
+                await asyncio.sleep(0.1)
+
+    loop.create_task(_usage_listener())
+
     await _start_background_tasks(controller, on_event, loop, interface)
 
     if query:

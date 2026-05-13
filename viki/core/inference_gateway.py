@@ -147,6 +147,17 @@ class LLMProvider(ABC):
             + (output_tokens / 1000.0) * self.cost_per_1k_out
         )
         self.total_cost_usd += delta
+        
+        try:
+            from viki.api.events import get_event_bus
+            get_event_bus().publish("usage", {
+                "input": input_tokens,
+                "output": output_tokens,
+                "model": self.model_name
+            }, channel="system")
+        except Exception:
+            pass
+            
         return delta
 
     @abstractmethod
@@ -412,12 +423,21 @@ class APILLM(LLMProvider):
                         ]
                         break
 
-            out = await self.client.chat.completions.create(
+            out, completion = await self.client.chat.completions.create_with_completion(
                 model=self.model_name,
                 messages=messages,
                 response_model=response_model,
                 temperature=temperature,
             )
+            try:
+                usage = getattr(completion, "usage", None)
+                if usage is not None:
+                    self.record_token_usage(
+                        getattr(usage, "prompt_tokens", 0) or 0,
+                        getattr(usage, "completion_tokens", 0) or 0,
+                    )
+            except Exception:
+                pass
             success = True
             return out
         finally:
@@ -593,6 +613,13 @@ class LocalLLM(LLMProvider):
                         # Handle Tool Calls
                         _msg = resp_json["message"]
                         _msg.pop("thinking", None)
+                        
+                        # Record token usage
+                        self.record_token_usage(
+                            resp_json.get("prompt_eval_count", 0),
+                            resp_json.get("eval_count", 0)
+                        )
+
                         if _msg.get("tool_calls"):
                             success = True
                             return json.dumps({"tool_calls": _msg["tool_calls"]})
@@ -640,6 +667,12 @@ class LocalLLM(LLMProvider):
 
                     if "message" not in resp_json:
                         raise ValueError(f"Missing 'message' in response: {resp_json}")
+
+                    # Record token usage
+                    self.record_token_usage(
+                        resp_json.get("prompt_eval_count", 0),
+                        resp_json.get("eval_count", 0)
+                    )
 
                     success = True
                     msg = dict(resp_json["message"])
@@ -1101,8 +1134,8 @@ class ModelRouter:
             viki_logger.error(f"Failed to load model config from {path}: {e}")
             self.default_model = MockLLM({'model_name': 'error-fallback'})
 
-    def get_model(self, capabilities: List[str] = None) -> LLMProvider:
-        if not capabilities:
+    def get_model(self, capabilities: List[str] = None, tier: str = "standard") -> LLMProvider:
+        if not capabilities and tier == "standard":
             if self._model_allowed(self.default_model):
                 return self.default_model
             fb = self._first_allowed_model()
@@ -1116,9 +1149,10 @@ class ModelRouter:
                 continue
 
             model_caps = model.config.get('capabilities', [])
+            model_tier = model.config.get('tier', 'standard').lower()
             
             # 1. Capability matching
-            matched_caps = sum(1 for cap in capabilities if cap in model_caps)
+            matched_caps = sum(1 for cap in (capabilities or []) if cap in model_caps)
             
             # 2. Priority from config (1-4, higher is better)
             priority = model.config.get('priority', 2)
@@ -1126,12 +1160,17 @@ class ModelRouter:
             # 3. Calculate base score
             score = (matched_caps * priority) + (model.trust_score * 0.5)
             
-            # 4. Penalize high latency for fast_response capability
-            if 'fast_response' in capabilities and model.avg_latency > 0:
+            # 4. Tier matching bonus (Strong bias)
+            if model_tier == tier.lower():
+                score += 10.0
+            
+            # 5. Penalize high latency for fast_response capability or fast tier
+            is_fast = 'fast_response' in (capabilities or []) or tier == "fast"
+            if is_fast and model.avg_latency > 0:
                 latency_penalty = model.avg_latency / 10.0
                 score -= latency_penalty
             
-            # 5. Penalize high error rate
+            # 6. Penalize high error rate
             if model.call_count > 10:
                 error_rate = model.error_count / model.call_count
                 error_penalty = error_rate * 5.0

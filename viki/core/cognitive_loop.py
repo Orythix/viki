@@ -39,6 +39,7 @@ class CognitiveRoute:
     refusal_reason: Optional[str] = None
     use_lite_schema: bool = False
     use_ensemble: bool = True
+    model_tier: str = "standard" # "fast" | "standard" | "heavy"
     source: str = "judgment"  # "reflex" | "judgment" | "fallback"
     elapsed_ms: float = 0.0
     metrics: Dict[str, Any] = field(default_factory=dict)
@@ -58,6 +59,7 @@ class CognitiveRoute:
             "source": self.source,
             "use_lite_schema": self.use_lite_schema,
             "use_ensemble": self.use_ensemble,
+            "model_tier": self.model_tier,
             "elapsed_ms": round(self.elapsed_ms, 2),
             "judgment": self.judgment.as_dict(),
             "has_action_override": self.action_override is not None,
@@ -81,10 +83,14 @@ class CognitiveRouter:
     hit rate against real sessions.
     """
 
-    def __init__(self, judgment: JudgmentEngine, reflex: Any, telemetry: Optional["RouterTelemetry"] = None):
-        self.judgment = judgment
-        self.reflex = reflex
+    def __init__(self, reflex_brain, judgment_engine, telemetry=None, data_dir: str = None):
+        self.reflex = reflex_brain
+        self.judgment = judgment_engine
         self.telemetry = telemetry or RouterTelemetry()
+        
+        # v26: Semantic Cache
+        from viki.core.utils.semantic_cache import SemanticCache
+        self.cache = SemanticCache(data_dir=data_dir) if data_dir else None
 
     async def classify(
         self,
@@ -101,6 +107,36 @@ class CognitiveRouter:
             "cognitive_router.classify",
             attributes={"input.len": len(user_input or "")},
         ) as span_info:
+            # 1. Semantic Cache Lookup (Phase 3 Optimization)
+            if self.cache:
+                cached_data = self.cache.lookup(user_input)
+                if cached_data:
+                    # Reconstruct VIKIResponse from cache
+                    from viki.core.schema import VIKIResponse
+                    viki_resp = VIKIResponse(**cached_data)
+                    
+                    # Mock a judgment for the cached route
+                    cached_judgment = JudgmentResult(
+                        outcome=JudgmentOutcome.SHALLOW,
+                        recommendation="proceed",
+                        reason="Retrieved from semantic cache",
+                        risk=0.0,
+                        clarity=1.0,
+                        novelty=0.0,
+                        complexity_score=0.1
+                    )
+                    
+                    route = CognitiveRoute(
+                        outcome=JudgmentOutcome.SHALLOW,
+                        judgment=cached_judgment,
+                        cached_response=viki_resp.final_response,
+                        source="cache",
+                        model_tier="fast"
+                    )
+                    self._finalize(route, t0)
+                    return route
+
+            # 2. Reflex Search (Cheapest path)
             reflex_response, reflex_action = self._run_reflex(user_input)
             judgment = await self.judgment.evaluate(user_input, context)
 
@@ -138,6 +174,7 @@ class CognitiveRouter:
                 action_override=reflex_action,
                 use_lite_schema=False,
                 use_ensemble=False,
+                model_tier="fast",
                 source="reflex",
             )
         if reflex_response is not None:
@@ -147,6 +184,7 @@ class CognitiveRouter:
                 cached_response=reflex_response,
                 use_lite_schema=False,
                 use_ensemble=False,
+                model_tier="fast",
                 source="reflex",
             )
         return None
@@ -164,7 +202,9 @@ class CognitiveRouter:
         return skill_registry.get_skill(action.skill_name) is not None
 
     def _route_from_judgment(self, judgment: JudgmentResult) -> CognitiveRoute:
+        complexity = judgment.complexity_score
         outcome = judgment.outcome
+
         if outcome == JudgmentOutcome.REFUSE:
             return CognitiveRoute(
                 outcome=outcome,
@@ -172,20 +212,37 @@ class CognitiveRouter:
                 refusal_reason=judgment.reason,
                 source="judgment",
             )
-        if outcome in (JudgmentOutcome.REFLEX, JudgmentOutcome.SHALLOW):
-            # No learned reflex pattern matched -> degrade REFLEX to SHALLOW.
+        
+        # v26: Tiered Routing Logic
+        if complexity < 0.3:
+            # Fast Lane: Minimal novelty/risk.
             return CognitiveRoute(
                 outcome=JudgmentOutcome.SHALLOW,
                 judgment=judgment,
                 use_lite_schema=True,
                 use_ensemble=False,
+                model_tier="fast",
                 source="judgment",
             )
+        
+        if complexity <= 0.8:
+            # Standard Lane: Typical coding/reasoning.
+            return CognitiveRoute(
+                outcome=JudgmentOutcome.DEEP,
+                judgment=judgment,
+                use_lite_schema=False,
+                use_ensemble=False,
+                model_tier="standard",
+                source="judgment",
+            )
+
+        # Deep Lane: Complex, novel, or risky.
         return CognitiveRoute(
             outcome=JudgmentOutcome.DEEP,
             judgment=judgment,
             use_lite_schema=False,
             use_ensemble=True,
+            model_tier="heavy",
             source="judgment",
         )
 
@@ -203,6 +260,11 @@ class CognitiveRouter:
             route.elapsed_ms,
             route.judgment.reason,
         )
+
+    def store_response(self, user_input: str, response: Any):
+        """Store a completed response in the semantic cache."""
+        if self.cache:
+            self.cache.store(user_input, response)
 
 
 class RouterTelemetry:
