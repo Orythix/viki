@@ -113,3 +113,18 @@ def emit_skill_execution(
             err = err[:400] + "…"
         row["error"] = err
     _append(row)
+
+
+def emit_security_event(
+    event_type: str,
+    details: str,
+    severity: str = "medium",
+) -> None:
+    """Log a security-relevant event (e.g. action blocked, air-gap violation)."""
+    row: Dict[str, Any] = {
+        "event": "security_boundary",
+        "type": event_type,
+        "details": details,
+        "severity": severity,
+    }
+    _append(row)

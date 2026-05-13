@@ -41,6 +41,7 @@ from viki.core.memory import HierarchicalMemory
 from viki.core.deliberation import DeliberationEngine
 
 from viki.ops.tenant_ops import SimpleOpsPlanner, ControllerTenantConnector, OpsPlan
+from viki.application.services.forge_orchestrator import ForgeOrchestrator
 
 # Phase 6: Autonomy
 from viki.core.mission_control import MissionControl
@@ -232,13 +233,32 @@ class VIKIController:
         root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         return os.path.join(root_dir, "viki", "data", "evolution_state.json")
 
+    def _init_db(self):
+        """Ensure core data directories exist."""
+        system = self.settings.get("system", {})
+        data_dir = system.get("data_dir", self.DEFAULT_DATA_DIR)
+        os.makedirs(data_dir, exist_ok=True)
+        workspace_dir = system.get("workspace_dir", self.DEFAULT_WORKSPACE_DIR)
+        os.makedirs(workspace_dir, exist_ok=True)
+
     def __init__(self, settings_path: str, soul_path: str, workspace_override: Optional[str] = None):
         self.settings = self._load_yaml(settings_path)
         self.soul_path = soul_path
         # Overlay environment variables so users can configure via .env without editing YAML
         system = self.settings.setdefault("system", {})
         self._apply_system_overrides(system, workspace_override)
-        self.low_resource_mode = system.get("low_resource_mode", False)
+        self._init_db()
+        self.shadow_mode = bool(self.settings.get("system", {}).get("shadow_mode", False))
+        self.air_gap = bool(self.settings.get("system", {}).get("air_gap", False))
+        self.low_resource_mode = bool(self.settings.get("system", {}).get("low_resource_mode", False))
+        
+        # Security session history for CLI dashboard
+        self.session_history = {
+            "touched_files": [],
+            "executed_commands": [],
+            "blocked_actions": []
+        }
+        
         # 0. Fast Perception Layer (Reflex Brain)
         data_dir = system.get("data_dir", self.DEFAULT_DATA_DIR)
         self.reflex = ReflexBrain(data_dir=data_dir)
@@ -416,6 +436,7 @@ class VIKIController:
 
         # v26: Tenant-aware Ops planner (creates OpsPlan before any side effects)
         self.ops_planner = SimpleOpsPlanner(self)
+        self.forge_orchestrator = ForgeOrchestrator(self)
 
         self.safe_mode = False
         self.internal_trace = []
@@ -547,6 +568,46 @@ class VIKIController:
         
         # 5. Start Continuous Learning Monitor (checks periodically for training)
         self._create_tracked_task(self._continuous_learning_loop(), "continuous_learning")
+
+    def track_touched_item(self, category: str, item: str):
+        """Track a file, command, or domain for the session dashboard."""
+        if category not in self.session_history:
+            return
+        # Redact before storing if it's a command or file with potentially sensitive name
+        redacted = self.safety.sanitize_output(item)
+        if redacted not in self.session_history[category]:
+            self.session_history[category].insert(0, redacted)
+            self.session_history[category] = self.session_history[category][:10]
+
+    def get_sovereign_status(self) -> Dict[str, Any]:
+        """Returns a snapshot of the current security and boundary status."""
+        workspace_dir = self.settings.get("system", {}).get("workspace_dir", self.DEFAULT_WORKSPACE_DIR)
+        data_dir = self.settings.get("system", {}).get("data_dir", self.DEFAULT_DATA_DIR)
+        
+        shell_cap = self.capabilities.get("shell_exec")
+        research_cap = self.capabilities.get("internet_research")
+        
+        return {
+            "filesystem": {
+                "workspace": os.path.abspath(workspace_dir),
+                "data": os.path.abspath(data_dir),
+                "allowed_roots_count": len(self.settings.get("system", {}).get("allowed_roots", [])) or 2
+            },
+            "network": {
+                "air_gap": self.air_gap,
+                "local_llm_only": self.settings.get("system", {}).get("local_llm_only", False),
+                "allowlist_count": len(research_cap.meta.get("destination_allowlist", [])) if research_cap else 0
+            },
+            "shell": {
+                "enabled": shell_cap.enabled if shell_cap else False,
+                "approval_required": shell_cap.requires_confirmation if shell_cap else True
+            },
+            "privacy": {
+                "redaction_active": True,
+                "shadow_mode": self.shadow_mode
+            },
+            "history": self.session_history
+        }
 
     async def _boot_evolution_after_delay(self, delay_s: int) -> None:
         await asyncio.sleep(delay_s)
@@ -1500,7 +1561,18 @@ class VIKIController:
 
         if user_input.startswith("/forge"):
              task = user_input.replace("/forge", "").strip()
-             if not task: return "Usage: /forge [task description]"
+             if not task: return "Usage: /forge [task description | bake | switch | list]"
+             
+             # Route to skill for subcommands
+             if any(task.startswith(cmd) for cmd in ["bake", "switch", "list"]):
+                  parts = task.split()
+                  action = parts[0]
+                  profile = parts[1] if len(parts) > 1 else "general"
+                  forge_skill = self.skill_registry.get_skill("internal_forge")
+                  if forge_skill:
+                       return await forge_skill.execute({"action": action, "profile": profile})
+             
+             # Fallback to legacy evolution synthesis
              mutation = await self.evolution.propose_skill(task)
              if mutation:
                   return f"Neural Forge: Synthesis started for '{task}'. View proposal with /evolve."

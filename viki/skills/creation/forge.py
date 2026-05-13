@@ -39,7 +39,7 @@ def _resolve_forge_base_ollama_model(controller: Any) -> str:
         m = _safe_profile_model_name(profiles, fk)
         if m:
             return m
-    for alt in ("qwen35", "gemma4"):
+    for alt in ("viki-trainer", "qwen35", "gemma4"):
         m = _safe_profile_model_name(profiles, alt)
         if m:
             return m
@@ -158,8 +158,7 @@ class ModelForgeSkill(BaseSkill):
     Uses Unsloth for high-efficiency 4-bit LoRA training.
     """
 
-    def __init__(self, orchestrator: Any, controller: Any):
-        self._orchestrator = orchestrator
+    def __init__(self, controller: Any):
         self.controller = controller
         self._name = "internal_forge"
         self._description = "Initiate neural fine-tuning or bake specialized model profiles. Usage: internal_forge(action='bake', profile='security')"
@@ -200,16 +199,16 @@ class ModelForgeSkill(BaseSkill):
         action = params.get("action", "evolve")
         
         if action == "list":
-            profiles = list(self._orchestrator.profiles.keys())
+            profiles = list(self.controller.forge_orchestrator.profiles.keys())
             return f"Available Forge Profiles: {profiles}"
             
         if action == "bake":
             profile = params.get("profile", "general")
-            return await self._orchestrator.bake_profile(profile)
+            return await self.controller.forge_orchestrator.bake_profile(profile)
 
         if action == "switch":
             profile = params.get("profile", "general")
-            return await self._orchestrator.switch_to_profile(profile)
+            return await self.controller.forge_orchestrator.switch_to_profile(profile)
 
         # Legacy Evolution path
         from viki.core.preference_forge import trl_dpo_available

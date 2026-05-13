@@ -1,297 +1,52 @@
 models:
-  budget:
-    daily_usd_cap: 5.0
-    per_call_usd_cap: 0.5
-    explicit_cloud_only: false
-    per_provider_daily_cap:
-      openai: 3.0
-      anthropic: 3.0
-      gemini: 3.0
-      mistral: 1.5
-      groq: 1.5
-      bedrock: 3.0
   providers:
     ollama:
       type: local
-      base_url: http://127.0.0.1:11434
+      base_url: http://localhost:11434
     openai:
       type: api
-      base_url: https://api.openai.com/v1
-      api_key_env: OPENAI_API_KEY
+      api_key: ${OPENAI_API_KEY}
     anthropic:
-      type: api
-      base_url: https://api.anthropic.com/v1
-      api_key_env: ANTHROPIC_API_KEY
-    gemini:
-      type: gemini
-      api_key_env: GOOGLE_API_KEY
-    groq:
-      type: groq
-      base_url: https://api.groq.com/openai/v1
-      api_key_env: GROQ_API_KEY
-    mistral:
-      type: mistral
-      base_url: https://api.mistral.ai/v1
-      api_key_env: MISTRAL_API_KEY
-    bedrock:
-      type: bedrock
-      region: us-east-1
+      type: anthropic
+      api_key: ${ANTHROPIC_API_KEY}
     mock:
       type: mock
-  default: viki-base
+
+  default: qwen35
+
   profiles:
+    # --- The One Model (Standard Chat & Reasoning) ---
     qwen35:
       provider: ollama
       model_name: qwen3.5:latest
-      temperature: 0.5
-      priority: 3
+      priority: 4
       capabilities:
-      - general
+      - chat
       - reasoning
-      - coding
-      - analysis
-      - fast_response
-      - researching
-      - chatter
       - tool_use
-      - planning
-      supports_native_tools: false
-      description: "Qwen 3.5 \u2014 primary local generalist when pulled as qwen3.5:latest."
-    gemma4:
+      supports_native_tools: true
+      description: "Primary local model for all tasks."
+
+    # --- Dedicated Trainer (Using the same model to save resources) ---
+    viki-trainer:
       provider: ollama
-      model_name: gemma4:latest
-      temperature: 0.5
-      priority: 2
+      model_name: qwen3.5:latest
+      training_only: true
+      priority: 1
       capabilities:
-      - general
-      - reasoning
-      - chatter
-      - analysis
-      - fast_response
-      supports_native_tools: false
-      description: "Gemma 4 \u2014 local alternative when pulled as gemma4:latest."
+      - training
+      description: "Dedicated training/evolution persona."
+
+    # --- The Evolved VIKI (The output of /forge bake) ---
     viki-evolved:
       provider: ollama
       model_name: viki-neural-forge
-      temperature: 0.6
       priority: 3
       capabilities:
-      - general
-      - reasoning
-      - coding
-      - analysis
-      - fast_response
-      - researching
-      - chatter
-      - tool_use
-      supports_native_tools: false
-      description: VIKI Modelfile image (viki-neural-forge) with baked-in lessons
-        after internal_forge.
-    phi3:
-      provider: ollama
-      model_name: phi3:latest
-      temperature: 0.1
-      priority: 1
-      capabilities:
-      - reflex
-      - fast_response
-      supports_native_tools: false
-      description: Phi-3 - Microsoft's compact model. Use for SHALLOW/REFLEX intent
-        detection.
-    deepseek-coder:
-      provider: ollama
-      model_name: deepseek-coder:latest
-      temperature: 0.1
-      priority: 3
-      capabilities:
-      - coding
-      - debugging
-      - planning
-      description: DeepSeek Coder - Specialized for code generation and debugging.
-    glm-4:
-      provider: ollama
-      model_name: glm-4.7-flash:latest
-      temperature: 0.1
-      priority: 2
-      capabilities:
-      - reasoning
-      - planning
-      - coding
-      - analysis
-      - multilingual
-      - tool_use
-      description: GLM-4.7 Flash - High speed efficient model for complex reasoning.
-    deepseek-r1:
-      provider: ollama
-      model_name: deepseek-r1:latest
-      temperature: 0.6
-      priority: 4
-      capabilities:
-      - planning
-      - reasoning
-      - complex_task
-      description: DeepSeek R1 - Advanced reasoning model for DEEP tasks.
-    llama3:
-      provider: ollama
-      model_name: llama3:latest
-      temperature: 0.5
-      priority: 2
-      capabilities:
-      - chatter
-      - general
-      - analysis
-      description: Llama 3 - Meta's flagship model for natural conversation.
-    llava:
-      provider: ollama
-      model_name: llava:latest
-      temperature: 0.1
-      priority: 3
-      capabilities:
-      - vision
-      - analysis
-      description: Llava - Local multimodal vision model for screenshots/images.
-    gpt-4o:
-      provider: openai
-      model_name: gpt-4o
-      temperature: 0.7
-      priority: 2
-      capabilities:
-      - reasoning
-      - planning
-      - coding
-      - analysis
-      - intelligence
-      - researching
-      - vision
-      - tool_use
-      cost_per_1k_in: 0.005
-      cost_per_1k_out: 0.015
-      description: OpenAI GPT-4 Omni - State of the art intelligence.
-    gpt-4o-mini:
-      provider: openai
-      model_name: gpt-4o-mini
-      temperature: 0.3
-      priority: 2
-      capabilities:
-      - fast_response
-      - general
-      - coding
-      - researching
-      - vision
-      - tool_use
-      cost_per_1k_in: 0.00015
-      cost_per_1k_out: 0.0006
-      description: OpenAI GPT-4o mini - Fast and cost-efficient.
-    claude-3.5-sonnet:
-      provider: anthropic
-      model_name: claude-3-5-sonnet-20240620
-      temperature: 0.7
-      priority: 4
-      capabilities:
-      - reasoning
-      - coding
-      - analysis
-      - intelligence
-      - researching
-      - vision
-      - tool_use
-      - complex_task
-      cost_per_1k_in: 0.003
-      cost_per_1k_out: 0.015
-      description: Anthropic Claude 3.5 Sonnet - State of the art reasoning and coding.
-    gemini-2.5-pro:
-      provider: gemini
-      model_name: gemini-2.5-pro
-      temperature: 0.7
-      priority: 4
-      capabilities:
-      - reasoning
-      - coding
-      - analysis
-      - intelligence
-      - researching
-      - vision
-      - tool_use
-      - complex_task
-      cost_per_1k_in: 0.00125
-      cost_per_1k_out: 0.005
-      description: "Gemini 2.5 Pro \u2014 top reasoning + 1M context."
-    gemini-2.5-flash:
-      provider: gemini
-      model_name: gemini-2.5-flash
-      temperature: 0.5
-      priority: 3
-      capabilities:
-      - fast_response
-      - general
-      - coding
-      - researching
-      - vision
-      - tool_use
-      cost_per_1k_in: 7.5e-05
-      cost_per_1k_out: 0.0003
-      description: "Gemini 2.5 Flash \u2014 high throughput cheap fallback."
-    groq-llama-3.1-70b:
-      provider: groq
-      model_name: llama-3.1-70b-versatile
-      temperature: 0.5
-      priority: 3
-      capabilities:
-      - reasoning
-      - coding
-      - fast_response
-      - general
-      - tool_use
-      cost_per_1k_in: 0.00059
-      cost_per_1k_out: 0.00079
-      description: "Groq Llama 3.1 70B \u2014 high throughput, sub-second latency."
-    groq-mixtral-8x7b:
-      provider: groq
-      model_name: mixtral-8x7b-32768
-      temperature: 0.5
-      priority: 2
-      capabilities:
-      - fast_response
-      - general
-      - researching
-      cost_per_1k_in: 0.00027
-      cost_per_1k_out: 0.00027
-      description: "Groq Mixtral \u2014 fastest cheap option."
-    mistral-large:
-      provider: mistral
-      model_name: mistral-large-latest
-      temperature: 0.5
-      priority: 3
-      capabilities:
-      - reasoning
-      - coding
-      - analysis
-      - researching
-      - tool_use
-      cost_per_1k_in: 0.002
-      cost_per_1k_out: 0.006
-      description: "Mistral Large \u2014 frontier-tier from Mistral AI."
-    bedrock-claude-3.5-sonnet:
-      provider: bedrock
-      model_name: anthropic.claude-3-5-sonnet-20240620-v1:0
-      temperature: 0.7
-      priority: 3
-      capabilities:
-      - reasoning
-      - coding
-      - analysis
-      - intelligence
-      - researching
-      - tool_use
-      - complex_task
-      cost_per_1k_in: 0.003
-      cost_per_1k_out: 0.015
-      description: "Claude 3.5 Sonnet on AWS Bedrock \u2014 IAM-gated cloud fallback."
-    mock-model:
-      provider: mock
-      model_name: mock-local
-      temperature: 0.0
-      priority: 0
-      capabilities:
-      - basic
-      description: Mock LLM for testing without external dependencies.
+      - chat
+      - sovereign
+      description: "The evolved version of VIKI with baked-in knowledge."
+
+  budget:
+    monthly_limit_usd: 5.0
+    warning_threshold_usd: 3.5

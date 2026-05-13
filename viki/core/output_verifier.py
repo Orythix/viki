@@ -110,8 +110,8 @@ class JudgmentEngine:
             return _make(JudgmentOutcome.REFLEX, "proceed", "Direct system command detected.")
 
         # Rule: Questions require DEEP reasoning for accuracy.
-        if context.get("task_type") == "question":
-            return _make(JudgmentOutcome.DEEP, "proceed", "Inquisitive intent detected. Routing to Deliberation Layer.")
+        if context.get("task_type") == "question" or recommended_cap == "internet_research":
+            return _make(JudgmentOutcome.DEEP, "proceed", "Inquisitive or research intent detected. Routing to Deliberation Layer.")
 
         # Rule: Bias toward simplicity (Model Agnostic Thrift).
         if novelty < self.reflex_threshold and risk < 0.1 and clarity > 0.8:

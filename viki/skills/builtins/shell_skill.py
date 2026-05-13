@@ -14,6 +14,10 @@ class ShellSkill(BaseSkill):
     SECURITY: Uses allowlist for safe commands and requires confirmation for destructive operations.
     """
     
+    def __init__(self, controller=None):
+        super().__init__()
+        self._controller = controller
+    
     # --- SECURITY FIX: CRIT-003 - Allowlist-based command filtering ---
     
     # Safe command patterns (read-only, informational)
@@ -190,6 +194,10 @@ class ShellSkill(BaseSkill):
         
         # Log all shell executions
         viki_logger.info(f"Shell: Executing {classification} command: {safe_for_log(command)}")
+        if self._controller:
+            # Extract just the first word (the command itself) to avoid leaking full params in history
+            cmd_name = command.split()[0] if command.split() else command
+            self._controller.track_touched_item("executed_commands", cmd_name)
 
         try:
             # Construct the shell invocation

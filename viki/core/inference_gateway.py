@@ -585,6 +585,10 @@ class LocalLLM(LLMProvider):
                         if resp.status == 404:
                             return f"Error: Model '{self.model_name}' not found."
                         resp_json = await resp.json()
+                        if "error" in resp_json:
+                            return f"Ollama Error: {resp_json['error']}"
+                        if "message" not in resp_json:
+                            return f"Error: Missing 'message' in Ollama response: {resp_json}"
 
                         # Handle Tool Calls
                         _msg = resp_json["message"]
@@ -657,12 +661,10 @@ class LocalLLM(LLMProvider):
         if response_model == VIKIResponse:
             return (
                 "### JSON OUTPUT (required) ###\n"
-                "Return one JSON object only. Use keys: final_thought (object with intent_summary, "
-                "primary_strategy, confidence) and final_response (string — your full answer to the user).\n"
-                "Do NOT return a JSON Schema (no top-level properties, required, or definitions).\n"
-                "Example: {\"final_thought\":{\"intent_summary\":\"User asked a question\","
-                "\"primary_strategy\":\"Answer helpfully\",\"confidence\":0.82},"
-                "\"final_response\":\"Here is my answer...\"}"
+                "Return one JSON object only. Use keys: final_thought (object), final_response (string), "
+                "and action (optional object with skill_name and parameters).\n"
+                "Do NOT return a JSON Schema. Example: {\"final_thought\":{\"intent_summary\":\"...\",\"primary_strategy\":\"...\",\"confidence\":0.8},"
+                "\"final_response\":\"...\",\"action\":{\"skill_name\":\"...\",\"parameters\":{}}}"
             )
         if response_model == VIKIResponseLite:
             return (
@@ -706,7 +708,7 @@ class LocalLLM(LLMProvider):
                     "role": "system",
                     "content": (
                         "You returned a JSON Schema. That is wrong. Return ONLY a data object (one JSON value) "
-                        "with fields final_thought and final_response as described in the prior instructions. "
+                        "with fields final_thought, final_response, and action as described in the prior instructions. "
                         "final_response must contain your actual reply to the user."
                     ),
                 }
@@ -1015,6 +1017,8 @@ class ModelRouter:
 
     def _model_allowed(self, model: LLMProvider) -> bool:
         if not model.available:
+            return False
+        if model.config.get('training_only'):
             return False
         try:
             cloud = model.is_cloud()

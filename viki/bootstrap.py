@@ -48,7 +48,11 @@ class SimpleInterface:
                 health_summary = controller.get_runtime_health_summary()
                 style = "yellow" if "degraded" in health_summary else "dim"
                 self.console.print(f"[{style}]{health_summary}[/]")
-        self.console.print("[dim]Type 'exit' to quit.[/]\n")
+            
+            # Show the boundary dashboard at welcome
+            self.render_boundary_dashboard(controller)
+            
+        self.console.print("[dim]Type 'exit' to quit. Type '/help' for boundary controls.[/]\n")
 
     def print_user(self, text):
         self.console.print(f"[bold green]USER >[/] {text}")
@@ -65,6 +69,65 @@ class SimpleInterface:
 
     def print_action(self, text):
         self.console.print(f"[yellow]   Action: {text}[/]")
+
+    def render_boundary_dashboard(self, controller):
+        """Renders a dashboard panel showing the current security boundaries."""
+        status = controller.get_sovereign_status()
+        
+        # Filesystem Table
+        fs_table = Table.grid(expand=True)
+        fs_table.add_column(style="cyan", justify="left")
+        fs_table.add_column(style="white", justify="left")
+        fs_table.add_row("Workspace:", status["filesystem"]["workspace"])
+        fs_table.add_row("Data:", status["filesystem"]["data"])
+        fs_table.add_row("Scope:", f"{status['filesystem']['allowed_roots_count']} Allowed Roots")
+
+        # Network & Shell Table
+        net_table = Table.grid(expand=True)
+        net_table.add_column(style="cyan", justify="left")
+        net_table.add_column(style="white", justify="left")
+        
+        net_val = "[bold red]AIR-GAPPED[/]" if status["network"]["air_gap"] else "[bold green]ONLINE[/]"
+        net_table.add_row("Network:", net_val)
+        net_table.add_row("Allowlist:", f"{status['network']['allowlist_count']} Domains")
+        
+        shell_val = "[bold green]ENABLED[/]" if status["shell"]["enabled"] else "[bold red]DISABLED[/]"
+        net_table.add_row("Shell:", shell_val)
+        net_table.add_row("Approval:", "[bold yellow]ON[/]" if status["shell"]["approval_required"] else "[dim]OFF[/]")
+
+        # History / Run Log
+        history = status["history"]
+        history_text = Text()
+        if history["touched_files"]:
+            history_text.append("\nFiles Touched:\n", style="bold yellow")
+            for f in history["touched_files"][:3]:
+                history_text.append(f"  • {f}\n", style="dim")
+        if history["executed_commands"]:
+            history_text.append("Commands Executed:\n", style="bold yellow")
+            for c in history["executed_commands"][:3]:
+                history_text.append(f"  • {c}\n", style="dim")
+        
+        # Main Layout
+        panel_content = Columns([fs_table, net_table])
+        
+        full_content = Panel(
+            history_text if history_text else panel_content,
+            title="[bold blue]SOVEREIGN BOUNDARY[/]",
+            subtitle="[dim]Local Enforcement Active[/]",
+            border_style="blue"
+        )
+        
+        if history_text:
+             # If we have history, show it in a more detailed layout
+             from rich.layout import Layout
+             l = Layout()
+             l.split_row(
+                 Layout(Panel(panel_content, title="[bold]Status[/]", border_style="dim"), name="status"),
+                 Layout(Panel(history_text, title="[bold]Activity Log[/]", border_style="dim"), name="log")
+             )
+             self.console.print(Panel(l, title="[bold blue]SOVEREIGN BOUNDARY[/]", border_style="blue", height=10))
+        else:
+             self.console.print(full_content)
 
 async def _shutdown_controller(controller):
     controller.watchdog.stop()
@@ -149,6 +212,11 @@ async def _run_interactive_loop(controller, interface, on_event, streaming_state
                 interface.console.print("  [green]/undo[/]     — Roll back the most recent checkpoint")
                 interface.console.print("  [green]/save[/]     — Save session: /save <name>")
                 interface.console.print("  [green]/load[/]     — Load session: /load <name>")
+                interface.console.print("  [green]/boundary[/] — Refresh the Sovereign Boundary dashboard")
+                continue
+            
+            if user_input.lower() == "/boundary":
+                interface.render_boundary_dashboard(controller)
                 continue
             
             if user_input.lower() == "/skills":

@@ -36,7 +36,8 @@ class CapabilityRegistry:
             safety_tier="safe",
             read_only=True,
             requires_confirmation=False,
-            linked_skills=["research"]
+            linked_skills=["research"],
+            meta={"destination_allowlist": []} # Empty list = allow all unless air_gap is on
         ))
         self.register(Capability(
             name="filesystem_read",

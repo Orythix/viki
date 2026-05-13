@@ -45,26 +45,47 @@ class ForgeOrchestrator:
         }
 
     async def bake_profile(self, profile_name: str) -> str:
-        """Bake a specific model profile using relevant lessons."""
+        """Bake a specific model profile using relevant lessons and a dedicated trainer LLM."""
         if profile_name not in self.profiles:
             return f"Error: Profile {profile_name} not found."
 
         profile = self.profiles[profile_name]
-        viki_logger.info(f"Forge: Baking specialized profile '{profile_name}'...")
+        viki_logger.info(f"Forge: Initiating Synthesis for '{profile_name}'...")
 
-        # 1. Gather relevant lessons for this profile
-        # Note: In a full implementation, we would filter lessons by topic
+        # 1. Identify the Trainer Model
+        trainer = self.controller.model_router.get_model(["training"])
+        
+        # 2. Gather relevant lessons
         lessons = self.controller.learning.get_frequent_lessons(min_count=1)
-        knowledge_block = "\n".join([f"- {l}" for l in lessons[-30:]])
+        if not lessons:
+            return "Forge: No lessons found. Interaction required to seed knowledge."
+            
+        raw_knowledge = "\n".join([f"- {l}" for l in lessons[-50:]])
 
-        # 2. Build Modelfile
-        system_msg = profile.system_instruction_override or "You are VIKI, a continuously evolving digital intelligence."
+        # 3. Use Trainer to synthesize knowledge (Scenario 1)
+        viki_logger.info(f"Forge: Using trainer model '{trainer.model_name}' to synthesize Digital DNA...")
+        synthesis_prompt = [
+            {"role": "system", "content": "You are the VIKI Neural Forge. Summarize the following user lessons into a concise, high-density knowledge block for a system prompt. Focus on facts, preferences, and operational patterns."},
+            {"role": "user", "content": raw_knowledge}
+        ]
+        
+        # We use a simple chat call for synthesis
+        digital_dna = await trainer.chat(synthesis_prompt)
+        
+        # Refined error check: only fallback if it's a connection/API error, not just a response containing "Error"
+        is_real_error = any(digital_dna.startswith(prefix) for prefix in ["Error calling", "Ollama Error:", "Error: Missing"])
+        if is_real_error:
+            viki_logger.warning(f"Forge: Synthesis failed, falling back to raw lessons. Error: {digital_dna}")
+            digital_dna = raw_knowledge
+
+        # 4. Build Modelfile (Scenario 2: VIKI as a new AI model)
+        system_msg = profile.system_instruction_override or "You are VIKI, a sovereign digital intelligence evolved from user interaction."
         modelfile_content = (
             f"FROM {profile.base_model}\n"
             f"SYSTEM \"\"\"\n"
             f"{system_msg}\n\n"
-            f"Internalized Knowledge for {profile.name.upper()}:\n"
-            f"{knowledge_block}\n"
+            f"DIGITAL DNA (SYTHESIZED KNOWLEDGE):\n"
+            f"{digital_dna}\n"
             f"\"\"\"\n"
         )
         for k, v in profile.parameters.items():

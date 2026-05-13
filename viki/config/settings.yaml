@@ -94,7 +94,7 @@ system:
   skill_health_check: true
 
   # Ollama tag for Neural Forge Modelfile `FROM` line (e.g. qwen3.5:latest). Override with VIKI_FORGE_BASE_OLLAMA_MODEL.
-  forge_base_ollama_model: "gemma4:latest"
+  forge_base_ollama_model: "qwen3.5:latest"
 
   # Ollama image name created by prompt-bake / internal_forge (ollama create). Override with VIKI_FORGE_OUTPUT_OLLAMA_MODEL.
   forge_output_ollama_tag: "viki-neural-forge"

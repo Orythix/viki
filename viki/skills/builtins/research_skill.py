@@ -254,7 +254,21 @@ class ResearchSkill(BaseSkill):
             for tld in suspicious_tlds:
                 if hostname.lower().endswith(tld):
                     return False, f"Access to internal hostname not allowed: {hostname}"
+
+            # Check destination allowlist
+            if self.controller and hasattr(self.controller, "capabilities"):
+                cap = self.controller.capabilities.get("internet_research")
+                if cap and cap.meta.get("destination_allowlist"):
+                    allowlist = cap.meta["destination_allowlist"]
+                    if not any(hostname.lower().endswith(domain.lower()) for domain in allowlist):
+                        if hasattr(self.controller, "track_touched_item"):
+                             self.controller.track_touched_item("blocked_actions", f"Network: {hostname}")
+                        return False, f"Access to domain '{hostname}' is not in the allowlist."
             
+            # Track allowed access
+            if self.controller and hasattr(self.controller, "track_touched_item"):
+                 self.controller.track_touched_item("touched_files", f"Network: {hostname}")
+
             return True, url
             
         except Exception as e:
