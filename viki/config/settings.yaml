@@ -156,7 +156,7 @@ skills:
 
 # Optional integrations (Phase 1: Molty-style). Credentials via env or path.
 # Gmail: set VIKI_GMAIL_CREDENTIALS_PATH to JSON key file; token saved to data_dir.
-# Calendar: same or VIKI_GOOGLE_CALENDAR_CREDENTIALS_PATH. See viki/SECURITY_SETUP.md.
+# Calendar: same or VIKI_GOOGLE_CALENDAR_CREDENTIALS_PATH. See viki/SECURITY_docs/SETUP.md.
 integrations:
   gmail:
     enabled: false

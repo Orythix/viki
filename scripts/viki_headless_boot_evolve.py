@@ -17,7 +17,7 @@ Example (PowerShell, repo root):
   $env:VIKI_DATA_DIR = "D:\\VIKI\\data"
   python scripts/viki_headless_boot_evolve.py
 
-See VIKI_RUNBOOK.md § Background evolution and scripts/Register-VikiBootTask.ps1.
+See docs/VIKI_RUNBOOK.md § Background evolution and scripts/Register-VikiBootTask.ps1.
 """
 from __future__ import annotations
 

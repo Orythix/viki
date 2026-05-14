@@ -190,7 +190,7 @@ Plankton's `.claude/hooks/config.json` controls all behavior:
 
 - Plankton (credit: @alxfazio)
 - Plankton REFERENCE.md — Full architecture documentation (credit: @alxfazio)
-- Plankton SETUP.md — Detailed installation guide (credit: @alxfazio)
+- Plankton docs/SETUP.md — Detailed installation guide (credit: @alxfazio)
 
 ## ECC v1.8 Additions
 

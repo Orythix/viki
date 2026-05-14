@@ -33,17 +33,17 @@ rules/
 
 ```bash
 # Install common + one or more language-specific rule sets
-./install.sh typescript
-./install.sh angular
-./install.sh python
-./install.sh golang
-./install.sh web
-./install.sh swift
-./install.sh php
-./install.sh arkts
+./bin/install.sh typescript
+./bin/install.sh angular
+./bin/install.sh python
+./bin/install.sh golang
+./bin/install.sh web
+./bin/install.sh swift
+./bin/install.sh php
+./bin/install.sh arkts
 
 # Install multiple languages at once
-./install.sh typescript python
+./bin/install.sh typescript python
 ```
 
 ### Option 2: Manual Installation

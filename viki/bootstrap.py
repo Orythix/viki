@@ -34,6 +34,7 @@ from rich.text import Text
 from rich.table import Table
 from rich.columns import Columns
 from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.prompt import Confirm
 
 load_dotenv()
 
@@ -47,7 +48,6 @@ from viki.config.logger import viki_logger
 from viki.config.resolve import get_soul_path
 from viki.service_registry import Container
 from viki.core.utils.onboarding import run_onboarding
-from viki.ui.thinking_tree import ThinkingTree
 
 console = Console()
 
@@ -69,12 +69,8 @@ class SimpleInterface:
         cwd = os.getcwd()
         
         from rich.table import Table
+        from rich.panel import Panel
         from rich import box
-        
-        main_table = Table(box=box.SIMPLE_HEAD, expand=True, show_header=True, padding=(0, 2))
-        main_table.add_column("System Vitals", style="bold cyan")
-        main_table.add_column("Capabilities", style="bold blue")
-        main_table.add_column("Shortcuts", style="bold magenta")
         
         net = "[bold green]ONLINE[/]"
         shell = "[bold green]ENABLED[/]"
@@ -83,25 +79,44 @@ class SimpleInterface:
             net = "[bold red]AIR-GAPPED[/]" if status["network"]["air_gap"] else "[bold green]ONLINE[/]"
             shell = "[bold green]ENABLED[/]" if status["shell"]["enabled"] else "[bold red]DISABLED[/]"
             
-        main_table.add_row(
-            f"Operator: [white]{username}[/]",
-            f"Network: {net}",
-            "[dim]/help - All commands[/]"
-        )
-        main_table.add_row(
-            f"Workspace: [white]{cwd}[/]",
-            f"Shell: {shell}",
-            "[dim]/skills - Registered skills[/]"
-        )
-        main_table.add_row(
-            f"Mode: [yellow]Sovereign[/]",
-            f"Version: [white]8.1.0[/]",
-            "[dim]/boundary - Security status[/]"
+        left_content = (
+            f"\n[bold]Welcome back {username.capitalize()}![/]\n\n"
+            f"[cyan]       ▐▛███▜▌       [/]\n"
+            f"[cyan]      ▝▜█████▛▘      [/]\n"
+            f"[cyan]        ▘▘ ▝▝        [/]\n\n"
+            f"VIKI Sovereign Intelligence\n"
+            f"Mode: Sovereign\n"
+            f"[dim]{cwd}[/]"
         )
         
-        self.console.print("\n[bold cyan]*** O R Y T H I X   N E X U S ***[/]")
-        self.console.print(main_table)
-        self.console.print("")
+        right_content = (
+            "[bold]Tips for getting started[/]\n"
+            "Run [bold cyan]/help[/] to see all available commands and shortcuts.\n"
+            "Run [bold cyan]/boundary[/] to review your active security scopes.\n"
+            "[dim]Note: You have launched VIKI in Sovereign mode. Ensure your environment variables are configured correctly.[/]\n"
+            "[dim]───────────────────────────────────────────────────────────────────────────────────────────────────────[/]\n"
+            "[bold]System Status[/]\n"
+            f"Network: {net}    Shell: {shell}\n"
+            f"Recent Activity: [dim]No recent activity[/]"
+        )
+        
+        grid = Table(show_header=False, show_edge=False, box=box.MINIMAL, padding=(1, 3), expand=True)
+        grid.add_column(justify="center", ratio=1)
+        grid.add_column(justify="left", ratio=2)
+        grid.add_row(left_content, right_content)
+        
+        panel = Panel(
+            grid,
+            title="[bold]VIKI v8.1.0[/]",
+            title_align="left",
+            border_style="cyan",
+            box=box.ROUNDED,
+            expand=True
+        )
+        
+        self.console.print()
+        self.console.print(panel)
+        self.console.print()
 
     def print_user(self, text):
         pass # Input prompt handles this cleanly now
@@ -174,17 +189,21 @@ async def _start_background_tasks(controller, on_event, loop, interface):
     except Exception as e:
         interface.print_error(f"Task Launch Error: {e}")
 
-async def _run_single_query(controller, interface, query, on_event, on_think, thinking_tree, streaming_state):
+async def _run_single_query(controller, interface, query, on_event, streaming_state):
     try:
         interface.print_user(query)
         start_t = time.time()
         streaming_state["active"] = False
+        streaming_state["processing"] = True
         
-        thinking_tree.reset()
-        thinking_tree.update_perception(query[:50])
+        on_event("thought", "Thinking")
         
-        with Live(thinking_tree, console=interface.console, refresh_per_second=4, transient=True):
-            response = await controller.process_request(query, on_event=on_event, on_think=on_think)
+        response = await controller.process_request(query, on_event=on_event)
+        
+        streaming_state["processing"] = False
+        if interface.status is not None:
+            interface.status.stop()
+            interface.status = None
         
         elapsed = time.time() - start_t
         if streaming_state["active"]:
@@ -213,6 +232,28 @@ async def _run_interactive_loop(controller, interface, on_event, streaming_state
                 await _shutdown_controller(controller)
                 break
             
+            if user_input.lower() == "/reset":
+                if Confirm.ask("[bold red]Are you sure you want to completely wipe VIKI's memory? This cannot be undone.[/]"):
+                    interface.console.print("[yellow]Wiping memory databases...[/]")
+                    await _shutdown_controller(controller)
+                    
+                    import glob
+                    data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
+                    deleted_count = 0
+                    for ext in ("*.db", "*.db-wal", "*.db-shm"):
+                        for db_file in glob.glob(os.path.join(data_dir, ext)):
+                            try:
+                                os.remove(db_file)
+                                deleted_count += 1
+                            except Exception as e:
+                                interface.console.print(f"[red]Failed to delete {os.path.basename(db_file)}: {e}[/]")
+                                
+                    interface.console.print(f"[bold green]Memory wiped ({deleted_count} files deleted). Please restart VIKI to start fresh.[/]")
+                    break
+                else:
+                    interface.console.print("[dim]Reset cancelled.[/]")
+                continue
+            
             if user_input.lower() == "/help":
                 interface.console.print("[bold cyan]Available Commands:[/]")
                 interface.console.print("  [green]/help[/]     — Show this help")
@@ -225,6 +266,7 @@ async def _run_interactive_loop(controller, interface, on_event, streaming_state
                 interface.console.print("  [green]/scan[/]     — Re-scan workspace codebase (use in chat)")
                 interface.console.print("  [green]/restore[/]  — List checkpoints; /restore <id> to revert files")
                 interface.console.print("  [green]/undo[/]     — Roll back the most recent checkpoint")
+                interface.console.print("  [green]/reset[/]    — Wipe VIKI's memory databases and start fresh")
                 interface.console.print("  [green]/save[/]     — Save session: /save <name>")
                 interface.console.print("  [green]/load[/]     — Load session: /load <name>")
                 interface.console.print("  [green]/boundary[/] — Refresh the Sovereign Boundary dashboard")
@@ -265,12 +307,16 @@ async def _run_interactive_loop(controller, interface, on_event, streaming_state
                 
             start_t = time.time()
             streaming_state["active"] = False
+            streaming_state["processing"] = True
             
-            thinking_tree.reset()
-            thinking_tree.update_perception(user_input[:50])
-
-            with Live(thinking_tree, console=interface.console, refresh_per_second=4, transient=True):
-                response = await controller.process_request(user_input, on_event=on_event, on_think=on_think)
+            on_event("thought", "Thinking")
+            
+            response = await controller.process_request(user_input, on_event=on_event)
+            
+            streaming_state["processing"] = False
+            if interface.status is not None:
+                interface.status.stop()
+                interface.status = None
             
             elapsed = time.time() - start_t
 
@@ -296,7 +342,7 @@ async def main(workspace_path=None, query=None):
     viki_logger.setLevel(logging.INFO)
     
     debug_state = {"active": False}
-    streaming_state = {"active": False}
+    streaming_state = {"active": False, "processing": False}
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     settings_path = os.path.join(script_dir, "config", "settings.yaml")
@@ -347,6 +393,9 @@ async def main(workspace_path=None, query=None):
 
     def on_event(event_type, data):
         if event_type in ["thought", "action"]:
+            if not streaming_state.get("processing", False) or streaming_state.get("active", False):
+                return
+                
             interface.last_thought = data
             in_fmt = interface.format_count(interface.session_usage['input'])
             out_fmt = interface.format_count(interface.session_usage['output'])
@@ -417,32 +466,12 @@ async def main(workspace_path=None, query=None):
 
     loop.create_task(_usage_listener())
 
-    thinking_tree = ThinkingTree()
-
-    def on_think(event_type, data):
-        if event_type == "interpretation":
-            thinking_tree.update_interpretation(
-                data.get("intent"),
-                data.get("capabilities"),
-                data.get("sentiment")
-            )
-        elif event_type == "deliberation":
-            thinking_tree.update_deliberation(
-                data.get("model"),
-                data.get("tier")
-            )
-        elif event_type == "execution":
-            thinking_tree.update_execution(
-                data.get("tool"),
-                data.get("params")
-            )
-
     await _start_background_tasks(controller, on_event, loop, interface)
 
     if query:
-        await _run_single_query(controller, interface, query, on_event, on_think, thinking_tree, streaming_state)
+        await _run_single_query(controller, interface, query, on_event, streaming_state)
     else:
-        await _run_interactive_loop(controller, interface, on_event, on_think, thinking_tree, streaming_state, debug_state)
+        await _run_interactive_loop(controller, interface, on_event, streaming_state, debug_state)
 
 def run():
     """Synchronous entry point for the `viki` console script."""
@@ -493,6 +522,24 @@ def run():
             query_parts = parsed_args.args
 
     query_str = " ".join(query_parts).strip() if query_parts else None
+
+    target_workspace = workspace_path if workspace_path else os.getcwd()
+    
+    console.print()
+    console.print(Panel.fit(
+        f"[bold white]Accessing workspace:[/]\n\n"
+        f"[cyan]{target_workspace}[/]\n\n"
+        f"Quick safety check: Is this a project you created or one you trust?\n"
+        f"(Like your own code, a well-known open source project, or work from your team).\n"
+        f"If not, take a moment to review what's in this folder first.\n\n"
+        f"VIKI will be able to read, edit, and execute files here.",
+        border_style="yellow",
+        title="[bold yellow]Security Guide[/]"
+    ))
+    
+    if not Confirm.ask("Do you trust this folder and wish to proceed?"):
+        console.print("[yellow]Access denied. Exiting.[/]")
+        sys.exit(0)
 
     try:
         asyncio.run(main(workspace_path=workspace_path, query=query_str))

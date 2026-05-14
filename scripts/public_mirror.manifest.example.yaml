@@ -10,13 +10,13 @@ readme_override: docs/README_VIKI_PUBLIC.md
 # Repository-root-relative paths to copy (files or directories).
 # Omit README.md here when using readme_override (root README comes from the override).
 include:
-  - SETUP.md
-  - ARCHITECTURE.md
-  - VIKI_RUNBOOK.md
+  - docs/SETUP.md
+  - docs/ARCHITECTURE.md
+  - docs/VIKI_RUNBOOK.md
   - CONTRIBUTING.md
   - CHANGELOG.md
-  - DOCKER.md
-  - SECURITY.md
+  - docs/DOCKER.md
+  - docs/SECURITY.md
   - CODE_OF_CONDUCT.md
   - LICENSE
   - NOTICE

@@ -29,7 +29,7 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 
 ### Changed
 - **Neural Forge default Ollama tag**: prompt-bake / `internal_forge` now use **`viki-neural-forge`** by default (was `viki-born-again`). Override with `system.forge_output_ollama_tag` or `VIKI_FORGE_OUTPUT_OLLAMA_MODEL`. **`viki-evolved`** in `models.yaml` points at the new tag.
-- **Documentation**: added [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md) as the canonical index; cross-linked `README`, `SETUP`, `VIKI_RUNBOOK`, `ARCHITECTURE`, `CONTRIBUTING`, `DOCKER`, `security-lab`, `qa-automation`, and related docs; fixed a broken `docs/PLAN.md` reference in `ARCHITECTURE.md`.
+- **Documentation**: added [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md) as the canonical index; cross-linked `README`, `SETUP`, `VIKI_RUNBOOK`, `ARCHITECTURE`, `CONTRIBUTING`, `DOCKER`, `labs/security-lab`, `labs/qa-automation`, and related docs; fixed a broken `docs/PLAN.md` reference in `docs/ARCHITECTURE.md`.
 - **SEO / discoverability**: README overview + FAQ; richer `keywords` in README, `pyproject.toml`, and `ui/package.json`; `ui/index.html` meta/OG/Twitter/JSON-LD aligned to the GitHub repo (removed placeholder `viki.ai` and missing `og:image`); `ui/public/robots.txt` and `sitemap.xml` no longer point at a non-owned domain.
 
 ## [7.3.2] - 2026-05-08 (Public release prep)
@@ -51,7 +51,7 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 
 ### Security
 - **Rotated default `VIKI_API_KEY`**: the historical `REDACTED-OLD-KEY-ROTATE-VIKI_API_KEY` placeholder is invalid. The repository's git history was rewritten to scrub the string; every operator must generate their own key with `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
-- **`SECURITY.md`**: now documents the GitHub private-vulnerability-reporting flow with response SLAs, and the dead-default-key policy.
+- **`docs/SECURITY.md`**: now documents the GitHub private-vulnerability-reporting flow with response SLAs, and the dead-default-key policy.
 - **Resolved merge conflict** in `viki/core/controller.py` (now registers the new `EngineeringPlaybookSkill` and `CodingWorkflowSkill` lazy proxies).
 
 ### Migration
@@ -65,7 +65,7 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 ## [7.3.1] - 2026-02-17 (First public pre-release)
 
 ### Added
-- **Docker support:** Dockerfile and docker-compose for running the API in containers; FLASK_HOST env for binding; DOCKER.md and README section.
+- **Docker support:** Dockerfile and docker-compose for running the API in containers; FLASK_HOST env for binding; docs/DOCKER.md and README section.
 - **File upload:** Chat API accepts multipart form (message + files); uploads saved to data/uploads; controller accepts attachment_paths; UI attach button and file chips.
 - **Pre-release flow:** PRE_RELEASE.md checklist; GitHub Actions release workflow on tag push; README pre-release notice and docs link.
 
@@ -87,7 +87,7 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 - **Filesystem_skill roots from settings:** When controller provides `system.workspace_dir` or `system.data_dir`, FileSystemSkill uses those as allowed roots (aligned with path_sandbox); otherwise falls back to existing roots.
 
 ### References
-- Security details: `viki/SECURITY_SETUP.md`, security focus plan in `plans/`.
+- Security details: `viki/SECURITY_docs/SETUP.md`, security focus plan in `plans/`.
 
 ---
 
@@ -109,7 +109,7 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 - **Dataset Export**: `LearningModule.export_training_dataset(output_path, format)` for `jsonl`, `alpaca`, `openai`.
 - **A/B Testing**: `ModelABTest` framework for comparing models (quick validation, default prompts, scoring).
 - **Continuous Learning**: `ContinuousLearner` runs periodic training cycles (configurable schedule, min lessons, validation).
-- **Documentation**: `SECURITY_SETUP.md`, `IMPLEMENTATION_SUMMARY.md`, `MODEL_ENHANCEMENT_SUMMARY.md`, `OBSERVABILITY.md`, `ARCHITECTURE_REFACTOR.md`, `PERFORMANCE_NOTES.md`; README docs table and version bump to 7.2.0.
+- **Documentation**: `SECURITY_docs/SETUP.md`, `IMPLEMENTATION_SUMMARY.md`, `MODEL_ENHANCEMENT_SUMMARY.md`, `OBSERVABILITY.md`, `ARCHITECTURE_REFACTOR.md`, `PERFORMANCE_NOTES.md`; README docs table and version bump to 7.2.0.
 
 ### Fixed
 - **Security**: PowerShell injection in notification skill; path sandboxing in filesystem skill; SSRF/SSL in research skill; removed `shell=True` and validated input in system control skill; reflex path runs full security pipeline.
@@ -118,7 +118,7 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 - **Debounced Persistence**: WorldModel, Scorecard, Reflex, Evolution use debounced saves and `flush()` for clean shutdown.
 
 ### References
-- Implementation details: `viki/IMPLEMENTATION_SUMMARY.md`, `viki/MODEL_ENHANCEMENT_SUMMARY.md`, `viki/SECURITY_SETUP.md`.
+- Implementation details: `viki/IMPLEMENTATION_SUMMARY.md`, `viki/MODEL_ENHANCEMENT_SUMMARY.md`, `viki/SECURITY_docs/SETUP.md`.
 
 ---
 
@@ -134,7 +134,7 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 - **AttributeError**: Resolved critical system crash where components attempted to access the non-existent `.memory` dictionary in the LearningModule.
 - **Async Startup Traceback**: Fixed unawaited `_startup_pulse` warnings and ensured clean initialization of cognitive layers.
 - **Neural Dashboard v2**: Revamped the React UI with premium HSL themes, glassmorphism, and better responsive design.
-- **Documentation Overhaul**: Updated `README.md`, `ARCHITECTURE.md`, and `SETUP.md` for v7.1.0; added `run-viki` workflow.
+- **Documentation Overhaul**: Updated `README.md`, `docs/ARCHITECTURE.md`, and `docs/SETUP.md` for v7.1.0; added `run-viki` workflow.
 - **CORS Stability**: Explicitly configured cross-origin resource sharing to prevent UI/API connection failures.
 
 ### The Governance Pillar

@@ -63,7 +63,7 @@ VIKI is built on the **Orythix Cognitive Architecture**:
 4. **Run lint** — `ruff check viki` (CI runs the same).
 5. **Update docs** — if you add or change a skill, configuration option, or
    public API, update the relevant `.md` file (often `README.md`,
-   `ARCHITECTURE.md`, or `viki/SECURITY_SETUP.md`).
+   `docs/ARCHITECTURE.md`, or `viki/SECURITY_docs/SETUP.md`).
 6. **Reference issues** — link any related issue in the PR description.
 7. **Follow the PR template** — fill in summary and test plan.
 
@@ -127,13 +127,13 @@ git config core.hooksPath .githooks
 
 ## Subprojects
 
-Changes to **`security-lab/`** or **`qa-automation/`** should keep those folders **runnable on their own** (do not require importing private VIKI internals unless explicitly agreed). Use each subfolder’s `README.md` and tests as the contract. Docs index: [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md).
+Changes to **`labs/security-lab/`** or **`labs/qa-automation/`** should keep those folders **runnable on their own** (do not require importing private VIKI internals unless explicitly agreed). Use each subfolder’s `README.md` and tests as the contract. Docs index: [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md).
 
 ## Need Help?
 
 * General questions → [GitHub Discussions](https://github.com/Orythix/viki/discussions)
 * Bug reports → [GitHub Issues](https://github.com/Orythix/viki/issues)
-* Security issues → see [`SECURITY.md`](./SECURITY.md) (private advisories only)
+* Security issues → see [`docs/SECURITY.md`](./docs/SECURITY.md) (private advisories only)
 
 ---
 

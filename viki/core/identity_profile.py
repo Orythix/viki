@@ -20,6 +20,17 @@ class Soul:
 
     def get_system_prompt(self) -> str:
         """Generate the system prompt based on the SOUL configuration."""
+        import os
+        config_dir = os.path.dirname(os.path.abspath(__file__))
+        personality_path = os.path.join(os.path.dirname(config_dir), 'config', 'core_personality.md')
+        
+        try:
+            if os.path.exists(personality_path):
+                with open(personality_path, 'r', encoding='utf-8') as f:
+                    return f.read()
+        except Exception:
+            pass
+
         parts = []
         tagline = self.config.get('tagline') or self.config.get('positioning')
         if tagline:

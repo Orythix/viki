@@ -48,7 +48,7 @@ These are usually low-signal or out of bounty scope unless the program says othe
 
 ## Workflow
 
-1. Check scope first: program rules, SECURITY.md, disclosure channel, and exclusions.
+1. Check scope first: program rules, docs/SECURITY.md, disclosure channel, and exclusions.
 2. Find real entrypoints: HTTP handlers, uploads, background jobs, webhooks, parsers, and integration endpoints.
 3. Run static tooling where it helps, but treat it as triage input only.
 4. Read the real code path end to end.

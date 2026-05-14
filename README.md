@@ -204,8 +204,8 @@ VIKI/
 │   ├── skills/         # Modular Ability System (FS, Shell, Research)
 │   ├── api/            # Unified Nexus (Discord, Telegram, Slack)
 │   └── main.py         # Authoritative entry point
-├── security-lab/           # Standalone defensive AI security lab (FastAPI + Docker)
-├── qa-automation/          # Multi-stack QA learning tracks (pytest, Java, Playwright, k6, …)
+├── labs/security-lab/           # Standalone defensive AI security lab (FastAPI + Docker)
+├── labs/qa-automation/          # Multi-stack QA learning tracks (pytest, Java, Playwright, k6, …)
 ├── docs/                   # Repo-wide documentation index (see DOCUMENTATION.md)
 ├── data/                   # SQLite wisdom & facts (gitignored by default)
 ├── logs/                   # Structured telemetry (gitignored by default)
@@ -262,7 +262,7 @@ pip install -e ".[windows,qt]"
     ```powershell
     python -c "import secrets; print(secrets.token_urlsafe(32))"
     ```
-    See [viki/SECURITY_SETUP.md](viki/SECURITY_SETUP.md) and `.env.example` for all options.
+    See [viki/SECURITY_docs/SETUP.md](viki/SECURITY_docs/SETUP.md) and `.env.example` for all options.
 
 3.  **Launch VIKI (CLI)**:
     ```powershell
@@ -286,11 +286,11 @@ Install the `viki` command so you can run it from any directory with the current
 
 **One-line install (optional)**:
 
-- Windows: `irm https://raw.githubusercontent.com/Orythix/viki/main/install.ps1 | iex` (or from repo: `.\install.ps1`)
-- Unix: `curl -fsSL https://raw.githubusercontent.com/Orythix/viki/main/install.sh | bash` (or from repo: `./install.sh`)
+- Windows: `irm https://raw.githubusercontent.com/Orythix/viki/main/bin/install.ps1 | iex` (or from repo: `.\bin/install.ps1`)
+- Unix: `curl -fsSL https://raw.githubusercontent.com/Orythix/viki/main/bin/install.sh | bash` (or from repo: `./bin/install.sh`)
 
 4.  **Run with Docker**:
-    Build and run the VIKI CLI in a container. Ollama should be running on the host (or in another container). See [DOCKER.md](DOCKER.md) for details.
+    Build and run the VIKI CLI in a container. Ollama should be running on the host (or in another container). See [docs/DOCKER.md](docs/DOCKER.md) for details.
     ```powershell
     copy .env.example .env
     # Edit .env and set VIKI_API_KEY (required)
@@ -382,28 +382,28 @@ Unlike static bots, VIKI also grows during normal use: interact, lessons accumul
 ---
 
 ## Security & Ethics
-*   **API Authentication**: All API endpoints require `VIKI_API_KEY`. Set via environment variable; see [viki/SECURITY_SETUP.md](viki/SECURITY_SETUP.md).
+*   **API Authentication**: All API endpoints require `VIKI_API_KEY`. Set via environment variable; see [viki/SECURITY_docs/SETUP.md](viki/SECURITY_docs/SETUP.md).
 *   **Admin Commands**: Super-admin uses `VIKI_ADMIN_SECRET` (env). Never commit secrets; use env or a secrets manager.
 *   **Privacy**: 100% Local. No telemetry. No external API calls unless explicitly configured for internet research.
 *   **Control**: Every skill run passes `validate_action`; file paths are sandboxed (dev_tools, whisper, PDF, data_analysis, filesystem). Shell command chaining is treated as destructive. Output and logs redact secrets.
-*   **Audit**: Check `logs/viki.log` and `viki/SECURITY_SETUP.md` for capability checks and setup.
+*   **Audit**: Check `logs/viki.log` and `viki/SECURITY_docs/SETUP.md` for capability checks and setup.
 
 ## Documentation
 
-**Full index:** [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md) (core VIKI, `security-lab`, `qa-automation`, eval, playbooks).
+**Full index:** [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md) (core VIKI, `labs/security-lab`, `labs/qa-automation`, eval, playbooks).
 
 | Document | Description |
 |----------|-------------|
-| [SETUP.md](SETUP.md) | Installation and environment |
-| [VIKI_RUNBOOK.md](VIKI_RUNBOOK.md) | Operations, troubleshooting, RAG eval, boot evolution |
-| [DOCKER.md](DOCKER.md) | Run VIKI in Docker (`docker compose`) |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | System design and data flow |
+| [docs/SETUP.md](docs/SETUP.md) | Installation and environment |
+| [docs/VIKI_RUNBOOK.md](docs/VIKI_RUNBOOK.md) | Operations, troubleshooting, RAG eval, boot evolution |
+| [docs/DOCKER.md](docs/DOCKER.md) | Run VIKI in Docker (`docker compose`) |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design and data flow |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |
-| [SECURITY.md](SECURITY.md) | Security policy and reporting |
-| [viki/SECURITY_SETUP.md](viki/SECURITY_SETUP.md) | API keys, CORS, capability setup |
+| [docs/SECURITY.md](docs/SECURITY.md) | Security policy and reporting |
+| [viki/SECURITY_docs/SETUP.md](viki/SECURITY_docs/SETUP.md) | API keys, CORS, capability setup |
 | [viki/eval/README.md](viki/eval/README.md) | RAG retrieval evaluation (`run_rag_eval.py`) |
-| [security-lab/README.md](security-lab/README.md) | Local defensive AI security lab |
-| [qa-automation/README.md](qa-automation/README.md) | QA automation learning monorepo |
+| [labs/security-lab/README.md](labs/security-lab/README.md) | Local defensive AI security lab |
+| [labs/qa-automation/README.md](labs/qa-automation/README.md) | QA automation learning monorepo |
 | [viki/ARCHITECTURE_REFACTOR.md](viki/ARCHITECTURE_REFACTOR.md) | Controller / pipeline refactor notes |
 | [`scripts/build_viki_model.py`](scripts/build_viki_model.py) | CLI: bake lessons into an Ollama model (`prompt_bake` / LoRA / DPO) |
 

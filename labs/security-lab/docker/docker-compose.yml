@@ -1,0 +1,45 @@
+# Local-only AI security learning lab. Do not expose ports to untrusted networks.
+#
+# Usage (from repo labs/security-lab/docker):
+#   docker compose up --build
+#
+# Services:
+#   lab-api      — FastAPI backend (localhost:8000)
+#   lab-ui       — React dashboard (localhost:5173) — production build served via nginx optional; dev uses vite on host
+#   sandbox-demo — Intentionally weak demo app (internal only; XSS lab)
+
+services:
+  lab-api:
+    build:
+      context: ..
+      dockerfile: docker/backend.Dockerfile
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      LAB_API_KEY: ${LAB_API_KEY:-dev-lab-change-me}
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:latest}
+      DATABASE_URL: sqlite:////data/lab_audit.db
+      RBAC_POLICY_PATH: /srv/security/policies/rbac.json
+      TOOL_ALLOWLIST: python,echo,whoami
+    volumes:
+      - lab_audit:/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - lab_internal
+
+  sandbox-demo:
+    build:
+      context: ..
+      dockerfile: docker/sandbox.Dockerfile
+    networks:
+      - lab_internal
+    # No host ports — reachable only as http://sandbox-demo:8080 from lab-api
+
+networks:
+  lab_internal:
+    driver: bridge
+
+volumes:
+  lab_audit:

@@ -25,18 +25,18 @@ The **full implementation** (application source, UI, tests, `scripts/`, private 
 ## Contributing & contact
 
 - **Docs corrections, questions, ideas:** open an issue (or Discussion) on **[VIKI-public](https://github.com/Orythix/VIKI-public)**.
-- **Security vulnerabilities:** follow [SECURITY.md](./SECURITY.md) — use the **private** reporting channel described there, not a public issue.
+- **Security vulnerabilities:** follow [docs/SECURITY.md](./docs/SECURITY.md) — use the **private** reporting channel described there, not a public issue.
 - **Code / PRs:** the implementation repo is **private**; maintainers grant access by invitation when appropriate. The exported [CONTRIBUTING.md](./CONTRIBUTING.md) describes internal workflow for people who already have access.
 
 ## What’s in *this* repo (VIKI-public)
 
 | Document | Description |
 |----------|-------------|
-| [SETUP.md](./SETUP.md) | Install and environment (reference; full tree is private) |
-| [ARCHITECTURE.md](./ARCHITECTURE.md) | System design |
-| [VIKI_RUNBOOK.md](./VIKI_RUNBOOK.md) | Operations and troubleshooting |
-| [DOCKER.md](./DOCKER.md) | Container run |
-| [SECURITY.md](./SECURITY.md) | Security policy |
+| [docs/SETUP.md](./docs/SETUP.md) | Install and environment (reference; full tree is private) |
+| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | System design |
+| [docs/VIKI_RUNBOOK.md](./docs/VIKI_RUNBOOK.md) | Operations and troubleshooting |
+| [docs/DOCKER.md](./docs/DOCKER.md) | Container run |
+| [docs/SECURITY.md](./docs/SECURITY.md) | Security policy |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | Contribution guide for **authorized** contributors |
 | [CHANGELOG.md](./CHANGELOG.md) | Version history |
 | [docs/DOCUMENTATION.md](./docs/DOCUMENTATION.md) | Doc index |

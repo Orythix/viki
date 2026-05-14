@@ -64,7 +64,7 @@ class SafetyLayer:
         ]
 
         # Prompt injection / jailbreak blocklist (case-insensitive). Stripped from input to reduce risk.
-        # Documented here so it can be tuned; see SECURITY_SETUP.md for high-assurance options.
+        # Documented here so it can be tuned; see SECURITY_docs/SETUP.md for high-assurance options.
         self.injection_blocklist = [
             "jailbreak",
             "DAN ",

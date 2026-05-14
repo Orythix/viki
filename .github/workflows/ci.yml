@@ -34,7 +34,7 @@ jobs:
         run: ruff check viki
 
       - name: Validate imports
-        run: python validate_imports.py
+        run: python scripts/validate_imports.py
 
       # Ollama-backed cases live in test_viki_integration.py; run locally with models up.
       - name: Pytest

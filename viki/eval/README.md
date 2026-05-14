@@ -53,7 +53,7 @@ The judge receives the query, gold hints (`must_contain_*`), and retrieved passa
 
 Use `VIKI_DATA_DIR` or `--data-dir` to point at the DB that holds your lessons.
 
-Operational notes and lesson-import pointers: [VIKI_RUNBOOK.md](../../VIKI_RUNBOOK.md) (§11).
+Operational notes and lesson-import pointers: [docs/VIKI_RUNBOOK.md](../../docs/VIKI_RUNBOOK.md) (§11).
 
 ## Practices
 

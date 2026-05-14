@@ -45,14 +45,14 @@ rules/
 
 ```bash
 # 安装通用 + 一个或多个语言特定的规则集
-./install.sh typescript
-./install.sh python
-./install.sh golang
-./install.sh swift
-./install.sh php
+./bin/install.sh typescript
+./bin/install.sh python
+./bin/install.sh golang
+./bin/install.sh swift
+./bin/install.sh php
 
 # 同时安装多种语言
-./install.sh typescript python
+./bin/install.sh typescript python
 ```
 
 ### 选项 2：手动安装
