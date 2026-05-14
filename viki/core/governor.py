@@ -81,7 +81,21 @@ class EthicalGovernor:
                 self._log_veto(intent, reason)
                 return False, f"VETOED: {reason}"
 
-        # 2. Semantic Analysis (v25 Enhancement)
+        # 2. Harmlessness Whitelist (Developer Autonomy)
+        # Bypasses semantic check for low-risk coding/research intents.
+        harmless_intents = [
+            r"search.*(code|repo|file)",
+            r"read.*file",
+            r"list.*(dir|files)",
+            r"check.*status",
+            r"run.*tests",
+            r"generate.*(ui|mockup|variant)",
+        ]
+        if any(re.search(p, intent_lower) for p in harmless_intents):
+            viki_logger.debug(f"Governor: Harmless intent whitelist match: '{intent}'")
+            return True, "Approved (Whitelist)"
+
+        # 3. Semantic Analysis (v25 Enhancement)
         if model_router and len(intent) > 5:
             approved, reason = await self.semantic_veto_check(intent, model_router, wisdom=wisdom)
             if not approved:

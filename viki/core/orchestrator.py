@@ -465,6 +465,10 @@ class VIKIController:
         self.evolution.set_skill_registry(self.skill_registry)
         
         self.benchmark = ControlledBenchmark(self)
+        
+        # v26: Planner/Executor Split (The "Nervous System")
+        from viki.core.task_planner import PlannerExecutor
+        self.planner = PlannerExecutor(self.model_router)
 
         # v26: Tenant-aware Ops planner (creates OpsPlan before any side effects)
         self.ops_planner = SimpleOpsPlanner(self)
@@ -1083,6 +1087,38 @@ class VIKIController:
             except Exception:
                 pass
             return None, err_msg, 0.0
+
+    def _get_planner_callbacks(self, session_id: str, budget: Dict[str, Any], on_event: Optional[Any]) -> Dict[str, Any]:
+        """Maps TaskGraph node types to functional skill executions for the FSM pipeline."""
+        
+        async def _generic_exec(task: Any, skill: str):
+            if on_event: on_event("status", f"PLANNER: {task.description}")
+            # Ensure parameters are a dict
+            params = task.parameters if isinstance(task.parameters, dict) else {}
+            res, err, lat = await self._execute_skill(skill, params, budget)
+            return res if not err else f"Error: {err}"
+
+        async def _analyze(task: Any):
+            if on_event: on_event("status", f"PLANNER ANALYZING: {task.description}")
+            model = self.model_router.get_model(["reasoning", "fast_response"])
+            prompt = (
+                f"You are the VIKI Execution Agent.\n"
+                f"Goal: {self.world.state.active_goal}\n"
+                f"Current Task: {task.description}\n"
+                f"Context: {task.parameters}\n\n"
+                f"Provide a technical analysis or plan for this specific step."
+            )
+            return await model.chat([{"role": "user", "content": prompt}])
+
+        return {
+            "search_repo": lambda t: _generic_exec(t, "code_search"),
+            "read_file": lambda t: _generic_exec(t, "read_file"),
+            "patch": lambda t: _generic_exec(t, "patch_file"),
+            "run_tests": lambda t: _generic_exec(t, "terminal_exec"),
+            "refactor": lambda t: _generic_exec(t, "refactor_tool"),
+            "analyze": _analyze,
+            "reflect": _analyze,
+        }
 
     def _json_type_matches(self, value: Any, expected_type: str) -> bool:
         """Very small JSON-schema type checker (best-effort, not full validation)."""
@@ -1912,6 +1948,7 @@ class VIKIController:
                     "url_context_present": bool(url_context),
                 },
                 skill_registry=self.skill_registry,
+                history=self.memory.working.get_trace(session_id=session_id),
             )
         except Exception as e:
             viki_logger.warning("Cognitive routing failed (%s); defaulting to DEEP.", e)
@@ -1954,6 +1991,54 @@ class VIKIController:
 
         # v25: Adaptive Agency Weightings
         agency_weights = self.evolution.get_agent_weightings()
+
+        # --- SOVEREIGN FSM: Momentum-Based Orchestration ---
+        lower_input = safe_input.lower().strip()
+        continuation_keywords = {"yes", "no", "do it", "develop it", "do best thing", "continue", "next", "go", "proceed", "cancel", "ok", "sure", "fix it", "do it now"}
+        
+        is_continuation = lower_input in continuation_keywords or (len(lower_input.split()) <= 4 and any(k in lower_input for k in continuation_keywords))
+        
+        if is_continuation and self.world.state.active_goal:
+            viki_logger.info(f"FSM: Continuation Intent Detected. Resuming goal: {self.world.state.active_goal[:50]}...")
+            # Inherit last phase if we are in a valid workflow
+            if self.world.state.current_phase in ("PLANNING", "EXECUTING", "TESTING"):
+                viki_logger.debug(f"FSM: Inheriting phase: {self.world.state.current_phase}")
+            else:
+                self.world.state.current_phase = "EXECUTING" # Default to execution for "do it"
+        elif task_type == "coding":
+            # --- SUFFICIENT REQUIREMENTS DETECTION (Sovereign Redesign) ---
+            frameworks = {"react", "next.js", "nextjs", "vue", "angular", "svelte", "tailwind", "vite", "node", "express", "flask", "django"}
+            dev_keywords = {"build", "create", "make", "generate", "scaffold", "develop", "setup", "initialize"}
+            
+            is_sufficient = any(f in lower_input for f in frameworks) and any(k in lower_input for k in dev_keywords)
+            
+            if self.world.state.active_goal != safe_input and len(safe_input) > 10:
+                viki_logger.info(f"FSM: New Goal Detected: {safe_input[:50]}...")
+                self.world.state.active_goal = safe_input
+                self.world.state.planning_depth = 0
+                self.world.state.retry_count = 0
+                
+                if is_sufficient:
+                    viki_logger.info("FSM: SUFFICIENT REQUIREMENTS DETECTED. Bypassing PLANNING phase.")
+                    self.world.state.current_phase = "EXECUTING"
+                    self.world.state.execution_started = True
+                else:
+                    self.world.state.current_phase = "PLANNING"
+                    self.world.state.execution_started = False
+            
+            # --- ANTI-LOOP PROTECTION ---
+            if self.world.state.current_phase == "PLANNING":
+                self.world.state.planning_depth += 1
+                if self.world.state.planning_depth > 1:
+                    viki_logger.warning("FSM: MAX_PLANNING_CYCLES exceeded. Forcing EXECUTING state.")
+                    self.world.state.current_phase = "EXECUTING"
+                    self.world.state.execution_started = True
+
+        # Ensure goal persistence
+        if self.world.state.active_goal:
+            viki_logger.info(f"FSM State: {self.world.state.current_phase} | Goal: {self.world.state.active_goal[:30]}...")
+            
+        self.world.save()
 
         # --- ReAct LOOP: Reason → Act → Observe → Reason → ... ---
         if self.is_agent_mode:
@@ -2041,6 +2126,28 @@ class VIKIController:
                 use_ensemble_setting = self.settings.get("system", {}).get("use_ensemble", True)
                 if cognitive_route is not None:
                     use_ensemble_setting = use_ensemble_setting and cognitive_route.use_ensemble
+                # v26: Autonomous Planner/Executor Branch
+                # If we are in 'build' phase and the model didn't provide an action,
+                # or if we want to ensure linear execution, use the PlannerExecutor.
+                if task_type == "coding" and self.world.state.current_phase == "build" and not viki_resp.action:
+                    viki_logger.info("FSM: In BUILD phase but no action provided. Triggering Task Graph Execution.")
+                    graph = await self.planner.plan(self.world.state.active_goal, repo_context=project_instructions)
+                    # Register callbacks for the planner
+                    self.planner.callbacks = self._get_planner_callbacks(session_id, budget, on_event)
+                    executed_graph = await self.planner.execute(graph)
+                    
+                    self.world.state.current_phase = "test"
+                    self.world.save()
+                    
+                    summary = executed_graph.summary()
+                    action_results.append({
+                        "action": "task_graph_execution",
+                        "result": f"Executed {summary['done']} tasks. Status: {'Success' if summary['failed'] == 0 else 'Partial Failure'}",
+                        "step": react_step + 1
+                    })
+                    viki_resp.final_response = f"I've completed the build phase for your task: {self.world.state.active_goal}. Moving to verification."
+                    viki_resp.action = None # Stop loop after planner run
+                
                 viki_resp: VIKIResponse = await self.cortex.process(
                     safe_input,
                     memory_context=memory_context,
@@ -2059,11 +2166,26 @@ class VIKIController:
                     is_debug_mode=self.is_debug_mode,
                     is_singularity_mode=self.is_singularity_mode,
                 )
-                self.internal_trace.append({
-                    "strategy": viki_resp.final_thought.primary_strategy,
-                    "meta": viki_resp.internal_metacognition,
-                    "timestamp": time.time()
-                })
+                # --- SOVEREIGN POLICY: Execution Commitment & Forbidden Transitions ---
+                if task_type == "coding":
+                    conf = viki_resp.final_thought.confidence
+                    
+                    # 1. Force EXECUTING if confidence > 0.65
+                    if conf > 0.65 and self.world.state.current_phase == "PLANNING":
+                        viki_logger.info(f"FSM: High confidence ({conf:.2f}) detected. Committing to EXECUTING phase.")
+                        self.world.state.current_phase = "EXECUTING"
+                        self.world.state.execution_started = True
+                        self.world.save()
+                    
+                    # 2. Forbidden Transitions: EXECUTING/TESTING -> PLANNING
+                    # 2. Forbidden Transitions: EXECUTING/TESTING -> PLANNING
+                    if self.world.state.execution_started and viki_resp.intent_type == "planning":
+                         viki_logger.warning("FSM: FORBIDDEN TRANSITION detected (PLANNING during EXECUTION). Suppressing plan and forcing action.")
+
+                    # 3. Style Mimicry: Nudge for first execution
+                    if self.world.state.execution_started and react_step == 0:
+                        viki_logger.info("FSM: Enforcing Style Mimicry policy. Nudging for contextual inspection.")
+                
                 if len(self.internal_trace) > 10: self.internal_trace.pop(0)
                 
                 # Capture user corrections and frustration as lessons
@@ -2194,27 +2316,29 @@ class VIKIController:
 
                 if err:
                     self.signals.update_signal("frustration", 0.3)
-                    selected_model = self.model_router.get_model(capabilities=[task_type])
-                    selected_model.record_performance(0.0, False)
                     self.skill_registry.record_execution(skill_name, False, 0.0)
                     self.learning.save_failure(skill_name, err, user_input)
-
-                    # Recovery: if a tool contract validation failed, try to replan rather than hard-failing.
-                    is_contract_failure = (
-                        "Tool contract violation" in err or
-                        "Tool contract output validation failed" in err
-                    )
-                    if react_step < max_react_steps - 1 and is_contract_failure:
+                    
+                    # --- SOVEREIGN RETRY ARCHITECTURE ---
+                    self.world.state.retry_count += 1
+                    viki_logger.info(f"FSM: Tool failure ({err}). Retry count: {self.world.state.retry_count}")
+                    
+                    if self.world.state.retry_count <= 3:
+                        viki_logger.info("FSM: Transitioning to DEBUGGING state for autonomous repair.")
+                        self.world.state.current_phase = "DEBUGGING"
+                        self.world.save()
+                        
+                        # Add failure context to the next loop iteration
                         action_results.append({
                             "action": f"{skill_name}({params})",
-                            "error": err,
+                            "error": f"EXECUTION_FAILURE: {err}. Propose a fix or alternative path. DO NOT REPLAN.",
                             "step": react_step + 1,
                         })
                         continue
 
                     if "timed out" in err:
                         return f"I couldn't complete '{skill_name}' in time. Try a simpler request or retry."
-                    return f"I must apologize. My attempt to execute '{skill_name}' failed: {err}."
+                    return f"I must apologize. My attempt to execute '{skill_name}' failed after {self.world.state.retry_count} retries: {err}."
                 selected_model = self.model_router.get_model(capabilities=[task_type])
                 selected_model.record_performance(latency, True)
                 self.skill_registry.record_execution(skill_name, True, latency)

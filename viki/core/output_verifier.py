@@ -59,7 +59,7 @@ class JudgmentEngine:
             "search", "google", "stop",
         }
 
-    async def evaluate(self, user_input: str, context: Optional[Dict[str, Any]] = None) -> JudgmentResult:
+    async def evaluate(self, user_input: str, context: Optional[Dict[str, Any]] = None, history: Optional[List[Dict[str, str]]] = None) -> JudgmentResult:
         """
         Calculates the optimal cognitive mode for a task.
         Returns detailed JudgmentResult for downstream processing.
@@ -67,7 +67,7 @@ class JudgmentEngine:
         t0 = time.perf_counter()
         context = context or {}
 
-        clarity = self._calculate_clarity(user_input)
+        clarity = self._calculate_clarity(user_input, history)
         risk = self._assess_risk(user_input, context)
         past_failure = self._check_failure_similarity(user_input)
         novelty = self._estimate_novelty(user_input, context)
@@ -125,6 +125,11 @@ class JudgmentEngine:
         if novelty < self.reflex_threshold and risk < 0.1 and clarity > 0.8:
             return _make(JudgmentOutcome.SHALLOW, "proceed", "Familiar pattern. Shallow reasoning applied.")
 
+        # v26 Sovereign Policy: Prefer SHALLOW for standard coding tasks to avoid deliberative loops.
+        is_coding = context.get("task_type") == "coding"
+        if is_coding and risk < 0.5 and novelty < 0.8:
+             return _make(JudgmentOutcome.SHALLOW, "proceed", "Standard coding task. Bypassing deliberative planning.")
+
         if risk < 0.4 and novelty < 0.6:
             return _make(JudgmentOutcome.SHALLOW, "proceed", "Standard task. Shallow reasoning applied.")
 
@@ -150,10 +155,24 @@ class JudgmentEngine:
             return "filesystem_read"
         return None
 
-    def _calculate_clarity(self, text: str) -> float:
-        words = text.split()
+    def _calculate_clarity(self, text: str, history: Optional[List[Dict[str, str]]] = None) -> float:
+        words = (text or "").split()
         if not words: return 0.0
         
+        # v26 Enhancement: Intent Resolution via History (Sovereign Redesign)
+        # If the input is a short follow-up and we have history, it's highly clear.
+        lower_input = text.lower().strip()
+        continuation_keywords = {"yes", "no", "do it", "develop it", "do best thing", "continue", "next", "go", "proceed", "cancel", "ok", "sure", "fix it"}
+        
+        if lower_input in continuation_keywords or (history and len(words) <= 4 and any(k in lower_input for k in continuation_keywords)):
+            viki_logger.info("Judgment: Continuation intent detected. Boosting clarity and bypassing veto.")
+            return 0.95 # Sovereign Boost
+            
+        if history and len(words) <= 3:
+            last_msg = history[-1]["content"].lower() if history else ""
+            if "?" in last_msg or "plan" in last_msg or "checklist" in last_msg:
+                return 0.90 # High clarity for context-aware follow-ups
+
         # Single word inputs still have meaning
         if len(words) == 1: return 0.5
         

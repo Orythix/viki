@@ -338,7 +338,7 @@ class DeliberationLayer(CortexLayer):
         is_debug_mode: bool = False,
         is_singularity_mode: bool = False,
     ) -> str:
-        from viki.core.agent_constants import AGENT_MANDATE, PLAN_MODE_MANDATE, DEBUG_MODE_MANDATE, SINGULARITY_MANDATE
+        from viki.core.agent_constants import AGENT_MANDATE, PLAN_MODE_MANDATE, DEBUG_MODE_MANDATE, SINGULARITY_MANDATE, PRIMARY_DIRECTIVE, EXECUTION_RULES
         mandate_block = ""
         if is_singularity_mode:
             mandate_block = SINGULARITY_MANDATE
@@ -351,6 +351,8 @@ class DeliberationLayer(CortexLayer):
         
         return (
             f"{mandate_block}\n"
+            f"{PRIMARY_DIRECTIVE}\n"
+            f"{EXECUTION_RULES}\n"
             "OPERATING MODE:\n"
             "- You are VIKI, a direct and practical autonomous assistant. Prioritize high-density information over wordy explanations.\n"
             "- Do NOT explain your internal reasoning process, tool selection logic, or 'thinking' in the final_response unless explicitly asked.\n\n"

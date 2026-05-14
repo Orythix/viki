@@ -53,7 +53,7 @@ class CapabilityRegistry:
             safety_tier="safe",
             read_only=True,
             requires_confirmation=False,
-            linked_skills=["endpoint_guard"]
+            linked_skills=["endpoint_guard", "autonomous_auditor", "mutation_pilot"]
         ))
         self.register(Capability(
             name="filesystem_write",
@@ -159,6 +159,15 @@ class CapabilityRegistry:
                 "sql_query",
                 "aws_console",
                 "kubernetes_ctl",
+                "engineering_playbook",
+                "megatron_lm_playbook",
+                "coding_workflow",
+                "cache_pilot",
+                "context_weaver",
+                "mind_trace",
+                "log_voyager",
+                "manus",
+                "market_explorer",
             ],
         ))
 
@@ -216,6 +225,18 @@ class CapabilityRegistry:
         content_creation = {"data_analysis", "presentation", "spreadsheet", "website"}
         if skill_name in content_creation:
             return "content_creation"
+
+        # Sovereign Tool Hub Prefixes
+        if skill_name.startswith("aws_"):
+            return "safe_utilities"
+        if skill_name.startswith("k8s_") or skill_name.startswith("docker_"):
+            return "safe_utilities"
+        if skill_name.startswith("git_"):
+            return "code_intelligence"
+        if skill_name.startswith(("sys_", "ai_", "prod_", "tool_")):
+            return "safe_utilities"
+        if skill_name.startswith("net_"):
+            return "internet_research"
 
         return None
 

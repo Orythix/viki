@@ -855,10 +855,22 @@ class LocalLLM(LLMProvider):
         try:
             return json.loads(content)
         except json.JSONDecodeError:
+            # Try ast.literal_eval for single-quoted Python-dict-style output
+            try:
+                import ast
+                val = ast.literal_eval(content)
+                if isinstance(val, dict):
+                    return val
+            except Exception:
+                pass
+
             # Last resort: Try replacing single quotes if double quotes are missing in keys
             if "'" in content and '"' not in content[:10]:
-                fixed = content.replace("'", '"')
-                return json.loads(fixed)
+                try:
+                    fixed = content.replace("'", '"')
+                    return json.loads(fixed)
+                except Exception:
+                    pass
             raise
 
     def _structured_fallback(self, response_model: Type[T], content: str, err: Exception) -> T:

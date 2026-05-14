@@ -97,6 +97,7 @@ class CognitiveRouter:
         user_input: str,
         context: Optional[Dict[str, Any]] = None,
         skill_registry: Optional[Any] = None,
+        history: Optional[List[Dict[str, str]]] = None,
     ) -> CognitiveRoute:
         from viki.core.telemetry_service import start_span
 
@@ -138,7 +139,7 @@ class CognitiveRouter:
 
             # 2. Reflex Search (Cheapest path)
             reflex_response, reflex_action = self._run_reflex(user_input)
-            judgment = await self.judgment.evaluate(user_input, context)
+            judgment = await self.judgment.evaluate(user_input, context, history=history)
 
             route = self._route_from_reflex(
                 reflex_action, reflex_response, judgment, skill_registry

@@ -47,7 +47,7 @@ class VIKIResponse(BaseModel):
 class VIKIResponseLite(BaseModel):
     """Lightweight response for SHALLOW reasoning.
     Only 3 fields — local models produce this reliably with zero heuristic fixes."""
-    final_response: str = Field(..., description="The actual textual answer to the user. Do NOT use placeholders like 'Direct response'.")
+    final_response: Optional[str] = Field(None, description="The actual textual answer to the user.")
     action: Optional[ActionCall] = Field(None, description="Action to execute. MANDATORY if user asks for research, search, or system control.")
     confidence: float = Field(0.7, description="Confidence in response (0-1)")
 
@@ -81,6 +81,15 @@ class WorldState(BaseModel):
     codebase_graph: Dict[str, Dict[str, Any]] = Field(default_factory=dict) # v25: File -> {dependencies, signature_hash}
     active_context: List[str] = Field(default_factory=list) # v25: List of recently hot files
     last_updated: float = Field(default_factory=time.time)
+
+    # v26: Autonomous Execution Context
+    active_goal: Optional[str] = None
+    active_project: Optional[str] = None
+    current_phase: Optional[str] = "IDLE" # e.g., 'IDLE', 'PLANNING', 'EXECUTING', 'TESTING', 'COMPLETE'
+    execution_started: bool = False
+    planning_depth: int = 0 # Track consecutive planning calls for the same goal
+    retry_count: int = 0
+    last_phase: Optional[str] = None
 
 class TaskProgress(BaseModel):
     """Status updates during processing."""
