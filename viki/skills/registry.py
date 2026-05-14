@@ -19,7 +19,7 @@ class SkillRegistry:
         self.intent_map = {
             "media_control": ["media_control", "voice"],
             "system_command": ["system_control", "shell", "endpoint_guard"],
-            "coding": ["dev_skill", "python_interpreter", "filesystem_skill", "coding_workflow", "manus"],
+            "coding": ["dev_skill", "python_interpreter", "filesystem_skill", "coding_workflow", "manus", "lsp_tools"],
             "research": ["research", "summarize", "market_explorer", "pdf"],
             "security": ["security_tools", "autonomous_auditor", "mutation_pilot"],
             "governance": ["cache_pilot", "context_weaver", "mind_trace", "log_voyager"],

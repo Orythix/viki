@@ -208,6 +208,42 @@ class WorldModel:
             viki_logger.debug(f"WorldModel: Failed to parse {rel_path}: {e}")
             return None
 
+    def start_mission(self, goal: str, project: Optional[str] = None):
+        """v26: Initializes an autonomous execution mission."""
+        self.state.active_goal = goal
+        self.state.active_project = project or os.path.basename(os.getcwd())
+        self.state.current_phase = "PLANNING"
+        self.state.execution_started = True
+        self.state.retry_count = 0
+        viki_logger.info(f"WorldModel: Mission Started -> {goal}")
+        self.save()
+
+    def update_mission_phase(self, phase: str):
+        """v26: Transitions the mission to a new lifecycle phase."""
+        self.state.last_phase = self.state.current_phase
+        self.state.current_phase = phase.upper()
+        viki_logger.info(f"WorldModel: Mission Phase Transition -> {self.state.current_phase}")
+        self.save()
+
+    def finish_mission(self, summary: str = "", success: bool = True):
+        """Finalize the current mission and archive state."""
+        status = "COMPLETE" if success else "FAILED"
+        self.state.current_phase = "complete"
+        viki_logger.info(f"WorldModel: Mission {status}. Summary: {summary[:50]}...")
+        self.state.active_goal = None
+        self.state.execution_started = False
+        self._save_state()
+
+    def get_active_mission(self) -> Optional[Dict[str, Any]]:
+        """Returns the current active mission if one exists."""
+        if self.state.active_goal and self.state.current_phase.upper() != "COMPLETE":
+            return {
+                "goal": self.state.active_goal,
+                "project": self.state.active_project,
+                "phase": self.state.current_phase
+            }
+        return None
+
     def get_understanding(self) -> str:
         """Returns a summarized textual prompt of the current world understanding."""
         apps = ", ".join(list(self.state.apps.keys())[:5])
@@ -223,6 +259,12 @@ class WorldModel:
         # Always show CWD so the LLM knows what directory it can read files from
         cwd = os.path.abspath(os.getcwd())
         lines.append(f"- Current Working Directory: {cwd}")
+        
+        # v26: Mission Status
+        if self.state.active_goal:
+            lines.append(f"- Active Goal: {self.state.active_goal}")
+            lines.append(f"- Current Phase: {self.state.current_phase}")
+
         if apps:
             lines.append(f"- Identified Apps: {apps}")
         if paths:

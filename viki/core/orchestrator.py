@@ -608,6 +608,12 @@ class VIKIController:
         viki_logger.info("VIKIController Initialized: Sovereign Intelligence Orchestrator (v8.1.0)")
         self.telemetry.record("system", "startup", {"version": "8.1.0", "mode": "sovereign"})
 
+        # v27: Check for active missions from WorldModel
+        active_mission = self.world.get_active_mission()
+        if active_mission:
+            viki_logger.info(f"RESUME ADVISORY: Detected active mission: {active_mission['goal'][:50]}...")
+            viki_logger.info(f"Phase: {active_mission['phase']}. Use '/resume' to continue.")
+
         viki_logger.info("STARTUP PULSE: Initiating autonomous knowledge sync...")
         
         # 1. Quick Research Pulse (optional; disable with system.startup_research: false to speed first request)
@@ -962,13 +968,7 @@ class VIKIController:
         return "Runtime health: degraded — " + " | ".join(parts)
 
     async def _continuous_learning_loop(self):
-        """Background loop for continuous learning checks.
-
-        Stops itself when low_resource_mode is on. Interval and warm-up
-        are settings-driven (forge.continuous_learning_warmup_s,
-        forge.continuous_learning_interval_s) so operators can dial them
-        down on small machines.
-        """
+        """Background loop for continuous learning checks."""
         if getattr(self, "low_resource_mode", False):
             viki_logger.info("low_resource_mode: continuous_learning_loop disabled.")
             return
@@ -982,6 +982,22 @@ class VIKIController:
             except Exception as e:
                 viki_logger.error(f"Continuous learning check failed: {e}")
             await asyncio.sleep(interval_s)
+
+    async def resume_mission(self, on_event=None) -> str:
+        """Resumes an active mission found in the WorldModel."""
+        mission = self.world.get_active_mission()
+        if not mission:
+            return "No active mission found to resume."
+        
+        goal = mission["goal"]
+        viki_logger.info(f"Resuming mission: {goal[:50]}...")
+        
+        # Trigger the CodingWorkflowSkill directly with the resume context
+        workflow = self.skill_registry.get_skill("coding_workflow")
+        if not workflow:
+            return "CodingWorkflowSkill not found. Cannot resume mission."
+        
+        return await workflow.execute({"action": "resume"})
 
     def _load_yaml(self, path: str) -> Dict[str, Any]:
         try:
@@ -1388,21 +1404,29 @@ class VIKIController:
             ("viki.skills.builtins.window_management_skill", "WindowManagerSkill", ()),
             ("viki.skills.builtins.shell_skill", "ShellSkill", ()),
             ("viki.skills.builtins.notification_skill", "NotificationSkill", ()),
-            # v26: Escalation-only skills (Gated from auto-activation to prevent workflow hijacking)
-            # ("viki.skills.builtins.engineering_playbook_skill", "EngineeringPlaybookSkill", ()),
-            # ("viki.skills.builtins.megatron_lm_playbook_skill", "MegatronLmPlaybookSkill", ()),
-            # ("viki.skills.builtins.coding_workflow_skill", "CodingWorkflowSkill", ()),
-            ("viki.skills.builtins.cache_pilot_skill", "CachePilotSkill", (self,)),
-            ("viki.skills.builtins.context_weaver_skill", "ContextWeaverSkill", (self,)),
-            ("viki.skills.builtins.mind_trace_skill", "MindTraceSkill", (self,)),
-            ("viki.skills.builtins.autonomous_auditor_skill", "AutonomousAuditorSkill", (self,)),
-            ("viki.skills.builtins.log_voyager_skill", "LogVoyagerSkill", (self,)),
-            ("viki.skills.builtins.mutation_pilot_skill", "MutationPilotSkill", (self,)),
-            ("viki.skills.builtins.manus_skill", "ManusSkill", (self,)),
-            ("viki.skills.builtins.market_explorer_skill", "MarketExplorerSkill", (self,)),
+            ("viki.skills.builtins.coding_workflow_skill", "CodingWorkflowSkill", (self,)),
         ]
+        # v27: Dynamic Skill Discovery for Builtins
+        import pkgutil
+        import viki.skills.builtins as builtins_pkg
+        
+        discovered_specs = []
+        registered_modules = {s[0] for s in eager_specs} | {s[2] for s in self._LAZY_SKILL_SPECS}
+        
+        for _, modname, ispkg in pkgutil.iter_modules(builtins_pkg.__path__):
+            if ispkg: continue
+            full_modname = f"viki.skills.builtins.{modname}"
+            if full_modname in registered_modules: continue
+            
+            # Simple heuristic: CamelCase class name from snake_case module
+            class_name = "".join(word.capitalize() for word in modname.split("_"))
+            if not class_name.endswith("Skill"): class_name += "Skill"
+            
+            discovered_specs.append((full_modname, class_name, (self,)))
+            viki_logger.debug(f"Discovered skill: {class_name} in {full_modname}")
+
         all_skills = []
-        for module_path, class_name, args in eager_specs:
+        for module_path, class_name, args in eager_specs + discovered_specs:
             skill = _load_skill(module_path, class_name, *args)
             if skill is not None:
                 all_skills.append(skill)

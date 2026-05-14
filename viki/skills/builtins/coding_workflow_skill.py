@@ -53,6 +53,16 @@ class CodingWorkflowSkill(BaseSkill):
             "structured_logging_and_diagnostics",
             "dependency_and_package_management",
         ],
+        "audit": [
+            "security_and_hardening",
+            "security-scan",
+            "security-review",
+        ],
+        "redteam": [
+            "REDTEAM",
+            "security-bounty-hunter",
+            "security_and_hardening",
+        ],
         "simplify": [
             "code_simplification",
             "code_review_and_quality",
@@ -75,12 +85,15 @@ class CodingWorkflowSkill(BaseSkill):
         "plan": "build",
         "build": "test",
         "test": "review",
-        "review": "simplify",
+        "review": "audit",
+        "audit": "simplify",
+        "redteam": "audit",
         "simplify": "ship",
         "ship": "complete",
     }
 
-    def __init__(self) -> None:
+    def __init__(self, controller=None) -> None:
+        self._controller = controller
         self._playbooks = EngineeringPlaybookSkill()
 
     @property
@@ -90,8 +103,11 @@ class CodingWorkflowSkill(BaseSkill):
     @property
     def description(self) -> str:
         return (
-            "Runs a structured coding lifecycle phase (spec/plan/build/test/review/simplify/ship), "
-            "returning the playbook stack and a step-by-step checklist for that phase."
+            "Professional Coding Lifecycle Orchestrator. Manages the state of a coding task.\n"
+            "- run(phase='build', task='...'): Get the playbook and checklist for a specific phase.\n"
+            "- start(goal='...', project='...'): Initialize a new coding mission.\n"
+            "- update(phase='...'): Progress to the next lifecycle phase.\n"
+            "- finish(success=True): Finalize and close the current mission."
         )
 
     @property
@@ -99,62 +115,106 @@ class CodingWorkflowSkill(BaseSkill):
         return {
             "type": "object",
             "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["run", "start", "update", "finish"],
+                    "default": "run",
+                    "description": "Lifecycle action to perform.",
+                },
                 "phase": {
                     "type": "string",
                     "enum": list(self.PHASE_PLAYBOOKS.keys()),
-                    "description": "Lifecycle phase to run.",
+                    "description": "Lifecycle phase (required for 'run').",
                 },
-                "task": {"type": "string", "description": "User's coding task for this phase."},
+                "task": {"type": "string", "description": "Goal/Task description."},
                 "context": {"type": "string", "description": "Optional paths/decisions context."},
+                "success": {"type": "boolean", "default": True, "description": "Used with 'finish' action."}
             },
-            "required": ["phase", "task"],
+            "required": ["action"]
         }
 
-    async def _h1_for(self, playbook: str) -> str:
-        markdown = await self._playbooks.execute({"playbook": playbook, "format": "markdown"})
-        for line in markdown.splitlines():
-            stripped = line.strip()
-            if stripped.startswith("# "):
-                return stripped[2:].strip()
-        return playbook.replace("_", " ").title()
-
     async def execute(self, params: Dict[str, Any]) -> str:
-        phase = str(params.get("phase") or "").strip().lower()
-        task = str(params.get("task") or "").strip()
-        context = str(params.get("context") or "").strip()
+        action = str(params.get("action") or "run").strip().lower()
+        world = self._controller.world if self._controller else None
 
-        if phase not in self.PHASE_PLAYBOOKS:
-            valid = ", ".join(self.PHASE_PLAYBOOKS.keys())
-            return f"coding_workflow: invalid phase '{phase}'. Valid phases: {valid}"
-        if not task:
-            return "coding_workflow: 'task' is required."
+        if action == "start":
+            goal = params.get("task") or params.get("goal")
+            if not goal: return "Error: 'task' is required to start a mission."
+            if world: world.start_mission(goal, params.get("project"))
+            return f"Mission Started: {goal}"
 
-        stack = self.PHASE_PLAYBOOKS[phase]
-        primary = stack[0]
+        elif action == "update":
+            phase = params.get("phase")
+            if not phase: return "Error: 'phase' is required for update."
+            if world: world.update_mission_phase(phase)
+            return f"Mission Phase Updated to: {phase}"
 
-        playbook_lines: List[str] = []
-        for slug in stack:
-            title = await self._h1_for(slug)
-            playbook_lines.append(f"- `{slug}`: {title}")
+        elif action == "finish":
+            success = params.get("success", True)
+            summary = params.get("summary", "")
+            if world: world.finish_mission(summary, success)
+            return f"Mission Finished (Success={success})"
 
-        checklist_sections: List[str] = []
-        for heading in ("Process", "Verification", "Red Flags"):
-            section = await self._playbooks.execute({"playbook": primary, "section": heading, "format": "markdown"})
-            if section.startswith("engineering_playbook: section"):
-                continue
-            checklist_sections.append(section)
+        elif action == "resume":
+            if not world or not world.state.active_goal:
+                return "Error: No active mission found in WorldModel to resume."
+            # Reroute to 'run' with current world state
+            return await self.execute({
+                "action": "run",
+                "phase": world.state.current_phase.lower(),
+                "task": world.state.active_goal
+            })
 
-        checklist_body = "\n\n".join(checklist_sections).strip() or "No checklist sections found."
-        next_step = self.NEXT_PHASE.get(phase, "complete")
-        stack_text = "\n".join(playbook_lines)
+        elif action == "run":
+            phase = str(params.get("phase") or "").strip().lower()
+            task = str(params.get("task") or "").strip()
+            context = str(params.get("context") or "").strip()
 
-        context_block = f"\n\n## Context\n{context}" if context else ""
-        return (
-            f"# Coding Workflow: {phase} — {task}\n\n"
-            "## Playbook Stack\n"
-            f"{stack_text}\n\n"
-            "## Checklist\n"
-            f"{checklist_body}\n\n"
-            f"## Next Step\nMove to `{next_step}`."
-            f"{context_block}\n"
-        )
+            if not phase:
+                # If we have an active mission, use its phase
+                if world and world.state.active_goal:
+                    phase = world.state.current_phase.lower()
+                    if not task: task = world.state.active_goal
+                else:
+                    return "Error: 'phase' is required when no active mission exists."
+
+            if phase not in self.PHASE_PLAYBOOKS:
+                valid = ", ".join(self.PHASE_PLAYBOOKS.keys())
+                return f"coding_workflow: invalid phase '{phase}'. Valid phases: {valid}"
+
+            stack = self.PHASE_PLAYBOOKS[phase]
+            primary = stack[0]
+
+            playbook_lines: List[str] = []
+            for slug in stack:
+                title = await self._h1_for(slug)
+                playbook_lines.append(f"- `{slug}`: {title}")
+
+            checklist_sections: List[str] = []
+            for heading in ("Process", "Verification", "Red Flags"):
+                section = await self._playbooks.execute({"playbook": primary, "section": heading, "format": "markdown"})
+                if section.startswith("engineering_playbook: section"):
+                    continue
+                checklist_sections.append(section)
+
+            checklist_body = "\n\n".join(checklist_sections).strip() or "No checklist sections found."
+            next_step = self.NEXT_PHASE.get(phase, "complete")
+            stack_text = "\n".join(playbook_lines)
+
+            context_block = f"\n\n## Context\n{context}" if context else ""
+            
+            # Auto-update world phase if running through phases
+            if world and world.state.active_goal:
+                world.update_mission_phase(phase)
+
+            return (
+                f"# Coding Workflow: {phase.upper()} — {task}\n\n"
+                "## Playbook Stack\n"
+                f"{stack_text}\n\n"
+                "## Checklist\n"
+                f"{checklist_body}\n\n"
+                f"## Next Step\nMove to `{next_step}`."
+                f"{context_block}\n"
+            )
+        
+        return f"Error: Unknown action '{action}'"

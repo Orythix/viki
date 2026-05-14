@@ -226,12 +226,13 @@ class CodeSearchSkill(BaseSkill):
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["search", "symbol", "scan"],
+                    "enum": ["search", "symbol", "scan", "explain_code"],
                     "description": "Operation to perform.",
                 },
                 "query": {"type": "string", "description": "Search text or symbol name."},
                 "top_k": {"type": "integer", "default": 5},
                 "language": {"type": "string", "description": "Optional language filter for symbol search."},
+                "path": {"type": "string", "description": "File path for explain_code."},
                 "workspace_dir": {"type": "string", "description": "Optional workspace dir override for scan."},
             },
             "required": ["action"],
@@ -257,7 +258,40 @@ class CodeSearchSkill(BaseSkill):
                 [{"name": s.name, "path": s.path, "line": s.line, "kind": s.kind, "language": s.language} for s in results],
                 indent=2,
             )
+        if action == "explain_code":
+            path = params.get("path")
+            if not path:
+                return "Error: explain_code requires 'path'."
+            return await self._explain_code(path)
         return f"Unknown code_search action '{action}'."
+
+    async def _explain_code(self, path: str) -> str:
+        """Use LLM to explain the logic of a file."""
+        if not os.path.exists(path):
+            # Try workspace relative
+            ws = self._workspace_dir()
+            path = os.path.join(ws, path)
+            if not os.path.exists(path):
+                return f"Error: File '{path}' not found."
+
+        try:
+            with open(path, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+            
+            # Truncate if too large for prompt
+            if len(content) > 10000:
+                content = content[:10000] + "\n... (truncated)"
+            
+            model = self._controller.model_router.get_model(["reasoning", "fast_response"])
+            prompt = (
+                f"Explain the purpose and architectural logic of the following file: {path}\n\n"
+                f"```\n{content}\n```\n\n"
+                f"Provide a concise summary of main classes, functions, and the overall flow."
+            )
+            
+            return await model.chat([{"role": "user", "content": prompt}])
+        except Exception as e:
+            return f"Explain Error: {e}"
 
     def _workspace_dir(self) -> str:
         if self._controller and hasattr(self._controller, "settings"):
@@ -383,12 +417,20 @@ class CodeSearchSkill(BaseSkill):
             viki_logger.debug("code_search: persist failed: %s", e)
 
     def _chunk_file(self, path: str, source: str, lang: str) -> Tuple[List[CodeChunk], List[SymbolEntry]]:
-        # Try tree-sitter first; fall back to regex chunking.
-        chunks_ts = self._chunk_with_treesitter(path, source, lang)
-        if chunks_ts is not None:
-            chunks, symbols = chunks_ts
-            return chunks, symbols
-        return self._chunk_with_regex(path, source, lang)
+        # Try tree-sitter first for high-quality symbols.
+        res_ts = self._chunk_with_treesitter(path, source, lang)
+        
+        # Always generate sliding-window chunks via the regex path to ensure 
+        # that top-level logic, global variables, and comments are searchable.
+        chunks_regex, symbols_regex = self._chunk_with_regex(path, source, lang)
+        
+        if res_ts is not None:
+            chunks_ts, symbols_ts = res_ts
+            # Merge them: tree-sitter gives us precise symbol chunks, 
+            # regex gives us full-file coverage. Overlap is acceptable for search.
+            return chunks_ts + chunks_regex, symbols_ts
+            
+        return chunks_regex, symbols_regex
 
     def _chunk_with_treesitter(self, path: str, source: str, lang: str) -> Optional[Tuple[List[CodeChunk], List[SymbolEntry]]]:
         try:

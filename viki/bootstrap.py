@@ -367,6 +367,11 @@ async def _run_interactive_loop(controller, interface, on_event, streaming_state
                 interface.console.print("[yellow]Shutting down...[/]")
                 await _shutdown_controller(controller)
                 break
+            elif user_input.startswith('/resume'):
+                on_event("thought", "Resuming mission")
+                response = await controller.resume_mission(on_event=on_event)
+                interface.print_viki(response)
+                continue
             
             elif user_input.lower() == "/paste":
                 if pyperclip:
@@ -447,6 +452,7 @@ async def _run_interactive_loop(controller, interface, on_event, streaming_state
                 interface.console.print("  [green]/reset[/]    — Wipe VIKI's memory databases and start fresh")
                 interface.console.print("  [green]/save[/]     — Save session: /save <name>")
                 interface.console.print("  [green]/load[/]     — Load session: /load <name>")
+                interface.console.print("  [green]/resume[/]   — Resume the most recent active mission")
                 interface.console.print("  [green]/security[/] — Show Sovereign Boundary dashboard")
                 interface.console.print("  [green]/audit[/]    — Show detailed session audit log")
                 interface.console.print("  [green]/paste[/]    — Paste long text from clipboard")

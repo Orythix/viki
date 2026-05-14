@@ -2,13 +2,14 @@ import os
 import shutil
 import tempfile
 import asyncio
+import re
 from typing import Dict, Any, List, Optional
 from viki.skills.base import BaseSkill
 from viki.config.logger import viki_logger
 
 class MutationPilotSkill(BaseSkill):
     """
-    Skill for mutation benchmarking.
+    Skill for mutation benchmarking and autonomous healing.
     Injects synthetic faults into code to verify that the test suite is capable
     of catching regression or logic errors.
     """
@@ -22,7 +23,12 @@ class MutationPilotSkill(BaseSkill):
 
     @property
     def description(self) -> str:
-        return "Runs mutation benchmarks to test suite robustness. Actions: benchmark, mutate."
+        return (
+            "Mutation testing and autonomous healing. Actions:\n"
+            "- benchmark(path=..., test_command=...): Inject bug and verify test suite catch rate.\n"
+            "- mutate(path=...): Generate a mutant file for manual inspection.\n"
+            "- heal(path=..., error_log=..., test_command=...): Use LLM to automatically fix a failing file."
+        )
 
     @property
     def schema(self) -> dict:
@@ -84,34 +90,54 @@ class MutationPilotSkill(BaseSkill):
         with open(path, 'r', encoding='utf-8', errors='ignore') as f:
             content = f.read()
         
-        # Simple mutations: swap operators
+        # Industrial mutations: swap operators, invert logic, or break returns
         mutations = [
-            (" == ", " != "),
-            (" != ", " == "),
-            (" > ", " < "),
-            (" < ", " > "),
-            ("True", "False"),
-            ("False", "True"),
-            (" and ", " or "),
-            (" or ", " and ")
+            (r" == ", " != "),
+            (r" != ", " == "),
+            (r" > ", " < "),
+            (r" < ", " > "),
+            (r"True", "False"),
+            (r"False", "True"),
+            (r" and ", " or "),
+            (r" or ", " and "),
+            (r" \+ ", " - "),
+            (r" - ", " + "),
+            (r" \* ", " / "),
+            (r" / ", " * "),
+            (r"if ", "if not "),
         ]
         
-        mutant_content = content
+        mutated_content = content
         mutated = False
-        for old, new in mutations:
-            if old in mutant_content:
-                mutant_content = mutant_content.replace(old, new, 1) # Only first one
+        mutation_desc = ""
+        
+        # Try a few candidates
+        import random
+        candidates = list(range(len(mutations)))
+        random.shuffle(candidates)
+        
+        for idx in candidates:
+            old, new = mutations[idx]
+            if re.search(old, mutated_content):
+                mutated_content = re.sub(old, new, mutated_content, count=1)
                 mutated = True
-                mutation_desc = f"Swapped '{old}' with '{new}'"
+                mutation_desc = f"Applied mutation: '{old.strip()}' -> '{new.strip()}'"
                 break
         
+        if not mutated:
+            # Fallback: break a return statement
+            if "return " in mutated_content:
+                mutated_content = mutated_content.replace("return ", "return None # MUTATED: ", 1)
+                mutated = True
+                mutation_desc = "Applied mutation: Broken return statement (returning None)."
+
         if not mutated:
             return "Could not find any candidates for mutation in this file."
             
         # Write to temporary file
         temp_fd, temp_path = tempfile.mkstemp(suffix=".py", prefix="mutant_")
         with os.fdopen(temp_fd, 'w') as f:
-            f.write(mutant_content)
+            f.write(mutated_content)
             
         return f"MUTANT_CREATED: {temp_path}\nDescription: {mutation_desc}"
 
@@ -125,8 +151,6 @@ class MutationPilotSkill(BaseSkill):
 
     async def _run_benchmark(self, path: str, test_command: str) -> str:
         target_dir = os.path.dirname(path)
-
-        # Build a clean env that prevents .pyc generation entirely
         clean_env = os.environ.copy()
         clean_env["PYTHONDONTWRITEBYTECODE"] = "1"
 
@@ -151,9 +175,9 @@ class MutationPilotSkill(BaseSkill):
         mutant_path = mutant_info.split(": ")[1].split("\n")[0]
         
         # 3. Swap file and run tests
-        backup_path = path + ".bak"
+        backup_path = path + ".mutant_bak"
         shutil.copy2(path, backup_path)
-        self._purge_pycache(target_dir)          # Clear any residual cache
+        self._purge_pycache(target_dir)
         shutil.copy(mutant_path, path)
 
         try:
@@ -168,59 +192,58 @@ class MutationPilotSkill(BaseSkill):
             
             # 4. Results
             if proc.returncode == 0:
-                # Mutant SURVIVED (Test suite is weak)
                 result = "MUTANT_SURVIVED: The test suite passed even with the bug injected. The tests are NOT robust enough."
             else:
-                # Mutant KILLED (Test suite is strong)
                 result = "MUTANT_KILLED: The test suite correctly identified the bug. The tests are robust."
             
-            return f"--- Mutation Benchmark Result ---\nTarget: {os.path.basename(path)}\n{result}\n\nTest Output Snippet:\n{stdout.decode()[:200]}..."
+            return f"--- Mutation Benchmark Result ---\nTarget: {os.path.basename(path)}\n{result}\n\nTest Output Snippet:\n{stdout.decode()[:400]}..."
 
         finally:
             # Restore original
-            shutil.move(backup_path, path)
+            if os.path.exists(backup_path):
+                shutil.move(backup_path, path)
             if os.path.exists(mutant_path):
                 os.remove(mutant_path)
 
     async def _run_heal(self, path: str, error_log: str, test_command: Optional[str] = None) -> str:
-        """Autonomous healing: Propose a patch for a failing file."""
+        """Autonomous healing: Propose and apply a patch for a failing file."""
         if not self._controller:
             return "Error: Skill not connected to controller."
 
         viki_logger.info(f"MutationPilot: Attempting to heal {os.path.basename(path)}...")
         
-        # Read the file content
         with open(path, 'r', encoding='utf-8', errors='ignore') as f:
             content = f.read()
 
-        # Build heal prompt
         prompt = (
             f"I need to fix a bug in the following file: {path}\n\n"
             f"FILE CONTENT:\n{content}\n\n"
             f"FAILURE LOG:\n{error_log}\n\n"
-            f"Propose a PATCH that fixes the issue. Ground your patch in the failure log. "
-            f"Reply with the NEW FILE CONTENT in a code block."
+            f"Propose a fix that resolves the issue. Ground your patch in the failure log. "
+            f"Reply with the COMPLETE NEW FILE CONTENT in a code block."
         )
 
-        # Call the deliberation layer (Deep) for reasoning
         try:
             resp = await self._controller.cortex.process(
                 prompt,
-                model_tier="deep", # Use high-quality model for healing
+                model_tier="deep",
                 is_plan_mode=True
             )
             
-            # Extract content from response
-            new_content = resp.explanation
-            if "```" in new_content:
-                # Basic code block extraction
-                import re
-                blocks = re.findall(r"```(?:\w+)?\n(.*?)```", new_content, re.DOTALL)
-                if blocks:
-                    new_content = blocks[0]
-
+            # Robust extraction
+            new_content = ""
+            raw_explanation = resp.explanation
+            blocks = re.findall(r"```(?:\w+)?\n(.*?)```", raw_explanation, re.DOTALL)
+            if blocks:
+                # Use the longest block (likely the file content)
+                new_content = max(blocks, key=len)
+            
             if not new_content or new_content.strip() == content.strip():
-                return "Heal failed: LLM did not propose a meaningful change."
+                # Try fallback: maybe it didn't use code blocks?
+                if len(raw_explanation) > len(content) * 0.5:
+                     new_content = raw_explanation # Risky fallback
+                else:
+                     return "Heal failed: LLM did not propose a meaningful change."
 
             # Apply the patch (with backup)
             backup_path = path + ".heal_bak"
@@ -230,7 +253,6 @@ class MutationPilotSkill(BaseSkill):
                 f.write(new_content)
 
             # Verification
-            verify_msg = ""
             if test_command:
                 viki_logger.info(f"MutationPilot: Verifying heal for {os.path.basename(path)}...")
                 proc = await asyncio.create_subprocess_shell(
@@ -238,7 +260,7 @@ class MutationPilotSkill(BaseSkill):
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE
                 )
-                stdout, stderr = await proc.communicate()
+                stdout, _ = await proc.communicate()
                 
                 if proc.returncode == 0:
                     os.remove(backup_path)
@@ -246,8 +268,7 @@ class MutationPilotSkill(BaseSkill):
                 else:
                     # Rollback
                     shutil.move(backup_path, path)
-                    verify_msg = f"\nVerification FAILED. Code rolled back. Test Output:\n{stdout.decode()[:200]}"
-                    return f"HEAL_PROPOSED_BUT_FAILED: The patch did not fix the tests.{verify_msg}"
+                    return f"HEAL_PROPOSED_BUT_FAILED: The patch did not fix the tests. Test Output:\n{stdout.decode()[:400]}"
             
             return f"HEAL_APPLIED: File {os.path.basename(path)} updated. (No verification command provided)."
 
