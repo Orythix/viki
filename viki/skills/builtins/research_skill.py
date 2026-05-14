@@ -76,10 +76,10 @@ class ResearchSkill(BaseSkill):
 
         if 'query' in params:
             if not HAS_DDG:
-                return "Error: Search library not installed. Run: pip install ddgs"
+                raise RuntimeError("Error: Search library not installed. Run: pip install ddgs")
             return await self._search(params['query'])
             
-        return "Error: Specify 'query' to search or 'url' to read a page."
+        raise RuntimeError("Error: Specify 'query' to search or 'url' to read a page.")
 
     async def _search(self, query: str) -> str:
         try:
@@ -115,7 +115,7 @@ class ResearchSkill(BaseSkill):
             return "\n".join(formatted)
         except Exception as e:
             viki_logger.error(f"Search error: {e}")
-            return f"Search error: {str(e)}"
+            raise RuntimeError(f"Search error: {str(e)}")
 
     def _extract_facts_from_text(self, text: str, max_facts: int = 3) -> List[str]:
         """
@@ -318,11 +318,11 @@ class ResearchSkill(BaseSkill):
                             pass
                     
                     if response.status != 200:
-                        return f"Error: HTTP {response.status} when fetching {url}"
+                        raise RuntimeError(f"Error: HTTP {response.status} when fetching {url}")
                     
                     content_type = response.headers.get('Content-Type', '')
                     if 'text/html' not in content_type and 'application/xhtml' not in content_type:
-                        return f"Error: URL returned non-HTML content ({content_type})"
+                        raise RuntimeError(f"Error: URL returned non-HTML content ({content_type})")
                     
                     html = await response.text()
             
@@ -365,7 +365,7 @@ class ResearchSkill(BaseSkill):
             return f"CONTENT FROM {url}:\n\n{clean_text}"
             
         except asyncio.TimeoutError:
-            return f"Error: Timeout reading {url} (15s limit exceeded)"
+            raise RuntimeError(f"Error: Timeout reading {url} (15s limit exceeded)")
         except Exception as e:
             viki_logger.error(f"Page read error for {url}: {e}")
-            return f"Error reading page: {str(e)}"
+            raise RuntimeError(f"Error reading page: {str(e)}")

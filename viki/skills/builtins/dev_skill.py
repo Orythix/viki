@@ -90,7 +90,7 @@ class DevSkill(BaseSkill):
         
         ok, path_or_err = validate_output_path(path, controller=self._controller)
         if not ok:
-            return path_or_err
+            raise RuntimeError(path_or_err)
         path = path_or_err
 
         action = self._resolve_action(params, path)
@@ -210,7 +210,7 @@ class DevSkill(BaseSkill):
                 self._controller.track_touched_item("touched_files", path)
             return f"Successfully patched {path} (occurrence={occurrence if occurrence else 'all'})."
         except Exception as e:
-            return f"Patch Error: {e}"
+            raise RuntimeError(f"Patch Error: {e}")
 
     def _move_file(self, src: str, dest: str) -> str:
         try:
@@ -219,7 +219,7 @@ class DevSkill(BaseSkill):
             shutil.move(src, dest)
             return f"Successfully moved {src} to {dest}."
         except Exception as e:
-            return f"Move Error: {e}"
+            raise RuntimeError(f"Move Error: {e}")
 
     def _delete_file(self, path: str) -> str:
         try:
@@ -230,14 +230,14 @@ class DevSkill(BaseSkill):
                 os.remove(path)
             return f"Successfully deleted {path}."
         except Exception as e:
-            return f"Delete Error: {e}"
+            raise RuntimeError(f"Delete Error: {e}")
 
     def _create_dir(self, path: str) -> str:
         try:
             os.makedirs(path, exist_ok=True)
             return f"Successfully created directory {path}."
         except Exception as e:
-            return f"CreateDir Error: {e}"
+            raise RuntimeError(f"CreateDir Error: {e}")
 
     async def _multi_patch(self, patches: List[Dict[str, Any]]) -> str:
         results = []

@@ -83,12 +83,12 @@ class FileSystemSkill(BaseSkill):
         path = params.get("path")
         
         if not action or not path:
-            return "Error: strict parameters 'action' and 'path' required."
+            raise RuntimeError("Error: strict parameters 'action' and 'path' required.")
         
         # Validate path before any operation
         is_valid, validated_path = self._validate_path(path)
         if not is_valid:
-            return validated_path  # Returns error message
+            raise RuntimeError(validated_path)
 
         try:
             if action == "list_dir":
@@ -105,17 +105,17 @@ class FileSystemSkill(BaseSkill):
             elif action == "write_file":
                 content = params.get("content")
                 if not content: 
-                    return "Error: No content provided."
+                    raise RuntimeError("Error: No content provided.")
                 # Additional length check to prevent abuse
                 if len(content) > 100000:  # 100KB limit
-                    return "Error: Content too large (max 100KB)"
+                    raise RuntimeError("Error: Content too large (max 100KB)")
                 with open(validated_path, "w", encoding='utf-8') as f:
                     f.write(content)
                 if self._controller:
                     self._controller.track_touched_item("touched_files", validated_path)
                 return f"File written successfully to {validated_path}"
                 
-            return f"Error: Unknown action '{action}'"
+            raise RuntimeError(f"Error: Unknown action '{action}'")
             
         except Exception as e:
-            return f"FileSystem Error: {str(e)}"
+            raise RuntimeError(f"FileSystem Error: {str(e)}")

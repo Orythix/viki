@@ -126,16 +126,18 @@ class PlannerExecutor:
         "You are VIKI's planner. Decompose the user's coding goal into a typed task graph.\n"
         "Output ONLY a JSON array of tasks with fields {id, type, description, parameters, depends_on}.\n"
         "Allowed task types: search_repo, read_file, write, patch, run_tests, refactor, analyze, reflect, shell, create.\n"
+        "CRITICAL: 'shell' and 'create' tasks MUST have a 'command' parameter.\n"
+        "CRITICAL: 'write' and 'read_file' tasks MUST have a 'path' parameter.\n"
         "Keep the plan minimal (<=12 tasks). Each task should be small and verifiable.\n"
         "Tasks must reference other task ids in depends_on for ordering.\n"
-        "Example: [{\"id\":\"t1\",\"type\":\"shell\",\"description\":\"init project\",\"parameters\":{\"command\":\"npx create-vite .\"},\"depends_on\":[]}]"
+        "Example: [{\"id\":\"t1\",\"type\":\"shell\",\"description\":\"init project\",\"parameters\":{\"command\":\"npx create-vite@latest . --template react\"},\"depends_on\":[]}]"
     )
 
     def __init__(self, model_router, executor_callbacks: Optional[Dict[str, Any]] = None):
         self.model_router = model_router
         self.callbacks = executor_callbacks or {}
 
-    async def plan(self, goal: str, repo_context: str = "") -> TaskGraph:
+    async def plan(self, goal: str, repo_context: str = "", skill_context: str = "") -> TaskGraph:
         """Ask the planning model for a task graph; fall back to a heuristic if parsing fails."""
         try:
             model = self.model_router.get_model(["planning", "reasoning"])
@@ -154,6 +156,7 @@ class PlannerExecutor:
                     "role": "user",
                     "content": (
                         f"GOAL:\n{goal}\n\n"
+                        f"AVAILABLE SKILLS (SCHEMAS):\n{skill_context}\n\n"
                         f"REPO CONTEXT (snippets):\n{(repo_context or '')[:4000]}\n\n"
                         f"Produce the task graph as JSON only."
                     ),

@@ -2239,8 +2239,15 @@ class VIKIController:
                 # v26: Autonomous Planner/Executor Branch (Direct Execution Path)
                 viki_resp = None
                 if task_type == "coding" and self.world.state.current_phase == "EXECUTING" and not action_results and not is_continuation:
-                    viki_logger.info("FSM: Triggering SOVEREIGN TASK GRAPH EXECUTION.")
-                    graph = await self.planner.plan(self.world.state.active_goal, repo_context=project_instructions)
+                    skill_context = self.skill_registry.get_context_description(
+                        mode="full", 
+                        names=["shell", "dev_skill", "filesystem_skill", "research", "lsp_tools"]
+                    )
+                    graph = await self.planner.plan(
+                        self.world.state.active_goal, 
+                        repo_context=project_instructions,
+                        skill_context=skill_context
+                    )
                     self.planner.callbacks = self._get_planner_callbacks(session_id, budget, on_event)
                     executed_graph = await self.planner.execute(graph)
                     

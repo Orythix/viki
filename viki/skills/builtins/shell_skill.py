@@ -169,12 +169,12 @@ class ShellSkill(BaseSkill):
         return "unknown"
 
     async def execute(self, params: Dict[str, Any]) -> str:
-        command = params.get('command')
+        command = params.get('command') or params.get('cmd')
         shell_type = params.get('shell', 'powershell')
         skip_confirmation = params.get('skip_confirmation', False)
 
         if not command:
-            return "Error: No command provided."
+            raise RuntimeError("Error: No command provided.")
 
         # Classify the command
         classification = self._classify_command(command)
@@ -221,10 +221,10 @@ class ShellSkill(BaseSkill):
             error = stderr.decode('utf-8', errors='replace').strip()
             
             if process.returncode != 0:
-                return f"Command Failed (Exit Code {process.returncode}):\n{error}\n{output}"
+                raise RuntimeError(f"Command Failed (Exit Code {process.returncode}):\n{error}\n{output}")
 
             return output if output else "(Command executed with no output)"
 
         except Exception as e:
             viki_logger.error(f"Shell execution error: {e}")
-            return f"Shell error: {e}"
+            raise RuntimeError(f"Shell error: {e}")
