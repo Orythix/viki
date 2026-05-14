@@ -1,6 +1,6 @@
 import pytest
 import asyncio
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, AsyncMock
 from viki.skills.builtins.memory_skill import MemorySkill
 
 @pytest.fixture
@@ -19,8 +19,7 @@ def mock_controller():
     
     # Mock HierarchicalMemory
     controller.memory.episodic.conn.cursor.return_value.fetchone.return_value = [20]
-    controller.memory.episodic.consolidate = MagicMock(return_value=asyncio.Future())
-    controller.memory.episodic.consolidate.return_value.set_result(None)
+    controller.memory.episodic.consolidate = AsyncMock()
     
     # Mock WorkingMemory
     controller.memory.working.get_all_sessions = MagicMock(return_value=[

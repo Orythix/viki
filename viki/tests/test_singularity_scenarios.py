@@ -10,7 +10,8 @@ async def orchestrator():
     settings_path = "viki/tests/test_settings.yaml"
     soul_path = "viki/tests/data/test_soul.yaml"
     orc = VIKIController(settings_path, soul_path)
-    return orc
+    yield orc
+    await orc.shutdown()
 
 @pytest.mark.asyncio
 async def test_scenario_time_reflex():
@@ -74,5 +75,6 @@ async def test_scenario_memory_management(orchestrator):
     assert "Lessons" in res
     
     # Check sessions
+    orchestrator.memory.working.add_message("user", "Scenario testing")
     res = await mem_skill.execute({"action": "sessions"})
     assert "ACTIVE SESSIONS" in res

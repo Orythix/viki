@@ -179,8 +179,11 @@ def _record_local_span(info: Dict[str, Any]) -> None:
 def init_persistent_traces(db_path: str) -> None:
     """Open a SQLite DB to persist spans. Idempotent."""
     global _TRACE_DB, _TRACE_DB_PATH
-    if _TRACE_DB is not None and _TRACE_DB_PATH == db_path:
-        return
+    if _TRACE_DB is not None:
+        if _TRACE_DB_PATH == db_path:
+            return
+        # Different path: close existing one first to avoid leaks/locks
+        close_persistent_traces()
     try:
         os.makedirs(os.path.dirname(os.path.abspath(db_path)) or ".", exist_ok=True)
         conn = sqlite3.connect(db_path, check_same_thread=False, timeout=30.0)

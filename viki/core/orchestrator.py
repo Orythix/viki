@@ -2300,7 +2300,7 @@ class VIKIController:
         if 'viki_resp' in locals() and viki_resp and cognitive_route and cognitive_route.source != "cache":
             try:
                 # Pydantic v1 uses .dict(), v2 uses .model_dump()
-                resp_data = viki_resp.dict() if hasattr(viki_resp, 'dict') else viki_resp.model_dump()
+                resp_data = viki_resp.model_dump() if hasattr(viki_resp, 'model_dump') else viki_resp.dict()
                 self.cognitive_router.store_response(safe_input, resp_data)
             except Exception as e:
                 viki_logger.debug(f"Failed to cache response: {e}")
