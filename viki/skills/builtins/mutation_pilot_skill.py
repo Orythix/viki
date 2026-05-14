@@ -115,13 +115,29 @@ class MutationPilotSkill(BaseSkill):
             
         return f"MUTANT_CREATED: {temp_path}\nDescription: {mutation_desc}"
 
+    @staticmethod
+    def _purge_pycache(directory: str):
+        """Remove all __pycache__ dirs under *directory* so Python reimports from source."""
+        for root, dirs, _ in os.walk(directory):
+            for d in dirs:
+                if d == "__pycache__":
+                    shutil.rmtree(os.path.join(root, d), ignore_errors=True)
+
     async def _run_benchmark(self, path: str, test_command: str) -> str:
+        target_dir = os.path.dirname(path)
+
+        # Build a clean env that prevents .pyc generation entirely
+        clean_env = os.environ.copy()
+        clean_env["PYTHONDONTWRITEBYTECODE"] = "1"
+
         # 1. Verify tests pass on ORIGINAL file
         viki_logger.info("MutationPilot: Verifying base state...")
+        self._purge_pycache(target_dir)
         base_proc = await asyncio.create_subprocess_shell(
             test_command,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stderr=asyncio.subprocess.PIPE,
+            env=clean_env
         )
         await base_proc.communicate()
         if base_proc.returncode != 0:
@@ -137,14 +153,16 @@ class MutationPilotSkill(BaseSkill):
         # 3. Swap file and run tests
         backup_path = path + ".bak"
         shutil.copy2(path, backup_path)
-        shutil.copy(mutant_path, path) # Use copy instead of copy2 to update timestamp (vital for Python imports)
-        
+        self._purge_pycache(target_dir)          # Clear any residual cache
+        shutil.copy(mutant_path, path)
+
         try:
             viki_logger.info(f"MutationPilot: Testing mutant version of {os.path.basename(path)}...")
             proc = await asyncio.create_subprocess_shell(
                 test_command,
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                stderr=asyncio.subprocess.PIPE,
+                env=clean_env
             )
             stdout, _ = await proc.communicate()
             

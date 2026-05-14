@@ -226,6 +226,8 @@ class VIKIController:
             ("logs", "log_voyager"),
             ("mutation", "mutation_pilot"),
             ("market", "market_explorer"),
+            ("mem", "memory"),
+            ("sovereign", "memory"),
         ]
         for alias_name, target_name in alias_pairs:
             target = self.skill_registry.get_skill(target_name)
@@ -1306,6 +1308,7 @@ class VIKIController:
             ("viki.skills.builtins.endpoint_guard_skill", "EndpointGuardSkill", (self,)),
             ("viki.skills.creation.forge", "ModelForgeSkill", (self,)),
             ("viki.skills.builtins.recall_skill", "RecallSkill", (self,)),
+            ("viki.skills.builtins.memory_skill", "MemorySkill", (self,)),
             ("viki.skills.builtins.media_skill", "MediaControlSkill", ()),
             ("viki.skills.builtins.clipboard_skill", "ClipboardSkill", ()),
             ("viki.skills.builtins.window_management_skill", "WindowManagerSkill", ()),

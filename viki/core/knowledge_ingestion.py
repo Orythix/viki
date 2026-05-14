@@ -296,6 +296,58 @@ class LearningModule:
         cur.execute("SELECT content FROM lessons")
         return [json.loads(r['content']) for r in cur.fetchall()]
 
+    def get_lessons(self, query: str = None, source: str = None, author: str = None, limit: int = 10, offset: int = 0) -> List[Dict[str, Any]]:
+        """Returns detailed lesson records with optional filtering."""
+        cur = self.conn.cursor()
+        sql = "SELECT id, text_representation, content, author, source_task, reliability, access_count, created_at FROM lessons WHERE 1=1"
+        params = []
+        if query:
+            sql += " AND text_representation LIKE ?"
+            params.append(f"%{query}%")
+        if source:
+            sql += " AND source_task = ?"
+            params.append(source)
+        if author:
+            sql += " AND author = ?"
+            params.append(author)
+        
+        sql += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+        
+        cur.execute(sql, params)
+        return [dict(r) for r in cur.fetchall()]
+
+    def delete_lesson(self, lesson_id: str) -> bool:
+        """Removes a lesson and its relationships."""
+        cur = self.conn.cursor()
+        cur.execute("DELETE FROM relationships WHERE lesson_id = ?", (lesson_id,))
+        cur.execute("DELETE FROM lessons WHERE id = ?", (lesson_id,))
+        self.conn.commit()
+        self.mark_vector_dirty()
+        return cur.rowcount > 0
+
+    def update_lesson(self, lesson_id: str, fact: str = None, reliability: float = None) -> bool:
+        """Updates an existing lesson's fact content or reliability."""
+        cur = self.conn.cursor()
+        updates = []
+        params = []
+        if fact:
+            updates.append("text_representation = ?, content = ?")
+            params.extend([fact, json.dumps({"fact": fact})])
+        if reliability is not None:
+            updates.append("reliability = ?")
+            params.append(reliability)
+        
+        if not updates:
+            return False
+            
+        sql = f"UPDATE lessons SET {', '.join(updates)} WHERE id = ?"
+        params.append(lesson_id)
+        cur.execute(sql, params)
+        self.conn.commit()
+        self.mark_vector_dirty()
+        return cur.rowcount > 0
+
     def get_total_lesson_count(self) -> int:
         """Returns the total number of unique lessons in the DB."""
         cur = self.conn.cursor()

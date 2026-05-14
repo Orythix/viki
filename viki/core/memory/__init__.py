@@ -153,6 +153,14 @@ class WorkingMemory:
                     return msg.get("content", "")
             return ""
 
+    def get_all_sessions(self) -> List[Dict[str, Any]]:
+        """List all available session IDs and their message counts."""
+        if not self.db: return []
+        with self._lock:
+            return list(self.db.query(
+                "SELECT session_id, COUNT(*) as message_count, MAX(timestamp) as last_active FROM messages GROUP BY session_id ORDER BY last_active DESC"
+            ))
+
     def close(self):
         with self._lock:
             if self.db:
