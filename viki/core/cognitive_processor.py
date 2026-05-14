@@ -466,15 +466,17 @@ class DeliberationLayer(CortexLayer):
             intent = context.get('intent_type', 'conversation')
             raw_input = context.get('raw_input', '')
             
+            skip_escalation = context.get('skip_escalation', False)
+            
             # 1. Identify "Triggered" skills for full disclosure
             triggered_names = self.skill_registry.get_relevant_skill_names(intent, raw_input)
             
             # 2. Build metadata list for everything
-            skills_context = "\n\n" + self.skill_registry.get_context_description(mode="metadata")
+            skills_context = "\n\n" + self.skill_registry.get_context_description(mode="metadata", skip_escalation=skip_escalation)
             
             # 3. Build full manifest for triggered skills
             if triggered_names:
-                manifest = self.skill_registry.get_context_description(mode="full", names=triggered_names)
+                manifest = self.skill_registry.get_context_description(mode="full", names=triggered_names, skip_escalation=skip_escalation)
                 skills_context += "\n\n[DETAILED TOOL INSTRUCTIONS (Use these for exact parameter schemas)]\n" + manifest
         
         # Inject URL content if any
@@ -488,6 +490,17 @@ class DeliberationLayer(CortexLayer):
             awareness += f"\n\nWORLD AWARENESS:\n{world_context}\n"
         if project_instructions:
             awareness += f"\n\nPROJECT CONTEXT (VIKI.md — follow these instructions):\n{project_instructions}\n"
+        
+        # v26: Strict Execution-First Directives
+        if context.get("execution_started"):
+             awareness += (
+                 "\nSTRICT EXECUTION DIRECTIVE (Phase: EXECUTING):\n"
+                 "1. DO NOT enter discovery, specification, or planning modes.\n"
+                 "2. DO NOT ask for clarification; use technical assumptions to maintain momentum.\n"
+                 "3. DO NOT use playbooks or high-level workflows unless explicitly requested.\n"
+                 "4. MANDATORY ACTION: Execute implementation steps directly. Priority: CODE > TALK.\n"
+             )
+
         if signals_context:
             awareness += f"\nCOGNITIVE STATE:\n{signals_context}\n"
         
@@ -1061,6 +1074,7 @@ class ConsciousnessStack:
                       is_plan_mode: bool = False,
                       is_debug_mode: bool = False,
                       is_singularity_mode: bool = False,
+                      execution_started: bool = False,
                       on_think=None) -> VIKIResponse:
         start_time = time.time()
         data = user_input
@@ -1098,6 +1112,8 @@ class ConsciousnessStack:
                     data["is_plan_mode"] = is_plan_mode
                     data["is_debug_mode"] = is_debug_mode
                     data["is_singularity_mode"] = is_singularity_mode
+                    data["execution_started"] = execution_started
+                    data["skip_escalation"] = h_mem.get("skip_escalation", False)
                 elif isinstance(data, str):
                     data = {
                         "raw_input": data,
@@ -1120,6 +1136,7 @@ class ConsciousnessStack:
                         "is_plan_mode": is_plan_mode,
                         "is_debug_mode": is_debug_mode,
                         "is_singularity_mode": is_singularity_mode,
+                        "execution_started": execution_started,
                     }
             
             data = await layer.process(data)

@@ -14,7 +14,7 @@ from viki.core.test_healer import TestHealerPipeline
 from viki.core.identity_profile import Soul
 from viki.core.security_guard import SafetyLayer, safe_for_log
 from viki.core.inference_gateway import APILLM, ModelRouter, StructuredPrompt
-from viki.core.schema import VIKIResponse, ActionCall
+from viki.core.schema import VIKIResponse, ActionCall, ThoughtObject
 from viki.skills.registry import SkillRegistry
 from viki.core.knowledge_ingestion import LearningModule
 from viki.core.super_admin import SuperAdminLayer
@@ -1091,12 +1091,22 @@ class VIKIController:
     def _get_planner_callbacks(self, session_id: str, budget: Dict[str, Any], on_event: Optional[Any]) -> Dict[str, Any]:
         """Maps TaskGraph node types to functional skill executions for the FSM pipeline."""
         
-        async def _generic_exec(task: Any, skill: str):
+        async def _generic_exec(task: Any, skill: str, forced_params: Optional[Dict[str, Any]] = None):
             if on_event: on_event("status", f"PLANNER: {task.description}")
-            # Ensure parameters are a dict
-            params = task.parameters if isinstance(task.parameters, dict) else {}
+            params = (task.parameters if isinstance(task.parameters, dict) else {}).copy()
+            if forced_params:
+                params.update(forced_params)
+            
+            # Special case for shell commands: ensure 'command' is present
+            if skill == "shell" and "command" not in params:
+                 # If the planner put the command in 'parameters' but not under 'command' key
+                 # though typically parameters IS the dict.
+                 pass
+
             res, err, lat = await self._execute_skill(skill, params, budget)
-            return res if not err else f"Error: {err}"
+            if err:
+                raise RuntimeError(err)
+            return res
 
         async def _analyze(task: Any):
             if on_event: on_event("status", f"PLANNER ANALYZING: {task.description}")
@@ -1112,12 +1122,15 @@ class VIKIController:
 
         return {
             "search_repo": lambda t: _generic_exec(t, "code_search"),
-            "read_file": lambda t: _generic_exec(t, "read_file"),
-            "patch": lambda t: _generic_exec(t, "patch_file"),
-            "run_tests": lambda t: _generic_exec(t, "terminal_exec"),
-            "refactor": lambda t: _generic_exec(t, "refactor_tool"),
+            "read_file": lambda t: _generic_exec(t, "dev_tools", {"action": "read_file"}),
+            "write": lambda t: _generic_exec(t, "dev_tools", {"action": "write_file"}),
+            "patch": lambda t: _generic_exec(t, "dev_tools", {"action": "patch_file"}),
+            "run_tests": lambda t: _generic_exec(t, "shell", {"skip_confirmation": True}),
+            "refactor": lambda t: _generic_exec(t, "dev_tools", {"action": "patch_file"}),
             "analyze": _analyze,
             "reflect": _analyze,
+            "shell": lambda t: _generic_exec(t, "shell", {"skip_confirmation": True}),
+            "create": lambda t: _generic_exec(t, "shell", {"skip_confirmation": True}),
         }
 
     def _json_type_matches(self, value: Any, expected_type: str) -> bool:
@@ -1203,6 +1216,30 @@ class VIKIController:
         if err:
             return err
         return self._validate_property_constraints(props, params)
+
+    def should_execute_directly(self, user_input: str) -> bool:
+        """
+        Sovereign Execution Router: Determines if a request has sufficient detail 
+        to bypass planning and discovery workflows.
+        """
+        lower_input = user_input.lower().strip()
+        
+        # 1. Implementation Intent Signals
+        dev_keywords = {"build", "create", "make", "generate", "scaffold", "develop", "setup", "initialize", "add", "implement"}
+        has_intent = any(k in lower_input for k in dev_keywords)
+        
+        # 2. Framework/Stack Signals
+        frameworks = {"react", "next.js", "nextjs", "vue", "angular", "svelte", "tailwind", "vite", "node", "express", "flask", "django", "fastapi", "python", "typescript", "javascript"}
+        has_framework = any(f in lower_input for f in frameworks)
+        
+        # 3. Product/App Type Signals
+        product_types = {"app", "frontend", "backend", "dashboard", "website", "ui", "api", "service", "script", "component", "widget", "tool"}
+        has_product = any(p in lower_input for p in product_types)
+        
+        # Sovereign Decision: (Intent + Framework) OR (Framework + Product) OR (Intent + Product)
+        # If at least TWO signals exist, we have enough to start scaffolding/coding.
+        signals = sum([has_intent, has_framework, has_product])
+        return signals >= 2
 
     def _validate_skill_output(self, skill_name: str, output: Any) -> Optional[str]:
         """
@@ -1351,9 +1388,10 @@ class VIKIController:
             ("viki.skills.builtins.window_management_skill", "WindowManagerSkill", ()),
             ("viki.skills.builtins.shell_skill", "ShellSkill", ()),
             ("viki.skills.builtins.notification_skill", "NotificationSkill", ()),
-            ("viki.skills.builtins.engineering_playbook_skill", "EngineeringPlaybookSkill", ()),
-            ("viki.skills.builtins.megatron_lm_playbook_skill", "MegatronLmPlaybookSkill", ()),
-            ("viki.skills.builtins.coding_workflow_skill", "CodingWorkflowSkill", ()),
+            # v26: Escalation-only skills (Gated from auto-activation to prevent workflow hijacking)
+            # ("viki.skills.builtins.engineering_playbook_skill", "EngineeringPlaybookSkill", ()),
+            # ("viki.skills.builtins.megatron_lm_playbook_skill", "MegatronLmPlaybookSkill", ()),
+            # ("viki.skills.builtins.coding_workflow_skill", "CodingWorkflowSkill", ()),
             ("viki.skills.builtins.cache_pilot_skill", "CachePilotSkill", (self,)),
             ("viki.skills.builtins.context_weaver_skill", "ContextWeaverSkill", (self,)),
             ("viki.skills.builtins.mind_trace_skill", "MindTraceSkill", (self,)),
@@ -1933,6 +1971,10 @@ class VIKIController:
         # Add relevant failures to context for error avoidance
         relevant_failures = self.learning.get_relevant_failures(safe_input, limit=3)
         memory_context['relevant_failures'] = relevant_failures
+        
+        # --- SOVEREIGN GATING: Skip escalation for standard coding tasks ---
+        if task_type == "coding" and not self.is_plan_mode:
+            memory_context["skip_escalation"] = True
 
         world_understanding = self.world.get_understanding()
 
@@ -1994,50 +2036,57 @@ class VIKIController:
 
         # --- SOVEREIGN FSM: Momentum-Based Orchestration ---
         lower_input = safe_input.lower().strip()
-        continuation_keywords = {"yes", "no", "do it", "develop it", "do best thing", "continue", "next", "go", "proceed", "cancel", "ok", "sure", "fix it", "do it now"}
+        from viki.core.agent_constants import SAFE_FOLLOWUP_MESSAGES, MAX_PLANNING_CYCLES, MAX_CLARIFICATION_REQUESTS
         
-        is_continuation = lower_input in continuation_keywords or (len(lower_input.split()) <= 4 and any(k in lower_input for k in continuation_keywords))
+        is_continuation = lower_input in SAFE_FOLLOWUP_MESSAGES or (len(lower_input.split()) <= 4 and any(k in lower_input for k in SAFE_FOLLOWUP_MESSAGES))
         
+        task_type = self._classify_task(safe_input)
+        
+        # 1. Follow-up Inheritance (Sovereign Boost)
         if is_continuation and self.world.state.active_goal:
             viki_logger.info(f"FSM: Continuation Intent Detected. Resuming goal: {self.world.state.active_goal[:50]}...")
-            # Inherit last phase if we are in a valid workflow
-            if self.world.state.current_phase in ("PLANNING", "EXECUTING", "TESTING"):
-                viki_logger.debug(f"FSM: Inheriting phase: {self.world.state.current_phase}")
+            # Inherit last phase or force EXECUTING if we were already implementation-focused
+            if self.world.state.current_phase in ("EXECUTING", "TESTING", "DEBUGGING"):
+                viki_logger.debug(f"FSM: Maintaining execution state: {self.world.state.current_phase}")
             else:
-                self.world.state.current_phase = "EXECUTING" # Default to execution for "do it"
+                self.world.state.current_phase = "EXECUTING"
+                self.world.state.execution_started = True
+            
+            # Sovereign Boost: Bypass cognitive routing for continuations
+            if cognitive_route:
+                cognitive_route.outcome = JudgmentOutcome.SHALLOW
+                cognitive_route.use_lite_schema = True
+        
+        # 2. Execution Routing & Anti-Loop
         elif task_type == "coding":
-            # --- SUFFICIENT REQUIREMENTS DETECTION (Sovereign Redesign) ---
-            frameworks = {"react", "next.js", "nextjs", "vue", "angular", "svelte", "tailwind", "vite", "node", "express", "flask", "django"}
-            dev_keywords = {"build", "create", "make", "generate", "scaffold", "develop", "setup", "initialize"}
-            
-            is_sufficient = any(f in lower_input for f in frameworks) and any(k in lower_input for k in dev_keywords)
-            
+            # New goal detection
             if self.world.state.active_goal != safe_input and len(safe_input) > 10:
-                viki_logger.info(f"FSM: New Goal Detected: {safe_input[:50]}...")
+                viki_logger.info(f"FSM: New Coding Goal: {safe_input[:50]}...")
                 self.world.state.active_goal = safe_input
                 self.world.state.planning_depth = 0
                 self.world.state.retry_count = 0
+                self.world.state.execution_started = False
                 
-                if is_sufficient:
-                    viki_logger.info("FSM: SUFFICIENT REQUIREMENTS DETECTED. Bypassing PLANNING phase.")
+                if self.should_execute_directly(safe_input):
+                    viki_logger.info("FSM: SUFFICIENT REQUIREMENTS. Bypassing planning; Locking EXECUTING state.")
                     self.world.state.current_phase = "EXECUTING"
                     self.world.state.execution_started = True
                 else:
                     self.world.state.current_phase = "PLANNING"
-                    self.world.state.execution_started = False
             
-            # --- ANTI-LOOP PROTECTION ---
+            # Anti-Loop Enforcement: Planning Phase
             if self.world.state.current_phase == "PLANNING":
                 self.world.state.planning_depth += 1
-                if self.world.state.planning_depth > 1:
-                    viki_logger.warning("FSM: MAX_PLANNING_CYCLES exceeded. Forcing EXECUTING state.")
+                if self.world.state.planning_depth > MAX_PLANNING_CYCLES:
+                    viki_logger.warning(f"FSM: MAX_PLANNING_CYCLES exceeded. Forcing EXECUTING state.")
                     self.world.state.current_phase = "EXECUTING"
                     self.world.state.execution_started = True
-
-        # Ensure goal persistence
-        if self.world.state.active_goal:
-            viki_logger.info(f"FSM State: {self.world.state.current_phase} | Goal: {self.world.state.active_goal[:30]}...")
+        
+        # FSM State Sanitization
+        if not self.world.state.current_phase:
+            self.world.state.current_phase = "IDLE"
             
+        viki_logger.info(f"FSM State: {self.world.state.current_phase} | Goal: {self.world.state.active_goal[:30] if self.world.state.active_goal else 'None'}...")
         self.world.save()
 
         # --- ReAct LOOP: Reason → Act → Observe → Reason → ... ---
@@ -2126,17 +2175,32 @@ class VIKIController:
                 use_ensemble_setting = self.settings.get("system", {}).get("use_ensemble", True)
                 if cognitive_route is not None:
                     use_ensemble_setting = use_ensemble_setting and cognitive_route.use_ensemble
-                # v26: Autonomous Planner/Executor Branch
-                # If we are in 'build' phase and the model didn't provide an action,
-                # or if we want to ensure linear execution, use the PlannerExecutor.
-                if task_type == "coding" and self.world.state.current_phase == "build" and not viki_resp.action:
-                    viki_logger.info("FSM: In BUILD phase but no action provided. Triggering Task Graph Execution.")
+
+                # --- SOVEREIGN EXECUTION ENGINE (Execution Lock) ---
+                if task_type == "coding" and self.world.state.execution_started:
+                    # In active execution, we prioritize speed and action over deep deliberation
+                    use_lite = True
+                    use_ensemble_setting = False
+                    
+                    # Execution Lock: Forbidden transition check
+                    if self.world.state.current_phase == "PLANNING":
+                         viki_logger.warning("FSM Lock: Execution in progress. Forcing return to EXECUTING phase.")
+                         self.world.state.current_phase = "EXECUTING"
+                
+                # FSM Transition: UNDERSTANDING -> EXECUTING (Automatic)
+                if task_type == "coding" and self.world.state.current_phase == "UNDERSTANDING":
+                     self.world.state.current_phase = "EXECUTING"
+                     self.world.state.execution_started = True
+
+                # v26: Autonomous Planner/Executor Branch (Direct Execution Path)
+                viki_resp = None
+                if task_type == "coding" and self.world.state.current_phase == "EXECUTING" and not action_results and not is_continuation:
+                    viki_logger.info("FSM: Triggering SOVEREIGN TASK GRAPH EXECUTION.")
                     graph = await self.planner.plan(self.world.state.active_goal, repo_context=project_instructions)
-                    # Register callbacks for the planner
                     self.planner.callbacks = self._get_planner_callbacks(session_id, budget, on_event)
                     executed_graph = await self.planner.execute(graph)
                     
-                    self.world.state.current_phase = "test"
+                    self.world.state.current_phase = "TESTING"
                     self.world.save()
                     
                     summary = executed_graph.summary()
@@ -2145,42 +2209,53 @@ class VIKIController:
                         "result": f"Executed {summary['done']} tasks. Status: {'Success' if summary['failed'] == 0 else 'Partial Failure'}",
                         "step": react_step + 1
                     })
-                    viki_resp.final_response = f"I've completed the build phase for your task: {self.world.state.active_goal}. Moving to verification."
-                    viki_resp.action = None # Stop loop after planner run
+                    viki_resp = VIKIResponse(
+                        final_thought=ThoughtObject(
+                            intent_summary="Task Graph Execution",
+                            primary_strategy="Direct implementation via sovereign task planner",
+                            confidence=1.0
+                        ),
+                        final_response=f"I've completed the implementation for {self.world.state.active_goal}. Moving to verification.",
+                        action=None
+                    )
                 
-                viki_resp: VIKIResponse = await self.cortex.process(
-                    safe_input,
-                    memory_context=memory_context,
-                    url_context=url_context,
-                    use_lite_schema=use_lite,
-                    world_context=world_understanding,
-                    signals_context=signals_state + f", AgencyWeights: {agency_weights}",
-                    evolution_log=self.evolution.get_evolution_summary(),
-                    action_results=action_results,
-                    use_ensemble=use_ensemble_setting,
-                    on_event=on_event,
-                    on_think=on_think,
-                    model_tier=cognitive_route.model_tier if cognitive_route else "standard",
-                    is_agent_mode=self.is_agent_mode,
-                    is_plan_mode=self.is_plan_mode,
-                    is_debug_mode=self.is_debug_mode,
-                    is_singularity_mode=self.is_singularity_mode,
-                )
+                if viki_resp is None:
+                    viki_resp = await self.cortex.process(
+                        safe_input,
+                        memory_context=memory_context,
+                        url_context=url_context,
+                        use_lite_schema=use_lite,
+                        world_context=world_understanding,
+                        signals_context=signals_state + f", AgencyWeights: {agency_weights}",
+                        evolution_log=self.evolution.get_evolution_summary(),
+                        action_results=action_results,
+                        use_ensemble=use_ensemble_setting,
+                        on_event=on_event,
+                        on_think=on_think,
+                        model_tier=cognitive_route.model_tier if cognitive_route else "standard",
+                        is_agent_mode=self.is_agent_mode,
+                        is_plan_mode=self.is_plan_mode,
+                        is_debug_mode=self.is_debug_mode,
+                        is_singularity_mode=self.is_singularity_mode,
+                        execution_started=self.world.state.execution_started,
+                    )
                 # --- SOVEREIGN POLICY: Execution Commitment & Forbidden Transitions ---
-                if task_type == "coding":
-                    conf = viki_resp.final_thought.confidence
-                    
-                    # 1. Force EXECUTING if confidence > 0.65
-                    if conf > 0.65 and self.world.state.current_phase == "PLANNING":
-                        viki_logger.info(f"FSM: High confidence ({conf:.2f}) detected. Committing to EXECUTING phase.")
-                        self.world.state.current_phase = "EXECUTING"
-                        self.world.state.execution_started = True
-                        self.world.save()
-                    
+                if task_type == "coding" and viki_resp:
+                    # Anti-Loop Enforcement: Clarification Requests (Moved here to ensure viki_resp exists)
+                    if viki_resp.intent_type == "clarification":
+                        self.world.state.retry_count += 1
+                        if self.world.state.retry_count > MAX_CLARIFICATION_REQUESTS:
+                            viki_logger.warning("FSM: MAX_CLARIFICATION_REQUESTS exceeded. Forcing autonomous assumptions.")
+                            viki_resp.intent_type = "execution"
+                            if viki_resp.final_thought:
+                                viki_resp.final_thought.primary_strategy = "Proceeding with best-guess technical assumptions to maintain execution momentum."
+
                     # 2. Forbidden Transitions: EXECUTING/TESTING -> PLANNING
-                    # 2. Forbidden Transitions: EXECUTING/TESTING -> PLANNING
-                    if self.world.state.execution_started and viki_resp.intent_type == "planning":
-                         viki_logger.warning("FSM: FORBIDDEN TRANSITION detected (PLANNING during EXECUTION). Suppressing plan and forcing action.")
+                    if self.world.state.execution_started and viki_resp.intent_type in ("planning", "discovery"):
+                         viki_logger.warning(f"FSM: FORBIDDEN TRANSITION ({viki_resp.intent_type}) detected during EXECUTION. Forcing bypass.")
+                         viki_resp.intent_type = "execution"
+                         if viki_resp.final_thought:
+                              viki_resp.final_thought.primary_strategy = "Forced execution path: bypass planning recursion and proceed with implementation."
 
                     # 3. Style Mimicry: Nudge for first execution
                     if self.world.state.execution_started and react_step == 0:
@@ -2321,17 +2396,17 @@ class VIKIController:
                     
                     # --- SOVEREIGN RETRY ARCHITECTURE ---
                     self.world.state.retry_count += 1
-                    viki_logger.info(f"FSM: Tool failure ({err}). Retry count: {self.world.state.retry_count}")
+                    viki_logger.info(f"FSM: Tool failure detected. Retry count: {self.world.state.retry_count}")
                     
                     if self.world.state.retry_count <= 3:
-                        viki_logger.info("FSM: Transitioning to DEBUGGING state for autonomous repair.")
+                        viki_logger.info("FSM: Transitioning to DEBUGGING state for autonomous repair. FORBIDDING REPLAN.")
                         self.world.state.current_phase = "DEBUGGING"
                         self.world.save()
                         
                         # Add failure context to the next loop iteration
                         action_results.append({
                             "action": f"{skill_name}({params})",
-                            "error": f"EXECUTION_FAILURE: {err}. Propose a fix or alternative path. DO NOT REPLAN.",
+                            "error": f"EXECUTION_FAILURE: {err}. Analysis required. DO NOT return to PLANNING phase. STAY in DEBUGGING/EXECUTING.",
                             "step": react_step + 1,
                         })
                         continue
@@ -2419,8 +2494,11 @@ class VIKIController:
                 viki_logger.warning("auto_web_research: %s", e)
 
         # --- ORYTHIX REFLECTION (v22) ---
-        # --- ORYTHIX MEMORY REINFORCEMENT (v23) ---
-        # v26: Semantic Cache Storage
+        # v26: Cognitive bypass for standard tasks
+        if task_type == "coding" and self.world.state.execution_started:
+             viki_logger.debug("Reflection bypassed: active execution session.")
+        else:
+             pass # Deprecated: Reflector logic is handled by background watchdogs.
         if 'viki_resp' in locals() and viki_resp and cognitive_route and cognitive_route.source != "cache":
             try:
                 # Pydantic v1 uses .dict(), v2 uses .model_dump()
@@ -2546,7 +2624,8 @@ class VIKIController:
             return "reasoning"  # questions use reasoning budget (no separate "question" key in budgets)
         if any(s == w or s.startswith(w + " ") for w in question_words):
             return "reasoning"
-        if any(k in s for k in ["code", "script", "fix", "patch"]):
+        from viki.core.agent_constants import CODING_KEYWORDS
+        if any(k in s for k in CODING_KEYWORDS):
             return "coding"
         if any(k in s for k in ["plan", "think", "analyze", "sequence"]):
             return "reasoning"
@@ -2764,6 +2843,41 @@ class VIKIController:
         if self.mcp_skill_count:
             viki_logger.info("MCP: %d external tools registered as skills.", self.mcp_skill_count)
         return self.mcp_skill_count
+
+    def should_execute_directly(self, text: str) -> bool:
+        """v26: Sovereign Router signal analyzer.
+        Returns True if the input contains sufficient signals (Intent + Framework + Product)
+        to warrant an immediate implementation path, bypassing discovery phases.
+        """
+        s = text.lower()
+        from viki.core.agent_constants import CODING_KEYWORDS
+        # Signal A: Direct implementation verbs
+        intents = ["create", "build", "make", "generate", "develop", "scaffold", "implement"]
+        # Signal B: Modern Frameworks/Tech stack
+        tech = CODING_KEYWORDS
+        # Signal C: Product/Domain clarity
+        products = ["app", "website", "dashboard", "frontend", "backend", "api", "ui", "script"]
+
+        has_intent = any(i in s for i in intents)
+        has_tech = any(t in s for t in tech)
+        has_product = any(p in s for p in products)
+
+        # Heuristic: 2 out of 3 signals usually mean the user knows what they want.
+        signals = sum([has_intent, has_tech, has_product])
+        return signals >= 2
+
+    def _skill_action_severity(self, skill_name: str, params: Dict[str, Any]) -> str:
+        """Determines the risk level of an autonomous action."""
+        dangerous = ["shellskill", "systemcontrolskill", "securityskill"]
+        if skill_name.lower() in dangerous:
+            return "destructive"
+        
+        # Heuristic for filesystem risk
+        if skill_name.lower() == "filesystemskill":
+            if any(k in str(params).lower() for k in ["delete", "remove", "overwrite", "rm ", "del "]):
+                return "medium"
+        
+        return "low"
 
     async def shutdown(self):
         if getattr(self, "_shutting_down", False):

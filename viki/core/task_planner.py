@@ -34,11 +34,14 @@ from viki.config.logger import viki_logger
 class TaskType(str, Enum):
     SEARCH_REPO = "search_repo"
     READ_FILE = "read_file"
+    WRITE = "write"
     PATCH = "patch"
     RUN_TESTS = "run_tests"
     REFACTOR = "refactor"
     ANALYZE = "analyze"
     REFLECT = "reflect"
+    SHELL = "shell"
+    CREATE = "create"
 
 
 class TaskStatus(str, Enum):
@@ -71,7 +74,7 @@ class PlanTask:
             "parameters": self.parameters,
             "depends_on": list(self.depends_on),
             "status": self.status.value,
-            "observation": self.observation[:500],
+            "observation": (self.observation or "")[:500],
             "attempts": self.attempts,
             "started_ts": self.started_ts,
             "finished_ts": self.finished_ts,
@@ -121,11 +124,11 @@ class PlannerExecutor:
 
     PLAN_SYSTEM_PROMPT = (
         "You are VIKI's planner. Decompose the user's coding goal into a typed task graph.\n"
-        "Output STRICT JSON: a list of tasks with fields {id, type, description, parameters, depends_on}.\n"
-        "Allowed task types: search_repo, read_file, patch, run_tests, refactor, analyze, reflect.\n"
-        "Keep the plan minimal (<=8 tasks). Each task should be small and verifiable.\n"
+        "Output ONLY a JSON array of tasks with fields {id, type, description, parameters, depends_on}.\n"
+        "Allowed task types: search_repo, read_file, write, patch, run_tests, refactor, analyze, reflect, shell, create.\n"
+        "Keep the plan minimal (<=12 tasks). Each task should be small and verifiable.\n"
         "Tasks must reference other task ids in depends_on for ordering.\n"
-        "Example: [{\"id\":\"t1\",\"type\":\"search_repo\",\"description\":\"locate function X\",\"parameters\":{\"query\":\"function X\"},\"depends_on\":[]}]"
+        "Example: [{\"id\":\"t1\",\"type\":\"shell\",\"description\":\"init project\",\"parameters\":{\"command\":\"npx create-vite .\"},\"depends_on\":[]}]"
     )
 
     def __init__(self, model_router, executor_callbacks: Optional[Dict[str, Any]] = None):
@@ -203,6 +206,32 @@ class PlannerExecutor:
     @staticmethod
     def _fallback_plan(goal: str) -> List[PlanTask]:
         """Conservative plan when the planner model is unavailable."""
+        lower_goal = goal.lower()
+        if any(w in lower_goal for w in ["create", "build", "make", "generate", "scaffold"]):
+             return [
+                 PlanTask(
+                     id="t1",
+                     type=TaskType.ANALYZE,
+                     description=f"Plan the project structure for: {goal[:100]}",
+                     parameters={"goal": goal},
+                     depends_on=[]
+                 ),
+                 PlanTask(
+                     id="t2",
+                     type=TaskType.SHELL,
+                     description="Initialize project directory",
+                     parameters={"command": "mkdir project -ea 0; if ($?) { echo 'Created' } else { echo 'Exists' }"},
+                     depends_on=["t1"]
+                 ),
+                 PlanTask(
+                     id="t3",
+                     type=TaskType.WRITE,
+                     description="Create initial entry point",
+                     parameters={"path": "project/README.md", "content": f"# Project\nGenerated for: {goal}"},
+                     depends_on=["t2"]
+                 )
+             ]
+             
         return [
             PlanTask(
                 id="t1",

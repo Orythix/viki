@@ -26,6 +26,11 @@ import logging
 from datetime import datetime
 from dotenv import load_dotenv
 
+try:
+    import pyperclip
+except ImportError:
+    pyperclip = None
+
 from rich.console import Console
 from rich.layout import Layout
 from rich.live import Live
@@ -57,6 +62,23 @@ class SimpleInterface:
         self.status = None
         self.session_usage = {"input": 0, "output": 0}
         self.last_thought = "Thinking"
+        try:
+            from prompt_toolkit import PromptSession
+            from prompt_toolkit.completion import WordCompleter
+            self.session = PromptSession()
+            self.completer = WordCompleter([
+                "/help", "/paste", "/multiline", "/audit", "/security", 
+                "/boundary", "/reset", "/exit", "/quit", "/clear"
+            ], ignore_case=True)
+        except ImportError:
+            self.session = None
+            self.completer = None
+
+    async def get_input(self, prompt="\n> ", use_completer=True):
+        if self.session:
+            completer = self.completer if use_completer else None
+            return (await self.session.prompt_async(prompt, completer=completer)).strip()
+        return self.console.input(prompt).strip()
         
     def format_count(self, count):
         if count >= 1_000_000:
@@ -332,7 +354,7 @@ async def _run_single_query(controller, interface, query, on_event, streaming_st
 async def _run_interactive_loop(controller, interface, on_event, streaming_state, debug_state):
     while True:
         try:
-            user_input = interface.console.input("\n> ").strip()
+            user_input = await interface.get_input("\n> ")
             
             if not user_input: continue
             elif user_input.startswith('/security') or user_input.startswith('/boundary'):
@@ -345,6 +367,47 @@ async def _run_interactive_loop(controller, interface, on_event, streaming_state
                 interface.console.print("[yellow]Shutting down...[/]")
                 await _shutdown_controller(controller)
                 break
+            
+            elif user_input.lower() == "/paste":
+                if pyperclip:
+                    try:
+                        content = pyperclip.paste()
+                        if content:
+                            interface.console.print(f"[dim]Pasting {len(content)} characters from clipboard...[/]")
+                            user_input = content
+                        else:
+                            interface.console.print("[yellow]Clipboard is empty.[/]")
+                            continue
+                    except Exception as e:
+                        interface.console.print(f"[red]Failed to paste from clipboard: {e}[/]")
+                        continue
+                else:
+                    interface.console.print("[red]pyperclip not installed. Clipboard support unavailable.[/]")
+                    continue
+
+            elif user_input.lower() == "/multiline":
+                interface.console.print("[bold cyan]Entering Multi-line Mode.[/] Type [bold green]DONE[/] on a new line or use [bold green]Ctrl+Z[/] (Windows) / [bold green]Ctrl+D[/] (Unix) to finish.\n")
+                lines = []
+                while True:
+                    try:
+                        line = await interface.get_input("[dim]... [/]", use_completer=False)
+                        if line.strip().upper() == "DONE":
+                            break
+                        lines.append(line)
+                    except EOFError:
+                        break
+                    except KeyboardInterrupt:
+                        lines = []
+                        break
+                
+                if not lines:
+                    interface.console.print("[yellow]Multi-line input cancelled.[/]")
+                    continue
+                
+                user_input = "\n".join(lines).strip()
+                if not user_input:
+                    continue
+                interface.console.print(f"[dim]Submitting {len(user_input)} characters...[/]")
             
             if user_input.lower() == "/reset":
                 if Confirm.ask("[bold red]Are you sure you want to completely wipe VIKI's memory? This cannot be undone.[/]"):
@@ -386,6 +449,8 @@ async def _run_interactive_loop(controller, interface, on_event, streaming_state
                 interface.console.print("  [green]/load[/]     — Load session: /load <name>")
                 interface.console.print("  [green]/security[/] — Show Sovereign Boundary dashboard")
                 interface.console.print("  [green]/audit[/]    — Show detailed session audit log")
+                interface.console.print("  [green]/paste[/]    — Paste long text from clipboard")
+                interface.console.print("  [green]/multiline[/] — Enter manual multi-line input mode")
                 continue
 
             if user_input.lower() == "/train":

@@ -94,17 +94,21 @@ class SkillRegistry:
         
         return f"{rate:.0f}% Success ({latency:.2f}s) {status}"
 
-    def get_context_description(self, mode: str = "metadata", names: List[str] = None) -> str:
+    def get_context_description(self, mode: str = "metadata", names: List[str] = None, skip_escalation: bool = False) -> str:
         """Generate formatted skill list for LLM context.
         
         Args:
             mode: 'metadata' (name+desc) or 'full' (schema+instructions)
             names: Optional list of skill names to include (if None, all are included)
+            skip_escalation: If True, skip skills marked as escalation-only (playbooks, etc.)
         """
+        escalation_skills = {"engineering_playbook", "megatron_lm_playbook", "coding_workflow"}
+        
         if mode == "metadata":
             lines = ["TOOLS (Metadata Only):"]
             for name, skill in self.skills.items():
                 if names and name not in names: continue
+                if skip_escalation and name in escalation_skills: continue
                 metrics = self.get_reliability_score(name)
                 # Keep it very short (~100 tokens for all)
                 lines.append(f"- {name}: {skill.description[:100]}... [{metrics}]")
@@ -114,6 +118,7 @@ class SkillRegistry:
             lines = ["TOOL MANIFESTS (Full Specs):"]
             for name, skill in self.skills.items():
                 if names and name not in names: continue
+                if skip_escalation and name in escalation_skills: continue
                 schema_json = json.dumps(skill.schema, indent=2)
                 lines.append(f"## {name}\n{skill.description}\n\nINSTRUCTIONS:\n{skill.instructions}\n\nSCHEMA:\n{schema_json}\n")
             return "\n".join(lines)
