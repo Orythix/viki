@@ -2,12 +2,12 @@ import re
 from typing import List, Optional
 
 def condense_text(text: str, max_chars: int = 3000, query: Optional[str] = None) -> str:
-    \"\"\"
+    """
     Condenses text for local LLM consumption.
     1. Removes boilerplate lines.
     2. Collapses whitespace.
     3. If query is provided, prioritizes blocks containing query terms.
-    \"\"\"
+    """
     if not text:
         return ""
 
@@ -67,9 +67,9 @@ def condense_text(text: str, max_chars: int = 3000, query: Optional[str] = None)
     return result
 
 def summarize_heuristic(text: str) -> str:
-    \"\"\"
+    """
     Extreme condensation: Keep only headers (lines ending in :) and first sentences.
-    \"\"\"
+    """
     lines = text.splitlines()
     summary = []
     for line in lines:
