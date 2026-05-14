@@ -137,7 +137,7 @@ class MutationPilotSkill(BaseSkill):
         # 3. Swap file and run tests
         backup_path = path + ".bak"
         shutil.copy2(path, backup_path)
-        shutil.copy2(mutant_path, path)
+        shutil.copy(mutant_path, path) # Use copy instead of copy2 to update timestamp (vital for Python imports)
         
         try:
             viki_logger.info(f"MutationPilot: Testing mutant version of {os.path.basename(path)}...")
