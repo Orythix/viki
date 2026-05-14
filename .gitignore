@@ -35,7 +35,11 @@ Desktop.ini
 
 # VIKI-specific
 viki/data/
+!viki/data/sovereign_library.json
+!viki/data/missions.json
 data/
+!data/sovereign_library.json
+!data/missions.json
 logs/
 workspace/
 FOCUS/
