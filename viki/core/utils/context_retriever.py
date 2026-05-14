@@ -12,35 +12,57 @@ class ContextRetriever:
         self.workspace_dir = workspace_dir
         self.max_snippet_len = 1500
         self.max_snippets = 5
+        self.pinned_paths: List[str] = [] # Pinned files or directories
 
     async def get_relevant_context(self, query: str) -> str:
         """
         Finds relevant code snippets in the workspace based on keyword overlap.
+        Includes pinned files/directories regardless of keyword match.
         """
         viki_logger.info(f"ContextRetriever: Finding relevant snippets for '{query[:30]}...'")
         
-        # 1. Extract keywords from query
+        # 1. Pinned context (highest priority)
+        pinned_snippets = []
+        for path in self.pinned_paths:
+            if os.path.isfile(path):
+                snippet = self._get_file_snippet(path, []) # Keywords empty = full or top of file
+                if snippet:
+                    rel_path = os.path.relpath(path, self.workspace_dir)
+                    pinned_snippets.append(f"--- PINNED FILE: {rel_path} ---\n{snippet}")
+            elif os.path.isdir(path):
+                # Sample a few files from the pinned directory
+                for root, _, files in os.walk(path):
+                    for file in files[:3]: # Limit per dir
+                        f_path = os.path.join(root, file)
+                        snippet = self._get_file_snippet(f_path, [])
+                        if snippet:
+                            rel_path = os.path.relpath(f_path, self.workspace_dir)
+                            pinned_snippets.append(f"--- PINNED DIR FILE: {rel_path} ---\n{snippet}")
+
+        # 2. Extract keywords from query for dynamic search
         keywords = self._extract_keywords(query)
-        if not keywords:
+        dynamic_snippets = []
+        
+        if keywords:
+            # Search for relevant files
+            relevant_files = self._search_files(keywords)
+            
+            # Extract snippets from top files
+            for file_path in relevant_files[:self.max_snippets]:
+                # Skip if already pinned
+                if any(os.path.samefile(file_path, p) for p in self.pinned_paths if os.path.exists(p) and os.path.exists(file_path)):
+                    continue
+                    
+                snippet = self._get_file_snippet(file_path, keywords)
+                if snippet:
+                    rel_path = os.path.relpath(file_path, self.workspace_dir)
+                    dynamic_snippets.append(f"--- FILE: {rel_path} ---\n{snippet}")
+
+        all_snippets = pinned_snippets + dynamic_snippets
+        if not all_snippets:
             return ""
 
-        # 2. Search for relevant files
-        relevant_files = self._search_files(keywords)
-        if not relevant_files:
-            return ""
-
-        # 3. Extract snippets from top files
-        snippets = []
-        for file_path in relevant_files[:self.max_snippets]:
-            snippet = self._get_file_snippet(file_path, keywords)
-            if snippet:
-                rel_path = os.path.relpath(file_path, self.workspace_dir)
-                snippets.append(f"--- FILE: {rel_path} ---\n{snippet}")
-
-        if not snippets:
-            return ""
-
-        return "\n\nRELEVANT CODE SNIPPETS (Retrieved via RAG):\n" + "\n\n".join(snippets)
+        return "\n\nRELEVANT CODE SNIPPETS (Retrieved via RAG/Pinning):\n" + "\n\n".join(all_snippets)
 
     def _extract_keywords(self, query: str) -> List[str]:
         # Simple tokenization, remove common words

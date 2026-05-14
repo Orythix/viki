@@ -5,7 +5,12 @@ import yaml
 import re
 import json
 import importlib
-from typing import Dict, Any, List, Optional, Tuple
+import shutil
+import hashlib
+from typing import Dict, Any, List, Optional, Tuple, Union
+
+from viki.core.telemetry import TelemetryStore
+from viki.core.test_healer import TestHealerPipeline
 from viki.core.identity_profile import Soul
 from viki.core.security_guard import SafetyLayer, safe_for_log
 from viki.core.inference_gateway import APILLM, ModelRouter, StructuredPrompt
@@ -214,6 +219,13 @@ class VIKIController:
             ("video", "short_video_agent"),
             ("short", "short_video_agent"),
             ("antivirus", "endpoint_guard"),
+            ("cache", "cache_pilot"),
+            ("weaver", "context_weaver"),
+            ("trace", "mind_trace"),
+            ("audit", "autonomous_auditor"),
+            ("logs", "log_voyager"),
+            ("mutation", "mutation_pilot"),
+            ("market", "market_explorer"),
         ]
         for alias_name, target_name in alias_pairs:
             target = self.skill_registry.get_skill(target_name)
@@ -281,6 +293,10 @@ class VIKIController:
         self._resolve_models_config(root_dir)
         self._resolve_security_layer_path(root_dir)
         
+        # v26.1: High-scale Distributed Traceability & Self-Healing
+        self.telemetry = TelemetryStore(data_dir)
+        self.test_healer = TestHealerPipeline(self)
+        
         self.soul = Soul(soul_path)
         self.persona = self._persona_from_soul_path(soul_path)
 
@@ -320,7 +336,7 @@ class VIKIController:
         self.nexus = MessagingNexus(request_processor=self)
 
 
-        self.learning = LearningModule(self.settings.get('system', {}).get('data_dir', self.DEFAULT_DATA_DIR))
+        self.learning = LearningModule(data_dir)
         
         # v25: Knowledge Gap Detection
         self.knowledge_gaps = KnowledgeGapDetector(self.learning)
@@ -348,14 +364,13 @@ class VIKIController:
         
         # Level 6 Modules
         self.sfs = SemanticFS(self.settings.get('system', {}).get('workspace_dir', self.DEFAULT_WORKSPACE_DIR))
-        self.history = TimeTravelModule(self.settings.get('system', {}).get('data_dir', self.DEFAULT_DATA_DIR))
+        self.history = TimeTravelModule(data_dir)
 
         try:
             from viki.core.usage_log import configure_session_usage_log
 
-            _dd = self.settings.get("system", {}).get("data_dir", self.DEFAULT_DATA_DIR)
             configure_session_usage_log(
-                _dd,
+                data_dir,
                 bool(self.settings.get("system", {}).get("session_usage_log", True)),
             )
         except Exception:
@@ -364,7 +379,7 @@ class VIKIController:
         # Phase 1: Budget enforcement for cloud calls (daily/per-call cost cap + circuit breaker).
         from viki.core.resource_budget import LLMBudget
         budget_state_path = os.path.join(
-            self.settings.get("system", {}).get("data_dir", self.DEFAULT_DATA_DIR),
+            data_dir,
             "llm_budget.json",
         )
         # Initial budget config will be merged with the YAML's `models.budget` block in the router.
@@ -397,7 +412,6 @@ class VIKIController:
         # dashboard Gantt view. Failure is non-fatal.
         try:
             from viki.core.telemetry_service import init_persistent_traces
-            data_dir = (self.settings.get("system") or {}).get("data_dir", self.DEFAULT_DATA_DIR)
             init_persistent_traces(os.path.join(data_dir, "traces.db"))
         except Exception as e:
             viki_logger.debug("init_persistent_traces failed: %s", e)
@@ -418,10 +432,10 @@ class VIKIController:
 
         # v9-v10 Digital Cognitive Organism State
         self.signals = CognitiveSignals()
-        self.world = WorldModel(self.settings.get('system', {}).get('data_dir', self.DEFAULT_DATA_DIR))
+        self.world = WorldModel(data_dir)
         self.cortex = ConsciousnessStack(self.model_router, soul_config=self.soul.config, 
                                          skill_registry=self.skill_registry, world_model=self.world,
-                                         data_dir=self.settings.get('system', {}).get('data_dir', self.DEFAULT_DATA_DIR))
+                                         data_dir=data_dir)
         
         # v11: Intelligence Governance (Judgment Engine)
         self.judgment = JudgmentEngine(self.learning, self.budgets)
@@ -431,13 +445,13 @@ class VIKIController:
             self.reflex,
             self.judgment,
             telemetry=self.router_telemetry,
-            data_dir=self.settings.get('system', {}).get('data_dir', self.DEFAULT_DATA_DIR)
+            data_dir=data_dir
         )
-        self.scorecard = IntelligenceScorecard(self.settings.get('system', {}).get('data_dir', self.DEFAULT_DATA_DIR))
+        self.scorecard = IntelligenceScorecard(data_dir)
         
         # v25: Adaptive Self-Modification (Evolution Engine)
         from viki.core.evolution import EvolutionEngine
-        self.evolution = EvolutionEngine(self.settings.get('system', {}).get('data_dir', self.DEFAULT_DATA_DIR))
+        self.evolution = EvolutionEngine(data_dir)
         self.evolution.set_reflex_module(self.reflex)
 
         # v26: Context Retriever (RAG)
@@ -541,6 +555,10 @@ class VIKIController:
         if getattr(self, "low_resource_mode", False):
             viki_logger.info("STARTUP PULSE: low_resource_mode ON — skipping autonomous startup pulse.")
             return
+
+        viki_logger.info("VIKIController Initialized: Sovereign Intelligence Orchestrator (v8.1.0)")
+        self.telemetry.record("system", "startup", {"version": "8.1.0", "mode": "sovereign"})
+
         viki_logger.info("STARTUP PULSE: Initiating autonomous knowledge sync...")
         
         # 1. Quick Research Pulse (optional; disable with system.startup_research: false to speed first request)
@@ -1254,6 +1272,14 @@ class VIKIController:
             ("viki.skills.builtins.engineering_playbook_skill", "EngineeringPlaybookSkill", ()),
             ("viki.skills.builtins.megatron_lm_playbook_skill", "MegatronLmPlaybookSkill", ()),
             ("viki.skills.builtins.coding_workflow_skill", "CodingWorkflowSkill", ()),
+            ("viki.skills.builtins.cache_pilot_skill", "CachePilotSkill", (self,)),
+            ("viki.skills.builtins.context_weaver_skill", "ContextWeaverSkill", (self,)),
+            ("viki.skills.builtins.mind_trace_skill", "MindTraceSkill", (self,)),
+            ("viki.skills.builtins.autonomous_auditor_skill", "AutonomousAuditorSkill", (self,)),
+            ("viki.skills.builtins.log_voyager_skill", "LogVoyagerSkill", (self,)),
+            ("viki.skills.builtins.mutation_pilot_skill", "MutationPilotSkill", (self,)),
+            ("viki.skills.builtins.manus_skill", "ManusSkill", (self,)),
+            ("viki.skills.builtins.market_explorer_skill", "MarketExplorerSkill", (self,)),
         ]
         all_skills = []
         for module_path, class_name, args in eager_specs:
@@ -1302,6 +1328,10 @@ class VIKIController:
         for skill in all_skills:
             if allowed is None or skill.name in allowed:
                 self.skill_registry.register_skill(skill)
+
+        # v26: Load Sovereign Tool Hub (100+ Skills)
+        library_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "sovereign_library.json")
+        self.skill_registry.load_sovereign_library(library_path, self)
 
         # Aliases: only add if target skill is registered
         self._apply_skill_aliases()
@@ -1418,6 +1448,7 @@ class VIKIController:
         self,
         user_input: str,
         on_event=None,
+        on_think=None,
         attachment_paths: Optional[List[str]] = None,
         session_id: Optional[str] = None,
     ) -> str:
@@ -1427,6 +1458,7 @@ class VIKIController:
             return await self._process_request_impl(
                 user_input,
                 on_event=on_event,
+                on_think=on_think,
                 attachment_paths=attachment_paths,
                 session_id=norm_session,
             )
@@ -1437,6 +1469,7 @@ class VIKIController:
         self,
         user_input: str,
         on_event=None,
+        on_think=None,
         attachment_paths: Optional[List[str]] = None,
         session_id: Optional[str] = None,
     ) -> str:
@@ -1896,6 +1929,7 @@ class VIKIController:
                     action_results=action_results,
                     use_ensemble=use_ensemble_setting,
                     on_event=on_event,
+                    on_think=on_think,
                     model_tier=cognitive_route.model_tier if cognitive_route else "standard",
                     is_agent_mode=self.is_agent_mode,
                     is_plan_mode=self.is_plan_mode,

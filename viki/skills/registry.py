@@ -5,7 +5,8 @@ import json
 import os
 import sys
 import time
-from typing import Dict, Any, Type, List
+import asyncio
+from typing import Dict, Any, Type, List, Optional
 from viki.skills.base import BaseSkill
 from viki.config.logger import viki_logger
 
@@ -13,6 +14,22 @@ class SkillRegistry:
     def __init__(self):
         self.skills: Dict[str, BaseSkill] = {}
         self.metrics: Dict[str, Dict[str, Any]] = {} # name -> {attempts, successes, failures, avg_latency}
+        
+        # v26: Intent to Skill Mapping for Progressive Disclosure
+        self.intent_map = {
+            "media_control": ["media_control", "voice"],
+            "system_command": ["system_control", "shell", "endpoint_guard"],
+            "coding": ["dev_skill", "python_interpreter", "filesystem_skill", "coding_workflow", "manus"],
+            "research": ["research", "summarize", "market_explorer", "pdf"],
+            "security": ["security_tools", "autonomous_auditor", "mutation_pilot"],
+            "governance": ["cache_pilot", "context_weaver", "mind_trace", "log_voyager"],
+            "cloud": [],
+            "devops": [],
+            "system": [],
+            "data": [],
+            "ai": [],
+            "productivity": [],
+        }
         
         # Path for persistence
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -77,13 +94,41 @@ class SkillRegistry:
         
         return f"{rate:.0f}% Success ({latency:.2f}s) {status}"
 
-    def get_context_description(self) -> str:
-        """Generate formatted skill list with metrics for LLM context."""
-        lines = ["TOOLS (with Performance Metrics):"]
-        for name, skill in self.skills.items():
-            metrics = self.get_reliability_score(name)
-            lines.append(f"- {name}: {skill.description} [{metrics}]")
-        return "\n".join(lines)
+    def get_context_description(self, mode: str = "metadata", names: List[str] = None) -> str:
+        """Generate formatted skill list for LLM context.
+        
+        Args:
+            mode: 'metadata' (name+desc) or 'full' (schema+instructions)
+            names: Optional list of skill names to include (if None, all are included)
+        """
+        if mode == "metadata":
+            lines = ["TOOLS (Metadata Only):"]
+            for name, skill in self.skills.items():
+                if names and name not in names: continue
+                metrics = self.get_reliability_score(name)
+                # Keep it very short (~100 tokens for all)
+                lines.append(f"- {name}: {skill.description[:100]}... [{metrics}]")
+            return "\n".join(lines)
+        
+        else: # Full mode
+            lines = ["TOOL MANIFESTS (Full Specs):"]
+            for name, skill in self.skills.items():
+                if names and name not in names: continue
+                schema_json = json.dumps(skill.schema, indent=2)
+                lines.append(f"## {name}\n{skill.description}\n\nINSTRUCTIONS:\n{skill.instructions}\n\nSCHEMA:\n{schema_json}\n")
+            return "\n".join(lines)
+
+    def get_relevant_skill_names(self, intent: str, user_input: str) -> List[str]:
+        """Find skill names relevant to the current intent and input."""
+        relevant = set(self.intent_map.get(intent, []))
+        
+        # Also check for direct name mentions in input
+        input_lower = user_input.lower()
+        for name in self.skills:
+            if name in input_lower:
+                relevant.add(name)
+        
+        return list(relevant)
 
     def _load_metrics(self):
         if os.path.exists(self.data_path):
@@ -149,3 +194,85 @@ class SkillRegistry:
         
         # Clean up path
         sys.path.pop(0)
+
+    def load_sovereign_library(self, path: str, controller: Any):
+        """Load 100+ skills from a JSON library and register them as BridgeSkills."""
+        if not os.path.exists(path):
+            viki_logger.warning(f"Sovereign Library not found at {path}")
+            return
+
+        try:
+            with open(path, "r") as f:
+                data = json.load(f)
+            
+            count = 0
+            for category, skills in data.items():
+                for spec in skills:
+                    name = spec["name"]
+                    desc = spec["description"]
+                    cmd = spec["command"]
+                    
+                    # Register as a BridgeSkill
+                    skill = LibrarySkillBridge(name, desc, cmd, controller)
+                    self.register_skill(skill)
+                    
+                    # Also update intent map
+                    if category in self.intent_map:
+                        self.intent_map[category].append(name)
+                    else:
+                        self.intent_map.setdefault("general", []).append(name)
+                    
+                    count += 1
+            
+            viki_logger.info(f"Sovereign Tool Hub: Successfully loaded {count} skills.")
+        except Exception as e:
+            viki_logger.error(f"Failed to load Sovereign Library: {e}")
+
+class LibrarySkillBridge(BaseSkill):
+    """A generic skill that executes a predefined command template."""
+    def __init__(self, name: str, description: str, command_template: str, controller: Any):
+        super().__init__()
+        self._name = name
+        self._description = description
+        self._command_template = command_template
+        self._controller = controller
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def description(self) -> str:
+        return self._description
+
+    @property
+    def schema(self) -> Dict[str, Any]:
+        # Extract variables from template like {path}
+        import re
+        vars = re.findall(r'\{(\w+)\}', self._command_template)
+        properties = {}
+        for v in vars:
+            properties[v] = {"type": "string", "description": f"Value for {v}"}
+        
+        return {
+            "type": "object",
+            "properties": properties,
+            "required": vars
+        }
+
+    async def execute(self, params: Dict[str, Any]) -> str:
+        try:
+            # Format command
+            cmd = self._command_template.format(**params)
+            
+            # Execute via shell skill or controller's sandbox
+            shell = self._controller.skill_registry.get_skill("shell")
+            if shell:
+                return await shell.execute({"command": cmd})
+            
+            # Fallback to subprocess if shell skill not available
+            import subprocess
+            proc = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
+            return proc.stdout or proc.stderr or "Success (No Output)"
+        except Exception as e:
+            return f"Error executing {self._name}: {e}"

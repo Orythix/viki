@@ -291,13 +291,28 @@ class _FileReferenceStage:
             if not resolved:
                 continue
             try:
+                # v26: Smart Context Management - Stubbing
+                file_size = os.path.getsize(resolved)
+                is_stub = file_size > 2048 # Anything over 2KB is stubbed
+                
                 with open(resolved, "r", encoding="utf-8", errors="ignore") as f:
-                    content = f.read(self.MAX_INLINE_SIZE)
-                truncated = " (truncated)" if len(content) >= self.MAX_INLINE_SIZE else ""
-                inlined.append(
-                    f"[Auto-loaded file: {resolved}{truncated}]\n"
-                    f"```\n{content}\n```"
-                )
+                    if is_stub:
+                        content = f.read(500) # Only first 500 chars for stub
+                        footer = f"\n\n... (file continues, {file_size} bytes total) ...\n"
+                        inlined.append(
+                            f"[CONTEXT STUB: {resolved}]\n"
+                            f"Metadata: {file_size} bytes. Use /weaver expand path='{ref}' to load full content.\n"
+                            f"```\n{content}{footer}\n```"
+                        )
+                    else:
+                        content = f.read(self.MAX_INLINE_SIZE)
+                        truncated = " (truncated)" if len(content) >= self.MAX_INLINE_SIZE else ""
+                        inlined.append(
+                            f"[Auto-loaded file: {resolved}{truncated}]\n"
+                            f"```\n{content}\n```"
+                        )
+            except Exception as e:
+                viki_logger.debug(f"FileReferenceStage failed for {resolved}: {e}")
                 viki_logger.debug("FileReferenceStage: auto-inlined %s (%d bytes)", resolved, len(content))
             except Exception as e:
                 viki_logger.debug("FileReferenceStage: failed to read %s: %s", resolved, e)

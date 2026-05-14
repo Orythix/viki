@@ -189,6 +189,12 @@ class InterpretationLayer(CortexLayer):
     # Intent keywords for fast classification
     COMMAND_KEYWORDS = {"open", "launch", "start", "run", "execute", "close", "kill", "stop"}
     MEDIA_KEYWORDS = {"play", "pause", "resume", "skip", "next", "previous", "mute", "unmute", "volume"}
+    CLOUD_KEYWORDS = {"aws", "ec2", "s3", "lambda", "k8s", "kubernetes", "docker", "terraform", "cloud", "instance", "bucket", "cluster"}
+    DEVOPS_KEYWORDS = {"git", "npm", "pip", "pytest", "test", "build", "deploy", "jenkins", "ci", "cd", "commit", "branch", "push", "pull", "merge"}
+    SYSTEM_KEYWORDS = {"df", "ps", "top", "free", "mem", "cpu", "disk", "uptime", "whoami", "hostname", "ip", "netstat", "memory", "storage", "network"}
+    DATA_KEYWORDS = {"sqlite", "redis", "db", "sql", "table", "data", "database", "query", "select", "insert", "update", "delete"}
+    AI_KEYWORDS = {"nvidia", "gpu", "cuda", "torch", "pytorch", "tensorflow", "ollama", "transformers", "huggingface", "model", "inference", "train"}
+    PROD_KEYWORDS = {"calendar", "todo", "task", "note", "notes", "agenda", "weather", "price", "crypto", "bitcoin", "productivity"}
     QUESTION_KEYWORDS = {"what", "who", "where", "when", "why", "how", "which", "is", "are", "can", "do", "does"}
     CODE_KEYWORDS = {"code", "function", "class", "debug", "fix", "implement", "write", "create", "build", "compile"}
     RESEARCH_KEYWORDS = {"search", "find", "look up", "google", "research", "tell me about"}
@@ -250,6 +256,18 @@ class InterpretationLayer(CortexLayer):
         """Fast keyword-based intent classification."""
         if words & self.MEDIA_KEYWORDS:
             return "media_control"
+        if words & self.CLOUD_KEYWORDS:
+            return "cloud"
+        if words & self.DEVOPS_KEYWORDS:
+            return "devops"
+        if words & self.SYSTEM_KEYWORDS:
+            return "system"
+        if words & self.DATA_KEYWORDS:
+            return "data"
+        if words & self.AI_KEYWORDS:
+            return "ai"
+        if words & self.PROD_KEYWORDS:
+            return "productivity"
         if words & self.COMMAND_KEYWORDS:
             return "system_command"
         if words & self.CODE_KEYWORDS:
@@ -286,6 +304,12 @@ class InterpretationLayer(CortexLayer):
             "research": ["researching", "reasoning"],
             "question": ["reasoning", "general"],
             "conversation": ["general", "chatter"],
+            "cloud": ["cloud", "reasoning"],
+            "devops": ["devops", "coding"],
+            "system": ["system", "fast_response"],
+            "data": ["data", "reasoning"],
+            "ai": ["ai", "reasoning"],
+            "productivity": ["productivity", "fast_response"],
         }
         return mapping.get(intent_type, ["general"])
 
@@ -431,15 +455,22 @@ class DeliberationLayer(CortexLayer):
         preferences = "\n".join([f"- {p}" for p in self.soul_config.get('preferences', [])])
         biases = "\n".join([f"- {b}" for b in self.soul_config.get('intellectual_biases', [])])
         
-        # Build skills catalog (deduplicated)
+        # v26: Smart Context Management (Progressive Disclosure)
         skills_context = ""
         if self.skill_registry:
-            seen_skills = set()
-            skills_context = "\n\nAVAILABLE TOOLS (use exact skill_name in action):\n"
-            for name, skill in self.skill_registry.skills.items():
-                if hasattr(skill, 'description') and id(skill) not in seen_skills:
-                    seen_skills.add(id(skill))
-                    skills_context += f"- {name}: {skill.description}\n"
+            intent = context.get('intent_type', 'conversation')
+            raw_input = context.get('raw_input', '')
+            
+            # 1. Identify "Triggered" skills for full disclosure
+            triggered_names = self.skill_registry.get_relevant_skill_names(intent, raw_input)
+            
+            # 2. Build metadata list for everything
+            skills_context = "\n\n" + self.skill_registry.get_context_description(mode="metadata")
+            
+            # 3. Build full manifest for triggered skills
+            if triggered_names:
+                manifest = self.skill_registry.get_context_description(mode="full", names=triggered_names)
+                skills_context += "\n\n[DETAILED TOOL INSTRUCTIONS (Use these for exact parameter schemas)]\n" + manifest
         
         # Inject URL content if any
         url_info = ""
@@ -1023,7 +1054,8 @@ class ConsciousnessStack:
                       model_tier: str = "standard",
                       is_agent_mode: bool = False,
                       is_plan_mode: bool = False,
-                      is_debug_mode: bool = False) -> VIKIResponse:
+                      is_debug_mode: bool = False,
+                      on_think=None) -> VIKIResponse:
         start_time = time.time()
         data = user_input
         
@@ -1032,6 +1064,10 @@ class ConsciousnessStack:
         
         for layer in self.layers:
             layer_start = time.time()
+            
+            if isinstance(layer, InterpretationLayer) and on_think:
+                # Will emit after this layer returns; hook in after
+                pass
             
             if isinstance(layer, DeliberationLayer):
                 # Ensure data is a dict with all context
@@ -1079,6 +1115,32 @@ class ConsciousnessStack:
                     }
             
             data = await layer.process(data)
+            
+            # Emit ThinkingTree telemetry after each layer
+            if on_think:
+                try:
+                    layer_name = layer.state.name
+                    if layer_name == "Interpretation" and isinstance(data, dict):
+                        on_think("interpretation", {
+                            "intent": data.get("intent_type", "unknown"),
+                            "sentiment": data.get("sentiment", "neutral"),
+                            "capabilities": data.get("recommended_capabilities", []),
+                        })
+                    elif layer_name == "Deliberation" and isinstance(data, VIKIResponse):
+                        model_name = data.metadata.get("model", "unknown") if data.metadata else "unknown"
+                        on_think("deliberation", {
+                            "model": model_name,
+                            "tier": model_tier,
+                            "has_action": bool(data.action),
+                        })
+                    elif layer_name == "Execution" and isinstance(data, VIKIResponse):
+                        if data.action:
+                            on_think("execution", {
+                                "tool": data.action.skill_name,
+                                "params": str(data.action.parameters)[:80],
+                            })
+                except Exception:
+                    pass  # Never let telemetry break the pipeline
             
             # Record per-layer timing
             layer_duration = time.time() - layer_start

@@ -11,11 +11,8 @@ models:
       api_key: ${ANTHROPIC_API_KEY}
     mock:
       type: mock
-
-  default: qwen35
-
+  default: viki-base
   profiles:
-    # --- The One Model (Standard Chat & Reasoning) ---
     qwen35:
       provider: ollama
       model_name: qwen3.5:latest
@@ -25,9 +22,7 @@ models:
       - reasoning
       - tool_use
       supports_native_tools: true
-      description: "Primary local model for all tasks."
-
-    # --- Dedicated Trainer (Using the same model to save resources) ---
+      description: Primary local model for all tasks.
     viki-trainer:
       provider: ollama
       model_name: qwen3.5:latest
@@ -35,9 +30,7 @@ models:
       priority: 1
       capabilities:
       - training
-      description: "Dedicated training/evolution persona."
-
-    # --- The Evolved VIKI (The output of /forge bake) ---
+      description: Dedicated training/evolution persona.
     viki-evolved:
       provider: ollama
       model_name: viki-evolved:latest
@@ -45,8 +38,7 @@ models:
       capabilities:
       - chat
       - sovereign
-      description: "The evolved version of VIKI with baked-in knowledge."
-
+      description: The evolved version of VIKI with baked-in knowledge.
   budget:
     monthly_limit_usd: 5.0
     warning_threshold_usd: 3.5

@@ -47,6 +47,7 @@ from viki.config.logger import viki_logger
 from viki.config.resolve import get_soul_path
 from viki.service_registry import Container
 from viki.core.utils.onboarding import run_onboarding
+from viki.ui.thinking_tree import ThinkingTree
 
 console = Console()
 
@@ -173,23 +174,19 @@ async def _start_background_tasks(controller, on_event, loop, interface):
     except Exception as e:
         interface.print_error(f"Task Launch Error: {e}")
 
-async def _run_single_query(controller, interface, query, on_event, streaming_state):
+async def _run_single_query(controller, interface, query, on_event, on_think, thinking_tree, streaming_state):
     try:
         interface.print_user(query)
         start_t = time.time()
         streaming_state["active"] = False
         
-        if interface.status is None:
-            interface.status = interface.console.status("[dim]Thinking...[/]", spinner="dots")
-            interface.status.start()
-            
-        response = await controller.process_request(query, on_event=on_event)
+        thinking_tree.reset()
+        thinking_tree.update_perception(query[:50])
+        
+        with Live(thinking_tree, console=interface.console, refresh_per_second=4, transient=True):
+            response = await controller.process_request(query, on_event=on_event, on_think=on_think)
+        
         elapsed = time.time() - start_t
-
-        if interface.status is not None:
-            interface.status.stop()
-            interface.status = None
-
         if streaming_state["active"]:
             interface.console.print("")
             streaming_state["active"] = False
@@ -269,16 +266,13 @@ async def _run_interactive_loop(controller, interface, on_event, streaming_state
             start_t = time.time()
             streaming_state["active"] = False
             
-            if interface.status is None:
-                interface.status = interface.console.status("[dim]Thinking...[/]", spinner="dots")
-                interface.status.start()
-                
-            response = await controller.process_request(user_input, on_event=on_event)
-            elapsed = time.time() - start_t
+            thinking_tree.reset()
+            thinking_tree.update_perception(user_input[:50])
 
-            if interface.status is not None:
-                interface.status.stop()
-                interface.status = None
+            with Live(thinking_tree, console=interface.console, refresh_per_second=4, transient=True):
+                response = await controller.process_request(user_input, on_event=on_event, on_think=on_think)
+            
+            elapsed = time.time() - start_t
 
             if streaming_state["active"]:
                 interface.console.print("")
@@ -423,12 +417,32 @@ async def main(workspace_path=None, query=None):
 
     loop.create_task(_usage_listener())
 
+    thinking_tree = ThinkingTree()
+
+    def on_think(event_type, data):
+        if event_type == "interpretation":
+            thinking_tree.update_interpretation(
+                data.get("intent"),
+                data.get("capabilities"),
+                data.get("sentiment")
+            )
+        elif event_type == "deliberation":
+            thinking_tree.update_deliberation(
+                data.get("model"),
+                data.get("tier")
+            )
+        elif event_type == "execution":
+            thinking_tree.update_execution(
+                data.get("tool"),
+                data.get("params")
+            )
+
     await _start_background_tasks(controller, on_event, loop, interface)
 
     if query:
-        await _run_single_query(controller, interface, query, on_event, streaming_state)
+        await _run_single_query(controller, interface, query, on_event, on_think, thinking_tree, streaming_state)
     else:
-        await _run_interactive_loop(controller, interface, on_event, streaming_state, debug_state)
+        await _run_interactive_loop(controller, interface, on_event, on_think, thinking_tree, streaming_state, debug_state)
 
 def run():
     """Synchronous entry point for the `viki` console script."""

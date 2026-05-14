@@ -34,7 +34,7 @@ class _FakeRouter:
     def __init__(self, model):
         self._model = model
 
-    def get_model(self, capabilities=None):
+    def get_model(self, capabilities=None, tier=None):
         return self._model
 
 

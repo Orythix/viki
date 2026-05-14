@@ -173,3 +173,56 @@ class SemanticCache:
         if norm1 > 0 and norm2 > 0:
             return dot / (norm1 * norm2)
         return 0.0
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Returns cache statistics."""
+        try:
+            conn = sqlite3.connect(self.db_path, timeout=10.0)
+            cur = conn.cursor()
+            cur.execute("SELECT count(*), sum(hit_count) FROM semantic_cache")
+            count, total_hits = cur.fetchone()
+            
+            size_bytes = os.path.getsize(self.db_path) if os.path.exists(self.db_path) else 0
+            
+            # Get top 5 queries by hit count
+            cur.execute("SELECT query_text, hit_count FROM semantic_cache ORDER BY hit_count DESC LIMIT 5")
+            top_queries = [{"query": r[0], "hits": r[1]} for r in cur.fetchall()]
+            
+            conn.close()
+            return {
+                "entry_count": count or 0,
+                "total_hits": total_hits or 0,
+                "db_size_kb": round(size_bytes / 1024, 2),
+                "top_queries": top_queries
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
+    def clear(self, query: Optional[str] = None):
+        """Clear all entries or a specific query."""
+        try:
+            conn = sqlite3.connect(self.db_path, timeout=30.0)
+            if query:
+                query_hash = hashlib.md5(query.strip().lower().encode()).hexdigest()
+                conn.execute("DELETE FROM semantic_cache WHERE query_hash = ?", (query_hash,))
+            else:
+                conn.execute("DELETE FROM semantic_cache")
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            viki_logger.error(f"Failed to clear cache: {e}")
+            return False
+
+    def list_entries(self, limit: int = 20) -> List[Dict[str, Any]]:
+        """List recent entries."""
+        try:
+            conn = sqlite3.connect(self.db_path, timeout=10.0)
+            conn.row_factory = sqlite3.Row
+            cur = conn.cursor()
+            cur.execute("SELECT query_text, timestamp, hit_count FROM semantic_cache ORDER BY timestamp DESC LIMIT ?", (limit,))
+            rows = [dict(r) for r in cur.fetchall()]
+            conn.close()
+            return rows
+        except Exception:
+            return []

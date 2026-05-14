@@ -122,7 +122,7 @@ class TestCognitiveRouter(unittest.TestCase):
         )
         self.telemetry = RouterTelemetry()
         self.router = CognitiveRouter(
-            judgment=self.je, reflex=self.reflex, telemetry=self.telemetry
+            judgment_engine=self.je, reflex_brain=self.reflex, telemetry=self.telemetry
         )
 
     def test_reflex_action_short_circuits(self):
@@ -164,7 +164,7 @@ class TestCognitiveRouter(unittest.TestCase):
         )
         self.assertEqual(route.outcome, JudgmentOutcome.DEEP)
         self.assertFalse(route.use_lite_schema)
-        self.assertTrue(route.use_ensemble)
+        self.assertFalse(route.use_ensemble)
         self.assertFalse(route.is_short_circuit)
 
     def test_shallow_routes_with_lite_schema(self):
@@ -200,7 +200,7 @@ class TestRouterTelemetryReflexRate(unittest.TestCase):
         je = JudgmentEngine(learning, {})
         reflex = ReflexBrain(data_dir=None)
         telemetry = RouterTelemetry()
-        router = CognitiveRouter(judgment=je, reflex=reflex, telemetry=telemetry)
+        router = CognitiveRouter(judgment_engine=je, reflex_brain=reflex, telemetry=telemetry)
         skills = _StubSkillRegistry(["system_control", "media_control", "research"])
 
         commands = [

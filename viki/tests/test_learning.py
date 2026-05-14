@@ -44,6 +44,8 @@ class TestVIKILearning(unittest.IsolatedAsyncioTestCase):
         self.controller = VIKIController(self.settings_path, self.soul_path)
         
     async def asyncTearDown(self):
+        from viki.core.telemetry_service import close_persistent_traces
+        close_persistent_traces()
         if hasattr(self, 'controller') and self.controller:
             try:
                 await asyncio.wait_for(self.controller.shutdown(), timeout=10.0)
@@ -85,9 +87,8 @@ class TestVIKILearning(unittest.IsolatedAsyncioTestCase):
         import sqlite3
         import time
         conn = sqlite3.connect(db_path)
-        conn.execute("CREATE TABLE IF NOT EXISTS lessons (id TEXT PRIMARY KEY, trigger TEXT, content TEXT, significance REAL, last_accessed REAL)")
-        conn.execute("INSERT INTO lessons VALUES (?, ?, ?, ?, ?)", 
-                     ("test-lesson", "mars", "Mars has low gravity.", 0.9, time.time()))
+        conn.execute("INSERT OR REPLACE INTO lessons (id, content, text_representation, embedding, created_at, last_accessed, access_count, author, source_task, reliability) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
+                     ("test-lesson", '{"fact":"Mars has low gravity.","trigger":"mars"}', "mars: Mars has low gravity.", "[]", time.time(), time.time(), 2, "Test", "TestTask", 0.9))
         conn.commit()
         conn.close()
         

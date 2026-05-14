@@ -22,6 +22,11 @@ class BaseSkill(ABC):
         return "1.0.0"
 
     @property
+    def instructions(self) -> str:
+        """Detailed instructions for the skill (loads on-demand)."""
+        return self.description
+
+    @property
     def schema(self) -> Dict[str, Any]:
         """JSON-schema like representation of input parameters.
         Override this in subclasses to enable native tool/function calling.
