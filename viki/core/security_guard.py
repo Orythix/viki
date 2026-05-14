@@ -15,6 +15,10 @@ SECRET_REDACT_PATTERNS = [
     (re.compile(r"xoxp-[a-zA-Z0-9-]+"), REDACTED_TOKEN),
     (re.compile(r"ghp_[a-zA-Z0-9]{36}"), REDACTED_TOKEN),
     (re.compile(r"gho_[a-zA-Z0-9]{36}"), REDACTED_TOKEN),
+    (re.compile(r"AKIA[0-9A-Z]{16}"), REDACTED_TOKEN), # AWS Access Key ID
+    (re.compile(r"amzn\.mws\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"), REDACTED_TOKEN),
+    (re.compile(r"xox[bap]-[a-zA-Z0-9-]+"), REDACTED_TOKEN), # Slack tokens
+    (re.compile(r"https?://[\w.-]+:[\w.-]+@[\w.-]+"), REDACTED_TOKEN), # Basic Auth URLs
 ]
 
 # Max chars to log for user input / params (truncate rest)

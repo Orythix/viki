@@ -448,6 +448,48 @@ class VIKIController:
             data_dir=data_dir
         )
         self.scorecard = IntelligenceScorecard(data_dir)
+
+    def track_touched_item(self, category: str, item: str):
+        """Track a resource touched during the session for security audit."""
+        if category in self.session_history:
+            if item not in self.session_history[category]:
+                self.session_history[category].append(item)
+                # Keep history manageable
+                if len(self.session_history[category]) > 50:
+                    self.session_history[category].pop(0)
+
+    def get_sovereign_status(self) -> Dict[str, Any]:
+        """Collect current security and boundary status for the dashboard."""
+        from viki.core.utils.path_sandbox import get_allowed_roots, BLOCKED_PATHS
+        
+        system = self.settings.get("system", {})
+        
+        # Resolve capabilities safely
+        net_cap = self.capabilities.get("internet_research")
+        shell_cap = self.capabilities.get("shell_exec")
+        
+        return {
+            "filesystem": {
+                "workspace": system.get("workspace_dir", "."),
+                "allowed_roots_count": len(get_allowed_roots(self)),
+                "blocked_paths_count": len(BLOCKED_PATHS),
+                "touched_files": self.session_history.get("touched_files", [])
+            },
+            "network": {
+                "air_gap": self.air_gap,
+                "allowlist_count": len(net_cap.meta.get("destination_allowlist", [])) if net_cap else 0,
+                "blocked_actions": self.session_history.get("blocked_actions", [])
+            },
+            "shell": {
+                "enabled": shell_cap.enabled if shell_cap else False,
+                "requires_confirmation": shell_cap.requires_confirmation if shell_cap else True,
+                "executed_commands": self.session_history.get("executed_commands", [])
+            },
+            "privacy": {
+                "redaction_active": True, # Hardcoded for now based on security_guard.py
+                "shadow_mode": self.shadow_mode
+            }
+        }
         
         # v25: Adaptive Self-Modification (Evolution Engine)
         from viki.core.evolution import EvolutionEngine

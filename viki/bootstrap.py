@@ -164,25 +164,103 @@ class SimpleInterface:
         pass # Handled by spinner
 
     def render_boundary_dashboard(self, controller):
-        """Renders the dashboard panel showing the current security boundaries when requested."""
+        """Renders the comprehensive Sovereign Boundary dashboard for security transparency."""
+        from rich.table import Table
+        from rich.panel import Panel
+        from rich.columns import Columns
+        from rich import box
+        
         status = controller.get_sovereign_status()
         
-        fs_table = Table.grid(expand=True)
-        fs_table.add_column(style="cyan", justify="left")
-        fs_table.add_column(style="white", justify="left")
-        fs_table.add_row("Workspace:", status["filesystem"]["workspace"])
-        fs_table.add_row("Scope:", f"{status['filesystem']['allowed_roots_count']} Allowed Roots")
+        # 1. Filesystem & Privacy
+        fs_table = Table(title="[bold cyan]Filesystem & Privacy[/]", box=box.SIMPLE)
+        fs_table.add_column("Scope", style="dim")
+        fs_table.add_column("Status", style="bold")
+        
+        fs_table.add_row("Workspace", os.path.basename(status["filesystem"]["workspace"]))
+        fs_table.add_row("Allowed Roots", str(status["filesystem"]["allowed_roots_count"]))
+        fs_table.add_row("Redaction", "[green]ACTIVE[/]" if status["privacy"]["redaction_active"] else "[red]OFF[/]")
+        fs_table.add_row("Shadow Mode", "[yellow]ON[/]" if status["privacy"]["shadow_mode"] else "[dim]OFF[/]")
 
-        net_table = Table.grid(expand=True)
-        net_table.add_column(style="cyan", justify="left")
-        net_table.add_column(style="white", justify="left")
+        # 2. Network & Shell Policy
+        net_table = Table(title="[bold magenta]Network & Shell[/]", box=box.SIMPLE)
+        net_table.add_column("Service", style="dim")
+        net_table.add_column("Policy", style="bold")
+        
         net_val = "[bold red]AIR-GAPPED[/]" if status["network"]["air_gap"] else "[bold green]ONLINE[/]"
-        net_table.add_row("Network:", net_val)
+        net_table.add_row("Internet", net_val)
+        net_table.add_row("Allowlist", f"{status['network']['allowlist_count']} Domains")
+        
         shell_val = "[bold green]ENABLED[/]" if status["shell"]["enabled"] else "[bold red]DISABLED[/]"
-        net_table.add_row("Shell:", shell_val)
+        net_table.add_row("Shell Exec", shell_val)
+        confirm_val = "[yellow]APPROVAL REQ[/]" if status["shell"]["requires_confirmation"] else "[red]AUTO[/]"
+        net_table.add_row("Shell Mode", confirm_val)
 
-        panel_content = Columns([fs_table, net_table])
-        self.console.print(Panel(panel_content, title="[bold blue]SOVEREIGN BOUNDARY[/]", border_style="blue"))
+        # 3. Recent Audit Log (Touched Items)
+        audit_table = Table(title="[bold yellow]Session Audit (Recent Activity)[/]", box=box.SIMPLE, expand=True)
+        audit_table.add_column("Category", style="dim", width=15)
+        audit_table.add_column("Item", style="white")
+        
+        touched_files = status["filesystem"]["touched_files"][-3:]
+        for f in touched_files:
+            audit_table.add_row("File Access", f)
+            
+        executed_cmds = status["shell"]["executed_commands"][-3:]
+        for c in executed_cmds:
+            audit_table.add_row("Shell Cmd", c)
+            
+        blocked = status["network"]["blocked_actions"][-3:]
+        for b in blocked:
+            audit_table.add_row("[red]Blocked[/]", b)
+
+        if not touched_files and not executed_cmds and not blocked:
+            audit_table.add_row("Audit", "[dim]No activity recorded yet.[/]")
+
+        # Display
+        self.console.print(Panel(
+            Columns([fs_table, net_table, audit_table], equal=True, expand=True),
+            title="[bold blue]SOVEREIGN BOUNDARY DASHBOARD[/]",
+            border_style="blue",
+            padding=(1, 2)
+        ))
+        self.console.print("[dim]Use /help to see all available security controls.[/]\n")
+
+    def render_audit_log(self, controller):
+        """Displays the full session audit log for security verification."""
+        from rich.table import Table
+        from rich.panel import Panel
+        from rich import box
+        
+        status = controller.get_sovereign_status()
+        
+        audit_table = Table(title="[bold yellow]Session Audit Log[/]", box=box.ROUNDED, expand=True)
+        audit_table.add_column("Category", style="dim", width=15)
+        audit_table.add_column("Resource/Action", style="white")
+        
+        # Files
+        files = status["filesystem"]["touched_files"]
+        for f in files:
+            audit_table.add_row("File Access", f)
+            
+        # Commands
+        cmds = status["shell"]["executed_commands"]
+        for c in cmds:
+            audit_table.add_row("Shell Command", f"[bold green]{c}[/]")
+            
+        # Blocked
+        blocked = status["network"]["blocked_actions"]
+        for b in blocked:
+            audit_table.add_row("[red]BLOCKED[/]", f"[red]{b}[/]")
+
+        if not files and not cmds and not blocked:
+            audit_table.add_row("Status", "[dim]No resources touched in this session.[/]")
+
+        self.console.print(Panel(
+            audit_table,
+            title="[bold red]INTERNAL AUDIT TRAIL[/]",
+            subtitle=f"Total: {len(files)} files, {len(cmds)} commands",
+            border_style="red"
+        ))
 
 async def _shutdown_controller(controller):
     controller.watchdog.stop()
@@ -257,7 +335,13 @@ async def _run_interactive_loop(controller, interface, on_event, streaming_state
             user_input = interface.console.input("\n> ").strip()
             
             if not user_input: continue
-            if user_input.lower() in ["exit", "quit", "/exit"]:
+            elif user_input.startswith('/security') or user_input.startswith('/boundary'):
+                interface.render_boundary_dashboard(controller)
+                continue
+            elif user_input.startswith('/audit'):
+                interface.render_audit_log(controller)
+                continue
+            elif user_input.startswith('/exit') or user_input.startswith('/quit'):
                 interface.console.print("[yellow]Shutting down...[/]")
                 await _shutdown_controller(controller)
                 break
@@ -300,7 +384,8 @@ async def _run_interactive_loop(controller, interface, on_event, streaming_state
                 interface.console.print("  [green]/reset[/]    — Wipe VIKI's memory databases and start fresh")
                 interface.console.print("  [green]/save[/]     — Save session: /save <name>")
                 interface.console.print("  [green]/load[/]     — Load session: /load <name>")
-                interface.console.print("  [green]/boundary[/] — Refresh the Sovereign Boundary dashboard")
+                interface.console.print("  [green]/security[/] — Show Sovereign Boundary dashboard")
+                interface.console.print("  [green]/audit[/]    — Show detailed session audit log")
                 continue
 
             if user_input.lower() == "/train":

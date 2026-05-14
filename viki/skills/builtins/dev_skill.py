@@ -110,6 +110,8 @@ class DevSkill(BaseSkill):
                 return f"Error: File '{path}' not found."
             with open(path, 'r', encoding='utf-8') as f:
                 content = f.read()
+            if self._controller:
+                self._controller.track_touched_item("touched_files", path)
             return f"--- FILE: {path} ---\n{content}\n--- END FILE ---"
         except Exception as e:
             return f"Read Error: {e}"
@@ -119,6 +121,8 @@ class DevSkill(BaseSkill):
             self._backup_file(path)
             with open(path, 'w', encoding='utf-8') as f:
                 f.write(content.replace("\\n", "\n"))
+            if self._controller:
+                self._controller.track_touched_item("touched_files", path)
             return f"Successfully wrote to {path}."
         except Exception as e:
             return f"Write Error: {e}"
@@ -133,6 +137,8 @@ class DevSkill(BaseSkill):
             new_content = content.replace(target, replacement)
             self._backup_file(path)
             with open(path, 'w', encoding='utf-8') as f: f.write(new_content)
+            if self._controller:
+                self._controller.track_touched_item("touched_files", path)
             return f"Successfully patched {path}."
         except Exception as e:
             return f"Patch Error: {e}"

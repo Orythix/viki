@@ -71,8 +71,14 @@ class BrowserSkill(BaseSkill):
                 return f"Browser screenshot saved to {path}"
             
             elif action == "content":
-                content = await self.page.content()
-                return f"Page content captured (truncated): {content[:2000]}..."
+                # Extract clean text from the body to save tokens for local models
+                text = await self.page.evaluate("document.body.innerText")
+                
+                # --- TOKEN OPTIMIZATION for Local Models ---
+                from viki.core.utils.token_optimizer import condense_text
+                clean_text = condense_text(text, max_chars=3000)
+                
+                return f"Page content captured:\n\n{clean_text}"
 
             return f"Error: Unknown browser action '{action}'"
 

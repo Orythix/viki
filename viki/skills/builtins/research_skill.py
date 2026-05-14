@@ -65,6 +65,12 @@ class ResearchSkill(BaseSkill):
         }
 
     async def execute(self, params: Dict[str, Any]) -> str:
+        # --- AIR GAP PROTECTION ---
+        if self.controller and getattr(self.controller, "air_gap", False):
+            if self.controller and hasattr(self.controller, "track_touched_item"):
+                self.controller.track_touched_item("blocked_actions", "Network: Attempted web access while AIR-GAPPED")
+            return "Safety Block: Internet access is DISABLED (Air-Gap active)."
+
         if 'url' in params:
             return await self._read_page(params['url'])
 
@@ -95,6 +101,8 @@ class ResearchSkill(BaseSkill):
             
             # --- Knowledge Extraction Bridge ---
             if self.controller:
+                 if hasattr(self.controller, "track_touched_item"):
+                      self.controller.track_touched_item("touched_files", "Network: DuckDuckGo Search")
                  await self._extract_knowledge_from_results(query, results)
 
             formatted = [f"--- SEARCH RESULTS for '{query}' ---"]
@@ -333,12 +341,14 @@ class ResearchSkill(BaseSkill):
             
             # Clean up whitespace
             lines = [line.strip() for line in text.splitlines() if line.strip()]
-            clean_text = '\n'.join(lines)
+            raw_text = '\n'.join(lines)
             
-            # Truncate to avoid overwhelming the LLM
-            if len(clean_text) > 4000:
-                clean_text = clean_text[:4000] + "\n... (truncated)"
-
+            # --- TOKEN OPTIMIZATION for Local Models ---
+            from viki.core.utils.token_optimizer import condense_text
+            # Use query for semantic trimming if possible
+            # We'll need to store the query in _last_query or similar
+            clean_text = condense_text(raw_text, max_chars=2500)
+            
             # Persist extracted facts from the page content.
             if self.controller and hasattr(self.controller, "learning"):
                 facts = self._extract_facts_from_text(clean_text, max_facts=3)
