@@ -1,6 +1,6 @@
 # VIKI Security Setup Guide
 
-**Last updated:** 2026-05-13
+**Last updated:** 2026-05-14 (v8.2.0 Sovereign)
 
 ## Critical: Set Up Before Running
 

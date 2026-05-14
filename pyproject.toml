@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "viki-sdi"
-version = "8.1.0"
+version = "8.2.0"
 description = "VIKI Sovereign Digital Intelligence — open-source self-hosted AI agent: Ollama local LLMs, Python CLI, MCP tools, RAG memory, Neural Forge, capability gating, Apache-2.0"
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -83,6 +83,7 @@ dependencies = [
     "python-pptx",
     "dependency-injector",
     "sqlalchemy",
+    "rank_bm25",
 ]
 
 [project.optional-dependencies]

@@ -84,8 +84,7 @@ Run the agent locally:
 
 ```bash
 python viki/main.py            # CLI
-python viki/api/server.py      # HTTP API
-cd ui && npm install && npm run dev   # dashboard
+python viki/api/server.py      # HTTP API (headless)
 ```
 
 ## Style Guides
@@ -119,11 +118,7 @@ git config core.hooksPath .githooks
 * Wrap blocking I/O in `asyncio.to_thread(...)` so the cognitive loop stays
   responsive.
 
-### JavaScript / React Style
 
-* Use functional components with React Hooks.
-* Components must be responsive and follow the existing dark-mode HSL theme.
-* Maintain the "Hologram" aesthetic for any new UI surfaces.
 
 ## Subprojects
 
@@ -141,4 +136,4 @@ Changes to **`labs/security-lab/`** or **`labs/qa-automation/`** should keep tho
 
 ---
 
-*Runbook version: aligned with VIKI v8.0.0 (Industrial). Update this file when default ports, flags, or critical architecture patterns change.*
+*Runbook version: aligned with VIKI v8.2.0 (Sovereign). Update this file when default ports, flags, or critical architecture patterns change.*

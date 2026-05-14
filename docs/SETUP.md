@@ -1,4 +1,4 @@
-# Setting Up VIKI (v8.0.0 Industrial)
+# Setting Up VIKI (v8.2.0 Sovereign)
 
 ## 📦 Prerequisites
 
@@ -9,6 +9,7 @@
     ollama pull deepseek-r1
     ```
 3.  **Visual Studio Build Tools** (Windows Only): Required for compiling `unsloth` dependencies if you plan to use `forge` for LoRA training.
+4.  **rank_bm25**: Required for Hybrid Memory Search. Automatically installed via `pip install -e .`.
 
 ## 🛠️ Environment Configuration
 
@@ -89,4 +90,4 @@ Full map: [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md).
 
 ---
 
-*Runbook version: aligned with VIKI v8.0.0 (Industrial). Update this file when default ports, flags, or critical architecture patterns change.*
+*Runbook version: aligned with VIKI v8.2.0 (Sovereign). Update this file when default ports, flags, or critical architecture patterns change.*

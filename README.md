@@ -4,7 +4,7 @@
 
 **Local LLM Orchestration | Private Knowledge Retrieval | Autonomous Self-Evolution**
 
-[![Version](https://img.shields.io/badge/version-8.1.1-blue.svg)](./CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-8.2.0-blue.svg)](./CHANGELOG.md)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Ollama](https://img.shields.io/badge/Ollama-Local_LLM-orange.svg)](https://ollama.ai)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
@@ -60,7 +60,7 @@ VIKI ships as a **single opinionated agent system**: judgment/reflex layers, SQL
 
 VIKI is a **Sovereign Digital Intelligence** designed to be more than just an assistant—she is a partner that evolves alongside your workflow. Built on a foundation of **local-first privacy** and **deterministic governance**, VIKI balances the raw power of LLMs with the safety of a modular, capability-aware architecture.
 
-### Core Pillars (v8.0.0)
+### Core Pillars (v8.2.0)
 
 *   **Intelligence Governance**: Powered by the **Judgment Engine**. Every directive is filtered through a cognitive triage (Reflex, Shallow, Deep) to ensure the right model is used for the right task while maintaining absolute safety.
 *   **The Neural Forge**: A integrated pipeline in the core kernel. VIKI extracts "Wisdom" from her SQLite-backed semantic memory and bakes it into a local **Ollama** image (default tag **`viki-neural-forge`**, profile **`viki-evolved`** in `models.yaml`) on top of bases such as **Phi-3**, **Mistral**, **Qwen**, or **DeepSeek-R1**.
@@ -68,6 +68,8 @@ VIKI is a **Sovereign Digital Intelligence** designed to be more than just an as
 *   **Recursive Self-Reflection**: Utilizing the **Reflection Layer**, VIKI critiques her own plans before execution, reducing hallucinations and improving tool-use accuracy.
 *   **Unified Persistence Layer**: A **SQLAlchemy-backed** multi-tiered architecture that allows VIKI to retain project context, user preferences, and historical lessons through a modern Repository pattern.
 *   **Industrial Clean Architecture**: A decoupled, testable system powered by **Dependency Injection**, ensuring VIKI is ready for enterprise-grade expansion and isolated module evolution.
+*   **Sovereign Singularity (High-Agency)**: A cognitive mode that unlocks unrestricted engineering agency. When activated, VIKI enters a predictive self-evolution loop, prioritizing high-velocity development and autonomous system hardening.
+*   **Rapid Reflex Pipeline**: A dedicated short-circuit path for sub-second responses. Common intents (Time, Status, Gating) bypass the full deliberation stack for near-instant execution.
 
 ### What makes VIKI specific
 

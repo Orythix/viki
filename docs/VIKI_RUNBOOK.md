@@ -1,6 +1,6 @@
 # VIKI Operational Runbook
 
-Operational procedures for running, verifying, and recovering **VIKI** on a workstation. For first-time install, see [docs/SETUP.md](docs/SETUP.md). For credentials and API hardening, see [viki/SECURITY_docs/SETUP.md](viki/SECURITY_docs/SETUP.md).
+Operational procedures for running, verifying, and recovering **VIKI** on a workstation. For first-time install, see [docs/SETUP.md](docs/SETUP.md). For credentials and API hardening, see [viki/SECURITY_SETUP.md](../viki/SECURITY_SETUP.md).
 
 ---
 
@@ -40,12 +40,8 @@ python viki/bootstrap.py
 - Exit: type `exit` at the prompt.
 - If you use a venv, activate it first (see [docs/SETUP.md](docs/SETUP.md)).
 
-### 3.2 CLI + hologram / web UI
-
-1. Terminal A — UI dev server: `cd ui` then `npm run dev`
-2. Terminal B — VIKI with API for UI: `python viki/bootstrap.py --ui`
-
-Browser: typically `http://localhost:5173`. The UI must authenticate: set `VITE_VIKI_API_KEY` in `ui/.env` to match `VIKI_API_KEY` (see [docs/SETUP.md](docs/SETUP.md)).
+1. Launch VIKI CLI: `python viki/main.py`
+2. Interact directly via the terminal. The CLI-first architecture has replaced the legacy web dashboard.
 
 ### 3.3 Environment overrides (common)
 
@@ -258,10 +254,10 @@ Keep **`low_resource_mode`** or **`air_gap`** on hosts that must not do this wor
 - [docs/SETUP.md](docs/SETUP.md) — install and first run  
 - [README.md](README.md) — product overview and architecture pointers  
 - [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md) — full documentation index  
-- [viki/SECURITY_docs/SETUP.md](viki/SECURITY_docs/SETUP.md) — API keys, UI auth, integrations  
+- [viki/SECURITY_SETUP.md](../viki/SECURITY_SETUP.md) — API keys, UI auth, integrations  
 - [labs/security-lab/README.md](labs/security-lab/README.md) — optional local defensive AI security lab  
 - [labs/qa-automation/README.md](labs/qa-automation/README.md) — optional QA automation learning tracks  
 
 ---
 
-*Runbook version: aligned with VIKI v8.0.0 tree. Update this file when default ports, flags, or critical paths change.*
+*Runbook version: aligned with VIKI v8.2.0 (Sovereign). Update this file when default ports, flags, or critical paths change.*

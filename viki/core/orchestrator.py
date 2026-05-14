@@ -286,6 +286,7 @@ class VIKIController:
         self.is_agent_mode = False
         self.is_plan_mode = False
         self.is_debug_mode = False
+        self.is_singularity_mode = False
         
         # --- SECURITY FIX: HIGH-005 - Recursion depth tracking ---
         self._reflex_recursion_depth = 0
@@ -1336,7 +1337,7 @@ class VIKIController:
         # but only import when first invoked.
         for spec in self._LAZY_SKILL_SPECS:
             sname, sdesc, smod, scls, needs_ctrl, stier = spec
-            def _ctor(ctrl):
+            def _ctor(ctrl, scls=scls, needs_ctrl=needs_ctrl):
                 if scls == "SwarmSkill":
                     return (ctrl.swarm, ctrl)
                 return (ctrl,) if needs_ctrl else ()
@@ -1489,6 +1490,49 @@ class VIKIController:
             viki_logger.debug("get_router_telemetry: %s", e)
             return {"error": str(e)}
 
+    async def _process_reflex_outcome(self, cognitive_route, safe_input, session_id, on_event=None) -> str:
+        """Handles immediate execution of a reflex-triggered action."""
+        reflex_action_override = cognitive_route.action_override
+        if reflex_action_override is None:
+            return "Reflex logic error: no action provided."
+        
+        skill_name = reflex_action_override.skill_name
+        params = (reflex_action_override.parameters or {}).copy()
+        budget = self.budgets.get("general", self.budgets["general"])
+
+        # Safety & Permission checks
+        check_res = self.capabilities.check_permission(skill_name, params=params)
+        if not check_res.allowed:
+            viki_logger.warning(f"Reflex blocked: {check_res.reason}")
+            return f"Reflex blocked: {check_res.reason}"
+            
+        if not self.safety.validate_action(skill_name, params):
+             viki_logger.warning("Reflex blocked: safety policy.")
+             return "Reflex blocked: safety policy."
+
+        if on_event:
+            on_event("status", f"REFLEX EXECUTING {skill_name}")
+
+        result, err, latency = await self._execute_skill(skill_name, params, budget)
+        if err:
+             try:
+                 self.reflex.report_failure(safe_input)
+             except Exception: pass
+             return f"Reflex execution failed: {err}"
+             
+        self.skill_registry.record_execution(skill_name, True, latency)
+        msg = self._compress_output(f"Done. {result}")
+        self.memory.working.add_message("assistant", msg, session_id=session_id)
+        
+        # Meta decoration for telemetry
+        self._last_response_meta_by_session[session_id] = {
+            "cognitive_route": cognitive_route.as_dict(),
+            "reflex_executed": True,
+            "latency": latency
+        }
+        
+        return msg
+
     async def process_request(
         self,
         user_input: str,
@@ -1547,6 +1591,40 @@ class VIKIController:
         for match in file_matches:
              if os.path.sep in match or '.' in match:
                   self.world.set_active_file(match)
+
+        # 0. Fast Perception Layer (Reflex Brain)
+        reflex_resp, reflex_action = self.reflex.think(user_input)
+        if reflex_resp is not None:
+             # Short-circuit with canned response (greetings, acknowledgments, singularity)
+             viki_logger.info("Reflex hit (conversational). Returning immediately.")
+             # v26.2: Sovereign Singularity Activation
+             if "singularity" in reflex_resp.lower() and "activated" in reflex_resp.lower():
+                 self.is_singularity_mode = True
+                 viki_logger.info("SINGULARITY ACTIVATED via Reflex.")
+             return reflex_resp
+        
+        if reflex_action is not None:
+             # Short-circuit with direct action execution (time_skill, math_skill)
+             viki_logger.info(f"Reflex hit (action: {reflex_action.skill_name}). Bypassing deliberation.")
+             # Inject the reflex action as a pseudo-route for the rest of the pipeline
+             from viki.core.cognitive_loop import CognitiveRoute, JudgmentOutcome, JudgmentResult
+             reflex_route = CognitiveRoute(
+                 outcome=JudgmentOutcome.REFLEX,
+                 judgment=JudgmentResult(
+                     outcome=JudgmentOutcome.REFLEX,
+                     recommendation="proceed",
+                     reason="Reflex hit (bypass deliberation)",
+                     risk=0.0,
+                     clarity=1.0,
+                     novelty=0.0,
+                     complexity_score=0.1
+                 ),
+                 model_tier="fast",
+                 action_override=reflex_action,
+                 use_lite_schema=True,
+                 source="reflex"
+             )
+             return await self._process_reflex_outcome(reflex_route, safe_input, session_id)
 
         # Tenant Ops: OpsPlan first (no side effects until approval).
         if self._should_plan_ops(safe_input):
@@ -1979,6 +2057,7 @@ class VIKIController:
                     is_agent_mode=self.is_agent_mode,
                     is_plan_mode=self.is_plan_mode,
                     is_debug_mode=self.is_debug_mode,
+                    is_singularity_mode=self.is_singularity_mode,
                 )
                 self.internal_trace.append({
                     "strategy": viki_resp.final_thought.primary_strategy,

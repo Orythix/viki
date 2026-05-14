@@ -6,6 +6,18 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 
 ## [Unreleased]
 
+## [8.2.0] - 2026-05-14 (Sovereign Intelligence & Reflex Optimization)
+
+### Added
+- **Sovereign Singularity (Superpower)**: Implemented a high-agency cognitive mandate activated via "give superpower to viki". This mode enforces unrestricted engineering agency and predictive self-evolution.
+- **Rapid Reflex Pipeline**: Integrated a zero-latency `ReflexBrain` directly into the request pipeline, bypassing the full deliberation layer for high-frequency tasks (Time, Status, Singularity triggers).
+- **Hybrid Memory Search**: Developed `viki/core/memory/hybrid_search.py` using **rank_bm25** (Okapi BM25) combined with vector semantic recall for superior information retrieval.
+- **Dependency Management**: Added `rank_bm25` to core dependencies for advanced keyword ranking in memory retrieval.
+
+### Fixed
+- **Skill Loading Stability**: Resolved a critical closure capture bug in `viki/core/orchestrator.py` that caused lazy skill proxies to point to incorrect classes.
+- **Cognitive Routing**: Fixed `CognitiveRoute` instantiation regressions that were causing failures in the reflex execution path.
+
 ## [8.1.0] - 2026-05-13 (CLI-First Sovereignty)
 
 ### Removed

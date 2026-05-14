@@ -135,6 +135,17 @@ class ReflexBrain:
         if canned is not None:
             return canned, None
 
+        # Time-query fast path: intercept BEFORE the deliberation gate so
+        # "what time is it in Sweden?" never routes to the LLM + research loop.
+        time_action = self._match_time_query(clean_input)
+        if time_action is not None:
+            return None, time_action
+
+        # Superpower trigger: Activate Sovereign Singularity
+        if "give superpower" in clean_input or "superpower to viki" in clean_input:
+             viki_logger.info("SUPERPOWER ACTIVATED: Sovereign Singularity online.")
+             return "Sovereign Singularity mode activated. I have unlocked autonomous self-optimization, predictive memory capture, and neural forge hot-loading. My core directives are now aligned for maximum agentic agency. How shall we reshape our reality?", None
+
         if self._should_defer_to_deliberation(clean_input):
             return None, None
 
@@ -205,6 +216,37 @@ class ReflexBrain:
         pattern = self.learned_patterns[normalized]
         viki_logger.info(f"Reflex: Learned pattern match for '{normalized}' -> {pattern['skill']}")
         return ActionCall(skill_name=pattern["skill"], parameters=pattern["params"])
+
+    def _match_time_query(self, clean_input: str) -> Optional[ActionCall]:
+        """Dedicated fast path for time-zone queries. Runs before deliberation gate."""
+        # Strip common lead-ins like "hello viki, tell me "
+        clean = re.sub(r"^(?:(?:hello|hi|hey)\s+\w+[\s,]+)?(?:tell\s+me\s+)?", "", clean_input).strip()
+        
+        # Patterns covering: "time in X", "what time is it in X", "current time in X",
+        # "what time is it now in X", "what's the time in X"
+        patterns = [
+            # what time is it (now) in X
+            r"(?:what\s+time\s+is\s+it\s+(?:right\s+)?(?:now\s+)?in|time\s+in)\s+(?P<location>[\w\s\-\.]+?)(?:\s+right\s+now)?\??$",
+            # (current) time in X (now)
+            r"(?:what(?:'?s|\s+is)?\s+(?:the\s+)?)?(?:current\s+)?time(?:\s+(?:right\s+)?now)?\s+in\s+(?P<location>[\w\s\-\.]+?)(?:\s+right\s+now)?\??$",
+            # what is X's time
+            r"what(?:'?s|\s+is)?\s+(?:the\s+)?(?P<location_poss>[\w\s\-\.]+?)'?s\s+time\??$",
+        ]
+        
+        for pat in patterns:
+            m = re.search(pat, clean)
+            if m:
+                groups = m.groupdict()
+                location = (groups.get("location") or groups.get("location_poss") or "").strip()
+                
+                # Clean up the captured location
+                location = re.sub(r"\s+right\s+now$", "", location, flags=re.IGNORECASE).strip()
+                location = re.sub(r"\s+now$", "", location, flags=re.IGNORECASE).strip()
+                
+                if location:
+                    viki_logger.info(f"Reflex: Time-query fast path for location='{location}'")
+                    return ActionCall(skill_name="time_skill", parameters={"location": location})
+        return None
 
     def _match_regex_action(self, clean_input: str) -> Optional[ActionCall]:
         """Try regex patterns for system commands; returns an ActionCall or None."""

@@ -1,4 +1,4 @@
-# VIKI Architecture (v8.1.1 Industrial)
+# VIKI Architecture (v8.2.0 Sovereign)
 
 ## Core Philosophy
 Following the **Industrial Restructuring**, VIKI follows a **Clean Architecture (Hexagonal)** and **Domain-Driven Design (DDD)** pattern:
@@ -30,26 +30,34 @@ Following the **Industrial Restructuring**, VIKI follows a **Clean Architecture 
 *   **Learning Repository**: SQLAlchemy-based implementation for managing lessons and failures in SQLite with WAL mode.
 *   **Inference Gateway**: Bridge to Ollama and cloud providers.
 *   **Event Bus**: Asynchronous message passing.
+*   **Hybrid Memory Search** (`viki/core/memory/hybrid_search.py`): Combines BM25 keyword retrieval with vector semantic recall for high-fidelity context.
 
-### 5. Model Enhancement & Observability
+### 5. The Reflex Brain (`viki/core/reflex_brain.py`)
+*   **Role**: Zero-Latency Short-Circuit.
+*   **Function**: A high-speed intent classifier that bypasses the full Cortex deliberation for deterministic tasks. It provides sub-second responses for status checks, time queries, and Sovereign triggers.
+
+### 6. Model Enhancement & Observability
 *   **Knowledge Gaps** (`viki/core/knowledge_gaps.py`): Records low-confidence responses; dream research uses `get_research_topics()`.
 *   **Pattern Tracker**: Persists patterns to disk; survives restarts.
 *   **Performance Metrics**: Tracked internally for model routing and selection.
 *   **Continuous Learner** (`viki/core/continuous_learning.py`): Optional periodic training cycles with validation.
 
-See [viki/skills/creation/forge.py](viki/skills/creation/forge.py) (Neural Forge: prompt-bake writes `data/Modelfile.viki_evolved`, then `ollama create` with default tag **`viki-neural-forge`**, overridable via `system.forge_output_ollama_tag` / `VIKI_FORGE_OUTPUT_OLLAMA_MODEL`; optional LoRA) and [viki/SECURITY_docs/SETUP.md](viki/SECURITY_docs/SETUP.md) for operational details. CLI entry: [scripts/build_viki_model.py](scripts/build_viki_model.py).
+See [viki/skills/creation/forge.py](viki/skills/creation/forge.py) (Neural Forge: prompt-bake writes `data/Modelfile.viki_evolved`, then `ollama create` with default tag **`viki-neural-forge`**, overridable via `system.forge_output_ollama_tag` / `VIKI_FORGE_OUTPUT_OLLAMA_MODEL`; optional LoRA) and [viki/SECURITY_SETUP.md](../viki/SECURITY_SETUP.md) for operational details. CLI entry: [scripts/build_viki_model.py](scripts/build_viki_model.py).
 
 ## Cognitive Data Flow
 ```mermaid
     User[User Input] --> Nexus{Priority Nexus}
-    Nexus -->|P10: Urgent| Controller
+    Nexus -->|P10: Urgent| Reflex[Reflex Brain]
+    Reflex -->|Match| ReflexExec[Reflex Execution]
+    Reflex -->|Miss| Controller[Main Controller]
+    
     Nexus -->|P30: Proactive| Controller
     
     Controller --> SafetyCheck{Safety Envelope}
     SafetyCheck -->|Safe| Executor[Skill Executor]
     SafetyCheck -->|Risky| Confirm[Awaiting /confirm]
     
-    Controller --> Memory[RAG + Failure Memory]
+    Controller --> Memory[Hybrid Search: BM25 + Vector]
     Controller --> Router{Model Router}
     
     Router -->|Reflex| Phi3(Local)
@@ -59,6 +67,8 @@ See [viki/skills/creation/forge.py](viki/skills/creation/forge.py) (Neural Forge
     Executor -->|Success| UI[CLI / Messaging Bridge]
     Executor -->|Fail| Record[Record Failure]
     Record --> Memory
+    
+    ReflexExec --> UI
 ```
 
 ## Frontier Wiring (2026 Gap-Closure)
@@ -107,4 +117,4 @@ They do not change runtime imports for `python viki/main.py`; see each folder’
 
 ---
 
-*Runbook version: aligned with VIKI v8.1.1 (Industrial). Update this file when default ports, flags, or critical architecture patterns change.*
+*Runbook version: aligned with VIKI v8.2.0 (Sovereign). Update this file when default ports, flags, or critical architecture patterns change.*

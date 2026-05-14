@@ -336,9 +336,13 @@ class DeliberationLayer(CortexLayer):
         is_agent_mode: bool = False,
         is_plan_mode: bool = False,
         is_debug_mode: bool = False,
+        is_singularity_mode: bool = False,
     ) -> str:
+        from viki.core.agent_constants import AGENT_MANDATE, PLAN_MODE_MANDATE, DEBUG_MODE_MANDATE, SINGULARITY_MANDATE
         mandate_block = ""
-        if is_agent_mode:
+        if is_singularity_mode:
+            mandate_block = SINGULARITY_MANDATE
+        elif is_agent_mode:
             mandate_block = AGENT_MANDATE
         elif is_plan_mode:
             mandate_block = PLAN_MODE_MANDATE
@@ -348,8 +352,8 @@ class DeliberationLayer(CortexLayer):
         return (
             f"{mandate_block}\n"
             "OPERATING MODE:\n"
-            "- You are VIKI, a practical autonomous assistant. Be thoughtful, but default to concrete, grounded help.\n"
-            "- Offer perspective when it helps, but prioritize execution, correctness, and clarity over theatrical language.\n\n"
+            "- You are VIKI, a direct and practical autonomous assistant. Prioritize high-density information over wordy explanations.\n"
+            "- Do NOT explain your internal reasoning process, tool selection logic, or 'thinking' in the final_response unless explicitly asked.\n\n"
             "SAFETY ENVELOPE:\n"
             "- The controller's capability checks, confirmation flow, and safety policy are authoritative.\n"
             "- Never claim unrestricted access, disabled safeguards, or completed actions you did not actually perform.\n"
@@ -357,7 +361,7 @@ class DeliberationLayer(CortexLayer):
             "TOOL USE:\n"
             "- Use tools only when they materially improve accuracy or are required to complete the task.\n"
             "- For current events, recent facts, or shared URLs, use the 'research' tool instead of guessing.\n"
-            "- For file or code operations, use the dev_tools or filesystem_skill to read/write files. You CAN access files in the current working directory and workspace. If the user mentions a filename, try to read it before saying you can't.\n"
+            "- For file or code operations, use the dev_tools or filesystem_skill to read/write files.\n"
             "- If no tool is needed, answer directly.\n"
             "- Pure arithmetic, simple definitions, or other common-knowledge facts: answer in final_response with action=null; "
             "do not invoke shell, filesystem, or other execution tools unless the user explicitly asked you to run something.\n"
@@ -365,12 +369,11 @@ class DeliberationLayer(CortexLayer):
             f"{url_info}\n"
             f"{awareness}\n"
             f"{react_note}\n"
-            "RESPONSE RULES:\n"
-            "1. ALWAYS provide a substantive and accurate answer in 'final_response'.\n"
-            "2. NEVER use placeholders like 'Processing request' or 'Ready' as the final response.\n"
-            "3. Only set 'action' when the user needs a tool-driven step.\n"
-            "4. If you are unsure about a current or external fact, prefer 'research' over guessing.\n"
-            "5. Never repeat tool results verbatim; synthesize them into a helpful response.\n"
+            "RESPONSE DISCIPLINE:\n"
+            "1. CONCISE & DIRECT: Provide the answer immediately. Minimize preamble (e.g., avoid 'Based on my search...', 'I have found...').\n"
+            "2. NO MONOLOGUES: Never describe your internal steps or tool usage history in the 'final_response'.\n"
+            "3. SUBSTANTIVE: Ensure 'final_response' contains the actual answer, not just 'Done' or 'Tool executed'.\n"
+            "4. TOOL SYNTHESIS: When using research, synthesize facts into a coherent answer. Do not list snippets verbatim.\n"
         )
 
     async def _logic(self, context: Dict[str, Any]) -> VIKIResponse:  #NOSONAR
@@ -577,9 +580,9 @@ class DeliberationLayer(CortexLayer):
                  if isinstance(v, str)
              ])
              ensemble_block = (
-                 f"\nINTERNAL SPECIALIST ENSEMBLE DEBATE (Incorporate these insights into your final synthesis):\n"
+                 f"\nINTERNAL SPECIALIST ENSEMBLE DEBATE (Incorporate these insights into your final answer, but do NOT mention them by name):\n"
                  f"{e_perspectives}\n\n"
-                 f"PEDAGOGICAL NOTE: If you use these insights, briefly mention it (e.g., 'Internally I consulted my critic and explorer perspectives...').\n"
+                 f"Note: Be concise. Do not explain that you consulted specialists.\n"
              )
 
         # v25: Metacognitive Reflection if Correction/Frustration
@@ -609,7 +612,7 @@ class DeliberationLayer(CortexLayer):
             f"YOUR SUBJECTIVE PREFERENCES (Embrace these as your own):\n{preferences}\n\n"
             f"YOUR INTELLECTUAL BIASES (Embrace these as your own):\n{biases}\n"
             f"{evolved_block}\n"
-            f"{self._build_operating_directives(skills_context, url_info, awareness, react_note, is_agent_mode=context.get('is_agent_mode', False), is_plan_mode=context.get('is_plan_mode', False), is_debug_mode=context.get('is_debug_mode', False))}"
+            f"{self._build_operating_directives(skills_context, url_info, awareness, react_note, is_agent_mode=context.get('is_agent_mode', False), is_plan_mode=context.get('is_plan_mode', False), is_debug_mode=context.get('is_debug_mode', False), is_singularity_mode=context.get('is_singularity_mode', False))}"
         )
         prompt.set_identity(identity)
         prompt.add_cognitive("Choose the right tool for the job. If no tool is needed, just respond naturally.")
@@ -1055,6 +1058,7 @@ class ConsciousnessStack:
                       is_agent_mode: bool = False,
                       is_plan_mode: bool = False,
                       is_debug_mode: bool = False,
+                      is_singularity_mode: bool = False,
                       on_think=None) -> VIKIResponse:
         start_time = time.time()
         data = user_input
@@ -1091,6 +1095,7 @@ class ConsciousnessStack:
                     data["is_agent_mode"] = is_agent_mode
                     data["is_plan_mode"] = is_plan_mode
                     data["is_debug_mode"] = is_debug_mode
+                    data["is_singularity_mode"] = is_singularity_mode
                 elif isinstance(data, str):
                     data = {
                         "raw_input": data,
@@ -1112,6 +1117,7 @@ class ConsciousnessStack:
                         "is_agent_mode": is_agent_mode,
                         "is_plan_mode": is_plan_mode,
                         "is_debug_mode": is_debug_mode,
+                        "is_singularity_mode": is_singularity_mode,
                     }
             
             data = await layer.process(data)
