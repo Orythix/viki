@@ -1376,10 +1376,24 @@ class VIKIController:
         def _load_skill(module_path: str, class_name: str, *args):
             try:
                 module = importlib.import_module(module_path)
-                cls = getattr(module, class_name)
-                return cls(*args)
+                cls = getattr(module, class_name, None)
+                if not cls:
+                    # Case-insensitive fallback
+                    for attr in dir(module):
+                        if attr.lower() == class_name.lower():
+                            cls = getattr(module, attr)
+                            break
+                if not cls:
+                    return None
+                
+                # Check constructor signature or just try-catch
+                try:
+                    return cls(*args)
+                except TypeError:
+                    # Fallback for skills that don't accept controller yet
+                    return cls()
             except Exception as e:
-                viki_logger.warning(f"Skill '{class_name}' disabled: {e}")
+                viki_logger.warning(f"Skill '{class_name}' from {module_path} disabled: {e}")
                 self.disabled_skills[class_name] = str(e)
                 return None
 
@@ -1402,9 +1416,10 @@ class VIKIController:
             ("viki.skills.builtins.media_skill", "MediaControlSkill", ()),
             ("viki.skills.builtins.clipboard_skill", "ClipboardSkill", ()),
             ("viki.skills.builtins.window_management_skill", "WindowManagerSkill", ()),
-            ("viki.skills.builtins.shell_skill", "ShellSkill", ()),
+            ("viki.skills.builtins.shell_skill", "ShellSkill", (self,)),
             ("viki.skills.builtins.notification_skill", "NotificationSkill", ()),
             ("viki.skills.builtins.coding_workflow_skill", "CodingWorkflowSkill", (self,)),
+            ("viki.skills.builtins.lsp_skill", "LspSkill", (self,)),
         ]
         # v27: Dynamic Skill Discovery for Builtins
         import pkgutil
@@ -1418,9 +1433,14 @@ class VIKIController:
             full_modname = f"viki.skills.builtins.{modname}"
             if full_modname in registered_modules: continue
             
+            # Skip known helpers or non-skill modules
+            if modname in ("code_index_watcher", "legacy_math"): continue
+            
             # Simple heuristic: CamelCase class name from snake_case module
             class_name = "".join(word.capitalize() for word in modname.split("_"))
-            if not class_name.endswith("Skill"): class_name += "Skill"
+            if not class_name.endswith("Skill") and class_name not in ("LSPSkill", "SFS"): 
+                # Avoid double "Skill" but ensure it's there for most
+                class_name += "Skill"
             
             discovered_specs.append((full_modname, class_name, (self,)))
             viki_logger.debug(f"Discovered skill: {class_name} in {full_modname}")
@@ -2233,13 +2253,21 @@ class VIKIController:
                         "result": f"Executed {summary['done']} tasks. Status: {'Success' if summary['failed'] == 0 else 'Partial Failure'}",
                         "step": react_step + 1
                     })
+                    
+                    if summary['failed'] == 0 and summary['done'] > 0:
+                        status_msg = f"I've successfully completed the implementation for '{self.world.state.active_goal}'."
+                    elif summary['done'] > 0:
+                        status_msg = f"I've partially completed the implementation for '{self.world.state.active_goal}', but {summary['failed']} tasks failed. Please review the logs."
+                    else:
+                        status_msg = f"I attempted to execute the task graph for '{self.world.state.active_goal}', but no tasks were completed successfully."
+
                     viki_resp = VIKIResponse(
                         final_thought=ThoughtObject(
                             intent_summary="Task Graph Execution",
                             primary_strategy="Direct implementation via sovereign task planner",
                             confidence=1.0
                         ),
-                        final_response=f"I've completed the implementation for {self.world.state.active_goal}. Moving to verification.",
+                        final_response=status_msg + " Moving to verification.",
                         action=None
                     )
                 

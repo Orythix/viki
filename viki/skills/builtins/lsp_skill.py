@@ -4,7 +4,7 @@ from viki.integrations.lsp_bridge import LSPBridge
 from viki.config.logger import viki_logger
 import os
 
-class LSPSkill(BaseSkill):
+class LspSkill(BaseSkill):
     """
     Language Server Protocol (LSP) integration for IDE-grade code analysis.
     Provides diagnostics, hover information, and symbol references.

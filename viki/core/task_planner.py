@@ -220,7 +220,7 @@ class PlannerExecutor:
                      id="t2",
                      type=TaskType.SHELL,
                      description="Initialize project directory",
-                     parameters={"command": "mkdir project -ea 0; if ($?) { echo 'Created' } else { echo 'Exists' }"},
+                     parameters={"command": "powershell -NoProfile -Command \"New-Item -ItemType Directory -Path project -Force\""},
                      depends_on=["t1"]
                  ),
                  PlanTask(
@@ -270,7 +270,9 @@ class PlannerExecutor:
                         t.status = TaskStatus.BLOCKED
                 break
             for task in ready:
+                viki_logger.info(f"PlannerExecutor: Running task {task.id} ({task.type.value}): {task.description}")
                 await self._run_task(task)
+                viki_logger.info(f"PlannerExecutor: Task {task.id} finished with status {task.status.value}")
         return graph
 
     async def _run_task(self, task: PlanTask) -> None:

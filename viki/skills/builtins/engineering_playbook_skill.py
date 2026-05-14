@@ -9,7 +9,8 @@ from viki.skills.base import BaseSkill
 
 
 class EngineeringPlaybookSkill(BaseSkill):
-    def __init__(self) -> None:
+    def __init__(self, controller: Optional[Any] = None) -> None:
+        self._controller = controller
         self._playbooks_dir = Path(__file__).resolve().parent.parent / "playbooks"
         self._slug_to_path: Dict[str, Path] = self._discover_playbooks()
         self._cache: Dict[str, str] = {}

@@ -11,7 +11,8 @@ from viki.skills.base import BaseSkill
 class MegatronLmPlaybookSkill(BaseSkill):
     """Loads Cursor-style SKILL.md bundles vendored from NVIDIA Megatron-LM."""
 
-    def __init__(self) -> None:
+    def __init__(self, controller: Optional[Any] = None) -> None:
+        self._controller = controller
         self._skills_root = Path(__file__).resolve().parent.parent / "playbooks" / "megatron_lm"
         self._slug_to_path: Dict[str, Path] = self._discover_skills()
         self._cache: Dict[str, str] = {}
