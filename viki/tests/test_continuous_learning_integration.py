@@ -22,11 +22,13 @@ def _run(coro):
     return asyncio.run(coro)
 
 
-def _write_results(data_dir: str, suite: str, results):
+def _write_results(data_dir: str, suite: str, results, metadata=None):
     suite_dir = os.path.join(data_dir, "eval_results", suite)
     os.makedirs(suite_dir, exist_ok=True)
     path = os.path.join(suite_dir, "001.jsonl")
     with open(path, "w", encoding="utf-8") as f:
+        if metadata:
+            f.write(json.dumps({"__metadata__": True, **metadata}) + "\n")
         for r in results:
             f.write(json.dumps(r) + "\n")
 
@@ -58,7 +60,8 @@ class TestContinuousLearnerIntegration(unittest.TestCase):
     def test_capability_index_returns_number(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             _write_results(td, "humaneval_plus",
-                           [{"task_id": f"t{i}", "score": 1.0, "passed": True} for i in range(5)])
+                           [{"task_id": f"t{i}", "score": 1.0, "passed": True} for i in range(5)],
+                           metadata={"model_profile": "local-7b", "model_name": "local-7b:latest"})
             ctrl = _StubController(td)
             cl = ContinuousLearner(ctrl)
             score = _run(cl._capability_index_for("local-7b"))
@@ -71,7 +74,7 @@ class TestContinuousLearnerIntegration(unittest.TestCase):
             ctrl = _StubController(td)
             cl = ContinuousLearner(ctrl)
             score = _run(cl._capability_index_for("local-7b"))
-            self.assertIsNotNone(score)
+            self.assertIsNone(score)
 
 
 if __name__ == "__main__":

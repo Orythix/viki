@@ -22,8 +22,13 @@ class ContinuousLearner:
         self.training_enabled = True
         # Phase 5: eval-gated promotion configuration.
         sys_cfg = (controller.settings.get("system") or {}) if getattr(controller, "settings", None) else {}
-        self.promotion_min_index_delta = float(sys_cfg.get("promotion_min_index_delta", 0.01))
-        self.promotion_min_consecutive_passes = int(sys_cfg.get("promotion_min_consecutive_passes", 2))
+        forge_cfg = (controller.settings.get("forge") or {}) if getattr(controller, "settings", None) else {}
+        self.promotion_min_index_delta = float(
+            sys_cfg.get("promotion_min_index_delta", forge_cfg.get("promotion_min_index_delta", 0.01))
+        )
+        self.promotion_min_consecutive_passes = int(
+            sys_cfg.get("promotion_min_consecutive_passes", forge_cfg.get("promotion_min_consecutive_passes", 2))
+        )
         data_dir = sys_cfg.get("data_dir", "./data")
         self.promotion_state_path = os.path.join(data_dir, "promotion_state.json")
         self._promotion_state: Dict[str, Any] = self._load_promotion_state()
@@ -244,10 +249,13 @@ class ContinuousLearner:
                 os.path.join(data_dir, "eval_results"),
                 min_tasks=min_tasks,
                 bootstrap_iters=bootstrap,
+                model_filter=model_name,
             )
             snapshot = ci.compute()
         except Exception as e:
             viki_logger.debug("ContinuousLearner: capability index compute failed: %s", e)
+            return None
+        if not snapshot or not snapshot.get("suites"):
             return None
         return float(snapshot.get("capability_index", 0.0)) if snapshot else None
 
@@ -275,6 +283,12 @@ class ContinuousLearner:
             )
             return False
         baseline_score = await self._capability_index_for(current_default) if current_default else 0.0
+        if current_default and baseline_score is None:
+            viki_logger.info(
+                "ContinuousLearner: no eval data for baseline %s; skipping promotion gate.",
+                current_default,
+            )
+            return False
         baseline_score = baseline_score or 0.0
 
         passes = self._promotion_state.setdefault("consecutive_passes", {})
@@ -377,24 +391,75 @@ class ContinuousLearner:
         self._apply_default_model(target)
         return {"ok": True, "new_default": target, "previous": previous}
 
+    @staticmethod
+    def _same_model_tag(left: Optional[str], right: Optional[str]) -> bool:
+        if not left or not right:
+            return False
+        l = left.strip().lower()
+        r = right.strip().lower()
+        aliases_l = {l}
+        aliases_r = {r}
+        if l.endswith(":latest"):
+            aliases_l.add(l[: -len(":latest")])
+        elif ":" not in l:
+            aliases_l.add(f"{l}:latest")
+        if r.endswith(":latest"):
+            aliases_r.add(r[: -len(":latest")])
+        elif ":" not in r:
+            aliases_r.add(f"{r}:latest")
+        return bool(aliases_l & aliases_r)
+
+    def _default_profile_for_model(self, model_name: str) -> tuple[str, Optional[str]]:
+        """
+        Resolve a candidate model/tag to the profile key that should become
+        `models.default`. If a raw Ollama tag is promoted, reuse the
+        `viki-evolved` profile when available and retarget its `model_name`.
+        """
+        mc = self.controller.models_config or {}
+        models_root = mc.setdefault("models", {})
+        profiles = models_root.get("profiles") or {}
+        if model_name in profiles:
+            return model_name, None
+        for profile_name, profile in profiles.items():
+            if isinstance(profile, dict) and self._same_model_tag(profile.get("model_name"), model_name):
+                return profile_name, None
+        if "viki-evolved" in profiles:
+            return "viki-evolved", model_name
+        return model_name, None
+
     def _apply_default_model(self, model_name: str) -> None:
         try:
             mc = self.controller.models_config or {}
-            mc.setdefault("models", {})["default"] = model_name
+            models_root = mc.setdefault("models", {})
+            profile_name, retarget_model_name = self._default_profile_for_model(model_name)
+            models_root["default"] = profile_name
+            if retarget_model_name:
+                profiles = models_root.setdefault("profiles", {})
+                profile = profiles.setdefault(profile_name, {})
+                if isinstance(profile, dict):
+                    profile["model_name"] = retarget_model_name
             # Persist to disk if possible.
-            cfg_path = os.path.join(os.path.dirname(__file__), "..", "config", "models.yaml")
-            cfg_path = os.path.abspath(cfg_path)
+            cfg_path = getattr(self.controller, "models_config_path", None)
+            if not cfg_path:
+                cfg_path = os.path.join(os.path.dirname(__file__), "..", "config", "models.yaml")
+                cfg_path = os.path.abspath(cfg_path)
             if os.path.isfile(cfg_path):
                 try:
                     import yaml  # type: ignore
 
                     with open(cfg_path, "r", encoding="utf-8") as f:
                         data = yaml.safe_load(f) or {}
-                    data.setdefault("models", {})["default"] = model_name
+                    data_models = data.setdefault("models", {})
+                    data_models["default"] = profile_name
+                    if retarget_model_name:
+                        profiles = data_models.setdefault("profiles", {})
+                        profile = profiles.setdefault(profile_name, {})
+                        if isinstance(profile, dict):
+                            profile["model_name"] = retarget_model_name
                     with open(cfg_path, "w", encoding="utf-8") as f:
                         yaml.safe_dump(data, f, sort_keys=False)
                 except Exception as e:
                     viki_logger.debug("ContinuousLearner: failed to rewrite models.yaml: %s", e)
-            viki_logger.info("ContinuousLearner: default model now %s", model_name)
+            viki_logger.info("ContinuousLearner: default model profile now %s (%s)", profile_name, model_name)
         except Exception as e:
             viki_logger.warning("ContinuousLearner: apply default failed: %s", e)

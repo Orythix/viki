@@ -60,6 +60,61 @@ class TestCapabilityIndexRigor(unittest.TestCase):
                              d2["suites"][0]["provenance_sha256"])
             self.assertTrue(d1["suites"][0]["provenance_sha256"])
 
+    def test_model_filter_selects_latest_matching_run(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
+            _write_suite(
+                td,
+                "humaneval_plus",
+                "001",
+                [
+                    {"__metadata__": True, "model_profile": "viki-base", "model_name": "viki-base:latest"},
+                    {"task_id": "base", "score": 0.0, "passed": False},
+                ],
+            )
+            _write_suite(
+                td,
+                "humaneval_plus",
+                "002",
+                [
+                    {"__metadata__": True, "model_profile": "viki-evolved", "model_name": "viki-neural-forge"},
+                    {"task_id": "candidate", "score": 1.0, "passed": True},
+                ],
+            )
+
+            candidate = CapabilityIndex(
+                td,
+                min_tasks=0,
+                bootstrap_iters=0,
+                model_filter="viki-neural-forge:latest",
+            ).compute()
+            baseline = CapabilityIndex(
+                td,
+                min_tasks=0,
+                bootstrap_iters=0,
+                model_filter="viki-base",
+            ).compute()
+
+            self.assertEqual(candidate["suites"][0]["model"], "viki-neural-forge")
+            self.assertAlmostEqual(candidate["axes"]["coding"], 1.0)
+            self.assertAlmostEqual(baseline["axes"]["coding"], 0.0)
+
+    def test_model_filter_ignores_untagged_legacy_runs(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
+            _write_suite(
+                td,
+                "humaneval_plus",
+                "001",
+                [{"task_id": "legacy", "score": 1.0, "passed": True}],
+            )
+            scoped = CapabilityIndex(
+                td,
+                min_tasks=0,
+                bootstrap_iters=0,
+                model_filter="viki-evolved",
+            ).compute()
+            self.assertEqual(scoped["suites"], [])
+            self.assertEqual(scoped["qualifying_suites"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

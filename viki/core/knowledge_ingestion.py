@@ -525,11 +525,13 @@ class LearningModule:
         format: str = "jsonl",
         min_access_count: Optional[int] = None,
         settings: Optional[Dict[str, Any]] = None,
+        include_failures: bool = False,
     ) -> str:
         """
         Export reinforced lessons for LoRA / external trainers.
         Rows include lessons with access_count >= min_access_count (default from settings/env, usually 2).
         format: jsonl (default, one object per line with \"text\" for TRL/Unsloth), alpaca, openai
+        include_failures: If True, also exports negative examples from the failures table.
         """
         min_ac = self.resolve_export_min_access_count(min_access_count, settings)
         cur = self.conn.cursor()
@@ -590,9 +592,40 @@ class LearningModule:
         else:
             raise ValueError(f"Unknown export format: {format}")
 
+        if include_failures:
+            cur.execute("SELECT action, error, context FROM failures ORDER BY timestamp DESC LIMIT 100")
+            fail_rows = cur.fetchall()
+            for f in fail_rows:
+                action, error, context = f["action"], f["error"], f["context"]
+                if format == "jsonl":
+                    block = (
+                        f"### Instruction:\nFailure Avoidance: Do not repeat this past mistake.\n"
+                        f"### Input:\nContext: {context}\nAction: {action}\n### Response:\n"
+                        f"Result was an ERROR: {error}. In the future, identify a safer or more correct strategy."
+                    )
+                    lines.append(json.dumps({"text": block}, ensure_ascii=False))
+                elif format == "alpaca":
+                    lines.append(json.dumps({
+                        "instruction": "Failure Avoidance: Do not repeat this past mistake.",
+                        "input": f"Context: {context}\nAction: {action}",
+                        "output": f"Avoid this. Result: {error}"
+                    }, ensure_ascii=False))
+                elif format == "openai":
+                    lines.append(json.dumps({
+                        "messages": [
+                            {"role": "system", "content": "You are VIKI's failure avoidance trainer."},
+                            {"role": "user", "content": f"Context: {context}\nAction: {action}"},
+                            {"role": "assistant", "content": f"This action failed with: {error}. Do not repeat."}
+                        ]
+                    }, ensure_ascii=False))
+
         with open(output_path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
-        return f"Exported {len(lines)} rows to {output_path} ({format}, min_access_count={min_ac})."
+        
+        status_msg = f"Exported {len(lines)} rows to {output_path} ({format}, min_access_count={min_ac})"
+        if include_failures:
+            status_msg += " (including failure cases)"
+        return status_msg
 
     def import_lessons_from_jsonl(
         self,

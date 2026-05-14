@@ -64,6 +64,13 @@ def create_modelfile():
         summary = summarize_memories(memories)
         memory_block = f"\n\nCORE SEMANTIC KNOWLEDGE:\n{summary}"
 
+    # Also include failure avoidance
+    failures = learning.get_relevant_failures("", limit=10)
+    failure_block = ""
+    if failures:
+        fail_summary = "\n".join([f"- {f}" for f in failures])
+        failure_block = f"\n\nFAILURE AVOIDANCE (Lessons from past mistakes):\n{fail_summary}"
+
     base_model = os.environ.get("VIKI_FORGE_BASE_OLLAMA_MODEL", "gemma4:latest").strip() or "gemma4:latest" 
     
     modelfile_content = f"""
@@ -74,6 +81,7 @@ PARAMETER top_p 0.9
 SYSTEM \"\"\"
 {system_prompt}
 {memory_block}
+{failure_block}
 \"\"\"
 """
     

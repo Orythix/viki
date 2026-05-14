@@ -33,6 +33,7 @@ def _stub_controller(data_dir: str, settings: Optional[dict] = None) -> SimpleNa
     return SimpleNamespace(
         settings={"system": {"data_dir": data_dir, **(settings or {})}},
         models_config={"models": {"default": "viki-base"}},
+        models_config_path=os.path.join(data_dir, "models.yaml"),
         learning=_StubLearning(),
         skill_registry=None,
     )
@@ -125,15 +126,47 @@ class TestPromotionGate(unittest.TestCase):
         os.makedirs(suite_dir, exist_ok=True)
         with open(os.path.join(suite_dir, "run1.jsonl"), "w", encoding="utf-8") as f:
             f.write(json.dumps({
-                "task_id": "t1", "score": 1.0, "passed": True, "air_gap": True,
+                "__metadata__": True,
+                "model_profile": "any-model",
+                "model_name": "any-model:latest",
+                "air_gap": True,
             }) + "\n")
             f.write(json.dumps({
-                "task_id": "t2", "score": 1.0, "passed": True, "air_gap": True,
+                "task_id": "t1", "score": 1.0, "passed": True,
+            }) + "\n")
+            f.write(json.dumps({
+                "task_id": "t2", "score": 1.0, "passed": True,
             }) + "\n")
 
         score = _run(learner._capability_index_for("any-model"))
         self.assertIsNotNone(score, "capability index should compute, not silently fail")
         self.assertGreaterEqual(score, 0.0)
+
+    def test_raw_ollama_tag_retargets_viki_evolved_profile(self):
+        controller = _stub_controller(self.data_dir)
+        controller.models_config = {
+            "models": {
+                "default": "gemma4",
+                "profiles": {
+                    "gemma4": {"model_name": "gemma4:latest"},
+                    "viki-evolved": {"model_name": "old-forge:latest"},
+                },
+            }
+        }
+        with open(controller.models_config_path, "w", encoding="utf-8") as f:
+            import yaml
+
+            yaml.safe_dump(controller.models_config, f)
+
+        learner = ContinuousLearner(controller)
+        result = learner.force_promote("viki-neural-forge", operator="alice")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(controller.models_config["models"]["default"], "viki-evolved")
+        self.assertEqual(
+            controller.models_config["models"]["profiles"]["viki-evolved"]["model_name"],
+            "viki-neural-forge",
+        )
 
 
 class TestScorecardSegmentation(unittest.TestCase):

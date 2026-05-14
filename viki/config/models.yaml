@@ -15,7 +15,7 @@ models:
     mock:
       type: mock
 
-  default: gemma4
+  default: viki-evolved
 
   profiles:
 
@@ -56,7 +56,7 @@ models:
 
     viki-evolved:
       provider: ollama
-      model_name: viki-evolved:latest
+      model_name: viki-evolved-targeted-20260514-100641:latest
       priority: 90
       timeout_seconds: 180
       max_context_tokens: 32768

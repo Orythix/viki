@@ -24,7 +24,7 @@ import os
 import random
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 
 # P2: minimum number of tasks required for a suite to count toward the
@@ -63,6 +63,7 @@ class SuiteResult:
     air_gap: bool = False
     timestamp: float = 0.0
     metadata: Dict[str, Any] = field(default_factory=dict)
+    model: Optional[str] = None
     qualifies: bool = True
     ci_low: float = 0.0
     ci_high: float = 0.0
@@ -78,6 +79,7 @@ class SuiteResult:
             "air_gap": self.air_gap,
             "timestamp": self.timestamp,
             "metadata": self.metadata,
+            "model": self.model,
             "qualifies": self.qualifies,
             "ci_low": round(self.ci_low, 4),
             "ci_high": round(self.ci_high, 4),
@@ -118,19 +120,69 @@ def _provenance_sha256(path: str) -> str:
         return ""
 
 
+MODEL_ID_KEYS = (
+    "model",
+    "model_name",
+    "model_label",
+    "model_profile",
+    "profile",
+    "default_model",
+)
+
+
+def _model_aliases(value: Any) -> Set[str]:
+    """Return exact-match aliases for profile names and Ollama `:latest` tags."""
+    if not isinstance(value, str):
+        return set()
+    raw = value.strip().lower()
+    if not raw:
+        return set()
+    aliases = {raw}
+    if raw.endswith(":latest"):
+        aliases.add(raw[: -len(":latest")])
+    elif ":" not in raw:
+        aliases.add(f"{raw}:latest")
+    return aliases
+
+
+def _model_values(obj: Dict[str, Any]) -> List[str]:
+    values: List[str] = []
+    for key in MODEL_ID_KEYS:
+        value = obj.get(key)
+        if isinstance(value, str) and value.strip():
+            values.append(value.strip())
+    return values
+
+
+def _matches_model_filter(values: List[str], model_filter: Optional[str]) -> bool:
+    if not model_filter:
+        return True
+    wanted = _model_aliases(model_filter)
+    return any(_model_aliases(value) & wanted for value in values)
+
+
 class CapabilityIndex:
     def __init__(
         self,
         results_root: str,
         min_tasks: int = DEFAULT_MIN_TASKS,
         bootstrap_iters: int = DEFAULT_BOOTSTRAP_ITERS,
+        model_filter: Optional[str] = None,
     ):
         self.results_root = results_root
         self.min_tasks = max(0, int(min_tasks))
         self.bootstrap_iters = max(0, int(bootstrap_iters))
+        self.model_filter = model_filter
 
     def latest_runs(self) -> List[SuiteResult]:
-        """Walk `<root>/<suite>/` and pick the most recent `.jsonl` per suite."""
+        """
+        Walk `<root>/<suite>/` and pick the most recent `.jsonl` per suite.
+
+        When `model_filter` is set, pick the most recent run in each suite that
+        was explicitly tagged for that model/profile. Untagged legacy runs are
+        ignored for model-scoped comparisons because they cannot prove which
+        model produced the score.
+        """
         runs: List[SuiteResult] = []
         if not os.path.isdir(self.results_root):
             return runs
@@ -142,11 +194,12 @@ class CapabilityIndex:
             if not jsonls:
                 continue
             jsonls.sort(reverse=True)
-            latest = jsonls[0]
-            run_path = os.path.join(suite_dir, latest)
-            sr = self._load_run(suite, latest, run_path)
-            if sr is not None:
-                runs.append(sr)
+            for latest in jsonls:
+                run_path = os.path.join(suite_dir, latest)
+                sr = self._load_run(suite, latest, run_path)
+                if sr is not None:
+                    runs.append(sr)
+                    break
         return runs
 
     def _load_run(self, suite: str, run_id: str, path: str) -> Optional[SuiteResult]:
@@ -155,6 +208,7 @@ class CapabilityIndex:
             passes: List[bool] = []
             air_gap = False
             metadata: Dict[str, Any] = {}
+            run_model_values: List[str] = []
             with open(path, "r", encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
@@ -164,7 +218,21 @@ class CapabilityIndex:
                     if obj.get("__metadata__"):
                         metadata = obj
                         air_gap = bool(obj.get("air_gap", False))
+                        run_model_values = _model_values(obj)
+                        if (
+                            self.model_filter
+                            and run_model_values
+                            and not _matches_model_filter(run_model_values, self.model_filter)
+                        ):
+                            return None
                         continue
+                    row_model_values = _model_values(obj)
+                    if self.model_filter:
+                        if row_model_values:
+                            if not _matches_model_filter(row_model_values, self.model_filter):
+                                continue
+                        elif not run_model_values:
+                            continue
                     s = float(obj.get("score", 0.0))
                     scores.append(s)
                     passes.append(bool(obj.get("passed", s >= 0.5)))
@@ -182,6 +250,7 @@ class CapabilityIndex:
                 air_gap=air_gap,
                 timestamp=os.path.getmtime(path),
                 metadata=metadata,
+                model=(run_model_values[0] if run_model_values else self.model_filter),
                 qualifies=qualifies,
                 ci_low=ci_low,
                 ci_high=ci_high,

@@ -52,6 +52,40 @@ def _ensure_dir(path: str) -> None:
     os.makedirs(path, exist_ok=True)
 
 
+def _active_model_identity(controller) -> Dict[str, Optional[str]]:
+    """
+    Best-effort identity for the model under evaluation.
+
+    The router stores models by profile key (e.g. `gemma4`) while providers
+    expose an engine/tag (e.g. `gemma4:latest`). Persist both so promotion can
+    compare candidates against baselines instead of reading unscoped eval files.
+    """
+    model_profile: Optional[str] = None
+    model_name: Optional[str] = None
+    try:
+        model_profile = (
+            ((getattr(controller, "models_config", {}) or {}).get("models") or {}).get("default")
+        )
+    except Exception:
+        model_profile = None
+    try:
+        router = getattr(controller, "model_router", None)
+        default_model = getattr(router, "default_model", None)
+        model_name = getattr(default_model, "model_name", None)
+        if router is not None and default_model is not None and not model_profile:
+            for profile, model in getattr(router, "models", {}).items():
+                if model is default_model:
+                    model_profile = profile
+                    break
+    except Exception:
+        model_name = None
+    return {
+        "model_profile": model_profile,
+        "model_name": model_name,
+        "model_label": model_profile or model_name,
+    }
+
+
 def load_jsonl(path: str) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
     if not os.path.isfile(path):
@@ -135,6 +169,7 @@ async def run_harness(
         "persona": cfg.persona,
         "started_at": time.time(),
     }
+    metadata.update({k: v for k, v in _active_model_identity(controller).items() if v})
 
     passed = 0
     total_score = 0.0
@@ -156,6 +191,8 @@ async def run_harness(
             row = {
                 "task_id": task.get("id", str(i)),
                 "task_name": task.get("name") or task.get("id"),
+                "model_profile": metadata.get("model_profile"),
+                "model_name": metadata.get("model_name"),
                 "prompt": prompt[:500],
                 "response": (response or "")[:1500],
                 "score": score.score,
@@ -178,7 +215,17 @@ async def run_harness(
         "mean_score": total_score / len(tasks),
         "results_path": out_path,
         "air_gap": cfg.air_gap,
+        "model_profile": metadata.get("model_profile"),
+        "model_name": metadata.get("model_name"),
     }
+    try:
+        router = getattr(controller, "model_router", None)
+        if router is not None:
+            for candidate in (metadata.get("model_profile"), metadata.get("model_name")):
+                if candidate:
+                    router.apply_eval_signal(candidate, summary["pass_rate"])
+    except Exception:
+        pass
     viki_logger.info(
         "Eval[%s] done: pass_rate=%.2f%% mean_score=%.3f",
         cfg.suite,
@@ -205,7 +252,7 @@ def make_arg_parser(suite: str, default_dataset: str) -> argparse.ArgumentParser
 
 def build_controller(args, persona_name: Optional[str] = None):
     """Construct a VIKIController suitable for evals."""
-    from viki.core.controller import VIKIController
+    from viki.core.orchestrator import VIKIController
     from viki.config.resolve import get_soul_path
 
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
