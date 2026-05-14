@@ -4,7 +4,7 @@ import time
 
 class ActionCall(BaseModel):
     """Represents a single skill execution."""
-    skill_name: str = Field(..., description="The name of the skill to execute (e.g., 'research', 'system_control')")
+    skill_name: str = Field("", description="The name of the skill to execute (e.g., 'research', 'system_control')")
     parameters: Dict[str, Any] = Field(default_factory=dict, description="Parameters to pass to the skill")
 
 class ThoughtObject(BaseModel):

@@ -122,7 +122,37 @@ class SimpleInterface:
         pass # Input prompt handles this cleanly now
 
     def print_viki(self, text):
-        self.console.print(f"{text}\n")
+        from rich.markdown import Markdown
+        from rich.panel import Panel
+        import re
+
+        # Separate system traces from the final response if present
+        trace_match = re.search(r"(\[SYSTEM_TRACE\].*)$", text, re.DOTALL | re.IGNORECASE)
+        main_content = text
+        trace_content = ""
+        
+        if trace_match:
+            main_content = text[:trace_match.start()].strip()
+            trace_content = trace_match.group(1).strip()
+
+        # Render main response in a clean panel
+        self.console.print(Panel(
+            Markdown(main_content),
+            title="[bold magenta]VIKI[/]",
+            title_align="left",
+            border_style="magenta",
+            padding=(1, 2)
+        ))
+
+        # Render trace content in a subtle, dimmed way if it exists
+        if trace_content:
+            self.console.print(Panel(
+                f"[dim]{trace_content}[/]",
+                title="[dim]System Trace[/]",
+                border_style="dim",
+                padding=(0, 1)
+            ))
+        self.console.print()
         
     def print_error(self, text):
         self.console.print(f"[bold red]Error:[/] {text}\n")
@@ -258,6 +288,7 @@ async def _run_interactive_loop(controller, interface, on_event, streaming_state
                 interface.console.print("[bold cyan]Available Commands:[/]")
                 interface.console.print("  [green]/help[/]     — Show this help")
                 interface.console.print("  [green]/skills[/]   — List all registered skills")
+                interface.console.print("  [green]/train[/]    — Trigger Neural Forge to evolve VIKI (bake memories into model)")
                 interface.console.print("  [green]/shadow[/]   — Toggle shadow mode (simulate vs real execution)")
                 interface.console.print("  [green]/debug[/]    — Toggle debug logging")
                 interface.console.print("  [green]/exit[/]     — Shutdown VIKI")
@@ -270,6 +301,16 @@ async def _run_interactive_loop(controller, interface, on_event, streaming_state
                 interface.console.print("  [green]/save[/]     — Save session: /save <name>")
                 interface.console.print("  [green]/load[/]     — Load session: /load <name>")
                 interface.console.print("  [green]/boundary[/] — Refresh the Sovereign Boundary dashboard")
+                continue
+
+            if user_input.lower() == "/train":
+                interface.console.print("[bold blue]Initiating Neural Forge Evolution...[/]")
+                from viki.evolution_engine import main_forge
+                success = main_forge()
+                if success:
+                    interface.console.print("[bold green]Evolution successful! Evolved model 'viki-evolved' is now updated.[/]")
+                else:
+                    interface.console.print("[bold red]Evolution failed. Check logs for details.[/]")
                 continue
             
             if user_input.lower() == "/boundary":

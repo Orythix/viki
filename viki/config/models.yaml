@@ -3,42 +3,155 @@ models:
     ollama:
       type: local
       base_url: http://localhost:11434
+
     openai:
       type: api
       api_key: ${OPENAI_API_KEY}
+
     anthropic:
       type: anthropic
       api_key: ${ANTHROPIC_API_KEY}
+
     mock:
       type: mock
-  default: viki-base
+
+  default: gemma4
+
   profiles:
-    qwen35:
+
+    gemma4:
       provider: ollama
-      model_name: qwen3.5:latest
-      priority: 4
+      model_name: gemma4:latest
+      priority: 100
+      timeout_seconds: 120
+      max_context_tokens: 32768
+
       capabilities:
-      - chat
-      - reasoning
-      - tool_use
+        - chat
+        - reasoning
+        - coding
+        - tool_use
+
       supports_native_tools: true
-      description: Primary local model for all tasks.
+      supports_streaming: true
+      local_first: true
+
+      description: |
+        Primary sovereign local model used for all standard operations.
+
     viki-trainer:
       provider: ollama
-      model_name: qwen3.5:latest
+      model_name: gemma4:latest
       training_only: true
-      priority: 1
+      priority: 10
+      timeout_seconds: 300
+
       capabilities:
-      - training
-      description: Dedicated training/evolution persona.
+        - training
+        - dataset_generation
+        - self_reflection
+
+      description: |
+        Dedicated training and evolutionary refinement model.
+
     viki-evolved:
       provider: ollama
       model_name: viki-evolved:latest
-      priority: 3
+      priority: 90
+      timeout_seconds: 180
+      max_context_tokens: 32768
+
       capabilities:
-      - chat
-      - sovereign
-      description: The evolved version of VIKI with baked-in knowledge.
+        - chat
+        - reasoning
+        - sovereign
+        - memory
+        - autonomous_planning
+
+      supports_native_tools: true
+      supports_streaming: true
+
+      description: |
+        Advanced evolved VIKI persona with persistent behavioral tuning.
+
+    gpt-5:
+      provider: openai
+      model_name: gpt-5
+      priority: 50
+      fallback: true
+
+      capabilities:
+        - reasoning
+        - coding
+        - planning
+        - tool_use
+
+      supports_native_tools: true
+      supports_streaming: true
+
+      description: |
+        Cloud reasoning fallback model for difficult tasks.
+
+    claude-sonnet:
+      provider: anthropic
+      model_name: claude-sonnet-4
+      priority: 40
+      fallback: true
+
+      capabilities:
+        - reasoning
+        - writing
+        - analysis
+
+      supports_streaming: true
+
+      description: |
+        Long-context analysis and writing model.
+
+  routing:
+
+    prefer_local_models: true
+
+    fallback_order:
+      - viki-evolved
+      - gemma4
+      - gpt-5
+      - claude-sonnet
+
+    task_routes:
+
+      coding:
+        primary: gemma4
+        fallback:
+          - gpt-5
+
+      reasoning:
+        primary: viki-evolved
+        fallback:
+          - gpt-5
+          - claude-sonnet
+
+      training:
+        primary: viki-trainer
+
+      writing:
+        primary: claude-sonnet
+        fallback:
+          - gpt-5
+
+  memory:
+    enabled: true
+    backend: local
+    path: ./memory
+
+  logging:
+    enabled: true
+    level: info
+    save_model_usage: true
+    save_tool_calls: true
+
   budget:
     monthly_limit_usd: 5.0
     warning_threshold_usd: 3.5
+    hard_limit_usd: 5.0
+    emergency_local_only: true

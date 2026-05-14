@@ -20,15 +20,17 @@ DATA_DIR = os.path.join(BASE_DIR, "..", "data")
 SOUL_PATH = os.path.join(BASE_DIR, "config", "soul.yaml")
 MODELFILE_PATH = os.path.join(BASE_DIR, "Modelfile")
 
-def load_soul():
+def get_personality_prompt():
+    personality_path = os.path.join(BASE_DIR, "config", "core_personality.md")
     try:
-        with open(SOUL_PATH, 'r') as f:
-            return yaml.safe_load(f)
-    except (yaml.YAMLError, IOError, FileNotFoundError) as e:
+        if os.path.exists(personality_path):
+            with open(personality_path, 'r', encoding='utf-8') as f:
+                return f.read()
+    except Exception as e:
         import logging
         logger = logging.getLogger('viki.forge')
-        logger.warning(f"Failed to load soul config: {e}")
-        return {}
+        logger.error(f"Error loading personality prompt: {e}")
+    return ""
 
 def summarize_memories(lessons: List[str]) -> str:
     """
@@ -51,8 +53,7 @@ def summarize_memories(lessons: List[str]) -> str:
 
 def create_modelfile():
     viki_logger.info("Forge: Initiating Modelfile generation...")
-    soul = load_soul()
-    system_prompt = soul.get('system_prompt', '')
+    system_prompt = get_personality_prompt()
     
     # Use LearningModule for data
     learning = LearningModule(DATA_DIR)
@@ -63,7 +64,7 @@ def create_modelfile():
         summary = summarize_memories(memories)
         memory_block = f"\n\nCORE SEMANTIC KNOWLEDGE:\n{summary}"
 
-    base_model = os.environ.get("VIKI_FORGE_BASE_OLLAMA_MODEL", "qwen3.5:latest").strip() or "qwen3.5:latest" 
+    base_model = os.environ.get("VIKI_FORGE_BASE_OLLAMA_MODEL", "gemma4:latest").strip() or "gemma4:latest" 
     
     modelfile_content = f"""
 FROM {base_model}
@@ -76,7 +77,7 @@ SYSTEM \"\"\"
 \"\"\"
 """
     
-    with open(MODELFILE_PATH, 'w') as f:
+    with open(MODELFILE_PATH, 'w', encoding='utf-8') as f:
         f.write(modelfile_content)
     
     viki_logger.info(f"Forge: Modelfile generated using base '{base_model}'")
@@ -90,7 +91,7 @@ def build_model():
     logger = logging.getLogger('viki.forge')
     logger.info(f"[FORGE] Building evolved core: {model_name}...")
     try:
-        result = subprocess.run(["ollama", "create", model_name, "-f", modelfile], capture_output=True, text=True)
+        result = subprocess.run(["ollama", "create", model_name, "-f", modelfile], capture_output=False, text=True)
         if result.returncode == 0:
             viki_logger.info(f"Forge: Model '{model_name}' updated.")
             return True
