@@ -128,9 +128,11 @@ class PlannerExecutor:
         "Allowed task types: search_repo, read_file, write, patch, run_tests, refactor, analyze, reflect, shell, create.\n"
         "CRITICAL: 'shell' and 'create' tasks MUST have a 'command' parameter.\n"
         "CRITICAL: 'write' and 'read_file' tasks MUST have a 'path' parameter.\n"
+        "CRITICAL: ALL shell commands MUST be NON-INTERACTIVE. Use --yes, --force, or -y flags.\n"
+        "Example: For npx, use 'npx -y create-vite@latest ...'. For npm, use 'npm init -y'.\n"
         "Keep the plan minimal (<=12 tasks). Each task should be small and verifiable.\n"
         "Tasks must reference other task ids in depends_on for ordering.\n"
-        "Example: [{\"id\":\"t1\",\"type\":\"shell\",\"description\":\"init project\",\"parameters\":{\"command\":\"npx create-vite@latest . --template react\"},\"depends_on\":[]}]"
+        "Example: [{\"id\":\"t1\",\"type\":\"shell\",\"description\":\"init project\",\"parameters\":{\"command\":\"npx -y create-vite@latest . --template react\"},\"depends_on\":[]}]"
     )
 
     def __init__(self, model_router, executor_callbacks: Optional[Dict[str, Any]] = None):

@@ -123,6 +123,15 @@ class ShellSkill(BaseSkill):
         return "Execute shell commands with security validation. Use with caution. Action: execute(command, shell='powershell')."
 
     @property
+    def instructions(self) -> str:
+        return (
+            "1. Commands must be NON-INTERACTIVE. Always use flags like -y, --yes, or --force to skip prompts.\n"
+            "2. Use 'powershell' for Windows-specific tasks and 'cmd' for legacy compatibility.\n"
+            "3. For npm/npx, ALWAYS use 'npx -y' or 'npm install --yes'.\n"
+            "4. Avoid commands that open external GUI windows or block indefinitely."
+        )
+
+    @property
     def schema(self) -> dict:
         return {
             "type": "object",
