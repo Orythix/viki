@@ -1430,7 +1430,7 @@ class VIKIController:
         
         for _, modname, ispkg in pkgutil.iter_modules(builtins_pkg.__path__):
             if ispkg: continue
-            full_modname = f"viki.skills.builtins.{modname}"
+            full_modname = f"skills.builtins.{modname}"
             if full_modname in registered_modules: continue
             
             # Skip known helpers or non-skill modules

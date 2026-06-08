@@ -42,8 +42,11 @@ async def main_async():
         use_llm_judge=not args.no_llm_judge,
         persona="research",
         timeout=args.timeout,
+        concurrency=args.concurrency,
+        resume=args.resume,
     )
     return await run_harness(cfg, controller)
+
 
 
 def main():

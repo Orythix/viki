@@ -9,7 +9,7 @@ sys.path.insert(0, os.getcwd())
 SKIP_PREFIXES = (
     "ui.",
     "skills.dynamic.",
-    "viki.skills.playbooks.manim-video.",
+    "skills.playbooks.manim-video.",
     "skills.playbooks.videodb.",
 )
 
@@ -43,7 +43,10 @@ def check_imports(start_dir):
 
 
 if __name__ == "__main__":
-    errs = check_imports("viki")
+    errs = []
+    for d in ["core", "api", "application", "domain", "infrastructure", "integrations", "skills", "ui"]:
+        if os.path.exists(d):
+            errs.extend(check_imports(d))
     if errs:
         print(f"\nFound {len(errs)} import errors.")
         sys.exit(1)

@@ -96,7 +96,7 @@ def fail(msg: str) -> str:
 # ---------------------------------------------------------------------------
 
 def load_settings() -> Dict[str, Any]:
-    settings_path = REPO_ROOT / "viki" / "config" / "settings.yaml"
+    settings_path = REPO_ROOT / "config" / "settings.yaml"
     with settings_path.open("r", encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
 
@@ -380,7 +380,7 @@ def strategy_preference(
 # ---------------------------------------------------------------------------
 
 def set_default_profile(profile_name: str = "viki-evolved") -> bool:
-    models_yaml = REPO_ROOT / "viki" / "config" / "models.yaml"
+    models_yaml = REPO_ROOT / "config" / "models.yaml"
     try:
         text = models_yaml.read_text(encoding="utf-8")
     except FileNotFoundError:

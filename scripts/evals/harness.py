@@ -1,18 +1,11 @@
 """
 Common harness for VIKI eval runners.
 
-Each suite defines:
-- `load_tasks(path) -> List[dict]`
-- `evaluator_for(task) -> ExecutionEvaluator | LLMJudgeEvaluator`
-
-The harness drives `controller.process_request(task["prompt"])`, scores the
-answer, and writes one JSONL per run to `data/eval_results/<suite>/<run_id>.jsonl`.
-
-A `__metadata__` first line in the result file captures run-level info
-(air_gap flag, total tasks, model defaults, controller persona).
-
-Designed so the user can run a subset (`--limit 10`) for fast PR-time
-sanity checks and the full suite weekly with cloud allowed.
+Upgraded version supporting:
+- Concurrency control (via asyncio.Semaphore)
+- Task cache resumption (skips already-evaluated tasks to resume interrupted runs)
+- LLM Judge robust retries with backoff
+- Live Rich progress dashboard with statistics (current pass rate, mean score, ETA)
 """
 
 from __future__ import annotations
@@ -25,7 +18,17 @@ import sys
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
+
+# Reconfigure stdout/stderr to UTF-8 on Windows/legacy hosts to handle Unicode characters.
+try:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
+
 
 # Local-first import path for ad-hoc invocations.
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -34,6 +37,24 @@ if ROOT not in sys.path:
 
 from config.logger import viki_logger  # noqa: E402
 from core.evaluators import EvalScore, ExecutionEvaluator, LLMJudgeEvaluator  # noqa: E402
+
+# Import Rich components for a premium console experience
+try:
+    from rich.progress import (
+        BarColumn,
+        MofNCompleteColumn,
+        Progress,
+        SpinnerColumn,
+        TextColumn,
+        TimeRemainingColumn,
+    )
+    from rich.console import Console
+    from rich.table import Table
+    from rich.panel import Panel
+    from rich import box
+    HAS_RICH = True
+except ImportError:
+    HAS_RICH = False
 
 
 @dataclass
@@ -46,6 +67,8 @@ class HarnessConfig:
     use_llm_judge: bool = True
     persona: Optional[str] = None
     timeout: int = 60
+    concurrency: int = 1
+    resume: bool = False
 
 
 def _ensure_dir(path: str) -> None:
@@ -53,13 +76,7 @@ def _ensure_dir(path: str) -> None:
 
 
 def _active_model_identity(controller) -> Dict[str, Optional[str]]:
-    """
-    Best-effort identity for the model under evaluation.
-
-    The router stores models by profile key (e.g. `gemma4`) while providers
-    expose an engine/tag (e.g. `gemma4:latest`). Persist both so promotion can
-    compare candidates against baselines instead of reading unscoped eval files.
-    """
+    """Best-effort identity for the model under evaluation."""
     model_profile: Optional[str] = None
     model_name: Optional[str] = None
     try:
@@ -103,26 +120,89 @@ def load_jsonl(path: str) -> List[Dict[str, Any]]:
     return out
 
 
-async def _grade_task(
+async def _grade_task_with_retry(
     task: Dict[str, Any],
     response: str,
     use_llm_judge: bool,
     model_router,
+    retries: int = 3,
+    backoff_factor: float = 2.0,
 ) -> EvalScore:
-    """Pick the right evaluator for the task and grade the response."""
+    """Grades the task, applying automatic retries with exponential backoff on LLM judge failures."""
     grader = task.get("grader") or "auto"
     if grader == "execution" or task.get("test_code") or task.get("expected_stdout"):
         return ExecutionEvaluator().evaluate(task, response)
+        
     if grader == "llm" or (use_llm_judge and model_router is not None):
-        try:
-            return await LLMJudgeEvaluator(model_router).evaluate(task, response)
-        except Exception as e:
-            viki_logger.warning("LLM judge failed (%s); falling back to keyword scoring.", e)
-    # Last resort: keyword/contains scoring
+        delay = 1.0
+        for attempt in range(retries):
+            try:
+                evaluator = LLMJudgeEvaluator(model_router)
+                return await evaluator.evaluate(task, response)
+            except Exception as e:
+                viki_logger.warning(
+                    "LLM judge failed on attempt %d/%d (%s). Retrying in %.1fs...",
+                    attempt + 1, retries, e, delay
+                )
+                if attempt == retries - 1:
+                    viki_logger.error("LLM judge chronically failed; falling back to keyword grader.")
+                    break
+                await asyncio.sleep(delay)
+                delay *= backoff_factor
+                
+    # Fallback: keyword/contains scoring
     expected = (task.get("expected_outcome") or "").strip().lower()
     response_lower = (response or "").strip().lower()
     score = 1.0 if expected and expected in response_lower else 0.0
     return EvalScore(score=score, passed=bool(score >= 0.5), reason="keyword_fallback")
+
+
+def _find_recent_run_cache(results_dir: str, suite: str, model_id: dict) -> Dict[str, Dict[str, Any]]:
+    """Scan the target directory for a previous matching run and index completed tasks."""
+    cache = {}
+    if not os.path.exists(results_dir):
+        return cache
+        
+    matching_file = None
+    latest_time = 0.0
+    
+    # Iterate over files to find the newest run with matching model metadata
+    for filename in os.listdir(results_dir):
+        if filename.endswith(".jsonl"):
+            filepath = os.path.join(results_dir, filename)
+            try:
+                with open(filepath, "r", encoding="utf-8") as f:
+                    first_line = f.readline().strip()
+                    if not first_line:
+                        continue
+                    meta = json.loads(first_line)
+                    if not meta.get("__metadata__") or meta.get("suite") != suite:
+                        continue
+                    
+                    # Verify model identifiers match
+                    m_profile = meta.get("model_profile")
+                    m_name = meta.get("model_name")
+                    if m_profile == model_id.get("model_profile") or m_name == model_id.get("model_name"):
+                        mtime = os.path.getmtime(filepath)
+                        if mtime > latest_time:
+                            latest_time = mtime
+                            matching_file = filepath
+            except Exception:
+                continue
+                
+    if matching_file:
+        viki_logger.info("Found matching run for cache resumption: %s", matching_file)
+        try:
+            with open(matching_file, "r", encoding="utf-8") as f:
+                next(f) # Skip metadata line
+                for line in f:
+                    row = json.loads(line.strip())
+                    if "task_id" in row:
+                        cache[row["task_id"]] = row
+        except Exception as e:
+            viki_logger.warning("Failed to load matching run cache: %s", e)
+            
+    return cache
 
 
 async def run_harness(
@@ -130,9 +210,7 @@ async def run_harness(
     controller,
     inject_prompt: Optional[Callable[[Dict[str, Any]], str]] = None,
 ) -> Dict[str, Any]:
-    """
-    Drive the controller against the suite's tasks. Returns a summary dict.
-    """
+    """Drive the controller against the suite's tasks concurrently with caching and rich output."""
     tasks = load_jsonl(cfg.tasks_path)
     if cfg.limit:
         tasks = tasks[: cfg.limit]
@@ -149,12 +227,22 @@ async def run_harness(
     _ensure_dir(suite_dir)
     run_id = time.strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:6]
     out_path = os.path.join(suite_dir, f"{run_id}.jsonl")
+    
+    model_id = _active_model_identity(controller)
+    
+    # 1. Load run cache if requested
+    cache = {}
+    if cfg.resume:
+        cache = _find_recent_run_cache(suite_dir, cfg.suite, model_id)
+        if cache:
+            viki_logger.info("Cache Resumption: Loaded %d completed tasks.", len(cache))
 
     viki_logger.info(
-        "Eval[%s]: running %d tasks (air_gap=%s, judge=%s) -> %s",
+        "Eval[%s]: driving %d tasks (air_gap=%s, concurrency=%d, judge=%s) -> %s",
         cfg.suite,
         len(tasks),
         cfg.air_gap,
+        cfg.concurrency,
         cfg.use_llm_judge,
         out_path,
     )
@@ -168,16 +256,53 @@ async def run_harness(
         "use_llm_judge": bool(cfg.use_llm_judge),
         "persona": cfg.persona,
         "started_at": time.time(),
+        "concurrency": cfg.concurrency,
+        "resumed": bool(cache),
     }
-    metadata.update({k: v for k, v in _active_model_identity(controller).items() if v})
+    metadata.update({k: v for k, v in model_id.items() if v})
 
     passed = 0
     total_score = 0.0
+    sem = asyncio.Semaphore(cfg.concurrency)
+    write_lock = asyncio.Lock()
+    
+    # Pre-write metadata header
     with open(out_path, "w", encoding="utf-8") as out:
         out.write(json.dumps(metadata) + "\n")
-        for i, task in enumerate(tasks):
-            prompt = inject_prompt(task) if inject_prompt else task.get("prompt", "")
+
+    # Define the worker coroutine
+    async def evaluate_task(task_item: Dict[str, Any], index: int, progress_bar=None, task_tracker=None):
+        nonlocal passed, total_score
+        task_id = task_item.get("id", str(index))
+        prompt = inject_prompt(task_item) if inject_prompt else task_item.get("prompt", "")
+        
+        # Resumed/Cached Hit Check
+        if cfg.resume and task_id in cache:
+            cached_row = cache[task_id]
+            # Verify prompt or simple match
+            cached_score = cached_row.get("score", 0.0)
+            cached_passed = cached_row.get("passed", False)
+            
+            async with write_lock:
+                with open(out_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(cached_row) + "\n")
+                    
+            if cached_passed:
+                passed += 1
+            total_score += cached_score
+            
+            if progress_bar and task_tracker:
+                progress_bar.update(
+                    task_tracker, 
+                    advance=1, 
+                    description=f"[dim]Skipped (Cached) {task_id}[/]"
+                )
+            return
+
+        async with sem:
             t0 = time.perf_counter()
+            if progress_bar and task_tracker:
+                progress_bar.update(task_tracker, description=f"[cyan]Running {task_id}...[/]")
             try:
                 response = await asyncio.wait_for(
                     controller.process_request(prompt), timeout=cfg.timeout
@@ -187,10 +312,17 @@ async def run_harness(
             except Exception as e:
                 response = f"ERROR: {e}"
             latency = time.perf_counter() - t0
-            score = await _grade_task(task, response, cfg.use_llm_judge, getattr(controller, "model_router", None))
+            
+            score = await _grade_task_with_retry(
+                task_item, 
+                response, 
+                cfg.use_llm_judge, 
+                getattr(controller, "model_router", None)
+            )
+            
             row = {
-                "task_id": task.get("id", str(i)),
-                "task_name": task.get("name") or task.get("id"),
+                "task_id": task_id,
+                "task_name": task_item.get("name") or task_id,
                 "model_profile": metadata.get("model_profile"),
                 "model_name": metadata.get("model_name"),
                 "prompt": prompt[:500],
@@ -201,11 +333,78 @@ async def run_harness(
                 "latency_seconds": round(latency, 3),
                 "judge_votes": score.judge_votes,
             }
-            out.write(json.dumps(row) + "\n")
+            
+            async with write_lock:
+                with open(out_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(row) + "\n")
+                    
             if score.passed:
                 passed += 1
             total_score += score.score
-            viki_logger.info("  [%d/%d] %s -> %.2f (%s)", i + 1, len(tasks), row["task_id"], score.score, "PASS" if score.passed else "FAIL")
+            
+            if progress_bar and task_tracker:
+                p_rate = passed / (index + 1) if index >= 0 else 0.0
+                status_color = "green" if score.passed else "red"
+                status_symbol = "✓" if score.passed else "✗"
+                progress_bar.update(
+                    task_tracker, 
+                    advance=1,
+                    description=f"[{status_color}]{status_symbol} {task_id} -> {score.score:.2f} ({latency:.1f}s)[/]"
+                )
+
+    # 2. Rich Progress Bar Rendering Loop
+    if HAS_RICH:
+        console = Console()
+        console.print(Panel(
+            f"[bold magenta]VIKI EVALUATION PIPELINE[/]\n"
+            f"[dim]Suite      :[/] [cyan]{cfg.suite}[/]\n"
+            f"[dim]Model      :[/] [yellow]{model_id.get('model_label', 'Unknown')}[/]\n"
+            f"[dim]Concurrency:[/] [green]{cfg.concurrency}[/]\n"
+            f"[dim]Resuming   :[/] {'[green]YES[/]' if cache else '[dim]NO[/]'}",
+            box=box.ROUNDED,
+            border_style="magenta",
+            expand=False
+        ))
+        
+        progress = Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(bar_width=40),
+            MofNCompleteColumn(),
+            TextColumn("[bold yellow]Pass Rate: {task.fields[pass_rate]:.1%}"),
+            TextColumn("[bold cyan]Mean: {task.fields[mean_score]:.2f}"),
+            TimeRemainingColumn(),
+            console=console,
+        )
+        
+        with progress:
+            task_tracker = progress.add_task(
+                "Evaluating...", 
+                total=len(tasks), 
+                pass_rate=0.0, 
+                mean_score=0.0
+            )
+            
+            # Run all tasks concurrently/sequentially according to Semaphore
+            coroutines = []
+            for i, task_item in enumerate(tasks):
+                coroutines.append(evaluate_task(task_item, i, progress, task_tracker))
+                
+            await asyncio.gather(*coroutines)
+            
+            # Final progress update
+            progress.update(
+                task_tracker, 
+                description="[bold green]✓ Done![/]", 
+                pass_rate=passed / len(tasks), 
+                mean_score=total_score / len(tasks)
+            )
+    else:
+        # Standard fallback loop without Rich
+        coroutines = []
+        for i, task_item in enumerate(tasks):
+            coroutines.append(evaluate_task(task_item, i))
+        await asyncio.gather(*coroutines)
 
     summary = {
         "suite": cfg.suite,
@@ -218,6 +417,8 @@ async def run_harness(
         "model_profile": metadata.get("model_profile"),
         "model_name": metadata.get("model_name"),
     }
+    
+    # Try to apply evaluation signal to model router
     try:
         router = getattr(controller, "model_router", None)
         if router is not None:
@@ -226,12 +427,33 @@ async def run_harness(
                     router.apply_eval_signal(candidate, summary["pass_rate"])
     except Exception:
         pass
-    viki_logger.info(
-        "Eval[%s] done: pass_rate=%.2f%% mean_score=%.3f",
-        cfg.suite,
-        summary["pass_rate"] * 100,
-        summary["mean_score"],
-    )
+
+    # Print a premium final results card
+    if HAS_RICH:
+        console = Console()
+        table = Table(title="Evaluation Run Summary", box=box.DOUBLE, header_style="bold cyan")
+        table.add_column("Metric", style="dim")
+        table.add_column("Value", style="bold")
+        
+        table.add_row("Run ID", summary["run_id"])
+        table.add_row("Suite", summary["suite"])
+        table.add_row("Tasks Count", str(summary["task_count"]))
+        table.add_row("Pass Rate", f"[bold green]{summary['pass_rate']:.2%}[/]")
+        table.add_row("Mean Score", f"[bold yellow]{summary['mean_score']:.3f}[/]")
+        table.add_row("Logs Path", summary["results_path"])
+        
+        console.print()
+        console.print(table)
+        console.print()
+    else:
+        viki_logger.info(
+            "Eval[%s] done: pass_rate=%.2f%% mean_score=%.3f (path=%s)",
+            cfg.suite,
+            summary["pass_rate"] * 100,
+            summary["mean_score"],
+            summary["results_path"],
+        )
+        
     return summary
 
 
@@ -247,6 +469,8 @@ def make_arg_parser(suite: str, default_dataset: str) -> argparse.ArgumentParser
     parser.add_argument("--results-dir", default=None, help="Override output directory.")
     parser.add_argument("--timeout", type=int, default=60, help="Per-task timeout (seconds).")
     parser.add_argument("--mock", action="store_true", help="Use MockLLM (CI smoke).")
+    parser.add_argument("--concurrency", "-c", type=int, default=1, help="Concurrently run N tasks (default: 1).")
+    parser.add_argument("--resume", "-r", action="store_true", help="Resume evaluation from the last matching run.")
     return parser
 
 
@@ -257,7 +481,7 @@ def build_controller(args, persona_name: Optional[str] = None):
 
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     repo_dir = os.path.dirname(base_dir)
-    settings_path = os.path.join(repo_dir, "viki", "config", "settings.yaml")
+    settings_path = os.path.join(repo_dir, "config", "settings.yaml")
     soul_path = get_soul_path(settings_path)
 
     if getattr(args, "air_gap", False):

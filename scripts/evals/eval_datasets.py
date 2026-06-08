@@ -14,9 +14,9 @@ reproducible. The adapters degrade gracefully when `datasets` /
 cached fixture alone, and `prepare()` returns False.
 
 Usage:
-    python scripts/evals/datasets.py --suite humaneval_plus
-    python scripts/evals/datasets.py --suite swe_bench_verified --limit 50
-    python scripts/evals/datasets.py --suite all
+    python scripts/evals/eval_datasets.py --suite humaneval_plus
+    python scripts/evals/eval_datasets.py --suite swe_bench_verified --limit 50
+    python scripts/evals/eval_datasets.py --suite all
 """
 
 from __future__ import annotations

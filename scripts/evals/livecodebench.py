@@ -38,8 +38,11 @@ async def main_async():
         use_llm_judge=False,  # always execution-graded
         persona="dev",
         timeout=args.timeout,
+        concurrency=args.concurrency,
+        resume=args.resume,
     )
     return await run_harness(cfg, controller)
+
 
 
 def main():

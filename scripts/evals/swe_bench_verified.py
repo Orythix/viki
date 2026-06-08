@@ -51,8 +51,11 @@ async def main_async():
         use_llm_judge=not args.no_llm_judge,
         persona="dev",
         timeout=args.timeout,
+        concurrency=args.concurrency,
+        resume=args.resume,
     )
     summary = await run_harness(cfg, controller)
+
     return summary
 
 

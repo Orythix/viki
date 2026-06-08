@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import unittest
 
-from scripts.evals import datasets as ds
+from scripts.evals import eval_datasets as ds
 
 
 class TestConverters(unittest.TestCase):

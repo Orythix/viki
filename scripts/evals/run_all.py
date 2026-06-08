@@ -20,7 +20,7 @@ from scripts.evals.harness import (  # noqa: E402
     default_results_root,
     run_harness,
 )
-from scripts.evals import datasets as eval_datasets  # noqa: E402
+from scripts.evals import eval_datasets  # noqa: E402
 from core.capability_index import CapabilityIndex  # noqa: E402
 
 SUITES = [
@@ -45,6 +45,8 @@ async def main_async():
         action="store_true",
         help="Materialize real benchmark fixtures via HuggingFace before running.",
     )
+    parser.add_argument("--concurrency", "-c", type=int, default=1, help="Concurrently run N tasks (default: 1).")
+    parser.add_argument("--resume", "-r", action="store_true", help="Resume evaluation from the last matching run.")
     args = parser.parse_args()
 
     if args.prepare_datasets:
@@ -65,6 +67,8 @@ async def main_async():
             air_gap=args.air_gap,
             use_llm_judge=not args.no_llm_judge,
             timeout=60,
+            concurrency=args.concurrency,
+            resume=args.resume,
         )
         try:
             summary = await run_harness(cfg, controller)
