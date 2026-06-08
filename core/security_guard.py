@@ -1,4 +1,5 @@
 from typing import Dict, Any, List, Optional
+import os
 import re
 from config.logger import viki_logger
 
@@ -177,7 +178,26 @@ class SafetyLayer:
         destructive_keywords = ["format ", "rm -rf", "mass delete", "shred ", "truncate "]
         if any(k in param_str for k in destructive_keywords):
             return "destructive"
+
+        # Explicit check for filesystem writes, patches, moves, and deletions
+        if skill_name in ["dev_tools", "filesystem", "filesystem_skill"]:
+            action = params.get("action", "").lower()
+            path = params.get("path", "")
             
+            if action in ["delete_file", "remove_file"]:
+                return "destructive"
+                
+            if action == "write_file" and path:
+                if os.path.exists(path):
+                    return "destructive"  # Overwriting is destructive
+                return "medium"  # Creating a new file is medium
+                
+            if action in ["patch_file", "multi_patch"]:
+                return "medium"  # Patching modifies a file
+                
+            if action == "move_file":
+                return "destructive"  # Moving/renaming deletes the source, so destructive
+
         # Medium
         medium_keywords = ["delete", "remove", "kill", "terminate", "close app", "uninstall"]
         if any(k in param_str for k in medium_keywords) or skill_name in ["system_shell"]:
@@ -186,6 +206,7 @@ class SafetyLayer:
             return "medium"
 
         return "safe"
+
 
     def validate_response(self, content: str) -> Dict[str, Any]:
         """

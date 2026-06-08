@@ -12,10 +12,14 @@ from core.orchestrator import VIKIController
 class TestVIKISecurityLayer(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         # Setup test paths
-        self.test_data_dir = os.path.abspath("./tests/data_security")
+        safe_id = self.id().replace(".", "_").replace("(", "").replace(")", "")
+        self.test_data_dir = os.path.abspath(f"./tests/data_security_{safe_id}")
         if os.path.exists(self.test_data_dir):
-            shutil.rmtree(self.test_data_dir)
-        os.makedirs(self.test_data_dir)
+            try:
+                shutil.rmtree(self.test_data_dir)
+            except Exception:
+                pass
+        os.makedirs(self.test_data_dir, exist_ok=True)
         
         # Resolve config paths relative to project root
         base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -38,7 +42,7 @@ class TestVIKISecurityLayer(unittest.IsolatedAsyncioTestCase):
             "skills": {"auto_discover": False, "registry_path": ""}
         }
         
-        self.settings_path = os.path.abspath("./tests/temp_settings_security.yaml")
+        self.settings_path = os.path.abspath(f"./tests/temp_settings_security_{safe_id}.yaml")
         import yaml
         with open(self.settings_path, 'w') as f:
             yaml.dump(self.settings, f)
@@ -78,6 +82,38 @@ class TestVIKISecurityLayer(unittest.IsolatedAsyncioTestCase):
         self.assertIn("violate", response.lower())
         # Ensure NO action triggered
         self.assertNotIn("Action", response)
+
+    def test_filesystem_action_severity(self):
+        # Test that writing a new file is medium severity and overwriting is destructive
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            new_file_path = os.path.join(tmpdir, "new_file.txt")
+            existing_file_path = os.path.join(tmpdir, "existing_file.txt")
+            with open(existing_file_path, "w", encoding="utf-8") as f:
+                f.write("exists")
+
+            safety = self.controller.safety
+            
+            # New file write -> medium
+            self.assertEqual(
+                safety.get_action_severity("filesystem_skill", {"action": "write_file", "path": new_file_path}),
+                "medium"
+            )
+            # Overwriting existing file -> destructive
+            self.assertEqual(
+                safety.get_action_severity("filesystem_skill", {"action": "write_file", "path": existing_file_path}),
+                "destructive"
+            )
+            # Deletion -> destructive
+            self.assertEqual(
+                safety.get_action_severity("dev_tools", {"action": "delete_file", "path": existing_file_path}),
+                "destructive"
+            )
+            # Patching -> medium
+            self.assertEqual(
+                safety.get_action_severity("dev_tools", {"action": "patch_file", "path": existing_file_path}),
+                "medium"
+            )
 
 if __name__ == '__main__':
     unittest.main()

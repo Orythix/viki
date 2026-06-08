@@ -61,7 +61,7 @@ system:
   request_timeout_seconds: 300
 
   # When true, run LLM security scan (scan_request) before deliberation. Adds latency and an extra LLM call per request.
-  security_scan_requests: false
+  security_scan_requests: true
 
   # When true, run internal specialist ensemble (critic/explorer/aligner) for complex intents. Set false for lower latency.
   use_ensemble: false
