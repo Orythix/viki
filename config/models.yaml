@@ -11,11 +11,11 @@ models:
       api_key: ${ANTHROPIC_API_KEY}
     mock:
       type: mock
-  default: viki-archived
+  default: gemma4
   profiles:
     gemma4:
       provider: ollama
-      model_name: gemma4:latest
+      model_name: gemma4:12b
       priority: 100
       timeout_seconds: 120
       max_context_tokens: 32768
@@ -32,7 +32,7 @@ models:
         '
     viki-trainer:
       provider: ollama
-      model_name: gemma4:latest
+      model_name: gemma4:12b
       training_only: true
       priority: 10
       timeout_seconds: 300
