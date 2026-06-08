@@ -57,7 +57,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 import yaml  # noqa: E402
 
-from viki.core.forge_config import resolve_forge_output_ollama_tag  # noqa: E402
+from core.forge_config import resolve_forge_output_ollama_tag  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Console helpers
@@ -189,7 +189,7 @@ def export_dataset(
     min_access_count: int,
     settings: Dict[str, Any],
 ) -> Tuple[Path, str]:
-    from viki.core.knowledge_ingestion import LearningModule  # type: ignore
+    from core.knowledge_ingestion import LearningModule  # type: ignore
 
     dataset_path = data_dir / "training_dataset_lora.jsonl"
     learning = LearningModule(str(data_dir))
@@ -224,7 +224,7 @@ def strategy_prompt_bake(
     min_count: int,
     dry_run: bool,
 ) -> int:
-    from viki.core.knowledge_ingestion import LearningModule  # type: ignore
+    from core.knowledge_ingestion import LearningModule  # type: ignore
 
     learning = LearningModule(str(data_dir))
     lessons = learning.get_frequent_lessons(min_count=min_count)
@@ -275,7 +275,7 @@ def strategy_lora(
         return 0
 
     try:
-        from viki.skills.creation.forge import _unsloth_train_sync  # type: ignore
+        from skills.creation.forge import _unsloth_train_sync  # type: ignore
     except Exception as e:
         fail(f"Cannot import LoRA trainer: {e!r}")
         return 4
@@ -305,8 +305,8 @@ async def _run_dpo_async(
     dry_run: bool,
 ) -> int:
     try:
-        from viki.core.knowledge_ingestion import LearningModule  # type: ignore
-        from viki.core.preference_forge import (  # type: ignore
+        from core.knowledge_ingestion import LearningModule  # type: ignore
+        from core.preference_forge import (  # type: ignore
             PreferenceDatasetBuilder,
             run_dpo_training,
             trl_dpo_available,
@@ -477,7 +477,7 @@ def main() -> int:
         info("Skipping Ollama check for GPU strategy (training stack only).")
 
     try:
-        from viki.core.knowledge_ingestion import LearningModule  # type: ignore
+        from core.knowledge_ingestion import LearningModule  # type: ignore
     except Exception as e:
         fail(f"Cannot import VIKI internals (run from repo root, deps installed): {e!r}")
         return 1

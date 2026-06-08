@@ -6,7 +6,7 @@ import sys
 # Add viki to path
 sys.path.append(os.path.abspath("."))
 
-from viki.skills.builtins.code_search_skill import CodeSearchSkill
+from skills.builtins.code_search_skill import CodeSearchSkill
 
 async def main():
     skill = CodeSearchSkill()

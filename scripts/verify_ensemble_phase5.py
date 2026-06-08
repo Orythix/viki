@@ -6,9 +6,9 @@ import sys
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from viki.core.cortex import ConsciousnessStack
-from viki.core.llm import ModelRouter
-from viki.core.world import WorldModel
+from core.cortex import ConsciousnessStack
+from core.llm import ModelRouter
+from core.world import WorldModel
 
 class MockModel:
     def __init__(self, name="PlaceHolder"):
@@ -17,7 +17,7 @@ class MockModel:
         return f"Perspective from {self.model_name}: This is a simulated response based on the prompt."
     async def chat_structured(self, messages, schema, image_path=None):
         # We need to return a VIKIResponse object
-        from viki.core.schema import VIKIResponse, ThoughtObject, VIKIResponseLite
+        from core.schema import VIKIResponse, ThoughtObject, VIKIResponseLite
         
         if schema == VIKIResponse:
              return VIKIResponse(
@@ -48,7 +48,7 @@ async def verify_ensemble():
     # triggering the ensemble logic inside DeliberationLayer
     
     # Actually, we can just test the EnsembleEngine directly first to verify agents exist
-    from viki.core.ensemble import EnsembleEngine
+    from core.ensemble import EnsembleEngine
     ensemble = EnsembleEngine(router)
     
     print(f"Agents loaded: {list(ensemble.agents.keys())}")

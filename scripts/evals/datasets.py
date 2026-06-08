@@ -32,7 +32,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from viki.config.logger import viki_logger  # noqa: E402
+from config.logger import viki_logger  # noqa: E402
 
 
 @dataclass

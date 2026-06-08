@@ -7,9 +7,9 @@ import yaml
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from viki.core.evolution import EvolutionEngine
-from viki.skills.registry import SkillRegistry
-from viki.core.llm import ModelRouter
+from core.evolution import EvolutionEngine
+from skills.registry import SkillRegistry
+from core.llm import ModelRouter
 
 async def verify_forge():
     print("--- Initializing Neural Forge v2 ---")
@@ -19,7 +19,7 @@ async def verify_forge():
         
     # Mock model router for testing or use real one
     root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    models_conf = os.path.join(root_dir, "viki/config/models.yaml")
+    models_conf = os.path.join(root_dir, "./config/models.yaml")
     router = ModelRouter(models_conf)
     
     registry = SkillRegistry()
@@ -35,7 +35,7 @@ async def verify_forge():
     mock_code = """
 import sys
 import platform
-from viki.skills.base import BaseSkill
+from skills.base import BaseSkill
 from typing import Dict, Any
 
 class PlatformInfoSkill(BaseSkill):

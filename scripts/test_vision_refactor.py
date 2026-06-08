@@ -6,8 +6,8 @@ import sys
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from viki.core.controller import VIKIController
-from viki.config.logger import viki_logger
+from core.controller import VIKIController
+from config.logger import viki_logger
 import logging
 
 # Set logging to see thought process
@@ -23,7 +23,7 @@ async def run_vision_refactor_test():
     viki = VIKIController(config_path, soul_path)
     
     # 2. Create a dummy 'legacy' file to maximize the Architect effect
-    legacy_file = "viki/skills/builtins/legacy_math.py"
+    legacy_file = "./skills/builtins/legacy_math.py"
     with open(legacy_file, 'w') as f:
         f.write("# LEGACY MONOLITHIC CODE\n")
         f.write("def do_math(op, a, b):\n")

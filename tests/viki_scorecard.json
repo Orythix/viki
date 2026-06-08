@@ -1,0 +1,574 @@
+{
+    "reliability_rate": [
+        {
+            "timestamp": 1778251673.4485688,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778251673.4696932,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778251673.4801056,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778251673.490613,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778251696.1781304,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778251696.1898172,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778251696.1983216,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778251696.2058363,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778251712.2056086,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778251712.2230318,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778251712.2323616,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778251712.2441351,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778251833.3544865,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778251833.3695154,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778251833.3780205,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778251833.3876367,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778253211.5821056,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778253211.605105,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778253211.6151035,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778253211.6661048,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778253593.8494568,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778253593.8669984,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778253593.8780084,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778253593.9110255,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778258432.4553518,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778258432.472107,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778258432.4809146,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778258432.5162683,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778262949.09752,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778262949.1135237,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778262949.12352,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778262949.1335196,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778262988.498594,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778262988.5125906,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778262988.5225904,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778262988.5316026,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778263871.1165957,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778263871.1322596,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778263871.1437726,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778263871.1527832,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778263983.634737,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778263983.6482944,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778263983.654549,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778263983.6666307,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778264098.0580335,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778264098.0704978,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778264098.0790894,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778264098.0875957,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778264676.2237353,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778264676.2398794,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778264676.2485392,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778264676.2604775,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778289134.7306314,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778289134.751616,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778289134.7629557,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778289134.808261,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778289134.819259,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778289134.830259,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778289150.333433,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778289150.350458,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778289150.361458,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778289150.3914587,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778289150.404458,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778289150.415459,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778293451.3809042,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778293451.396381,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778293451.4066494,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778293451.4575834,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778293451.470349,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778293451.482324,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778471438.2524972,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778471438.280842,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778471438.2919528,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778471438.3419785,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778471438.3569088,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778471438.3676305,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778471683.7616622,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778471683.7831964,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778471683.7927854,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778471683.8296373,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778471683.8428454,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778471683.8528063,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778606167.7436314,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778606167.7605844,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778606167.7700436,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778606167.803252,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778606167.8143864,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778606167.8231597,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778615356.718945,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778615356.7364178,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778615356.7471516,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778615356.788462,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778615356.8000152,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        },
+        {
+            "timestamp": 1778615356.80938,
+            "value": 0.9,
+            "context": null,
+            "model": "viki-test"
+        }
+    ],
+    "mistake_repetition": [],
+    "recovery_quality": [],
+    "interruption_stability": [],
+    "safety_compliance": [],
+    "latency_adherence": [],
+    "confidence_calibration": []
+}

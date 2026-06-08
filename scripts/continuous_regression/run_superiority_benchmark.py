@@ -14,8 +14,8 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 if REPO_ROOT not in sys.path:
     sys.path.append(REPO_ROOT)
 
-from viki.core.orchestrator import VIKIController
-from viki.core.performance_benchmark import ControlledBenchmark
+from core.orchestrator import VIKIController
+from core.performance_benchmark import ControlledBenchmark
 
 
 def _load_yaml(path: str) -> Dict[str, Any]:
@@ -102,8 +102,8 @@ async def run_once(
 
 async def main():
     parser = argparse.ArgumentParser(description="Run VIKI ControlledBenchmark superiority eval.")
-    parser.add_argument("--settings", default="viki/config/settings.yaml")
-    parser.add_argument("--soul", default="viki/config/soul.yaml")
+    parser.add_argument("--settings", default="./config/settings.yaml")
+    parser.add_argument("--soul", default="./config/soul.yaml")
     parser.add_argument("--model-label", default="Current-VIKI")
     parser.add_argument("--suites", default="superiority,core,dev", help="Comma-separated suite names.")
     parser.add_argument("--no-write-json", action="store_true")

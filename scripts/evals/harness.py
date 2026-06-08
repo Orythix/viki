@@ -32,8 +32,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from viki.config.logger import viki_logger  # noqa: E402
-from viki.core.evaluators import EvalScore, ExecutionEvaluator, LLMJudgeEvaluator  # noqa: E402
+from config.logger import viki_logger  # noqa: E402
+from core.evaluators import EvalScore, ExecutionEvaluator, LLMJudgeEvaluator  # noqa: E402
 
 
 @dataclass
@@ -252,8 +252,8 @@ def make_arg_parser(suite: str, default_dataset: str) -> argparse.ArgumentParser
 
 def build_controller(args, persona_name: Optional[str] = None):
     """Construct a VIKIController suitable for evals."""
-    from viki.core.orchestrator import VIKIController
-    from viki.config.resolve import get_soul_path
+    from core.orchestrator import VIKIController
+    from config.resolve import get_soul_path
 
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     repo_dir = os.path.dirname(base_dir)

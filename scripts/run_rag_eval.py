@@ -27,9 +27,9 @@ if str(_REPO) not in sys.path:
 # Quiet per-query lesson dumps (viki_logger is the "VIKI" root; INFO logs huge Unicode on Windows consoles).
 logging.getLogger("VIKI").setLevel(logging.WARNING)
 
-from viki.core.knowledge_ingestion import LearningModule  # noqa: E402
-from viki.eval.rag_eval import evaluate_rag_retrieval, load_gold_jsonl  # noqa: E402
-from viki.eval.rag_judge import enrich_report_with_ollama_judge  # noqa: E402
+from core.knowledge_ingestion import LearningModule  # noqa: E402
+from eval.rag_eval import evaluate_rag_retrieval, load_gold_jsonl  # noqa: E402
+from eval.rag_judge import enrich_report_with_ollama_judge  # noqa: E402
 
 
 def main() -> int:

@@ -40,8 +40,8 @@ async def _amain() -> int:
     if force:
         os.environ["VIKI_BACKGROUND_EVOLUTION_AT_BOOT"] = "1"
 
-    from viki.core.controller import VIKIController  # noqa: E402
-    from viki.config.resolve import get_soul_path  # noqa: E402
+    from core.controller import VIKIController  # noqa: E402
+    from config.resolve import get_soul_path  # noqa: E402
 
     script_dir = REPO_ROOT / "viki"
     settings_path = str(script_dir / "config" / "settings.yaml")

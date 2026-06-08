@@ -6,7 +6,7 @@ import sys
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from viki.core.evolution import EvolutionEngine
+from core.evolution import EvolutionEngine
 
 async def verify_evolution():
     print("--- Initializing VIKI Evolution Engine ---")

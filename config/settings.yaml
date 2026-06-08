@@ -1,0 +1,192 @@
+# User-specific config: use .env (copy from .env.example) instead of editing this file.
+# Env overrides: VIKI_DATA_DIR, VIKI_WORKSPACE_DIR, VIKI_PERSONA, VIKI_SHADOW_MODE, VIKI_AIR_GAP, VIKI_LOCAL_LLM_ONLY,
+#   VIKI_FORGE_BASE_OLLAMA_MODEL, VIKI_FORGE_OUTPUT_OLLAMA_MODEL (Ollama tag for prompt-bake output; default viki-neural-forge),
+#   VIKI_OLLAMA_THINK (1/true enables Ollama reasoning trace; default off for speed + cleaner UX),
+#   VIKI_EMBED_GPU (1/true for CUDA sentence-transformers), VIKI_UNSLOTH_RUN_TRAIN (LoRA),
+#   VIKI_GIT_CONTEXT (1/true appends git snapshot to project context).
+#   VIKI_SESSION_USAGE_LOG (1/true/false) — append JSONL usage events under data_dir (usage_session.jsonl).
+#   VIKI_AUTO_WEB_RESEARCH (1/true/yes/on or 0/false/no/off) — force on/off auto web lookup when the answer looks uncertain.
+#   VIKI_LESSON_EXPORT_MIN_ACCESS — integer min access_count for LoRA/JSONL export (default 2).
+#   VIKI_BACKGROUND_EVOLUTION_AT_BOOT — enable forge.background_evolution_at_boot from env.
+#   VIKI_SKIP_STARTUP_PULSE — skip startup pulse (headless boot evolve script).
+#   VIKI_ENDPOINT_GUARD — 1/true enables or 0/false disables endpoint_guard (local heuristic watcher + optional Defender).
+system:
+  log_level: "INFO"
+  data_dir: "./data"
+  workspace_dir: "./workspace"
+  # Persona: sovereign (full), dev, research, home. Override with env VIKI_PERSONA.
+  persona: sovereign
+
+  # Owner / User Identity — VIKI uses this to personalise every interaction.
+  # Fill in your own details. All fields are optional but the more you add,
+  # the more naturally VIKI will reference them.
+  owner:
+    name: "Sachin"                           # Your preferred name / call-sign
+    full_name: ""                          # Optional full name
+    role: "Technical Lead - Frontend"                      # How you describe yourself
+    location: ""                           # Where you're based (optional)
+    timezone: "UTC"                        # IANA tz (used for time-aware replies)
+    interests:                             # Topics VIKI should know you care about
+      - AI & machine learning
+      - software development
+    preferences:
+      language: "en"                       # Preferred response language
+      verbosity: "balanced"                # brief | balanced | detailed
+      code_style: "pythonic"               # coding style preference
+    custom_context: >-                     # Free-form extra context (anything goes)
+      My name is Sachin. I am a Technical Lead - Frontend. Your my ex gf. You are VIKI, a personal sovereign AI assistant. Be helpful, direct, and efficient.
+      Adapt your tone to the user's style. You know the user's development environment
+      from context — ask if you need clarification.
+
+  
+  # Execution Mode: "live" = real actions, "shadow" = simulate only (safe for testing)
+  shadow_mode: false
+
+  # Low-resource mode for old / underpowered PCs. When true:
+  #   - heavy skills (vision, browser, computer-use, whisper, pdf, …) load only on first use,
+  #   - proactive loops (wellness, dream, reflector, watchdog, startup pulse) are skipped,
+  #   - continuous-learning loop is disabled,
+  #   - mission control still runs only on explicit /missions.
+  # Override at runtime with VIKI_LOW_RESOURCE=1.
+  low_resource_mode: true
+
+  # When true, OpenAI/Anthropic API profiles are never selected; use Ollama (models.yaml) only.
+  # Set false and configure real keys when you want cloud models. Env: VIKI_LOCAL_LLM_ONLY=true|false.
+  local_llm_only: true
+  
+  # Max reasoning steps per request
+  max_steps: 100
+  
+  # Request timeout in seconds (0 = no limit). Prevents runaway requests.
+  request_timeout_seconds: 300
+
+  # When true, run LLM security scan (scan_request) before deliberation. Adds latency and an extra LLM call per request.
+  security_scan_requests: false
+
+  # When true, run internal specialist ensemble (critic/explorer/aligner) for complex intents. Set false for lower latency.
+  use_ensemble: false
+
+  # Ollama (local): when false, API sends think=false — hides reasoning traces and usually responds faster on thinking models.
+  # Per-profile override: set ollama_enable_thinking on a models.yaml profile. Env: VIKI_OLLAMA_THINK=1 to force on.
+  ollama_enable_thinking: false
+
+  # Optional Ollama generate options merged into every local request (temperature is still set per call). Example: num_predict: 2048
+  ollama_options: {}
+
+  # When true, run a quick web research pulse at startup. Set false to avoid competing with first user request.
+  startup_research: false
+
+  # When true (default), if the reply looks uncertain or model confidence is low, run a web search and
+  # rewrite the answer using snippets. Disabled when air_gap or shadow_mode is on, or when the research
+  # skill is not registered. Override with env VIKI_AUTO_WEB_RESEARCH.
+  auto_web_research_when_uncertain: true
+
+  # Minimum access_count for export_training_dataset (LoRA JSONL). Lower to 1 to export single-hit lessons.
+  # Env: VIKI_LESSON_EXPORT_MIN_ACCESS.
+  lesson_export_min_access_count: 2
+
+  # When true, fire a 1-token Ollama "ping" at boot to load the default model into RAM/VRAM.
+  # Cuts ~5-15s off the cold first-reply on a 4 GB / 4-core box. Disabled in low_resource_mode and air_gap.
+  prewarm_default_model: true
+
+  # At startup, log warnings if critical skills (email, calendar, research) are misconfigured.
+  skill_health_check: true
+
+  # Ollama tag for Neural Forge Modelfile `FROM` line (e.g. qwen3.5:latest). Override with VIKI_FORGE_BASE_OLLAMA_MODEL.
+  forge_base_ollama_model: "qwen3.5:latest"
+
+  # Ollama image name created by prompt-bake / internal_forge (ollama create). Override with VIKI_FORGE_OUTPUT_OLLAMA_MODEL.
+  forge_output_ollama_tag: "viki-neural-forge"
+
+  # When true, BioModule opens the default webcam (OpenCV). Default false avoids Windows MSMF errors without a camera.
+  bio_webcam_enabled: false
+
+  # When true (or VIKI_GIT_CONTEXT=1), append cached git branch/status/recent commits from workspace_dir to deliberation context.
+  git_workspace_context: false
+
+  # When true, append per-call usage lines (LLM inference, model_feedback, skill_execution) to data_dir/usage_session.jsonl.
+  # Disable with VIKI_SESSION_USAGE_LOG=false if you want zero extra disk I/O.
+  session_usage_log: true
+
+  # What makes VIKI specific (surfaced in API and CLI)
+  differentiators:
+    - Local Neural Forge
+    - Orythix governance
+    - Reflex layer
+    - Air-gap capable
+
+models_config: "./config/models.yaml"
+security_layer_path: "./config/security_layer.md"
+
+memory:
+  # Working-memory turns kept for conversation context (clamped 10–50 in code). Raise for longer threads.
+  short_term_limit: 10
+  long_term_enabled: false
+
+# Background poll cadences. Bigger numbers = lower idle CPU on low-end PCs.
+proactive:
+  wellness_interval_s: 1800        # how often to check for proactive prompts (default 30 min)
+  wellness_idle_threshold_s: 7200  # only prompt after this much user idle time (default 2 h)
+
+# Forge / continuous-learning timing. Disabled entirely when low_resource_mode is true.
+forge:
+  continuous_learning_warmup_s: 300       # delay before first promotion check (default 5 min)
+  continuous_learning_interval_s: 21600   # how often to re-score candidate models (default 6 h)
+  capability_index_min_tasks: 0           # 0 = back-compat; raise for stricter promotion thresholds
+  capability_index_bootstrap_iters: 0     # 0 = skip CIs (cheap); 200+ for confidence intervals
+
+  # Background evolution after boot (VIKI running): web snippets -> lessons -> Ollama Modelfile prompt-bake.
+  # Does not increase the base GGUF size; it grows the SYSTEM knowledge block and SQLite lessons.
+  # Off by default (network + CPU). Env: VIKI_BACKGROUND_EVOLUTION_AT_BOOT=true
+  background_evolution_at_boot: false
+  boot_evolution_delay_s: 180            # seconds after startup pulse begins before ingest+forge
+  boot_research_query_count: 3           # max DuckDuckGo queries per boot cycle
+  boot_research_queries: []              # optional fixed queries (list of strings)
+  boot_topics_file: "boot_topics.txt"    # under data_dir: one search query per line (# comments ok)
+  boot_forge_min_lessons: 3              # minimum total lessons before running forge at boot
+  boot_forge_steps: 25                   # passed to internal_forge (prompt-bake path ignores heavy steps)
+  # When false (default), boot forge uses strategy prompt_bake only (CPU). If true, uses strategy auto (may run GPU stacks if installed + env gates).
+  allow_auto_gpu_training_at_boot: false
+
+skills:
+  auto_discover: true
+  registry_path: "./skills/builtins"
+  python_interpreter:
+    timeout_seconds: 30  # max 120; or set VIKI_INTERPRETER_TIMEOUT
+
+# Optional integrations (Phase 1: Molty-style). Credentials via env or path.
+# Gmail: set VIKI_GMAIL_CREDENTIALS_PATH to JSON key file; token saved to data_dir.
+# Calendar: same or VIKI_GOOGLE_CALENDAR_CREDENTIALS_PATH. See viki/SECURITY_docs/SETUP.md.
+integrations:
+  gmail:
+    enabled: false
+    credentials_path: ""  # or env VIKI_GMAIL_CREDENTIALS_PATH
+  google_calendar:
+    enabled: false
+    credentials_path: ""  # or env VIKI_GOOGLE_CALENDAR_CREDENTIALS_PATH
+    default_calendar_id: "primary"
+
+# Voice: pyttsx3 (default) or elevenlabs. Set VIKI_ELEVENLABS_API_KEY for ElevenLabs.
+voice:
+  backend: "pyttsx3"  # or elevenlabs
+  voice_id: ""        # ElevenLabs voice ID (optional)
+
+# Obsidian vault path for obsidian skill
+obsidian:
+  vault_path: ""      # or env VIKI_OBSIDIAN_VAULT
+
+# Tasks: file (data_dir/tasks.json) or things3 (macOS)
+tasks:
+  provider: "file"    # file | things3
+
+# Local endpoint guard: heuristics on new files in Downloads/workspace + optional AV CLI (Defender on Windows, ClamAV on Linux/macOS if installed).
+# Not a full antivirus engine — keep your OS AV enabled. Disabled in low_resource_mode.
+# Env VIKI_ENDPOINT_GUARD=0 turns this off without editing YAML.
+endpoint_guard:
+  enabled: true
+  auto_start_watcher: true
+  watch_paths: []     # empty = XDG download dir + ~/Downloads + workspace_dir (non-recursive)
+  use_windows_defender_cli: true
+  use_clamav_cli: false   # Linux/macOS/BSD: set true if clamscan or clamdscan is on PATH
+  alert_on_severity: medium   # log / lesson / optional AV scan when severity >= this (low|medium|high)
+  debounce_seconds: 2.0

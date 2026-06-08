@@ -7,9 +7,9 @@ import yaml
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from viki.core.memory.identity import NarrativeIdentity
-from viki.core.evolution import EvolutionEngine
-from viki.core.governor import EthicalGovernor
+from core.memory.identity import NarrativeIdentity
+from core.evolution import EvolutionEngine
+from core.governor import EthicalGovernor
 
 async def verify_identity_drive():
     print("--- Initializing Identity & Survival Components ---")

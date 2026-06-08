@@ -7,10 +7,10 @@ sys.path.insert(0, os.getcwd())
 
 # Subpackages that require optional native/GUI deps (PyQt5, etc.) — not required for core CI.
 SKIP_PREFIXES = (
-    "viki.ui.",
-    "viki.skills.dynamic.",
+    "ui.",
+    "skills.dynamic.",
     "viki.skills.playbooks.manim-video.",
-    "viki.skills.playbooks.videodb.",
+    "skills.playbooks.videodb.",
 )
 
 

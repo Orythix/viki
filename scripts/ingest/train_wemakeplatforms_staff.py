@@ -16,10 +16,10 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if REPO_ROOT not in sys.path:
     sys.path.append(REPO_ROOT)
 
-from viki.core.forge_config import DEFAULT_FORGE_OUTPUT_OLLAMA_TAG
-from viki.core.knowledge_ingestion import LearningModule
-from viki.core.llm import LocalLLM
-from viki.skills.builtins.research_skill import ResearchSkill
+from core.forge_config import DEFAULT_FORGE_OUTPUT_OLLAMA_TAG
+from core.knowledge_ingestion import LearningModule
+from core.llm import LocalLLM
+from skills.builtins.research_skill import ResearchSkill
 
 
 FACT_PREFIX = "FACT:"
@@ -56,7 +56,7 @@ def _build_components(settings_path: str):
     system = settings.get("system", {})
     data_dir = system.get("data_dir", "./data")
 
-    models_config_path = settings.get("models_config", "viki/config/models.yaml")
+    models_config_path = settings.get("models_config", "./config/models.yaml")
     if not os.path.isabs(models_config_path):
         models_config_path = os.path.join(REPO_ROOT, models_config_path)
 

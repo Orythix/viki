@@ -5,7 +5,7 @@ import sys
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from viki.core.world import WorldModel
+from core.world import WorldModel
 
 def verify_world_engine():
     print("--- Initializing Phase 4: World Engine ---")
@@ -22,7 +22,7 @@ def verify_world_engine():
     world.scan_codebase(root_dir)
     
     # 2. Simulate User Interaction with a file
-    target_file = "viki/core/schema.py"
+    target_file = "./core/schema.py"
     print(f"\nSetting Active Focus: {target_file}")
     world.set_active_file(target_file)
     
