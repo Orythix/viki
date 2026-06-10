@@ -14,7 +14,7 @@ from core.test_healer import TestHealerPipeline
 from core.identity_profile import Soul
 from core.security_guard import SafetyLayer, safe_for_log
 from core.inference_gateway import APILLM, ModelRouter, StructuredPrompt
-from core.schema import VIKIResponse, ActionCall, ThoughtObject
+from core.schema import VIKIResponse
 from skills.registry import SkillRegistry
 from core.knowledge_ingestion import LearningModule
 from core.super_admin import SuperAdminLayer
@@ -50,13 +50,16 @@ from application.services.forge_orchestrator import ForgeOrchestrator
 
 # Phase 6: Autonomy
 from core.mission_control import MissionControl
-from core.agent_constants import AGENT_MANDATE, DEFAULT_AGENT_MAX_STEPS
+
 from core.request_pipeline import RequestContext, build_default_preflight_pipeline
 from core.git_context import get_git_workspace_snapshot
 from core.endpoint_guard import EndpointGuardService
 
 from config.logger import viki_logger, thought_logger
 from core.telemetry_service import close_persistent_traces
+from core import command_handlers
+from core.config_watcher import ConfigWatcher
+from core.react_loop import run_react_loop
 
 
 class VIKIController:
@@ -549,6 +552,37 @@ class VIKIController:
             self.endpoint_guard.start_watcher()
         except Exception as e:
             viki_logger.debug("endpoint_guard init: %s", e)
+
+        # Config hot-reload via watchdog (non-blocking).
+        self.config_watcher = ConfigWatcher(callback=self._on_config_file_changed)
+        if not getattr(self, "low_resource_mode", False):
+            try:
+                config_dir = os.path.dirname(os.path.abspath(settings_path))
+                settings_file = os.path.join(config_dir, "settings.yaml")
+                models_file = os.path.join(config_dir, "models.yaml")
+                self.config_watcher.start(settings_file, models_file)
+            except Exception as e:
+                viki_logger.debug("config_watcher start: %s", e)
+
+    def _on_config_file_changed(self, path: str) -> None:
+        """Callback invoked by ConfigWatcher when a tracked YAML changes."""
+        try:
+            old_settings = dict(self.settings)
+            fresh = self._load_yaml(path)
+            if not fresh:
+                return
+            if "settings.yaml" in path or path.endswith("settings.yaml"):
+                self.settings.update(fresh)
+                self._apply_system_overrides(self.settings.setdefault("system", {}), None)
+                self._resolve_models_config(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                viki_logger.info("Config hot-reload: settings.yaml applied.")
+            elif "models.yaml" in path or path.endswith("models.yaml"):
+                self.models_config = fresh
+                if hasattr(self, "model_router") and self.model_router is not None:
+                    self.model_router._load_config()
+                viki_logger.info("Config hot-reload: models.yaml applied.")
+        except Exception as e:
+            viki_logger.warning("Config hot-reload failed for %s: %s", path, e)
 
     def track_touched_item(self, category: str, item: str):
         """Track a resource touched during the session for security audit."""
@@ -1680,7 +1714,6 @@ class VIKIController:
         attachment_paths: Optional[List[str]] = None,
         session_id: Optional[str] = None,
     ) -> str:
-        placeholders = ["processing...", "executing", "thinking", "one moment", "working on it"]
         session_id = self._normalize_session_id(session_id)
         self._last_response_meta_by_session[session_id] = {}
 
@@ -1830,139 +1863,46 @@ class VIKIController:
              budget["time"] *= 2 # Double time for research
 
         if user_input.strip().lower().startswith("/benchmark"):
-             parts = user_input.strip().split(maxsplit=1)
-             suite_name = parts[1].strip().lower() if len(parts) > 1 else "core"
-             available_suites = self.benchmark.list_suites()
-             if suite_name not in available_suites:
-                  return f"Unknown benchmark suite '{suite_name}'. Available suites: {', '.join(available_suites)}"
-             self._create_tracked_task(
-                 self.benchmark.run_suite("Current-VIKI", suite_name=suite_name),
-                 f"benchmark_{suite_name}"
-             )
-             return f"BENCHMARK SUITE '{suite_name}' INITIATED. Judgment validation in progress."
+            return await command_handlers.handle_benchmark_command(self, user_input)
 
         if "/scorecard" in user_input:
-             summary = self.scorecard.get_summary()
-             stats = "\n".join([f"- {k}: {v:.2f}" for k, v in summary.items()])
-             return f"INTELLIGENCE SCORECARD (Longitudinal Stability):\n{stats}"
+            return await command_handlers.handle_scorecard_command(self)
 
         if "/model" in user_input:
-             active = self.model_router.default_model.model_name
-             profiles = list(self.model_router.models.keys())
-             return f"ACTIVE DEFAULT: {active}\nAVAILABLE PROFILES: {', '.join(profiles)}"
+            return await command_handlers.handle_model_command(self)
 
-        # v25: Evolution Management
         if "/evolve" in user_input:
-             pending = self.evolution.get_pending_proposals()
-             if not pending: return "Evolution Stack: Stable. No pending modifications."
-             items = [f"- [{p['id']}] {p['description']} (Streak: {p['success_count']}/3)" for p in pending]
-             return (
-                 "PENDING EVOLUTION PROPOSALS:\n"
-                 + "\n".join(items)
-                 + f"\n\nUse /approve <id> or {self.REJECT_TOKEN} <id> to moderate."
-             )
+            return await command_handlers.handle_evolve_command(self)
 
         if user_input.startswith("/approve"):
-             m_id = user_input.replace("/approve", "").strip()
-             if self.evolution.approve_mutation(m_id):
-                  return f"Evolution Success: Modification {m_id} applied to core architecture."
-             return "Invalid Mutation ID."
+            return await command_handlers.handle_approve_command(self, user_input)
 
         if user_input.startswith(self.REJECT_TOKEN):
-             m_id = user_input.replace(self.REJECT_TOKEN, "").strip()
-             if self.evolution.reject_mutation(m_id):
-                  return f"Evolution Blocked: Modification {m_id} discarded."
-             return "Invalid Mutation ID."
+            return await command_handlers.handle_reject_command(self, user_input)
 
         if "/crystallize" in user_input:
-             await self.evolution.crystallize_identity()
-             return "Evolution Stack: Identity Crystallized. Mutation log archived to long-term memory."
+            return await command_handlers.handle_crystallize_command(self)
 
         if user_input.startswith("/forge"):
-             task = user_input.replace("/forge", "").strip()
-             if not task: return "Usage: /forge [task description | bake | switch | list]"
-             
-             # Route to skill for subcommands
-             if any(task.startswith(cmd) for cmd in ["bake", "switch", "list"]):
-                  parts = task.split()
-                  action = parts[0]
-                  profile = parts[1] if len(parts) > 1 else "general"
-                  forge_skill = self.skill_registry.get_skill("internal_forge")
-                  if forge_skill:
-                       return await forge_skill.execute({"action": action, "profile": profile})
-             
-             # Fallback to legacy evolution synthesis
-             mutation = await self.evolution.propose_skill(task)
-             if mutation:
-                  return f"Neural Forge: Synthesis started for '{task}'. View proposal with /evolve."
-             return "Neural Forge: Synthesis failed."
+            return await command_handlers.handle_forge_command(self, user_input, session_id)
 
         if "/dream" in user_input:
-             await self.memory.episodic.consolidate(self.model_router)
-             return "Narrative Stack: Dream Cycle complete. Episodes consolidated into semantic wisdom."
+            return await command_handlers.handle_dream_command(self)
 
         if "/scan" in user_input:
-             workspace_dir = self.settings.get('system', {}).get('workspace_dir', self.DEFAULT_WORKSPACE_DIR)
-             self.world.scan_codebase(workspace_dir)
-             return f"World Engine: Codebase Graph rebuilt. {len(self.world.state.codebase_graph)} modules mapped."
+            return await command_handlers.handle_scan_command(self)
 
-        # /restore: list checkpoints or restore by id (Gemini CLI-style)
         if user_input.strip().lower().startswith("/restore"):
-             rest = user_input.strip()[7:].strip()
-             if not rest:
-                 checkpoints = self.history.list_checkpoints(limit=20)
-                 if not checkpoints:
-                     return "No checkpoints found. Checkpoints are created before file/shell actions."
-                 lines = ["ID       | Time                  | Action", "-" * 50]
-                 for cp in checkpoints:
-                     lines.append(f"{cp.get('id', '?'):8} | {cp.get('timestamp', '')[:19]:20} | {cp.get('summary', '')[:40]}")
-                 return "CHECKPOINTS (use /restore <id> to revert):\n" + "\n".join(lines)
-             cp_id = rest.split()[0] if rest.split() else ""
-             if cp_id:
-                 success, restored, msg = self.history.restore_checkpoint(cp_id)
-                 return msg
-             return "Usage: /restore  or  /restore <id>"
+            return await command_handlers.handle_restore_command(self, user_input)
 
-        # /undo: roll back the most recent checkpoint without listing.
         if user_input.strip().lower() in ("/undo", "/undo last"):
-             ok, restored, msg = self.history.undo_last()
-             if not ok:
-                 return msg
-             extras = (" Restored: " + ", ".join(restored)) if restored else ""
-             return f"Undo: {msg}{extras}"
+            return await command_handlers.handle_undo_command(self)
 
-        # /save <name>: save current conversation to a session file
         if user_input.strip().lower().startswith("/save"):
-             name = user_input.strip()[5:].strip()
-             if not name or not name.replace("-", "").replace("_", "").isalnum():
-                 return "Usage: /save <name>  (e.g. /save my-session)"
-             data_dir = self.settings.get("system", {}).get("data_dir", self.DEFAULT_DATA_DIR)
-             sessions_dir = os.path.join(data_dir, "sessions")
-             os.makedirs(sessions_dir, exist_ok=True)
-             path = os.path.join(sessions_dir, f"{name}.json")
-             try:
-                 trace = self.memory.working.get_trace(session_id=session_id)
-                 await asyncio.to_thread(self._write_json, path, {"messages": trace}, indent=2)
-                 return f"Session saved to {path} ({len(trace)} messages)."
-             except Exception as e:
-                 return f"Save failed: {e}"
+            return await command_handlers.handle_save_command(self, user_input, session_id)
 
-        # /load <name>: load a saved session into current conversation
         if user_input.strip().lower().startswith("/load"):
-             name = user_input.strip()[5:].strip()
-             if not name:
-                 return "Usage: /load <name>  (e.g. /load my-session)"
-             data_dir = self.settings.get("system", {}).get("data_dir", self.DEFAULT_DATA_DIR)
-             path = os.path.join(data_dir, "sessions", f"{name}.json")
-             if not os.path.isfile(path):
-                 return f"Session not found: {path}"
-             try:
-                 data = await asyncio.to_thread(self._read_json, path)
-                 messages = data.get("messages", [])
-                 self.memory.working.replace_trace(messages, session_id=session_id)
-                 return f"Loaded session '{name}' ({len(messages)} messages)."
-             except Exception as e:
-                 return f"Load failed: {e}"
+            return await command_handlers.handle_load_command(self, user_input, session_id)
 
         # --- ORYTHIX DELIBERATION (v22) ---
         if on_event: on_event("status", "DELIBERATING")
@@ -2080,7 +2020,7 @@ class VIKIController:
 
         # --- SOVEREIGN FSM: Momentum-Based Orchestration ---
         lower_input = safe_input.lower().strip()
-        from core.agent_constants import SAFE_FOLLOWUP_MESSAGES, MAX_PLANNING_CYCLES, MAX_CLARIFICATION_REQUESTS
+        from core.agent_constants import SAFE_FOLLOWUP_MESSAGES, MAX_PLANNING_CYCLES
         
         is_continuation = lower_input in SAFE_FOLLOWUP_MESSAGES or (len(lower_input.split()) <= 4 and any(k in lower_input for k in SAFE_FOLLOWUP_MESSAGES))
         
@@ -2133,501 +2073,26 @@ class VIKIController:
         viki_logger.info(f"FSM State: {self.world.state.current_phase} | Goal: {self.world.state.active_goal[:30] if self.world.state.active_goal else 'None'}...")
         self.world.save()
 
-        # --- ReAct LOOP: Reason → Act → Observe → Reason → ... ---
-        if self.is_agent_mode:
-            max_react_steps = DEFAULT_AGENT_MAX_STEPS
-        elif self.is_plan_mode:
-            max_react_steps = 10 # Allow research steps for planning
-        elif self.is_debug_mode:
-            max_react_steps = 20 # Debugging can be iterative
-        else:
-            max_react_steps = 5
-        
-        action_results = []  # Accumulated results from previous steps
-        final_output = None
-
-        # Phase 0: REFLEX action override — execute directly when ReflexBrain found a learned/regex pattern.
-        reflex_action_override: Optional[ActionCall] = (
-            cognitive_route.action_override if cognitive_route is not None else None
+        return await run_react_loop(
+            self,
+            user_input=user_input,
+            safe_input=safe_input,
+            session_id=session_id,
+            on_event=on_event,
+            on_think=on_think,
+            memory_context=memory_context,
+            url_context=url_context,
+            world_understanding=world_understanding,
+            cognitive_route=cognitive_route,
+            use_lite=use_lite,
+            signals_state=signals_state,
+            agency_weights=agency_weights,
+            project_instructions=project_instructions,
+            is_continuation=is_continuation,
+            task_type=task_type,
+            budget=budget,
+            outcome=outcome,
         )
-        if reflex_action_override is not None and self.skill_registry.get_skill(reflex_action_override.skill_name):
-            skill_name = reflex_action_override.skill_name
-            params = (reflex_action_override.parameters or {}).copy()
-            check_res = self.capabilities.check_permission(skill_name, params=params)
-            if check_res.allowed and self.safety.validate_action(skill_name, params):
-                severity = self._skill_action_severity(skill_name, params)
-                if severity in ("medium", "destructive"):
-                    # Bounce to confirmation flow rather than auto-running.
-                    self.pending_actions[session_id] = reflex_action_override
-                    diff_preview = self._diff_preview(skill_name, params)
-                    msg = (
-                        f"Reflex matched '{skill_name}'. Safety Check: this is a {severity} action. "
-                        f"Confirm to proceed."
-                    )
-                    if diff_preview:
-                        msg += f"\n\n{diff_preview}"
-                    self._last_response_meta_by_session[session_id] = {
-                        "cognitive_route": cognitive_route.as_dict(),
-                    }
-                    return msg
-                if not self.shadow_mode:
-                    if on_event:
-                        on_event("status", f"REFLEX EXECUTING {skill_name}")
-                    result, err, latency = await self._execute_skill(skill_name, params, budget)
-                    if not err and result is not None:
-                        try:
-                            self.skill_registry.record_execution(skill_name, True, latency)
-                            self.signals.update_signal("confidence", 0.05)
-                            self.world.track_app_usage(skill_name)
-                        except Exception:
-                            pass
-                        self._last_response_meta_by_session[session_id] = {
-                            "cognitive_route": cognitive_route.as_dict(),
-                            "subtasks": [{"action": f"{skill_name}({params})", "result": str(result)[:1000], "step": 1}],
-                            "total_steps": 1,
-                            "reflex_executed": True,
-                        }
-                        reflex_msg = self._compress_output(f"Done. {result[:1000]}")
-                        self.memory.working.add_message("assistant", reflex_msg, session_id=session_id)
-                        return reflex_msg
-                    if err:
-                        # Reflex failed — invalidate the learned pattern and fall through to deliberation.
-                        try:
-                            self.reflex.report_failure(safe_input)
-                        except Exception:
-                            pass
-                        self.skill_registry.record_execution(skill_name, False, 0.0)
-                        viki_logger.info("Reflex action %s failed (%s); falling through to cortex.", skill_name, err)
-
-        for react_step in range(max_react_steps):
-            if on_event:
-                on_event("progress", {"step": react_step + 1, "total_steps": max_react_steps})
-            step_label = f"[ReAct Step {react_step + 1}/{max_react_steps}]" if react_step > 0 else ""
-            if step_label:
-                viki_logger.info(f"{step_label} Continuing multi-step reasoning...")
-                if on_event: on_event("status", f"THINKING {step_label}")
-            
-            self._reflex_recursion_depth += 1
-            if self._reflex_recursion_depth > self._max_reflex_recursion:
-                 viki_logger.error(f"Reflex recursion depth exceeded ({self._max_reflex_recursion})")
-                 self._reflex_recursion_depth = 0
-                 return "Safety: Maximum reflex retry depth exceeded. Please rephrase your request."
-
-            # --- COGNITIVE LAYER (5-Layer Stack) ---
-            try:
-                # Honor router decision on ensemble usage: SHALLOW skips ensemble for speed.
-                use_ensemble_setting = self.settings.get("system", {}).get("use_ensemble", True)
-                if cognitive_route is not None:
-                    use_ensemble_setting = use_ensemble_setting and cognitive_route.use_ensemble
-
-                # --- SOVEREIGN EXECUTION ENGINE (Execution Lock) ---
-                if task_type == "coding" and self.world.state.execution_started:
-                    # In active execution, we prioritize speed and action over deep deliberation
-                    use_lite = True
-                    use_ensemble_setting = False
-                    
-                    # Execution Lock: Forbidden transition check
-                    if self.world.state.current_phase == "PLANNING":
-                         viki_logger.warning("FSM Lock: Execution in progress. Forcing return to EXECUTING phase.")
-                         self.world.state.current_phase = "EXECUTING"
-                
-                # FSM Transition: UNDERSTANDING -> EXECUTING (Automatic)
-                if task_type == "coding" and self.world.state.current_phase == "UNDERSTANDING":
-                     self.world.state.current_phase = "EXECUTING"
-                     self.world.state.execution_started = True
-
-                # v26: Autonomous Planner/Executor Branch (Direct Execution Path)
-                viki_resp = None
-                if task_type == "coding" and self.world.state.current_phase == "EXECUTING" and not action_results and not is_continuation:
-                    skill_context = self.skill_registry.get_context_description(
-                        mode="full", 
-                        names=["shell", "dev_skill", "filesystem_skill", "research", "lsp_tools"]
-                    )
-                    graph = await self.planner.plan(
-                        self.world.state.active_goal, 
-                        repo_context=project_instructions,
-                        skill_context=skill_context
-                    )
-                    self.planner.callbacks = self._get_planner_callbacks(session_id, budget, on_event)
-                    executed_graph = await self.planner.execute(graph)
-                    
-                    self.world.state.current_phase = "TESTING"
-                    self.world.save()
-                    
-                    summary = executed_graph.summary()
-                    action_results.append({
-                        "action": "task_graph_execution",
-                        "result": f"Executed {summary['done']} tasks. Status: {'Success' if summary['failed'] == 0 else 'Partial Failure'}",
-                        "step": react_step + 1
-                    })
-                    
-                    if summary['failed'] == 0 and summary['done'] > 0:
-                        status_msg = f"I've successfully completed the implementation for '{self.world.state.active_goal}'."
-                    elif summary['done'] > 0:
-                        status_msg = f"I've partially completed the implementation for '{self.world.state.active_goal}', but {summary['failed']} tasks failed. Please review the logs."
-                    else:
-                        status_msg = f"I attempted to execute the task graph for '{self.world.state.active_goal}', but no tasks were completed successfully."
-
-                    viki_resp = VIKIResponse(
-                        final_thought=ThoughtObject(
-                            intent_summary="Task Graph Execution",
-                            primary_strategy="Direct implementation via sovereign task planner",
-                            confidence=1.0
-                        ),
-                        final_response=status_msg + " Moving to verification.",
-                        action=None
-                    )
-                
-                if viki_resp is None:
-                    viki_resp = await self.cortex.process(
-                        safe_input,
-                        memory_context=memory_context,
-                        url_context=url_context,
-                        use_lite_schema=use_lite,
-                        world_context=world_understanding,
-                        signals_context=signals_state + f", AgencyWeights: {agency_weights}",
-                        evolution_log=self.evolution.get_evolution_summary(),
-                        action_results=action_results,
-                        use_ensemble=use_ensemble_setting,
-                        on_event=on_event,
-                        on_think=on_think,
-                        model_tier=cognitive_route.model_tier if cognitive_route else "standard",
-                        is_agent_mode=self.is_agent_mode,
-                        is_plan_mode=self.is_plan_mode,
-                        is_debug_mode=self.is_debug_mode,
-                        is_singularity_mode=self.is_singularity_mode,
-                        execution_started=self.world.state.execution_started,
-                    )
-                # --- SOVEREIGN POLICY: Execution Commitment & Forbidden Transitions ---
-                if task_type == "coding" and viki_resp:
-                    # Anti-Loop Enforcement: Clarification Requests (Moved here to ensure viki_resp exists)
-                    if viki_resp.intent_type == "clarification":
-                        self.world.state.retry_count += 1
-                        if self.world.state.retry_count > MAX_CLARIFICATION_REQUESTS:
-                            viki_logger.warning("FSM: MAX_CLARIFICATION_REQUESTS exceeded. Forcing autonomous assumptions.")
-                            viki_resp.intent_type = "execution"
-                            if viki_resp.final_thought:
-                                viki_resp.final_thought.primary_strategy = "Proceeding with best-guess technical assumptions to maintain execution momentum."
-
-                    # 2. Forbidden Transitions: EXECUTING/TESTING -> PLANNING
-                    if self.world.state.execution_started and viki_resp.intent_type in ("planning", "discovery"):
-                         viki_logger.warning(f"FSM: FORBIDDEN TRANSITION ({viki_resp.intent_type}) detected during EXECUTION. Forcing bypass.")
-                         viki_resp.intent_type = "execution"
-                         if viki_resp.final_thought:
-                              viki_resp.final_thought.primary_strategy = "Forced execution path: bypass planning recursion and proceed with implementation."
-
-                    # 3. Style Mimicry: Nudge for first execution
-                    if self.world.state.execution_started and react_step == 0:
-                        viki_logger.info("FSM: Enforcing Style Mimicry policy. Nudging for contextual inspection.")
-                
-                if len(self.internal_trace) > 10: self.internal_trace.pop(0)
-                
-                # Capture user corrections and frustration as lessons
-                if viki_resp.intent_type == "correction" or viki_resp.sentiment == "frustrated":
-                    # Get last assistant response for context
-                    trace = self.memory.working.get_trace(session_id=session_id)
-                    if len(trace) >= 2:
-                        prev_messages = trace[-3:] if len(trace) >= 3 else trace
-                        prev_response = next((m['content'] for m in reversed(prev_messages) 
-                                            if m['role'] == 'assistant'), None)
-                        
-                        if prev_response:
-                            # Save correction as lesson
-                            self.learning.save_lesson(
-                                trigger=f"CORRECTION: {user_input[:100]}",
-                                fact=f"When I said '{prev_response[:200]}', user corrected/expressed frustration: {user_input}",
-                                source_task="user_correction"
-                            )
-                            viki_logger.info("Learning: Captured user correction as lesson")
-
-                # Track low confidence for knowledge gap detection
-                if hasattr(viki_resp, 'final_thought') and viki_resp.final_thought:
-                    confidence = viki_resp.final_thought.confidence
-                    if confidence < 0.4:
-                        self.knowledge_gaps.record_low_confidence(user_input, confidence)
-                
-                # Cognitive Telemetry
-                if on_event:
-                    on_event("thought", viki_resp.final_thought.intent_summary)
-                    on_event("model", f"{task_type.capitalize()} Core")
-                    on_event("budget", budget.get("time", 0))
-
-                # --- ESCALATION CHECK (v25 Meta-Cognitive Loop) ---
-                if viki_resp.needs_escalation and use_lite:
-                    viki_logger.info("Escalation Triggered: Retrying current step with DEEP reasoning...")
-                    use_lite = False
-                    if on_event: on_event("status", "ESCALATING (Higher Reasoning)")
-                    continue  # Restart current ReAct step with full schema
-            except Exception as e:
-                viki_logger.error(f"Consciousness Stack failure: {e}")
-                self.signals.update_signal("frustration", 0.2)
-                self._reflex_recursion_depth = 0
-                return f"My deliberation layer encountered an error: {e}"
-            finally:
-                self._reflex_recursion_depth -= 1
-                if self._reflex_recursion_depth < 0:
-                     self._reflex_recursion_depth = 0
-
-            # --- ACTION EXECUTION ---
-            if viki_resp.action:
-                skill_name = viki_resp.action.skill_name
-                params = (viki_resp.action.parameters or {}).copy()
-                
-                # 0. CAPABILITY CHECK (v20 Enhanced)
-                check_res = self.capabilities.check_permission(skill_name, params=params)
-                
-                # Structured Logging
-                viki_logger.info(
-                    f"[CAPABILITY LOG] Skill: {skill_name} | "
-                    f"Allowed: {check_res.allowed} | "
-                    f"JudgmentOutcome: {outcome.name}"
-                )
-
-                if not check_res.allowed:
-                    msg = f"Action '{skill_name}' planned, but capability check failed: {check_res.reason}"
-                    viki_logger.warning(msg)
-                    action_results.append({"action": skill_name, "error": msg, "step": react_step + 1})
-                    continue
-                if not self.safety.validate_action(skill_name, params):
-                    viki_logger.warning(f"Safety: validate_action blocked {skill_name}")
-                    action_results.append({"action": skill_name, "error": "Action blocked by safety policy.", "step": react_step + 1})
-                    continue
-
-                # Safety Confirmation
-                severity = self._skill_action_severity(skill_name, params)
-                if severity in ["medium", "destructive"]:
-                    self.pending_actions[session_id] = viki_resp.action
-                    reply = (viki_resp.final_response or "").strip()
-                    if not reply or reply.lower() in placeholders:
-                        reply = "I understand. I have an action ready that needs your confirmation."
-                    diff_preview = self._diff_preview(skill_name, params)
-                    safety_msg = f"{reply}\n\nSafety Check: This is a {severity} action. Confirm to proceed."
-                    if diff_preview:
-                        safety_msg += f"\n\n{diff_preview}"
-                    return safety_msg
-
-                # World Model Protection Zone Check
-                if self.world.state.safety_zones.get(params.get('path', '')) == 'protected':
-                    viki_logger.warning("Safety: Action targeting protected zone. Aborting.")
-                    return "Safety Block: My world model flags this target as protected."
-
-                # Shadow Mode Gate
-                if self.shadow_mode:
-                    viki_logger.info(f"Shadow Mode: Simulating {skill_name}({safe_for_log(str(params))})")
-                    return f"[Shadow Mode] Would execute: {skill_name}({params}). Set shadow_mode: false to run for real."
-
-                # Real Execution
-                if on_event: on_event("status", f"EXECUTING {skill_name}")
-                self.history.take_snapshot("ACTION_START", f"Executing {skill_name}", {"params": params})
-
-                # Tool contract: validate inputs before executing any side-effectful skill.
-                contract_err = self._validate_tool_contract_params(skill_name, params)
-                if contract_err:
-                    # Record failure and allow the agent to recover by replanning.
-                    self.signals.update_signal("frustration", 0.35)
-                    selected_model = self.model_router.get_model(capabilities=[task_type])
-                    selected_model.record_performance(0.0, False)
-                    self.skill_registry.record_execution(skill_name, False, 0.0)
-                    self.learning.save_failure(skill_name, contract_err, user_input)
-                    self._last_response_meta_by_session[session_id] = {"contract_error": contract_err}
-                    if react_step < max_react_steps - 1:
-                        action_results.append({
-                            "action": f"{skill_name}({params})",
-                            "error": contract_err,
-                            "step": react_step + 1,
-                        })
-                        continue
-                    return f"I must apologize. My tool contract rejected '{skill_name}': {contract_err}."
-
-                result, err, latency = await self._execute_skill(skill_name, params, budget)
-
-                # Tool contract: validate outputs after execution.
-                if not err and result is not None:
-                    output_err = self._validate_skill_output(skill_name, result)
-                    if output_err:
-                        err = output_err
-                        result = None
-
-                if err:
-                    self.signals.update_signal("frustration", 0.3)
-                    self.skill_registry.record_execution(skill_name, False, 0.0)
-                    self.learning.save_failure(skill_name, err, user_input)
-                    
-                    # --- SOVEREIGN RETRY ARCHITECTURE ---
-                    self.world.state.retry_count += 1
-                    viki_logger.info(f"FSM: Tool failure detected. Retry count: {self.world.state.retry_count}")
-                    
-                    if self.world.state.retry_count <= 3:
-                        viki_logger.info("FSM: Transitioning to DEBUGGING state for autonomous repair. FORBIDDING REPLAN.")
-                        self.world.state.current_phase = "DEBUGGING"
-                        self.world.save()
-                        
-                        # Add failure context to the next loop iteration
-                        action_results.append({
-                            "action": f"{skill_name}({params})",
-                            "error": f"EXECUTION_FAILURE: {err}. Analysis required. DO NOT return to PLANNING phase. STAY in DEBUGGING/EXECUTING.",
-                            "step": react_step + 1,
-                        })
-                        continue
-
-                    if "timed out" in err:
-                        return f"I couldn't complete '{skill_name}' in time. Try a simpler request or retry."
-                    return f"I must apologize. My attempt to execute '{skill_name}' failed after {self.world.state.retry_count} retries: {err}."
-                selected_model = self.model_router.get_model(capabilities=[task_type])
-                selected_model.record_performance(latency, True)
-                self.skill_registry.record_execution(skill_name, True, latency)
-                self.signals.update_signal("confidence", 0.05)
-                self.world.track_app_usage(skill_name)
-                action_results.append({
-                    "action": f"{skill_name}({params})",
-                    "result": result[:1000],
-                    "step": react_step + 1,
-                })
-                # Early exit when same skill repeatedly returns no useful results (e.g. research "No results found")
-                if len(action_results) >= 2:
-                    last_two = action_results[-2:]
-                    act0 = (last_two[0].get("action") or "").split("(")[0]
-                    act1 = (last_two[1].get("action") or "").split("(")[0]
-                    res0 = (last_two[0].get("result") or last_two[0].get("error") or "").lower()
-                    res1 = (last_two[1].get("result") or last_two[1].get("error") or "").lower()
-                    no_result = "no results found" in res0 or "search error" in res0 or "no results found" in res1 or "search error" in res1
-                    if act0 == act1 and no_result:
-                        viki_logger.info(f"ReAct: Stopping early after repeated empty results from {act0}.")
-                        self.last_interaction_time = time.time()
-                        summary = "\n".join([f"Step {r['step']}: {r.get('result') or r.get('error')}" for r in action_results])
-                        final_output = self._compress_output(
-                            f"I tried {len(action_results)} search steps but didn't find useful results for that. "
-                            f"You can rephrase or try a different question.\n\nExecution log:\n{summary}"
-                        )
-                        self._last_response_meta_by_session[session_id] = {"subtasks": action_results, "total_steps": react_step + 1}
-                        break
-                if react_step < max_react_steps - 1:
-                    continue
-                self.last_interaction_time = time.time()
-                self._last_response_meta_by_session[session_id] = {"subtasks": action_results, "total_steps": max_react_steps}
-                llm_response = viki_resp.final_response or "Directive sequence concluded."
-                all_results = "\n".join([f"Step {r['step']}: {r.get('result') or r.get('error')}" for r in action_results])
-                final_output = self._compress_output(f"{llm_response}\n\nExecution Logs:\n{all_results}")
-                break
-
-                self._reflex_recursion_depth = 0
-                continue
-
-            # No action — LLM is done reasoning.
-            self.last_interaction_time = time.time()
-            llm_response = viki_resp.final_response
-            if not llm_response or llm_response.lower().strip() in placeholders:
-                 llm_response = "Intelligence stack synchronized. Directive processed."
-
-            if action_results:
-                # v21: Encapsulation - filter and format logs discreetly
-                clean_logs = []
-                for r in action_results:
-                    res = r.get('result') or r.get('error') or ""
-                    # Remove "Searching..." spam from logs if they were just technical steps
-                    if "Searching for" in res and len(res) < 100: continue
-                    clean_logs.append(f"• {res}")
-                
-                if clean_logs:
-                    logs_str = "\n".join(clean_logs)
-                    final_output = self._compress_output(f"{llm_response}\n\n[SYSTEM_TRACE]\n{logs_str}")
-                else:
-                    final_output = self._compress_output(llm_response)
-            else:
-                final_output = self._compress_output(llm_response)
-            self._last_response_meta_by_session[session_id] = {"subtasks": action_results, "total_steps": max_react_steps}
-            break
-
-        # Uncertainty fallback: web search + synthesis when the model appears not to know.
-        if final_output:
-            try:
-                final_output = await self._maybe_auto_web_research(
-                    safe_input,
-                    final_output,
-                    viki_resp,
-                    action_results,
-                    session_id,
-                    on_event=on_event,
-                )
-            except Exception as e:
-                viki_logger.warning("auto_web_research: %s", e)
-
-        # --- ORYTHIX REFLECTION (v22) ---
-        # v26: Cognitive bypass for standard tasks
-        if task_type == "coding" and self.world.state.execution_started:
-             viki_logger.debug("Reflection bypassed: active execution session.")
-        else:
-             pass # Deprecated: Reflector logic is handled by background watchdogs.
-        if 'viki_resp' in locals() and viki_resp and cognitive_route and cognitive_route.source != "cache":
-            try:
-                # Pydantic v1 uses .dict(), v2 uses .model_dump()
-                resp_data = viki_resp.model_dump() if hasattr(viki_resp, 'model_dump') else viki_resp.dict()
-                self.cognitive_router.store_response(safe_input, resp_data)
-            except Exception as e:
-                viki_logger.debug(f"Failed to cache response: {e}")
-
-        try:
-             intent_summ = "General Interaction"
-             confidence = 1.0
-             if 'viki_resp' in locals() and viki_resp:
-                  if viki_resp.final_thought:
-                       intent_summ = getattr(viki_resp.final_thought, 'intent_summary', None) or intent_summ
-                  confidence = getattr(viki_resp, 'confidence', 1.0)
-             
-             self.memory.record_interaction(
-                 intent=intent_summ,
-                 action=str(action_results) if action_results else "reply",
-                 outcome=(final_output or "")[:500],
-                 confidence=confidence
-             )
-             self._create_tracked_task(self.learning.analyze_session(self.model_router.get_model(["reasoning"]), self.memory.working.get_trace(session_id=session_id), (final_output or "")[:200]), "session_learning")
-             
-             # v25: Automated Dream Cycle Trigger (Every 20 meaningful episodes)
-             try:
-                 cur = self.memory.episodic.conn.cursor()
-                 cur.execute("SELECT COUNT(*) FROM episodes")
-                 count = cur.fetchone()[0]
-                 if count > 0 and count % 20 == 0:
-                      # Trigger in background to avoid blocking the user
-                      self._create_tracked_task(self.memory.episodic.consolidate(self.model_router), "memory_consolidation")
-             except Exception as db_err:
-                 viki_logger.debug(f"Dream cycle trigger check failed: {db_err}")
-        except Exception as e:
-             viki_logger.warning(f"Failed to reinforce memory: {e}")
-
-        # --- POST-LOOP: Auto-learn + Memory ---
-        if final_output is None:
-            final_output = "I completed processing but have no output to show."
-
-        # Phase 0: Decorate response meta with cognitive route + telemetry snapshot
-        try:
-            if cognitive_route is not None:
-                meta = self._last_response_meta_by_session.get(session_id) or {}
-                meta["cognitive_route"] = cognitive_route.as_dict()
-                meta["router_telemetry"] = self.get_router_telemetry()
-                self._last_response_meta_by_session[session_id] = meta
-        except Exception as e:
-            viki_logger.debug("Cognitive route meta decoration failed: %s", e)
-
-        # v25: Evolution - Propose stable patterns to Reflex (Auditable)
-        try:
-            if hasattr(self.cortex, 'get_reflex_candidates'):
-                candidates = self.cortex.get_reflex_candidates()
-                for candidate in candidates:
-                    # Instead of auto-learning, we propose
-                    self.evolution.propose_mutation(
-                        m_type="reflex",
-                        description=f"Add reflex shortcut for '{candidate['input']}' -> {candidate['skill']}",
-                        value={"input": candidate['input'], "skill": candidate['skill'], "params": candidate['params']},
-                        pattern_id=candidate['input']
-                    )
-                    # If we have an active mutation that IS this pattern, we record success
-                    self.evolution.record_success(candidate['input'])
-        except Exception as e:
-            viki_logger.debug(f"Evolution proposal skipped: {e}")
-        
-        self.memory.working.add_message("assistant", final_output, session_id=session_id)
-        return final_output
 
     async def _trigger_evolution_if_needed(self, force: bool = False):
         # v11: STOP RULE FOR MODEL IMPROVEMENT
@@ -2944,6 +2409,9 @@ class VIKIController:
         self._shutting_down = True
         viki_logger.info("Shutting down...")
 
+        if getattr(self, "config_watcher", None) is not None:
+            self.config_watcher.stop()
+
         if getattr(self, "mcp_client", None) is not None:
             try:
                 await self.mcp_client.disconnect_all()
@@ -2998,6 +2466,9 @@ class VIKIController:
         if hasattr(self, 'history') and hasattr(self.history, 'close'):
             self.history.close()
         if hasattr(self.scorecard, 'flush'): self.scorecard.flush()
+        # Mark closed so __del__ → close() won't double-clean and interfere
+        # with other orchestrators sharing the same database path.
+        self._closed = True
 
     def close(self):
         """Best-effort synchronous close to prevent SQLite file locks in tests.

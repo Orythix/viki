@@ -13,12 +13,15 @@ callers in main.py do not need to change.
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any, Callable, Dict, Optional, Type, TypeVar
 
 import yaml
 
 T = TypeVar("T")
+
+_log = logging.getLogger("container")
 
 
 # ---------------------------------------------------------------------------
@@ -38,8 +41,8 @@ class _ConfigProxy:
                 data = yaml.safe_load(f) or {}
             if isinstance(data, dict):
                 self._data.update(data)
-        except Exception:
-            pass  # Non-fatal – controller will load settings independently.
+        except Exception as exc:
+            _log.warning("Config load from %s failed: %s", path, exc)
 
     def get(self, key: str, default: Any = None) -> Any:
         return self._data.get(key, default)
@@ -107,21 +110,24 @@ class Container:
                     SqlAlchemyLearningRepository,
                 )
                 return SqlAlchemyLearningRepository(db_url="sqlite:///data/viki_knowledge.db?timeout=30.0")
-            except Exception:
+            except Exception as exc:
+                _log.warning("learning_repository init failed: %s", exc)
                 return None
 
         def _make_agent_pool():
             try:
                 from infrastructure.swarm.local_agent_pool import LocalAgentPool
                 return LocalAgentPool()
-            except Exception:
+            except Exception as exc:
+                _log.warning("agent_pool init failed: %s", exc)
                 return None
 
         def _make_safety_service():
             try:
                 from application.services.safety_service import SafetyService
                 return SafetyService(config=self.config.get("safety", {}))
-            except Exception:
+            except Exception as exc:
+                _log.warning("safety_service init failed: %s", exc)
                 return None
 
         def _make_swarm_orchestrator():
@@ -129,7 +135,8 @@ class Container:
                 from application.services.swarm_orchestrator import SwarmOrchestrator
                 pool = self.agent_pool()
                 return SwarmOrchestrator(agent_pool=pool)
-            except Exception:
+            except Exception as exc:
+                _log.warning("swarm_orchestrator init failed: %s", exc)
                 return None
 
         def _make_forge_orchestrator():
@@ -137,7 +144,8 @@ class Container:
                 from application.services.forge_orchestrator import ForgeOrchestrator
                 # controller is injected later by main.py
                 return ForgeOrchestrator(controller=None)
-            except Exception:
+            except Exception as exc:
+                _log.warning("forge_orchestrator init failed: %s", exc)
                 return None
 
         def _make_self_healing():
@@ -145,7 +153,8 @@ class Container:
                 from application.services.fault_tolerance_service import SelfHealingService
                 # controller is injected later by main.py
                 return SelfHealingService(controller=None)
-            except Exception:
+            except Exception as exc:
+                _log.warning("self_healing_service init failed: %s", exc)
                 return None
 
         def _make_recall_use_case():
@@ -155,7 +164,8 @@ class Container:
                     learning_repo=self.learning_repository(),
                     safety_service=self.safety_service(),
                 )
-            except Exception:
+            except Exception as exc:
+                _log.warning("recall_memory_use_case init failed: %s", exc)
                 return None
 
         # Singletons

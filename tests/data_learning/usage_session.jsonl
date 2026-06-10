@@ -1,0 +1,4 @@
+{"event": "llm_inference", "model_name": "fast-v1", "provider_class": "MockLLM", "method": "chat", "latency_ms": 113.914, "success": true, "ts": 1781109460.1871214}
+{"event": "model_feedback", "model_name": "fast-v1", "provider_class": "MockLLM", "latency_ms": 115.473, "success": true, "trust_score": 1.0, "call_count": 1, "ts": 1781109460.1881394}
+{"event": "llm_inference", "model_name": "default-v1", "provider_class": "MockLLM", "method": "chat", "latency_ms": 91.584, "success": true, "ts": 1781109460.2798235}
+{"event": "llm_inference", "model_name": "reasoning-v1", "provider_class": "MockLLM", "method": "chat", "latency_ms": 111.008, "success": true, "ts": 1781109461.6982415}

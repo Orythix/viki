@@ -11,12 +11,12 @@ warnings.filterwarnings("ignore", category=UserWarning, module="huggingface_hub"
 warnings.filterwarnings("ignore", module="sentence_transformers")
 warnings.filterwarnings("ignore", module="transformers")
 
-# Force transformers logging level directly if the library is loaded
-try:
-    import transformers
-    transformers.logging.set_verbosity_error()
-except ImportError:
-    pass
+def _silence_transformers():
+    try:
+        import transformers
+        transformers.logging.set_verbosity_error()
+    except ImportError:
+        pass
 import asyncio
 import time
 import argparse
@@ -461,7 +461,7 @@ async def _run_interactive_loop(controller, interface, on_event, streaming_state
             if user_input.lower() == "/train":
                 interface.console.print("[bold blue]Initiating Neural Forge Evolution...[/]")
                 from evolution_engine import main_forge
-                success = main_forge()
+                success = await main_forge()
                 if success:
                     interface.console.print("[bold green]Evolution successful! Evolved model 'viki-evolved' is now updated.[/]")
                 else:
@@ -534,6 +534,7 @@ async def _run_interactive_loop(controller, interface, on_event, streaming_state
             interface.print_error(str(e))
 
 async def main(workspace_path=None, query=None):
+    _silence_transformers()
     interface = SimpleInterface()
     viki_logger.setLevel(logging.INFO)
     

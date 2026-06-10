@@ -25,7 +25,8 @@ class TestVIKIIntegration(unittest.IsolatedAsyncioTestCase):
         self.test_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.test_data_path = self.test_dir.name
         
-        # Instantiate Controller with overridden data_dir
+        # Save and override data_dir so we don't leak across test suites
+        self._saved_data_dir = os.environ.pop("VIKI_DATA_DIR", None)
         os.environ["VIKI_DATA_DIR"] = self.test_data_path
         
         self.controller = VIKIController(self.settings_path, self.soul_path)
@@ -45,6 +46,12 @@ class TestVIKIIntegration(unittest.IsolatedAsyncioTestCase):
                 self.test_dir.cleanup()
             except:
                 pass
+        # Restore original VIKI_DATA_DIR to avoid leaking across test suites
+        if hasattr(self, '_saved_data_dir'):
+            if self._saved_data_dir is not None:
+                os.environ["VIKI_DATA_DIR"] = self._saved_data_dir
+            else:
+                os.environ.pop("VIKI_DATA_DIR", None)
         
     async def test_basic_request(self):
         """Test that basic requests return a response."""

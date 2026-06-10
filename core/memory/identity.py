@@ -1,9 +1,9 @@
-import sqlite3
 import json
 import time
 import os
 from typing import List, Dict, Any, Optional
 from config.logger import viki_logger
+from .database import get_connection
 
 class NarrativeIdentity:
     """
@@ -11,16 +11,14 @@ class NarrativeIdentity:
     Core self-model, long-term motivations, ethical priors, and continuity anchors.
     This layer is decay-resistant and grounds every response in 'who Orythix is becoming'.
     """
-    def __init__(self, data_dir: str):
+    def __init__(self, data_dir: str, db_path: Optional[str] = None):
         self.data_dir = data_dir
         os.makedirs(self.data_dir, exist_ok=True)
-        self.db_path = os.path.join(self.data_dir, "orythix_identity.db")
+        self.db_path = db_path or os.path.join(self.data_dir, "orythix_identity.db")
         self._init_db()
 
     def _init_db(self):
-        self.conn = sqlite3.connect(self.db_path, check_same_thread=False, timeout=30.0)
-        self.conn.execute("PRAGMA journal_mode=WAL")
-        self.conn.row_factory = sqlite3.Row
+        self.conn = get_connection(self.db_path)
         cur = self.conn.cursor()
         
         # Identity Store: Key-Value style for flexible anchoring
@@ -40,14 +38,9 @@ class NarrativeIdentity:
         self.conn.commit()
 
     def close(self):
-        """Release SQLite resources so tests can delete temp DB files."""
-        if hasattr(self, "conn") and self.conn:
-            try:
-                self.conn.close()
-            except Exception as e:
-                viki_logger.debug(f"NarrativeIdentity: Failed to close SQLite: {e}")
-            finally:
-                self.conn = None
+        from .database import release_connection
+        release_connection(self.db_path)
+        self.conn = None
 
     def _seed_identity(self):
         defaults = [

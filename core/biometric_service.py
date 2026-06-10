@@ -3,21 +3,28 @@ import sys
 import time
 from config.logger import viki_logger
 
-try:
-    import cv2
-except Exception as e:
-    cv2 = None
-    viki_logger.warning(f"OpenCV unavailable during BioModule import ({e}). Bio sensing will be disabled.")
-
+_cv2 = None
 
 def _opencv_silence_msmf():
     """Reduce OpenCV stderr spam when no camera is available (common on Windows MSMF)."""
-    if cv2 is None:
+    if _cv2 is None:
         return
     try:
-        cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_ERROR)
+        _cv2.utils.logging.setLogLevel(_cv2.utils.logging.LOG_LEVEL_ERROR)
     except Exception:
         pass
+
+
+def _get_cv2():
+    global _cv2
+    if _cv2 is None:
+        try:
+            import cv2
+            _cv2 = cv2
+            _opencv_silence_msmf()
+        except Exception as e:
+            viki_logger.warning(f"OpenCV unavailable ({e}). Bio sensing disabled.")
+    return _cv2
 
 
 class BioModule:
@@ -62,10 +69,9 @@ class BioModule:
                 "BioModule: Webcam sensor off (set system.bio_webcam_enabled: true or VIKI_BIO_WEBCAM=1 to enable)."
             )
             return
-        if cv2 is None:
+        if _get_cv2() is None:
             viki_logger.warning("BioModule: Empathy sensor disabled because OpenCV is unavailable.")
             return
-        _opencv_silence_msmf()
         self.is_running = True
         if self.experimental:
             viki_logger.info(self.EXPERIMENTAL_NOTICE)
@@ -77,26 +83,25 @@ class BioModule:
 
     def _open_capture(self):
         """Open default camera; prefer DirectShow on Windows to reduce MSMF failures."""
-        if cv2 is None:
+        cv2_mod = _get_cv2()
+        if cv2_mod is None:
             return None
-        _opencv_silence_msmf()
         if sys.platform == "win32":
             try:
-                cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+                cap = cv2_mod.VideoCapture(0, cv2_mod.CAP_DSHOW)
             except TypeError:
-                cap = cv2.VideoCapture(0)
+                cap = cv2_mod.VideoCapture(0)
             if cap.isOpened():
                 return cap
             try:
                 cap.release()
             except Exception:
                 pass
-        cap = cv2.VideoCapture(0)
+        cap = cv2_mod.VideoCapture(0)
         return cap if cap.isOpened() else None
 
     async def _monitor_loop(self):
-        # We handle blocking cv2 calls in executor to keep one loop
-        if cv2 is None:
+        if _get_cv2() is None:
             return
         loop = asyncio.get_running_loop()
         self.cap = await loop.run_in_executor(None, self._open_capture)

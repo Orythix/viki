@@ -88,7 +88,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-asyncio", "ruff"]
+dev = ["pytest", "pytest-asyncio", "pytest-timeout", "ruff"]
 # Model Context Protocol (remote stdio/http/sse servers). See viki/config/mcp_servers.yaml.
 mcp = ["mcp>=1.12.0"]
 # Optional stacks (install on top of the base package). See README "Install profiles".
@@ -131,6 +131,8 @@ select = ["F821", "F822", "F823", "F632"]
 asyncio_mode = "auto"
 testpaths = ["./tests"]
 pythonpath = ["."]
+timeout = 120
+timeout_method = "thread"
 
 [project.scripts]
 viki = "bootstrap:run"

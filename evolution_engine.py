@@ -1,7 +1,7 @@
 import os
 import yaml
 import json
-import subprocess
+import asyncio
 import time
 import sys
 from typing import List, Dict, Any
@@ -91,7 +91,7 @@ SYSTEM \"\"\"
     viki_logger.info(f"Forge: Modelfile generated using base '{base_model}'")
     return MODELFILE_PATH
 
-def build_model():
+async def build_model():
     modelfile = create_modelfile()
     model_name = "viki-evolved"
     
@@ -99,22 +99,31 @@ def build_model():
     logger = logging.getLogger('forge')
     logger.info(f"[FORGE] Building evolved core: {model_name}...")
     try:
-        result = subprocess.run(["ollama", "create", model_name, "-f", modelfile], capture_output=False, text=True)
-        if result.returncode == 0:
+        proc = await asyncio.create_subprocess_exec(
+            "ollama", "create", model_name, "-f", modelfile,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300.0)
+        if proc.returncode == 0:
             viki_logger.info(f"Forge: Model '{model_name}' updated.")
             return True
         else:
-            viki_logger.error(f"Forge building error: {result.stderr}")
+            err_text = stderr.decode("utf-8", errors="replace") if stderr else ""
+            viki_logger.error(f"Forge building error: {err_text}")
             return False
+    except asyncio.TimeoutError:
+        viki_logger.error("Forge: ollama create timed out after 300s.")
+        return False
     except Exception as e:
         viki_logger.error(f"Forge logic error: {e}")
         return False
 
-def main_forge():
+async def main_forge():
     import logging
     logger = logging.getLogger('forge')
     logger.info("--- VIKI NEURAL FORGE 2.0 ---")
-    success = build_model()
+    success = await build_model()
     if success:
         logger.info("--- FORGE SUCCESSFUL ---")
     else:
@@ -122,4 +131,4 @@ def main_forge():
     return success
 
 if __name__ == "__main__":
-    main_forge()
+    asyncio.run(main_forge())

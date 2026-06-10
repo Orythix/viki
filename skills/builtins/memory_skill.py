@@ -145,8 +145,10 @@ class MemorySkill(BaseSkill):
         total_lessons = learning.get_total_lesson_count()
         stable_lessons = learning.get_stable_lesson_count()
         
-        # Episodic stats
-        cur = memory.episodic.conn.cursor()
+        # Episodic stats – use get_connection to avoid stale .conn references
+        from core.memory.database import get_connection
+        conn = get_connection(memory.episodic.db_path)
+        cur = conn.cursor()
         cur.execute("SELECT COUNT(*) FROM episodes")
         episodes = cur.fetchone()[0]
         

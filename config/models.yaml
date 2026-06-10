@@ -11,7 +11,7 @@ models:
       api_key: ${ANTHROPIC_API_KEY}
     mock:
       type: mock
-  default: gemma4
+  default: viki-archived
   profiles:
     gemma4:
       provider: ollama

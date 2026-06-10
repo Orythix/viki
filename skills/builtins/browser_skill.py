@@ -1,6 +1,5 @@
 import asyncio
 from typing import Dict, Any, Optional
-from playwright.async_api import async_playwright
 from skills.base import BaseSkill
 from config.logger import viki_logger
 
@@ -31,6 +30,7 @@ class BrowserSkill(BaseSkill):
 
     async def _init_browser(self, headless=True):
         if not self.playwright:
+            from playwright.async_api import async_playwright
             self.playwright = await async_playwright().start()
             self.browser = await self.playwright.chromium.launch(headless=headless)
             self.context = await self.browser.new_context()

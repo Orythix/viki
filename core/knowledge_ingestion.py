@@ -15,11 +15,6 @@ except Exception as e:
     viki_logger.warning(f"NumPy unavailable during LearningModule import ({e}). Semantic features will use list fallback.")
 
 HAS_SEMANTIC = False
-SentenceTransformer = None
-try:
-    from sentence_transformers import util
-except Exception:
-    util = None
 
 
 def _lesson_content_trigger_fact(content: Optional[str], text_representation: str) -> tuple[Optional[str], str]:

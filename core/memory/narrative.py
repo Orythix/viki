@@ -1,4 +1,3 @@
-import sqlite3
 import json
 import time
 import os
@@ -7,12 +6,7 @@ from typing import List, Dict, Any, Optional
 
 import numpy as np
 from config.logger import viki_logger
-
-try:
-    from sentence_transformers import util
-except Exception as e:
-    util = None
-    viki_logger.warning(f"SentenceTransformers utilities unavailable during NarrativeMemory import ({e}). Episodic semantic recall will use fallback mode.")
+from .database import get_connection
 
 
 def _coerce_flat_embedding(v: Any, dim: int) -> Optional[List[float]]:
@@ -33,13 +27,11 @@ class NarrativeMemory:
     Implements 'Omniscience-like recall' for recent history and semantic search for long-term.
     Uses shared embedding model from core.embeddings.
     """
-    def __init__(self, data_dir: str):
+    def __init__(self, data_dir: str, db_path: Optional[str] = None):
         self.data_dir = data_dir
         os.makedirs(self.data_dir, exist_ok=True)
-        self.db_path = os.path.join(self.data_dir, "orythix_narrative.db")
+        self.db_path = db_path or os.path.join(self.data_dir, "orythix_narrative.db")
 
-        # Lazy encoder: deferred until the first call that needs an
-        # embedding. Trivial conversational turns never trigger the import.
         self._encoder = None
         self._encoder_loaded = False
 
@@ -59,9 +51,7 @@ class NarrativeMemory:
         return self._encoder
 
     def _init_db(self):
-        self.conn = sqlite3.connect(self.db_path, check_same_thread=False, timeout=30.0)
-        self.conn.execute("PRAGMA journal_mode=WAL")
-        self.conn.row_factory = sqlite3.Row
+        self.conn = get_connection(self.db_path)
         cur = self.conn.cursor()
         
         # Episodic Memory Schema (Context -> Intent -> Action -> Outcome)
@@ -152,7 +142,12 @@ class NarrativeMemory:
                 corpus_embs.append(flat)
                 corpus_rows.append(r)
 
-            if not corpus_embs or util is None:
+            if not corpus_embs:
+                return self._get_recent_episodes(limit)
+
+            try:
+                from sentence_transformers import util
+            except Exception:
                 return self._get_recent_episodes(limit)
 
             import torch
@@ -194,7 +189,13 @@ class NarrativeMemory:
 
     def get_semantic_knowledge(self, limit: int = 5) -> List[Dict[str, Any]]:
         """Returns consolidated wisdom for the current context."""
-        cur = self.conn.cursor()
+        import sqlite3
+        from .database import get_connection
+        try:
+            cur = self.conn.cursor()
+        except (sqlite3.ProgrammingError, sqlite3.OperationalError):
+            self.conn = get_connection(self.db_path)
+            cur = self.conn.cursor()
         cur.execute("SELECT category, insight FROM semantic_knowledge ORDER BY last_reinforced DESC LIMIT ?", (limit,))
         return [dict(r) for r in cur.fetchall()]
 
@@ -253,9 +254,6 @@ class NarrativeMemory:
              viki_logger.error(f"Narrative: Dream Cycle failed: {e}")
 
     def close(self):
-        if hasattr(self, 'conn') and self.conn:
-            try:
-                self.conn.close()
-                self.conn = None
-            except Exception:
-                pass
+        from .database import release_connection
+        release_connection(self.db_path)
+        self.conn = None

@@ -3,7 +3,9 @@ QMD-style hybrid memory search: BM25 (keyword) + vector (episodic) + optional LL
 Used by recall_skill and can be wired into get_full_context for richer retrieval.
 """
 import re
+import hashlib
 from typing import List, Dict, Any, Optional
+from collections import OrderedDict
 
 try:
     from rank_bm25 import BM25Okapi
@@ -16,18 +18,55 @@ def _tokenize(text: str) -> List[str]:
     return re.findall(r"\w+", (text or "").lower())
 
 
+class _BM25Cache:
+    """Reusable BM25 index to avoid rebuilding on every query."""
+
+    def __init__(self, max_docs: int = 500):
+        self._docs: List[str] = []
+        self._bm25: Any = None
+        self._max_docs = max_docs
+
+    def build(self, docs: List[str]):
+        if docs == self._docs:
+            return self._bm25
+        self._docs = docs[:self._max_docs]
+        tokenized = [_tokenize(d) for d in self._docs]
+        self._bm25 = BM25Okapi(tokenized)
+        return self._bm25
+
+
+_bm25_cache = _BM25Cache()
+
+_LRU_CACHE: "OrderedDict[str, List[str]]" = OrderedDict()
+_LRU_MAX = 128
+
+
+def _cache_key(query: str, limit: int, rerank: bool) -> str:
+    return hashlib.md5(f"{query}|{limit}|{rerank}".encode()).hexdigest()
+
+
 async def search_memory(
     controller: Any,  # VIKIController
     query: str,
     limit: int = 10,
     rerank: bool = False,
+    alpha: float = 0.5,
 ) -> List[str]:
     """
     Hybrid search over lessons (learning) and episodic memory.
     Combines keyword (BM25) and existing semantic retrieval, optionally reranks with LLM.
+
+    Args:
+        alpha: BM25 vs semantic weight (0 = pure semantic, 1 = pure BM25). Default 0.5 balanced.
     """
     if not controller:
         return []
+
+    ck = _cache_key(query, limit, rerank)
+    if ck in _LRU_CACHE:
+        _LRU_CACHE.move_to_end(ck)
+        return list(_LRU_CACHE[ck])
+
     query_lower = (query or "").lower()
     # 1) Lessons (keyword/semantic from learning)
     lessons = controller.learning.get_relevant_lessons(query, limit=limit * 2)
@@ -48,14 +87,27 @@ async def search_memory(
     if not combined:
         return []
 
-    # 3) BM25 over combined docs (if available)
+    # 3) BM25 over combined docs (if available) with configurable alpha
     if HAS_BM25 and combined:
-        tokenized = [_tokenize(d) for d in combined]
-        bm25 = BM25Okapi(tokenized)
-        scores = bm25.get_scores(_tokenize(query))
-        indexed = list(zip(scores, combined))
-        indexed.sort(key=lambda x: -x[0])
-        combined = [c for _, c in indexed if (c and c.strip())][: limit * 2]
+        bm25 = _bm25_cache.build(combined)
+        bm25_scores = bm25.get_scores(_tokenize(query))
+        max_bm25 = max(bm25_scores) if bm25_scores else 1.0
+        if max_bm25 == 0:
+            max_bm25 = 1.0
+        q_tokens = set(_tokenize(query))
+        semantic_scores = []
+        for d in combined:
+            t = set(_tokenize(d))
+            semantic_scores.append(len(q_tokens & t) / (len(q_tokens) + 1e-6))
+        max_sem = max(semantic_scores) if semantic_scores else 1.0
+        if max_sem == 0:
+            max_sem = 1.0
+        fused = [
+            (alpha * (bm25_scores[i] / max_bm25) + (1 - alpha) * (semantic_scores[i] / max_sem), combined[i])
+            for i in range(len(combined))
+        ]
+        fused.sort(key=lambda x: -x[0])
+        combined = [c for _, c in fused if (c and c.strip())][: limit * 2]
     else:
         # Simple keyword overlap score
         q_tokens = set(_tokenize(query))
@@ -67,6 +119,10 @@ async def search_memory(
     results = [c.strip() for c in combined if c.strip()][:limit]
 
     # 4) Optional LLM rerank: ask model to return indices in relevance order
+    if len(_LRU_CACHE) >= _LRU_MAX:
+        _LRU_CACHE.popitem(last=False)
+    _LRU_CACHE[ck] = list(results)
+
     if rerank and results and hasattr(controller, "model_router") and len(results) > 1:
         try:
             prompt = (

@@ -7,13 +7,21 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 from config.logger import viki_logger
 
-try:
-    from sqlite_utils import Database
-except ImportError:
-    Database = None
-
 from .narrative import NarrativeMemory, NarrativeMemory as EpisodicMemory
 from .identity import NarrativeIdentity
+from .database import get_connection
+
+_Database = None
+
+def _get_db_lib():
+    global _Database
+    if _Database is None:
+        try:
+            from sqlite_utils import Database
+            _Database = Database
+        except ImportError:
+            pass
+    return _Database
 
 class WorkingMemory:
     """
@@ -22,25 +30,24 @@ class WorkingMemory:
     
     SECURITY FIX: MED-001 - Added thread safety with proper locking.
     """
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Dict[str, Any], db_path: Optional[str] = None):
         self.config = config
-        # Clamp short-term trace length (config memory.short_term_limit); wider window = richer multi-turn context.
         self.max_turns = min(max(config.get('memory', {}).get('short_term_limit', 15), 10), 50)
-        
-        data_dir = config.get('system', {}).get('data_dir', './data')
-        os.makedirs(data_dir, exist_ok=True)
-        self.db_path = os.path.join(data_dir, "viki_working_memory.db")
-        
+
+        if db_path is None:
+            data_dir = config.get('system', {}).get('data_dir', './data')
+            os.makedirs(data_dir, exist_ok=True)
+            db_path = os.path.join(data_dir, "viki_working_memory.db")
+
+        self.db_path = db_path
         self.default_session_id = str(uuid.uuid4())
         self.db = None
-        
-        # --- SECURITY FIX: MED-001 - Thread safety lock ---
-        self._lock = threading.RLock()  # Reentrant lock for nested calls
-        
-        if Database:
-            conn = sqlite3.connect(self.db_path, check_same_thread=False, timeout=30.0)
-            conn.execute("PRAGMA journal_mode=WAL")
-            self.db = Database(conn)
+        self._lock = threading.RLock()
+
+        db_lib = _get_db_lib()
+        if db_lib:
+            conn = get_connection(db_path)
+            self.db = db_lib(conn)
             self._init_tables()
         else:
             self.ephemeral_history = {}
@@ -163,12 +170,9 @@ class WorkingMemory:
 
     def close(self):
         with self._lock:
-            if self.db:
-                try:
-                    self.db.conn.close()
-                    self.db = None
-                except Exception:
-                    pass
+            from .database import release_connection
+            release_connection(self.db_path)
+            self.db = None
 
 class HierarchicalMemory:
     """
@@ -176,12 +180,22 @@ class HierarchicalMemory:
     Integrates Working, Episodic, Semantic, and Identity layers.
     """
     def __init__(self, config: Dict[str, Any], learning_module=None):
-        self.working = WorkingMemory(config)
-        
         data_dir = config.get('system', {}).get('data_dir', './data')
-        self.episodic = EpisodicMemory(data_dir)
-        self.identity = NarrativeIdentity(data_dir)
-        self.semantic = learning_module # Shared with LearningModule
+        import os
+        os.makedirs(data_dir or ".", exist_ok=True)
+
+        from .database import MERGED_DB_NAME, migrate_to_merged
+        merged_path = os.path.join(data_dir, MERGED_DB_NAME)
+
+        # Create sub-modules FIRST so they define their table schemas
+        self.working = WorkingMemory(config, db_path=merged_path)
+        self.episodic = EpisodicMemory(data_dir, db_path=merged_path)
+        self.identity = NarrativeIdentity(data_dir, db_path=merged_path)
+
+        # THEN migrate data from legacy .db files into the merged DB
+        migrate_to_merged(data_dir, merged_path)
+
+        self.semantic = learning_module
 
     def get_context(self, current_input: str = "", limit: int = 20, session_id: Optional[str] = None) -> Dict[str, Any]:
         """Legacy alias: returns working trace and episodic context. Prefer get_full_context for full stack."""
@@ -260,8 +274,11 @@ class HierarchicalMemory:
         # This is handled by a separate background trigger or in-thread periodically
 
     def close(self):
-        if hasattr(self, 'working'): self.working.close()
-        if hasattr(self, 'episodic'): self.episodic.close()
-        if hasattr(self, 'identity') and hasattr(self.identity, 'close'):
-            self.identity.close()
+        from .database import release_connection
+        self.working.close()
+        self.episodic.close()
+        self.identity.close()
+        # Release the connection from migrate_to_merged call in __init__
+        if hasattr(self.episodic, 'db_path') and self.episodic.db_path:
+            release_connection(self.episodic.db_path)
         viki_logger.info('HierarchicalMemory: Stack shut down.')

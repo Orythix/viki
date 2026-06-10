@@ -1,27 +1,33 @@
 import asyncio
+import os
 from typing import Any
 from config.logger import viki_logger
 
-try:
-    import numpy as np
-except Exception as e:
-    np = None
-    viki_logger.warning(f"NumPy unavailable during VoiceModule import ({e}). Voice sonar will be disabled.")
+_np = None
+_sd = None
 
-import os
-VOICE_ENABLED = os.getenv("VIKI_VOICE_ENABLED", "1").lower() in ("1", "true", "yes")
+def _get_np():
+    global _np
+    if _np is None:
+        try:
+            import numpy as np_mod
+            _np = np_mod
+        except Exception as e:
+            viki_logger.warning(f"NumPy unavailable ({e}). Voice sonar disabled.")
+    return _np
 
-try:
-    if VOICE_ENABLED:
-        import sounddevice as sd
-    else:
-        sd = None
-        viki_logger.debug("VoiceModule: sounddevice skipped (VIKI_VOICE_ENABLED=0).")
-except Exception as e:
-    sd = None
-    viki_logger.warning(f"sounddevice unavailable during VoiceModule import ({e}). Voice sonar will be disabled.")
-
-# Lazy import torch only when needed
+def _get_sd():
+    global _sd
+    if _sd is None:
+        voice_enabled = os.getenv("VIKI_VOICE_ENABLED", "1").lower() in ("1", "true", "yes")
+        if not voice_enabled:
+            return None
+        try:
+            import sounddevice as sd_mod
+            _sd = sd_mod
+        except Exception as e:
+            viki_logger.warning(f"sounddevice unavailable ({e}). Voice sonar disabled.")
+    return _sd
 
 class VoiceModule:
     """
@@ -72,7 +78,9 @@ class VoiceModule:
         Logic: threshold = base_noise_floor + 0.2
         Goal: No false positives from air conditioning.
         """
-        if np is None or sd is None:
+        sd_mod = _get_sd()
+        np_mod = _get_np()
+        if np_mod is None or sd_mod is None:
             viki_logger.warning("VoiceModule: Ambient sonar disabled because NumPy or sounddevice is unavailable.")
             return
         if not self.model: await self.initialize()
@@ -85,17 +93,17 @@ class VoiceModule:
                 # We do this in a thread to avoid blocking the loop
                 duration = 0.5
                 recording = await asyncio.to_thread(
-                    lambda dur=duration: sd.rec(
+                    lambda dur=duration: sd_mod.rec(
                         int(dur * self.sampling_rate),
                         samplerate=self.sampling_rate,
                         channels=1,
                         blocking=True,
                     )
                 )
-                sd.wait() # Ensure recording is finished if not blocking? (blocking=True handles it)
+                sd_mod.wait()
                 
                 # Calculate RMS (Root Mean Square) Amplitude
-                rms = np.sqrt(np.mean(recording**2))
+                rms = np_mod.sqrt(np_mod.mean(recording**2))
                 self.base_noise_floor = float(rms)
                 
                 # Dynamic Thresholding Formula
@@ -112,10 +120,9 @@ class VoiceModule:
 
     def is_speech(self, audio_chunk: Any) -> bool:
         if self.model is None: return False
-        if np is None:
+        if _get_np() is None:
             return False
         
-        # Ensure we have a valid threshold
         threshold = getattr(self, 'vad_threshold', 0.5)
         
         import torch
@@ -127,11 +134,9 @@ class VoiceModule:
         return speech_prob > threshold
 
     async def listen_for_interruption(self, stop_event: asyncio.Event):
-        """
-        Ultra-low latency listener.
-        Runs concurrently with TTS. If speech detected -> stop_event.set()
-        """
-        if np is None or sd is None:
+        sd_mod = _get_sd()
+        np_mod = _get_np()
+        if np_mod is None or sd_mod is None:
             viki_logger.warning("VoiceModule: Interruption listener disabled because NumPy or sounddevice is unavailable.")
             return
         if not self.model: await self.initialize()
@@ -145,18 +150,13 @@ class VoiceModule:
                 viki_logger.warning(f"Audio status: {status}")
             
             if stop_event.is_set():
-                raise sd.CallbackStop()
+                raise sd_mod.CallbackStop()
 
-            # Check for speech
-            # We use the dynamic threshold from is_speech
             if self.is_speech(indata[:, 0]):
-                # viki_logger.info("INTERRUPTION DETECTED")
                 loop.call_soon_threadsafe(stop_event.set)
 
         try:
-            # Blocksize 512 samples (~30ms) is optimal for Silero
-            # 256 might be too small for the model's window, 512 is standard
-            with sd.InputStream(samplerate=self.sampling_rate, channels=1, callback=callback, blocksize=512):
+            with sd_mod.InputStream(samplerate=self.sampling_rate, channels=1, callback=callback, blocksize=512):
                 await stop_event.wait()
         except Exception as e:
             viki_logger.error(f"Interruption listener died: {e}")
