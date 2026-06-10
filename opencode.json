@@ -1,15 +1,4 @@
 {
-  "defaultEnv": "deepseek",
-  "env": {
-    "deepseek": {
-      "ANTHROPIC_BASE_URL": "https://opencode.ai/zen",
-      "ANTHROPIC_MODEL": "deepseek-v4-flash-free",
-      "ANTHROPIC_API_KEY": "sk-S3nnoJWjhvg9MzL8eDFALtg8c2GFnSNgCwpRbzBDAyJwBUAfKyOORq4pFqfsJ4tc"
-    },
-    "mimo": {
-      "ANTHROPIC_BASE_URL": "https://opencode.ai/zen",
-      "ANTHROPIC_MODEL": "mimo-v2.5-free",
-      "ANTHROPIC_API_KEY": "sk-S3nnoJWjhvg9MzL8eDFALtg8c2GFnSNgCwpRbzBDAyJwBUAfKyOORq4pFqfsJ4tc"
-    }
-  }
+  "$schema": "https://opencode.ai/config.json",
+  "model": "opencode/deepseek-v4-flash-free"
 }
