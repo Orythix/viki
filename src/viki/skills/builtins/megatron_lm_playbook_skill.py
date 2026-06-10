@@ -4,8 +4,8 @@ from pathlib import Path
 import re
 from typing import Any, Dict, List, Optional
 
-from config.logger import viki_logger
-from skills.base import BaseSkill
+from viki.config.logger import viki_logger
+from viki.skills.base import BaseSkill
 
 
 class MegatronLmPlaybookSkill(BaseSkill):

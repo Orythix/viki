@@ -14,7 +14,7 @@ import importlib
 import sys
 import unittest
 
-from skills.lazy_skill import LazySkillProxy
+from viki.skills.lazy_skill import LazySkillProxy
 
 
 def _run(coro):

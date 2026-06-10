@@ -5,7 +5,7 @@ Loads SentenceTransformer once on first use and reuses across LearningModule and
 import os
 from typing import Any, Optional
 
-from config.logger import viki_logger
+from viki.config.logger import viki_logger
 
 _encoder: Any = None
 

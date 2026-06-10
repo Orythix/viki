@@ -2,8 +2,8 @@ import pytest
 import os
 import tempfile
 import shutil
-from skills.builtins.context_weaver_skill import ContextWeaverSkill
-from core.utils.context_retriever import ContextRetriever
+from viki.skills.builtins.context_weaver_skill import ContextWeaverSkill
+from viki.core.utils.context_retriever import ContextRetriever
 
 class MockController:
     def __init__(self, workspace_dir):

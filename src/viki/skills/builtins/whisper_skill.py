@@ -5,9 +5,9 @@ File paths are restricted to allowed roots (workspace, data).
 import os
 import asyncio
 from typing import Dict, Any
-from skills.base import BaseSkill
-from config.logger import viki_logger
-from core.utils.path_sandbox import validate_output_path
+from viki.skills.base import BaseSkill
+from viki.config.logger import viki_logger
+from viki.core.utils.path_sandbox import validate_output_path
 
 
 class WhisperSkill(BaseSkill):

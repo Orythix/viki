@@ -16,10 +16,10 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if REPO_ROOT not in sys.path:
     sys.path.append(REPO_ROOT)
 
-from core.forge_config import DEFAULT_FORGE_OUTPUT_OLLAMA_TAG
-from core.knowledge_ingestion import LearningModule
-from core.llm import LocalLLM
-from skills.builtins.research_skill import ResearchSkill
+from viki.core.forge_config import DEFAULT_FORGE_OUTPUT_OLLAMA_TAG
+from viki.core.knowledge_ingestion import LearningModule
+from viki.core.llm import LocalLLM
+from viki.skills.builtins.research_skill import ResearchSkill
 
 
 FACT_PREFIX = "FACT:"

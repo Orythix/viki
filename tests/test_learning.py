@@ -8,7 +8,7 @@ import asyncio
 # Add project root (parent of viki folder) to path
 sys.path.append(os.path.abspath(os.path.join(os.getcwd(), '..')))
 
-from core.orchestrator import VIKIController
+from viki.core.orchestrator import VIKIController
 
 class TestVIKILearning(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):

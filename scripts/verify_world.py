@@ -5,8 +5,8 @@ import os
 root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(root_dir)
 
-from core.world import WorldModel
-from config.logger import viki_logger
+from viki.core.world import WorldModel
+from viki.config.logger import viki_logger
 import logging
 
 # Set logger to DEBUG to see the discovery traces

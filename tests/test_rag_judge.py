@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from eval.rag_eval import GoldRow, QueryResult, RagEvalReport
-from eval.rag_judge import _parse_judge_json, enrich_report_with_ollama_judge, run_ollama_judge
+from viki.eval.rag_eval import GoldRow, QueryResult, RagEvalReport
+from viki.eval.rag_judge import _parse_judge_json, enrich_report_with_ollama_judge, run_ollama_judge
 
 
 def test_parse_judge_json_plain():

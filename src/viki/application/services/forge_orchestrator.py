@@ -1,8 +1,8 @@
 import os
 import asyncio
 from typing import Dict, List, Any
-from domain.entities.forge import ForgeProfile
-from config.logger import viki_logger
+from viki.domain.entities.forge import ForgeProfile
+from viki.config.logger import viki_logger
 
 class ForgeOrchestrator:
     def __init__(self, controller):

@@ -7,7 +7,7 @@ import os
 import tempfile
 import unittest
 
-from core.telemetry_service import (
+from viki.core.telemetry_service import (
     init_persistent_traces,
     start_span,
     get_persistent_traces,

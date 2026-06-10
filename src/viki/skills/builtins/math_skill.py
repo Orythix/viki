@@ -2,7 +2,7 @@ import math
 import ast
 import operator
 from typing import Dict, Any
-from skills.base import BaseSkill
+from viki.skills.base import BaseSkill
 
 class SafeMathEvaluator(ast.NodeVisitor):
     """Safe evaluator for mathematical expressions using AST parsing."""

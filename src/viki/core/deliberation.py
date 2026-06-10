@@ -2,8 +2,8 @@
 import asyncio
 import json
 from typing import List, Dict, Any, Optional, Tuple
-from config.logger import viki_logger
-from core.inference_gateway import LLMProvider
+from viki.config.logger import viki_logger
+from viki.core.inference_gateway import LLMProvider
 
 class DeliberationEngine:
     """

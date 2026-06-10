@@ -2,7 +2,7 @@ import pytest
 import os
 import tempfile
 import shutil
-from skills.builtins.log_voyager_skill import LogVoyagerSkill
+from viki.skills.builtins.log_voyager_skill import LogVoyagerSkill
 
 class MockTelemetry:
     def get_summary(self):

@@ -13,7 +13,7 @@ import asyncio
 import shutil
 from typing import Any, Dict
 
-from skills.base import BaseSkill
+from viki.skills.base import BaseSkill
 
 _ALLOWED_VERBS = {"get", "describe", "logs", "top", "version", "explain"}
 

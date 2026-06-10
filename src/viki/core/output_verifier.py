@@ -3,8 +3,8 @@ import time
 from enum import Enum
 from typing import Dict, Any, List, Optional, Tuple
 from pydantic import BaseModel
-from config.logger import viki_logger
-from core.schema import ThoughtObject, ActionCall
+from viki.config.logger import viki_logger
+from viki.core.schema import ThoughtObject, ActionCall
 
 class JudgmentOutcome(Enum):
     REFLEX = "reflex"           # Fast, low-resource, no deep thought

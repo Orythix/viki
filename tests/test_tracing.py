@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import unittest
 
-from core.telemetry_service import (
+from viki.core.telemetry_service import (
     clear_local_spans,
     get_local_spans,
     init_tracing,

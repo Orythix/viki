@@ -3,8 +3,8 @@ import os
 import secrets
 import pyautogui
 from typing import Dict, Any
-from skills.base import BaseSkill
-from config.logger import viki_logger
+from viki.skills.base import BaseSkill
+from viki.config.logger import viki_logger
 
 class VisionSkill(BaseSkill):
     """

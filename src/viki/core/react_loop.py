@@ -1,11 +1,11 @@
 import time
 from typing import Any, Dict, List, Optional
 
-from core.agent_constants import DEFAULT_AGENT_MAX_STEPS, MAX_CLARIFICATION_REQUESTS
-from core.cognitive_loop import JudgmentOutcome
-from core.schema import VIKIResponse, ActionCall, ThoughtObject
-from core.security_guard import safe_for_log
-from config.logger import viki_logger
+from viki.core.agent_constants import DEFAULT_AGENT_MAX_STEPS, MAX_CLARIFICATION_REQUESTS
+from viki.core.cognitive_loop import JudgmentOutcome
+from viki.core.schema import VIKIResponse, ActionCall, ThoughtObject
+from viki.core.security_guard import safe_for_log
+from viki.config.logger import viki_logger
 
 
 PLACEHOLDERS = ["processing...", "executing", "thinking", "one moment", "working on it"]

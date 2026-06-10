@@ -7,8 +7,8 @@ import yaml
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.memory.narrative import NarrativeMemory
-from core.llm import ModelRouter
+from viki.core.memory.narrative import NarrativeMemory
+from viki.core.llm import ModelRouter
 
 async def verify_dream():
     print("--- Initializing Narrative Dream Cycle ---")

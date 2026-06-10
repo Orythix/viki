@@ -2,7 +2,7 @@ import os
 import asyncio
 import time
 from typing import Dict, Any, Optional, List
-from config.logger import viki_logger
+from viki.config.logger import viki_logger
 
 class TestHealerPipeline:
     """

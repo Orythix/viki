@@ -6,9 +6,9 @@ import sys
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.cortex import DeliberationLayer
-from core.llm import ModelRouter
-from config.logger import viki_logger
+from viki.core.cortex import DeliberationLayer
+from viki.core.llm import ModelRouter
+from viki.config.logger import viki_logger
 import logging
 
 # Disable excessive logging for test

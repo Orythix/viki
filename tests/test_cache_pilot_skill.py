@@ -3,8 +3,8 @@ import asyncio
 import os
 import tempfile
 import shutil
-from skills.builtins.cache_pilot_skill import CachePilotSkill
-from core.utils.semantic_cache import SemanticCache
+from viki.skills.builtins.cache_pilot_skill import CachePilotSkill
+from viki.core.utils.semantic_cache import SemanticCache
 
 class MockController:
     def __init__(self, data_dir):

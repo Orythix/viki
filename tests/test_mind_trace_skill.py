@@ -1,5 +1,5 @@
 import pytest
-from skills.builtins.mind_trace_skill import MindTraceSkill
+from viki.skills.builtins.mind_trace_skill import MindTraceSkill
 
 class MockController:
     def __init__(self):

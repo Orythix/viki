@@ -5,7 +5,7 @@ Enables data-driven model selection and validation.
 import time
 import asyncio
 from typing import Dict, Any, List
-from config.logger import viki_logger
+from viki.config.logger import viki_logger
 
 
 class ModelABTest:

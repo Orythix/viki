@@ -2,7 +2,7 @@ import yaml
 import os
 import datetime
 import secrets
-from config.logger import viki_logger
+from viki.config.logger import viki_logger
 
 class SuperAdminLayer:
     def __init__(self, config_path: str = "./config/admin.yaml"):

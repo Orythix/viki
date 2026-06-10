@@ -6,7 +6,7 @@ import hashlib
 import re
 import sqlite3
 from typing import List, Dict, Any, Optional
-from config.logger import viki_logger
+from viki.config.logger import viki_logger
 
 try:
     import numpy as np

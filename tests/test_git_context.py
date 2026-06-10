@@ -4,7 +4,7 @@ import subprocess
 import tempfile
 import unittest
 
-from core import git_context
+from viki.core import git_context
 
 
 class TestGitContext(unittest.TestCase):

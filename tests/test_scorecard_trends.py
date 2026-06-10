@@ -8,7 +8,7 @@ import os
 import tempfile
 import unittest
 
-from core.scorecard import IntelligenceScorecard
+from viki.core.scorecard import IntelligenceScorecard
 
 
 class TestScorecardTrends(unittest.TestCase):

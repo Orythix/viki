@@ -3,8 +3,8 @@ import os
 import time
 from typing import Dict, Any, List, Optional
 from pydantic import BaseModel, Field
-from config.logger import viki_logger
-from core.utils.debouncer import SyncDebouncer
+from viki.config.logger import viki_logger
+from viki.core.utils.debouncer import SyncDebouncer
 
 class MetricEntry(BaseModel):
     timestamp: float = Field(default_factory=time.time)

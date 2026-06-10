@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import unittest
 
-from core.orchestrator import VIKIController
+from viki.core.orchestrator import VIKIController
 
 
 class TestAutoWebResearchHeuristics(unittest.TestCase):

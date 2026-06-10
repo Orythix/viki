@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from skills.builtins.megatron_lm_playbook_skill import MegatronLmPlaybookSkill
+from viki.skills.builtins.megatron_lm_playbook_skill import MegatronLmPlaybookSkill
 
 
 EXPECTED_SLUGS = {

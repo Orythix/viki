@@ -14,8 +14,8 @@ import asyncio  # noqa: F401  (kept for backward compatibility)
 import sys
 from typing import Dict, Any, List, Optional, Tuple
 
-from skills.base import BaseSkill
-from config.logger import viki_logger
+from viki.skills.base import BaseSkill
+from viki.config.logger import viki_logger
 
 _WIN32_AVAILABLE = sys.platform == "win32"
 _win32gui = None

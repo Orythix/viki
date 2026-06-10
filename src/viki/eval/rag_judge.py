@@ -19,9 +19,9 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from config.logger import viki_logger
+from viki.config.logger import viki_logger
 
-from eval.rag_eval import GoldRow, QueryResult, RagEvalReport
+from viki.eval.rag_eval import GoldRow, QueryResult, RagEvalReport
 
 
 @dataclass

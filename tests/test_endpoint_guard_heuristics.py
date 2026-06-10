@@ -5,7 +5,7 @@ import os
 
 import pytest
 
-from core.endpoint_guard import assess_path_risk, candidate_download_directories, severity_meets
+from viki.core.endpoint_guard import assess_path_risk, candidate_download_directories, severity_meets
 
 
 def test_severity_meets_ordering():

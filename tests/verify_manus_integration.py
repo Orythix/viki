@@ -2,7 +2,7 @@ import pytest
 import os
 import tempfile
 import shutil
-from skills.builtins.manus_skill import ManusSkill
+from viki.skills.builtins.manus_skill import ManusSkill
 
 class MockController:
     def __init__(self, workspace_dir):

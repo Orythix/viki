@@ -5,8 +5,8 @@ import json
 import shutil
 import uuid
 from typing import Dict, Any, List, Optional, Tuple
-from config.logger import viki_logger
-from core.security_guard import safe_for_log
+from viki.config.logger import viki_logger
+from viki.core.security_guard import safe_for_log
 
 class TimeTravelModule:
     """

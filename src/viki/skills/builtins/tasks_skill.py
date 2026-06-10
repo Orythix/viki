@@ -7,8 +7,8 @@ import json
 import asyncio
 import subprocess
 from typing import Dict, Any
-from skills.base import BaseSkill
-from config.logger import viki_logger
+from viki.skills.base import BaseSkill
+from viki.config.logger import viki_logger
 
 
 class TasksSkill(BaseSkill):
@@ -112,4 +112,4 @@ class TasksSkill(BaseSkill):
                     await asyncio.to_thread(self._write_tasks, tasks)
                     return f"Completed: {t.get('title', '')}"
             return f"Task id {tid} not found."
-        return "Unknown action. Use add, list, complete."
+        return "Unknown action. Use add, list, complete."

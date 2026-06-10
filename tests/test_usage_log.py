@@ -3,7 +3,7 @@ import os
 import tempfile
 import unittest
 
-from core.usage_log import (
+from viki.core.usage_log import (
     configure_session_usage_log,
     emit_llm_inference,
     emit_model_feedback,

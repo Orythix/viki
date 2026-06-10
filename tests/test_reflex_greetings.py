@@ -7,7 +7,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import MagicMock, patch
 
-from core.rapid_response_system import ReflexBrain
+from viki.core.rapid_response_system import ReflexBrain
 
 
 class TestConversationalReflex(unittest.TestCase):

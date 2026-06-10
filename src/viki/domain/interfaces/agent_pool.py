@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional
-from domain.entities.swarm import SubAgent, SwarmTask
+from viki.domain.entities.swarm import SubAgent, SwarmTask
 
 class IAgentPool(ABC):
     @abstractmethod

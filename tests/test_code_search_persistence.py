@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from types import SimpleNamespace
 
-from skills.builtins.code_search_skill import CodeSearchSkill
+from viki.skills.builtins.code_search_skill import CodeSearchSkill
 
 
 def _stub_controller(data_dir: str):

@@ -11,7 +11,7 @@ import os
 import tempfile
 import unittest
 
-from core.capability_index import CapabilityIndex
+from viki.core.capability_index import CapabilityIndex
 
 
 def _write_suite(root: str, suite: str, run_id: str, results):

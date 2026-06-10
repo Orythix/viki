@@ -15,7 +15,7 @@ import os
 import tempfile
 import unittest
 
-from core.orchestrator import VIKIController
+from viki.core.orchestrator import VIKIController
 
 
 class TestControllerBoot(unittest.TestCase):

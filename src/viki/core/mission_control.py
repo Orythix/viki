@@ -7,8 +7,8 @@ import json
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from config.logger import viki_logger
-from core.ports import RequestProcessorPort
+from viki.config.logger import viki_logger
+from viki.core.ports import RequestProcessorPort
 
 class MissionType(str, Enum):
     RESEARCH = "research"

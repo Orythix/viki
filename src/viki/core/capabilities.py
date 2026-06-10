@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any
-from skills.base import BaseSkill
+from viki.skills.base import BaseSkill
 
 @dataclass
 class Capability:

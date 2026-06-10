@@ -1,8 +1,8 @@
 import asyncio
 from typing import Any, Dict, List
 
-from config.logger import viki_logger
-from core.ports import RequestProcessorPort
+from viki.config.logger import viki_logger
+from viki.core.ports import RequestProcessorPort
 
 
 class MessagingNexus:

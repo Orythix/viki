@@ -5,7 +5,7 @@ import sqlite3
 import threading
 from typing import List, Dict, Any, Optional
 from datetime import datetime
-from config.logger import viki_logger
+from viki.config.logger import viki_logger
 
 from .narrative import NarrativeMemory, NarrativeMemory as EpisodicMemory
 from .identity import NarrativeIdentity

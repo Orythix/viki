@@ -11,14 +11,14 @@ import asyncio
 import unittest
 from unittest.mock import MagicMock
 
-from core.cognitive_loop import (
+from viki.core.cognitive_loop import (
     CognitiveRoute,
     CognitiveRouter,
     RouterTelemetry,
 )
-from core.output_verifier import JudgmentEngine, JudgmentOutcome
-from core.rapid_response_system import ReflexBrain
-from core.schema import ActionCall
+from viki.core.output_verifier import JudgmentEngine, JudgmentOutcome
+from viki.core.rapid_response_system import ReflexBrain
+from viki.core.schema import ActionCall
 
 
 class _StubLearning:

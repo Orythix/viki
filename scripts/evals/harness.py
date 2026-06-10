@@ -35,8 +35,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from config.logger import viki_logger  # noqa: E402
-from core.evaluators import EvalScore, ExecutionEvaluator, LLMJudgeEvaluator  # noqa: E402
+from viki.config.logger import viki_logger  # noqa: E402
+from viki.core.evaluators import EvalScore, ExecutionEvaluator, LLMJudgeEvaluator  # noqa: E402
 
 # Import Rich components for a premium console experience
 try:

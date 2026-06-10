@@ -5,8 +5,8 @@ import sys
 # Add project root to path
 sys.path.append(os.path.abspath("."))
 
-from core.orchestrator import VIKIController
-from config.resolve import get_soul_path
+from viki.core.orchestrator import VIKIController
+from viki.config.resolve import get_soul_path
 
 async def run_market_demo():
     print("START: Initializing VIKI Sovereign Engine...")

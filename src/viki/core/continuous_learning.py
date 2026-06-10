@@ -7,8 +7,8 @@ import time
 import json
 import asyncio
 from typing import Dict, Any, Optional
-from config.logger import viki_logger
-from core.forge_config import resolve_forge_output_ollama_tag
+from viki.config.logger import viki_logger
+from viki.core.forge_config import resolve_forge_output_ollama_tag
 
 
 class ContinuousLearner:

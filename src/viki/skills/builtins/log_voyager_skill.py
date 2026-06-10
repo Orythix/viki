@@ -2,8 +2,8 @@ import os
 import re
 import time
 from typing import Dict, Any, List, Optional
-from skills.base import BaseSkill
-from config.logger import viki_logger
+from viki.skills.base import BaseSkill
+from viki.config.logger import viki_logger
 
 class LogVoyagerSkill(BaseSkill):
     """

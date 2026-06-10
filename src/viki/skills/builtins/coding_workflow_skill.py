@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from skills.base import BaseSkill
-from skills.builtins.engineering_playbook_skill import EngineeringPlaybookSkill
+from viki.skills.base import BaseSkill
+from viki.skills.builtins.engineering_playbook_skill import EngineeringPlaybookSkill
 
 
 class CodingWorkflowSkill(BaseSkill):

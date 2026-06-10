@@ -14,7 +14,7 @@ import sqlite3
 import tempfile
 import unittest
 
-from skills.dynamic.sql_query_skill import SqlQuerySkill
+from viki.skills.dynamic.sql_query_skill import SqlQuerySkill
 
 
 def _run(coro):

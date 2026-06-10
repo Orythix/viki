@@ -26,7 +26,7 @@ import textwrap
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
-from config.logger import viki_logger
+from viki.config.logger import viki_logger
 
 
 @dataclass

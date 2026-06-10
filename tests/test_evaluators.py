@@ -10,9 +10,9 @@ import os
 import tempfile
 import unittest
 
-from core.capability_index import CapabilityIndex
-from core.evaluators import ExecutionEvaluator, LLMJudgeEvaluator
-from core.inference_gateway import LLMProvider
+from viki.core.capability_index import CapabilityIndex
+from viki.core.evaluators import ExecutionEvaluator, LLMJudgeEvaluator
+from viki.core.inference_gateway import LLMProvider
 
 
 class TestExecutionEvaluator(unittest.TestCase):

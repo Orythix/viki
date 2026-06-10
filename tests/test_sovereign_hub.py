@@ -4,8 +4,8 @@ import sys
 # Add project root to path
 sys.path.append(os.path.abspath("."))
 
-from skills.registry import SkillRegistry
-from core.orchestrator import VIKIController
+from viki.skills.registry import SkillRegistry
+from viki.core.orchestrator import VIKIController
 
 class MockController:
     def __init__(self):

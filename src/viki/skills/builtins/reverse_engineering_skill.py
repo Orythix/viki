@@ -3,8 +3,8 @@ import subprocess
 import asyncio
 import shutil
 from typing import Dict, Any, List
-from skills.base import BaseSkill
-from config.logger import viki_logger
+from viki.skills.base import BaseSkill
+from viki.config.logger import viki_logger
 
 class ReverseEngineeringSkill(BaseSkill):
     """

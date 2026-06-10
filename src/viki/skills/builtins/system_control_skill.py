@@ -5,8 +5,8 @@ import webbrowser
 import asyncio
 import pyautogui
 from typing import Dict, Any, Union
-from skills.base import BaseSkill
-from config.logger import viki_logger
+from viki.skills.base import BaseSkill
+from viki.config.logger import viki_logger
 
 class SystemControlSkill(BaseSkill):
     """

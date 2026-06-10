@@ -4,8 +4,8 @@ import asyncio
 import unittest
 from unittest.mock import MagicMock
 
-from core.orchestrator import VIKIController
-from core.output_verifier import JudgmentEngine
+from viki.core.orchestrator import VIKIController
+from viki.core.output_verifier import JudgmentEngine
 
 
 class TestClassifyTask(unittest.TestCase):

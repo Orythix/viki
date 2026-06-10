@@ -1,7 +1,7 @@
 import unittest
 import asyncio
 
-from core.performance_benchmark import ControlledBenchmark
+from viki.core.performance_benchmark import ControlledBenchmark
 
 
 class DummyControllerSuccess:

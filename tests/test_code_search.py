@@ -11,7 +11,7 @@ import tempfile
 import textwrap
 import unittest
 
-from skills.builtins.code_search_skill import CodeSearchSkill
+from viki.skills.builtins.code_search_skill import CodeSearchSkill
 
 
 def _run(coro):

@@ -17,7 +17,7 @@ import os
 import threading
 from typing import Any, Optional
 
-from config.logger import viki_logger
+from viki.config.logger import viki_logger
 
 
 class _NoopHandle:

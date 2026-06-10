@@ -3,9 +3,9 @@ import json
 import time
 import ast
 from typing import Dict, Any, List, Optional
-from core.schema import WorldState
-from config.logger import viki_logger
-from core.utils.debouncer import SyncDebouncer
+from viki.core.schema import WorldState
+from viki.config.logger import viki_logger
+from viki.core.utils.debouncer import SyncDebouncer
 
 class WorldModel:
     """

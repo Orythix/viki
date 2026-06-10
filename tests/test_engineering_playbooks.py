@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from skills.builtins.engineering_playbook_skill import EngineeringPlaybookSkill
+from viki.skills.builtins.engineering_playbook_skill import EngineeringPlaybookSkill
 
 
 EXPECTED_ENGINEERING = {

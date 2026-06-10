@@ -6,9 +6,9 @@ import sys
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.cortex import ConsciousnessStack
-from core.llm import ModelRouter
-from core.world import WorldModel
+from viki.core.cortex import ConsciousnessStack
+from viki.core.llm import ModelRouter
+from viki.core.world import WorldModel
 
 class MockModel:
     def __init__(self, name="PlaceHolder"):

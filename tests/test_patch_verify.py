@@ -10,7 +10,7 @@ import tempfile
 import textwrap
 import unittest
 
-from core.patch_verify import PatchVerify
+from viki.core.patch_verify import PatchVerify
 
 
 class TestPatchVerify(unittest.TestCase):

@@ -21,7 +21,7 @@ from scripts.evals.harness import (  # noqa: E402
     run_harness,
 )
 from scripts.evals import eval_datasets  # noqa: E402
-from core.capability_index import CapabilityIndex  # noqa: E402
+from viki.core.capability_index import CapabilityIndex  # noqa: E402
 
 SUITES = [
     "humaneval_plus",

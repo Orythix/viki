@@ -2,9 +2,9 @@ import os
 import asyncio
 from typing import Any, Dict
 
-from skills.base import BaseSkill
-from config.logger import viki_logger
-from core.forge_config import resolve_forge_output_ollama_tag
+from viki.skills.base import BaseSkill
+from viki.config.logger import viki_logger
+from viki.core.forge_config import resolve_forge_output_ollama_tag
 
 
 def _strip_env(name: str) -> str:

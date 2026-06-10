@@ -1,7 +1,7 @@
 import os
 import re
 from typing import List, Dict, Any, Optional
-from config.logger import viki_logger
+from viki.config.logger import viki_logger
 
 class ContextRetriever:
     """

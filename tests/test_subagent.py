@@ -7,7 +7,7 @@ from __future__ import annotations
 import asyncio
 import unittest
 
-from core.specialist_agent import SubAgent, SubAgentManager
+from viki.core.specialist_agent import SubAgent, SubAgentManager
 
 
 def _run(coro):

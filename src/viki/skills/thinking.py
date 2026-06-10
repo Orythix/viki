@@ -1,5 +1,5 @@
 from typing import Dict, Any
-from skills.base import BaseSkill
+from viki.skills.base import BaseSkill
 
 class ThinkingSkill(BaseSkill):
     @property

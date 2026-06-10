@@ -15,7 +15,7 @@ import tempfile
 import unittest
 from typing import Any, Dict
 
-from integrations.lsp_bridge import LSPSession, LSPSpec, _path_to_uri
+from viki.integrations.lsp_bridge import LSPSession, LSPSpec, _path_to_uri
 
 
 def _run(coro):

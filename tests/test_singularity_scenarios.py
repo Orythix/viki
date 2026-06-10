@@ -1,8 +1,8 @@
 import pytest
 import asyncio
-from core.orchestrator import VIKIController
-from core.rapid_response_system import ReflexBrain
-from skills.builtins.time_skill import TimeSkill
+from viki.core.orchestrator import VIKIController
+from viki.core.rapid_response_system import ReflexBrain
+from viki.skills.builtins.time_skill import TimeSkill
 
 @pytest.fixture
 async def orchestrator():

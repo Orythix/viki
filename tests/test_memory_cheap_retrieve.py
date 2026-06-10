@@ -12,7 +12,7 @@ import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
-from core.utils.trivial_input import is_trivial_input
+from viki.core.utils.trivial_input import is_trivial_input
 
 
 class TestTrivialInputHelper(unittest.TestCase):

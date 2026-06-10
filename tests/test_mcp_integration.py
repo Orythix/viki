@@ -16,7 +16,7 @@ import os
 import tempfile
 import unittest
 
-from integrations.mcp_client import (
+from viki.integrations.mcp_client import (
     MCPClient,
     MCPSkillProxy,
     MCPServerSpec,

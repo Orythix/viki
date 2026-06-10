@@ -1,6 +1,6 @@
 from typing import Dict, List, Optional
-from domain.entities.swarm import SubAgent, AgentStatus
-from domain.interfaces.agent_pool import IAgentPool
+from viki.domain.entities.swarm import SubAgent, AgentStatus
+from viki.domain.interfaces.agent_pool import IAgentPool
 
 class LocalAgentPool(IAgentPool):
     def __init__(self):

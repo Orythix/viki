@@ -1,2 +1,0 @@
-# Use pip install -e . to install dependencies from pyproject.toml
--e .

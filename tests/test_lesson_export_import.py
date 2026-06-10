@@ -7,7 +7,7 @@ import shutil
 import tempfile
 import unittest
 
-from core.knowledge_ingestion import LearningModule
+from viki.core.knowledge_ingestion import LearningModule
 
 
 class TestLessonExportImport(unittest.TestCase):

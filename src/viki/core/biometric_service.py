@@ -1,7 +1,7 @@
 import asyncio
 import sys
 import time
-from config.logger import viki_logger
+from viki.config.logger import viki_logger
 
 _cv2 = None
 

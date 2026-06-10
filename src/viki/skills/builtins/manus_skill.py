@@ -1,9 +1,9 @@
 import os
 import re
 from typing import Dict, Any, List, Optional
-from skills.base import BaseSkill
-from core.execution_environment import get_sandbox, SandboxResult
-from config.logger import viki_logger
+from viki.skills.base import BaseSkill
+from viki.core.execution_environment import get_sandbox, SandboxResult
+from viki.config.logger import viki_logger
 
 class ManusSkill(BaseSkill):
     """

@@ -5,7 +5,7 @@ import hashlib
 from typing import List, Dict, Any, Optional
 
 import numpy as np
-from config.logger import viki_logger
+from viki.config.logger import viki_logger
 from .database import get_connection
 
 

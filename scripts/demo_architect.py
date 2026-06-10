@@ -6,8 +6,8 @@ import sys
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.controller import VIKIController
-from config.logger import viki_logger
+from viki.core.controller import VIKIController
+from viki.config.logger import viki_logger
 
 # Configure logging to show the debate
 import logging

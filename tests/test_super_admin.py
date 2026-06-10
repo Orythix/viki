@@ -3,8 +3,8 @@ import os
 import shutil
 import asyncio
 import yaml
-from core.super_admin import SuperAdminLayer
-from core.orchestrator import VIKIController
+from viki.core.super_admin import SuperAdminLayer
+from viki.core.orchestrator import VIKIController
 
 @pytest.fixture
 async def admin_setup():

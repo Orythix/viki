@@ -1,6 +1,6 @@
 import re
 from typing import Tuple, Optional, Dict, List
-from config.logger import viki_logger
+from viki.config.logger import viki_logger
 
 class EthicalGovernor:
     """

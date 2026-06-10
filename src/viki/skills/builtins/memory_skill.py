@@ -1,8 +1,8 @@
 from typing import Dict, Any, List, Optional
 import json
 import os
-from skills.base import BaseSkill
-from config.logger import viki_logger
+from viki.skills.base import BaseSkill
+from viki.config.logger import viki_logger
 
 class MemorySkill(BaseSkill):
     """

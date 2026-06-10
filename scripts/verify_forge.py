@@ -7,9 +7,9 @@ import yaml
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.evolution import EvolutionEngine
-from skills.registry import SkillRegistry
-from core.llm import ModelRouter
+from viki.core.evolution import EvolutionEngine
+from viki.skills.registry import SkillRegistry
+from viki.core.llm import ModelRouter
 
 async def verify_forge():
     print("--- Initializing Neural Forge v2 ---")
@@ -35,7 +35,7 @@ async def verify_forge():
     mock_code = """
 import sys
 import platform
-from skills.base import BaseSkill
+from viki.skills.base import BaseSkill
 from typing import Dict, Any
 
 class PlatformInfoSkill(BaseSkill):

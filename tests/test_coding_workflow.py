@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from skills.builtins.coding_workflow_skill import CodingWorkflowSkill
+from viki.skills.builtins.coding_workflow_skill import CodingWorkflowSkill
 
 
 EXPECTED_PHASE_PLAYBOOKS = {

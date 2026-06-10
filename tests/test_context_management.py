@@ -5,9 +5,9 @@ import sys
 # Add project root to path
 sys.path.append(os.path.abspath("."))
 
-from skills.registry import SkillRegistry
-from skills.builtins.filesystem_skill import FileSystemSkill
-from skills.builtins.time_skill import TimeSkill
+from viki.skills.registry import SkillRegistry
+from viki.skills.builtins.filesystem_skill import FileSystemSkill
+from viki.skills.builtins.time_skill import TimeSkill
 
 def test_progressive_disclosure():
     print("RUNNING: Smart Context Management Verification...")

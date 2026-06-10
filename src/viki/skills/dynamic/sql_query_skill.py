@@ -20,7 +20,7 @@ import re
 import sqlite3
 from typing import Any, Dict, List, Tuple
 
-from skills.base import BaseSkill
+from viki.skills.base import BaseSkill
 
 _FORBIDDEN = re.compile(
     r"\b(insert|update|delete|drop|alter|create|truncate|attach|detach|pragma|replace|grant|revoke)\b",

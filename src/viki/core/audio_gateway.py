@@ -1,7 +1,7 @@
 import asyncio
 import os
 from typing import Any
-from config.logger import viki_logger
+from viki.config.logger import viki_logger
 
 _np = None
 _sd = None

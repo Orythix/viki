@@ -5,7 +5,7 @@ Identifies areas where VIKI lacks knowledge for targeted learning.
 import time
 from typing import List, Dict, Any
 from collections import Counter
-from config.logger import viki_logger
+from viki.config.logger import viki_logger
 
 
 class KnowledgeGapDetector:

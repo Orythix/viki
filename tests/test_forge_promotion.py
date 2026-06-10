@@ -13,8 +13,8 @@ import unittest
 from types import SimpleNamespace
 from typing import Optional
 
-from core.continuous_learning import ContinuousLearner
-from core.scorecard import IntelligenceScorecard
+from viki.core.continuous_learning import ContinuousLearner
+from viki.core.scorecard import IntelligenceScorecard
 
 
 def _run(coro):

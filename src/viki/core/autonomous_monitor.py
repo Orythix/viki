@@ -3,7 +3,7 @@ import time
 import asyncio
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-from config.logger import viki_logger
+from viki.config.logger import viki_logger
 
 class ProactiveHandler(FileSystemEventHandler):
     def __init__(self, controller, loop):

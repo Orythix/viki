@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, List, Optional, Protocol
 
-from config.logger import viki_logger
+from viki.config.logger import viki_logger
 
 
 @dataclass

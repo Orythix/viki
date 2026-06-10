@@ -1,7 +1,7 @@
 import asyncio
 from typing import Dict, Any, Optional
-from skills.base import BaseSkill
-from config.logger import viki_logger
+from viki.skills.base import BaseSkill
+from viki.config.logger import viki_logger
 
 class BrowserSkill(BaseSkill):
     """

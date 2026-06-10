@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Dict, Any
-from skills.base import BaseSkill
+from viki.skills.base import BaseSkill
 
 # Fuzzy location -> IANA timezone name mapping for common queries
 _LOCATION_TZ_MAP = {

@@ -11,7 +11,7 @@ import subprocess
 import tempfile
 import unittest
 
-from core.worktree_runner import WorktreeRunner
+from viki.core.worktree_runner import WorktreeRunner
 
 
 def _has_git() -> bool:

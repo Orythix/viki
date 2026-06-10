@@ -3,8 +3,8 @@ import json
 import time
 import ast
 from typing import List, Dict, Any, Optional
-from config.logger import viki_logger
-from core.utils.debouncer import SyncDebouncer
+from viki.config.logger import viki_logger
+from viki.core.utils.debouncer import SyncDebouncer
 
 class EvolutionEngine:
     """

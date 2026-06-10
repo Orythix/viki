@@ -4,10 +4,10 @@ import time
 import os
 import json
 from typing import List, Dict, Any, Optional, Tuple
-from core.schema import ThoughtObject, SolverOutput, VIKIResponse, VIKIResponseLite, LayerState
-from core.ensemble import EnsembleEngine
-from config.logger import viki_logger, thought_logger
-from core.agent_constants import AGENT_MANDATE, PLAN_MODE_MANDATE, DEBUG_MODE_MANDATE
+from viki.core.schema import ThoughtObject, SolverOutput, VIKIResponse, VIKIResponseLite, LayerState
+from viki.core.ensemble import EnsembleEngine
+from viki.config.logger import viki_logger, thought_logger
+from viki.core.agent_constants import AGENT_MANDATE, PLAN_MODE_MANDATE, DEBUG_MODE_MANDATE
 
 # --------------------------------------------------------------------------- #
 #  TIMING INFRASTRUCTURE                                                       #

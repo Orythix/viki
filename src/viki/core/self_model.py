@@ -1,7 +1,7 @@
 from typing import Dict, Any, List
 import json
 import time
-from config.logger import viki_logger
+from viki.config.logger import viki_logger
 
 class SelfModel:
     """

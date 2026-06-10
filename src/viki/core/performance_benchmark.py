@@ -1,7 +1,7 @@
 import time
 from typing import List, Dict, Any
 from pydantic import BaseModel, Field
-from config.logger import viki_logger
+from viki.config.logger import viki_logger
 
 WONT_TOKEN = "won't"
 CANT_TOKEN = "can't"

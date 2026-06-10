@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Any, Dict, Optional
 
-from config.logger import viki_logger
+from viki.config.logger import viki_logger
 
 
 _DEFAULT_BUDGET = {

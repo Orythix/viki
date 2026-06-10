@@ -2,7 +2,7 @@ import json
 import time
 import os
 from typing import List, Dict, Any, Optional
-from config.logger import viki_logger
+from viki.config.logger import viki_logger
 from .database import get_connection
 
 class NarrativeIdentity:

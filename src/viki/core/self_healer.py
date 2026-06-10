@@ -14,8 +14,8 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, List, Optional
 
-from config.logger import viki_logger
-from core.mission_graph import MissionGraph, MissionNode, NodeStatus
+from viki.config.logger import viki_logger
+from viki.core.mission_graph import MissionGraph, MissionNode, NodeStatus
 
 RECOVERY_SYSTEM_PROMPT = (
     "You are VIKI's self-healing planner. A mission node failed. "

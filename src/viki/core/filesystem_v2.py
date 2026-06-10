@@ -2,7 +2,7 @@ import os
 import ctypes
 import subprocess
 from typing import List, Dict, Any
-from config.logger import viki_logger
+from viki.config.logger import viki_logger
 
 class SemanticFS:
     """

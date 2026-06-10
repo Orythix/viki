@@ -57,7 +57,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 import yaml  # noqa: E402
 
-from core.forge_config import resolve_forge_output_ollama_tag  # noqa: E402
+from viki.core.forge_config import resolve_forge_output_ollama_tag  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Console helpers

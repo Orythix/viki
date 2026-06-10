@@ -9,8 +9,8 @@ import urllib.request
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional, Type, TypeVar
 from pydantic import BaseModel
-from core.schema import VIKIResponse, VIKIResponseLite, ThoughtObject, ThoughtObjectLite
-from config.logger import viki_logger
+from viki.core.schema import VIKIResponse, VIKIResponseLite, ThoughtObject, ThoughtObjectLite
+from viki.config.logger import viki_logger
 
 T = TypeVar("T", bound=BaseModel)
 

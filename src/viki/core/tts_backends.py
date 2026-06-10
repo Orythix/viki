@@ -5,7 +5,7 @@ VoiceSkill selects backend from settings voice.backend and voice.voice_id.
 import os
 import asyncio
 from typing import Optional
-from config.logger import viki_logger
+from viki.config.logger import viki_logger
 
 def speak_elevenlabs(text: str, api_key: str, voice_id: Optional[str] = None) -> str:
     """Synthesize speech via ElevenLabs API and play (blocking). Returns error message or 'OK'."""

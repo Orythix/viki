@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional, Dict, Any
-from domain.entities.learning import Lesson, FailureRecord, Relationship
+from viki.domain.entities.learning import Lesson, FailureRecord, Relationship
 
 class ILearningRepository(ABC):
     @abstractmethod

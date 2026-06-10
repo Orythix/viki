@@ -7,7 +7,7 @@ WORKDIR /app
 
 # Copy project and install dependencies
 COPY pyproject.toml ./
-COPY viki/ ./viki/
+COPY src/ ./src/
 RUN pip install --no-cache-dir -e .
 
 # Create data and workspace dirs (volumes will override at runtime)

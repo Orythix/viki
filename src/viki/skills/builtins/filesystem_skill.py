@@ -1,7 +1,7 @@
 import os
 from typing import Dict, Any
-from skills.base import BaseSkill
-from core.utils.path_sandbox import get_allowed_roots, BLOCKED_PATHS
+from viki.skills.base import BaseSkill
+from viki.core.utils.path_sandbox import get_allowed_roots, BLOCKED_PATHS
 
 class FileSystemSkill(BaseSkill):
     def __init__(self, controller=None):

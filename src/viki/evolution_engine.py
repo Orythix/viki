@@ -11,8 +11,8 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
-from core.knowledge_ingestion import LearningModule
-from config.logger import viki_logger
+from viki.core.knowledge_ingestion import LearningModule
+from viki.config.logger import viki_logger
 
 # Paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))

@@ -2,7 +2,7 @@ import pytest
 import os
 import tempfile
 import shutil
-from skills.builtins.mutation_pilot_skill import MutationPilotSkill
+from viki.skills.builtins.mutation_pilot_skill import MutationPilotSkill
 
 class MockController:
     pass

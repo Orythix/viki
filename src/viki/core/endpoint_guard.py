@@ -16,7 +16,7 @@ import subprocess
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from config.logger import viki_logger
+from viki.config.logger import viki_logger
 
 try:
     from watchdog.events import FileSystemEventHandler

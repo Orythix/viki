@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import unittest
 
-from core.biometric_service import BioModule
+from viki.core.biometric_service import BioModule
 
 
 class TestBioModule(unittest.TestCase):

@@ -2,8 +2,8 @@ from typing import List, Optional
 from sqlalchemy import Column, String, Float, Integer, Text, create_engine, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship as sqlalchemy_relationship
-from domain.entities.learning import Lesson, FailureRecord, Relationship
-from domain.interfaces.learning_repository import ILearningRepository
+from viki.domain.entities.learning import Lesson, FailureRecord, Relationship
+from viki.domain.interfaces.learning_repository import ILearningRepository
 import json
 import time
 import hashlib

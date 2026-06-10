@@ -4,8 +4,8 @@ import asyncio
 import sys
 import tempfile
 from typing import Dict, Any, Optional
-from skills.base import BaseSkill
-from config.logger import viki_logger
+from viki.skills.base import BaseSkill
+from viki.config.logger import viki_logger
 
 DEFAULT_INTERPRETER_TIMEOUT = 30
 MAX_INTERPRETER_TIMEOUT = 120

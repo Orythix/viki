@@ -8,8 +8,8 @@ import tempfile
 # Add project root (parent of viki folder) to path
 sys.path.append(os.path.abspath(os.path.join(os.getcwd(), '..')))
 
-from core.orchestrator import VIKIController
-from core.telemetry_service import close_persistent_traces
+from viki.core.orchestrator import VIKIController
+from viki.core.telemetry_service import close_persistent_traces
 
 class TestVIKIIntegration(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):

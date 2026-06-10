@@ -4,8 +4,8 @@ Summarize URLs, PDFs, or YouTube (Molty summarize-style). Uses research_skill fo
 import os
 import asyncio
 from typing import Dict, Any
-from skills.base import BaseSkill
-from config.logger import viki_logger
+from viki.skills.base import BaseSkill
+from viki.config.logger import viki_logger
 
 
 class SummarizeSkill(BaseSkill):

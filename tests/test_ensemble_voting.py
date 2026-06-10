@@ -8,8 +8,8 @@ import asyncio
 import unittest
 from typing import Any, Dict, List
 
-from core.ensemble import EnsembleEngine
-from core.inference_gateway import LLMProvider
+from viki.core.ensemble import EnsembleEngine
+from viki.core.inference_gateway import LLMProvider
 
 
 class _StubProvider(LLMProvider):

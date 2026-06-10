@@ -16,7 +16,7 @@ import sys
 import tempfile
 import unittest
 
-from core.orchestrator import VIKIController
+from viki.core.orchestrator import VIKIController
 
 
 HEAVY_MODULES = (

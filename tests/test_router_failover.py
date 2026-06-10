@@ -12,8 +12,8 @@ import unittest
 
 import yaml
 
-from core.inference_gateway import ModelRouter, LLMProvider
-from core.resource_budget import LLMBudget
+from viki.core.inference_gateway import ModelRouter, LLMProvider
+from viki.core.resource_budget import LLMBudget
 
 
 class _StubProvider(LLMProvider):

@@ -1,6 +1,6 @@
 import json
 from typing import Dict, Any, List
-from skills.base import BaseSkill
+from viki.skills.base import BaseSkill
 
 class WeMakePlatformsSkill(BaseSkill):
     @property

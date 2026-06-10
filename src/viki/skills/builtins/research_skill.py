@@ -6,8 +6,8 @@ import re
 from typing import Dict, Any, List
 from urllib.parse import urlparse
 import ipaddress
-from skills.base import BaseSkill
-from config.logger import viki_logger
+from viki.skills.base import BaseSkill
+from viki.config.logger import viki_logger
 
 # Prefer ddgs (new package name); fall back to duckduckgo_search and suppress rename warning
 HAS_DDG = False

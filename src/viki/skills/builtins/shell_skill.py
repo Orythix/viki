@@ -2,9 +2,9 @@ import subprocess
 import asyncio
 import re
 from typing import Dict, Any
-from skills.base import BaseSkill
-from config.logger import viki_logger
-from core.security_guard import safe_for_log
+from viki.skills.base import BaseSkill
+from viki.config.logger import viki_logger
+from viki.core.security_guard import safe_for_log
 
 class ShellSkill(BaseSkill):
     """

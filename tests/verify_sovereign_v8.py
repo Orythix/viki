@@ -1,8 +1,8 @@
 import asyncio
 import os
 import json
-from core.orchestrator import VIKIController
-from config.resolve import get_soul_path
+from viki.core.orchestrator import VIKIController
+from viki.config.resolve import get_soul_path
 
 async def verify_v8_1_features():
     print("--- Verifying VIKI v8.1.0 Sovereign Scaling Features ---")

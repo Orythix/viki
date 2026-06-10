@@ -9,7 +9,7 @@ import os
 import tempfile
 import unittest
 
-from core.artifact_manifest import ArtifactManifest
+from viki.core.artifact_manifest import ArtifactManifest
 
 
 class TestArtifactManifest(unittest.TestCase):

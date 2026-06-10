@@ -1,8 +1,8 @@
 import asyncio
 from typing import Dict, Any, List
-from application.services.safety_service import SafetyService
-from domain.interfaces.learning_repository import ILearningRepository
-from domain.entities.learning import Lesson
+from viki.application.services.safety_service import SafetyService
+from viki.domain.interfaces.learning_repository import ILearningRepository
+from viki.domain.entities.learning import Lesson
 
 class MemoryRecallUseCase:
     def __init__(self, learning_repo: ILearningRepository, safety_service: SafetyService):

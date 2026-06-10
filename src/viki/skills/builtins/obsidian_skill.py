@@ -4,8 +4,8 @@ Obsidian vault skill: search, read, create, refactor notes. Config: obsidian.vau
 import os
 import re
 from typing import Dict, Any
-from skills.base import BaseSkill
-from config.logger import viki_logger
+from viki.skills.base import BaseSkill
+from viki.config.logger import viki_logger
 
 
 class ObsidianSkill(BaseSkill):

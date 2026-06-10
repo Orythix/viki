@@ -3,9 +3,9 @@ from __future__ import annotations
 import os
 from typing import Any, Dict, List
 
-from config.logger import viki_logger
-from skills.base import BaseSkill
-from core.endpoint_guard import (
+from viki.config.logger import viki_logger
+from viki.skills.base import BaseSkill
+from viki.core.endpoint_guard import (
     assess_path_risk,
     find_clamscan,
     find_mp_cmd_run,

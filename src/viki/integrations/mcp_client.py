@@ -44,8 +44,8 @@ from contextlib import AsyncExitStack
 from dataclasses import dataclass, field, replace
 from typing import Any, Dict, List, Optional, Tuple
 
-from config.logger import viki_logger
-from skills.base import BaseSkill
+from viki.config.logger import viki_logger
+from viki.skills.base import BaseSkill
 
 
 def _normalize_transport(raw: Optional[str]) -> str:

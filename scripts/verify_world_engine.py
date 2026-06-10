@@ -5,7 +5,7 @@ import sys
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.world import WorldModel
+from viki.core.world import WorldModel
 
 def verify_world_engine():
     print("--- Initializing Phase 4: World Engine ---")

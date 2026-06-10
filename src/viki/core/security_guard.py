@@ -1,7 +1,7 @@
 from typing import Dict, Any, List, Optional
 import os
 import re
-from config.logger import viki_logger
+from viki.config.logger import viki_logger
 
 # Placeholder used when redacting secrets in logs/output.
 REDACTED_TOKEN = "[REDACTED]"

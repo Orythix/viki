@@ -1,9 +1,9 @@
 from typing import Dict, Any, List
 import asyncio
-from skills.base import BaseSkill
-from application.services.swarm_orchestrator import SwarmOrchestrator
-from domain.entities.swarm import AgentStatus
-from config.logger import viki_logger
+from viki.skills.base import BaseSkill
+from viki.application.services.swarm_orchestrator import SwarmOrchestrator
+from viki.domain.entities.swarm import AgentStatus
+from viki.config.logger import viki_logger
 
 class SwarmSkill(BaseSkill):
     """

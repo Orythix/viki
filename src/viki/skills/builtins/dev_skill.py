@@ -1,9 +1,9 @@
 import os
 import shutil
 from typing import Dict, Any, List, Optional
-from skills.base import BaseSkill
-from core.utils.path_sandbox import validate_output_path
-from config.logger import viki_logger
+from viki.skills.base import BaseSkill
+from viki.core.utils.path_sandbox import validate_output_path
+from viki.config.logger import viki_logger
 
 class DevSkill(BaseSkill):
     """

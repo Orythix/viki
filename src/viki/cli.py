@@ -47,11 +47,11 @@ load_dotenv()
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, current_dir)
 
-from core.orchestrator import VIKIController
-from config.logger import viki_logger
-from config.resolve import get_soul_path
-from service_registry import Container
-from core.utils.onboarding import run_onboarding
+from viki.core.orchestrator import VIKIController
+from viki.config.logger import viki_logger
+from viki.config.resolve import get_soul_path
+from viki.service_registry import Container
+from viki.core.utils.onboarding import run_onboarding
 
 console = Console()
 

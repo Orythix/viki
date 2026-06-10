@@ -1,7 +1,7 @@
 import pytest
 import asyncio
 from unittest.mock import MagicMock, AsyncMock
-from skills.builtins.memory_skill import MemorySkill
+from viki.skills.builtins.memory_skill import MemorySkill
 
 @pytest.fixture
 def mock_controller():

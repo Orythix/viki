@@ -5,8 +5,8 @@ Requires Twitter API v2 credentials: VIKI_TWITTER_BEARER_TOKEN (read), VIKI_TWIT
 import os
 import asyncio
 from typing import Dict, Any
-from skills.base import BaseSkill
-from config.logger import viki_logger
+from viki.skills.base import BaseSkill
+from viki.config.logger import viki_logger
 
 
 class TwitterSkill(BaseSkill):

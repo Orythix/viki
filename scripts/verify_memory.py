@@ -7,7 +7,7 @@ import yaml
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.memory import HierarchicalMemory
+from viki.core.memory import HierarchicalMemory
 
 async def verify_hierarchy():
     # Load settings manually since VikiSettings doesn't exist/is in a different location

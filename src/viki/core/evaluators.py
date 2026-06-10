@@ -25,7 +25,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from config.logger import viki_logger
+from viki.config.logger import viki_logger
 
 
 @dataclass

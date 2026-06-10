@@ -9,57 +9,57 @@ import shutil
 import hashlib
 from typing import Dict, Any, List, Optional, Tuple, Union
 
-from core.telemetry import TelemetryStore
-from core.test_healer import TestHealerPipeline
-from core.identity_profile import Soul
-from core.security_guard import SafetyLayer, safe_for_log
-from core.inference_gateway import APILLM, ModelRouter, StructuredPrompt
-from core.schema import VIKIResponse
-from skills.registry import SkillRegistry
-from core.knowledge_ingestion import LearningModule
-from core.super_admin import SuperAdminLayer
-from core.audio_gateway import VoiceModule
-from core.autonomous_monitor import WatchdogModule, WellnessPulse
-from core.meta_cognition import ReflectorModule
-from core.biometric_service import BioModule
-from core.state_consolidation import DreamModule
-from core.filesystem_v2 import SemanticFS
-from core.temporal_memory import TimeTravelModule
-from core.knowledge_gaps import KnowledgeGapDetector
-from core.continuous_learning import ContinuousLearner
-from core.variant_optimizer import ModelABTest
-from api.central_nexus import MessagingNexus
-from core.rapid_response_system import ReflexBrain
-from core.event_bus import CognitiveSignals
-from core.world import WorldModel
-from core.cognitive_processor import ConsciousnessStack
-from core.output_verifier import JudgmentEngine, JudgmentOutcome, JudgmentResult
-from core.cognitive_loop import CognitiveRouter, RouterTelemetry, CognitiveRoute
-from core.capabilities import CapabilityRegistry
-from core.scorecard import IntelligenceScorecard
-from core.performance_benchmark import ControlledBenchmark
+from viki.core.telemetry import TelemetryStore
+from viki.core.test_healer import TestHealerPipeline
+from viki.core.identity_profile import Soul
+from viki.core.security_guard import SafetyLayer, safe_for_log
+from viki.core.inference_gateway import APILLM, ModelRouter, StructuredPrompt
+from viki.core.schema import VIKIResponse
+from viki.skills.registry import SkillRegistry
+from viki.core.knowledge_ingestion import LearningModule
+from viki.core.super_admin import SuperAdminLayer
+from viki.core.audio_gateway import VoiceModule
+from viki.core.autonomous_monitor import WatchdogModule, WellnessPulse
+from viki.core.meta_cognition import ReflectorModule
+from viki.core.biometric_service import BioModule
+from viki.core.state_consolidation import DreamModule
+from viki.core.filesystem_v2 import SemanticFS
+from viki.core.temporal_memory import TimeTravelModule
+from viki.core.knowledge_gaps import KnowledgeGapDetector
+from viki.core.continuous_learning import ContinuousLearner
+from viki.core.variant_optimizer import ModelABTest
+from viki.api.central_nexus import MessagingNexus
+from viki.core.rapid_response_system import ReflexBrain
+from viki.core.event_bus import CognitiveSignals
+from viki.core.world import WorldModel
+from viki.core.cognitive_processor import ConsciousnessStack
+from viki.core.output_verifier import JudgmentEngine, JudgmentOutcome, JudgmentResult
+from viki.core.cognitive_loop import CognitiveRouter, RouterTelemetry, CognitiveRoute
+from viki.core.capabilities import CapabilityRegistry
+from viki.core.scorecard import IntelligenceScorecard
+from viki.core.performance_benchmark import ControlledBenchmark
 
 # Orythix Cognitive Subsystems
-from core.governor import EthicalGovernor
-from core.self_model import SelfModel
-from core.memory import HierarchicalMemory
-from core.deliberation import DeliberationEngine
+from viki.core.governor import EthicalGovernor
+from viki.core.self_model import SelfModel
+from viki.core.memory import HierarchicalMemory
+from viki.core.deliberation import DeliberationEngine
 
-from ops.tenant_ops import SimpleOpsPlanner, ControllerTenantConnector, OpsPlan
-from application.services.forge_orchestrator import ForgeOrchestrator
+from viki.ops.tenant_ops import SimpleOpsPlanner, ControllerTenantConnector, OpsPlan
+from viki.application.services.forge_orchestrator import ForgeOrchestrator
 
 # Phase 6: Autonomy
-from core.mission_control import MissionControl
+from viki.core.mission_control import MissionControl
 
-from core.request_pipeline import RequestContext, build_default_preflight_pipeline
-from core.git_context import get_git_workspace_snapshot
-from core.endpoint_guard import EndpointGuardService
+from viki.core.request_pipeline import RequestContext, build_default_preflight_pipeline
+from viki.core.git_context import get_git_workspace_snapshot
+from viki.core.endpoint_guard import EndpointGuardService
 
-from config.logger import viki_logger, thought_logger
-from core.telemetry_service import close_persistent_traces
-from core import command_handlers
-from core.config_watcher import ConfigWatcher
-from core.react_loop import run_react_loop
+from viki.config.logger import viki_logger, thought_logger
+from viki.core.telemetry_service import close_persistent_traces
+from viki.core import command_handlers
+from viki.core.config_watcher import ConfigWatcher
+from viki.core.react_loop import run_react_loop
 
 
 class VIKIController:

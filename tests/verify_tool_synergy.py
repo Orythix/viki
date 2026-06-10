@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
-from skills.builtins.market_explorer_skill import MarketExplorerSkill
+from viki.skills.builtins.market_explorer_skill import MarketExplorerSkill
 
 class MockSkill:
     def __init__(self, return_val):

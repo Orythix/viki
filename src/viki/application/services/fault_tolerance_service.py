@@ -1,7 +1,7 @@
 import os
 from typing import List
-from domain.entities.health import HealthIssue
-from config.logger import viki_logger
+from viki.domain.entities.health import HealthIssue
+from viki.config.logger import viki_logger
 
 class SelfHealingService:
     def __init__(self, controller):

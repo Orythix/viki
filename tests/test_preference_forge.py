@@ -12,7 +12,7 @@ import tempfile
 import unittest
 from typing import List
 
-from core.preference_forge import (
+from viki.core.preference_forge import (
     PreferenceDatasetBuilder,
     PreferencePair,
     TeacherDistillation,

@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 import unittest
 
-from api.events import EventBus
+from viki.api.events import EventBus
 
 
 class TestEventBus(unittest.TestCase):

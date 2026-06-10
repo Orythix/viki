@@ -130,13 +130,13 @@ select = ["F821", "F822", "F823", "F632"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["./tests"]
-pythonpath = ["."]
+pythonpath = ["src"]
 timeout = 120
 timeout_method = "thread"
 
 [project.scripts]
-viki = "bootstrap:run"
+viki = "viki.cli:run"
 
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["core*", "api*", "application*", "domain*", "infrastructure*", "integrations*", "skills*", "ui*"]
+where = ["src"]
+include = ["viki*"]

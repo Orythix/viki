@@ -2,9 +2,9 @@ import asyncio
 import json
 from typing import Dict, Any, List
 from pydantic import BaseModel, Field
-from skills.base import BaseSkill
-from config.logger import viki_logger
-from core.inference_gateway import StructuredPrompt
+from viki.skills.base import BaseSkill
+from viki.config.logger import viki_logger
+from viki.core.inference_gateway import StructuredPrompt
 
 class VideoScene(BaseModel):
     scene_number: int

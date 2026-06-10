@@ -8,7 +8,7 @@ import os
 import tempfile
 import unittest
 
-from core.vector_memory import (
+from viki.core.vector_memory import (
     VectorHit,
     build_vector_backend,
 )

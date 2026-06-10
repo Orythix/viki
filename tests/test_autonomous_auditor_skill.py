@@ -2,7 +2,7 @@ import pytest
 import os
 import tempfile
 import shutil
-from skills.builtins.autonomous_auditor_skill import AutonomousAuditorSkill
+from viki.skills.builtins.autonomous_auditor_skill import AutonomousAuditorSkill
 
 class MockController:
     def __init__(self, workspace_dir):

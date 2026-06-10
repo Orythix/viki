@@ -14,8 +14,8 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 if REPO_ROOT not in sys.path:
     sys.path.append(REPO_ROOT)
 
-from core.orchestrator import VIKIController
-from core.performance_benchmark import ControlledBenchmark
+from viki.core.orchestrator import VIKIController
+from viki.core.performance_benchmark import ControlledBenchmark
 
 
 def _load_yaml(path: str) -> Dict[str, Any]:

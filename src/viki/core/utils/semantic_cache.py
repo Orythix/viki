@@ -4,7 +4,7 @@ import hashlib
 import time
 import os
 from typing import Optional, Dict, Any, List, Tuple
-from config.logger import viki_logger
+from viki.config.logger import viki_logger
 
 try:
     import numpy as np

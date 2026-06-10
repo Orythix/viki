@@ -4,9 +4,9 @@ import time
 import json
 import os
 from typing import Optional, Tuple, Dict, Any, List
-from core.schema import ActionCall
-from config.logger import viki_logger
-from core.utils.debouncer import SyncDebouncer
+from viki.core.schema import ActionCall
+from viki.config.logger import viki_logger
+from viki.core.utils.debouncer import SyncDebouncer
 
 
 # Conversational reflexes — greetings / acks / farewells that should never need

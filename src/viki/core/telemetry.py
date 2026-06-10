@@ -4,7 +4,7 @@ import time
 import json
 import threading
 from typing import Dict, Any, List, Optional
-from config.logger import viki_logger
+from viki.config.logger import viki_logger
 
 class TelemetryStore:
     """

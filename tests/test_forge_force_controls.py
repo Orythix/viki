@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from types import SimpleNamespace
 
-from core.continuous_learning import ContinuousLearner
+from viki.core.continuous_learning import ContinuousLearner
 
 
 class _StubLearning:

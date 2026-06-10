@@ -1,7 +1,7 @@
 from typing import List, Optional
-from domain.entities.swarm import SubAgent, SwarmTask, AgentStatus
-from domain.interfaces.agent_pool import IAgentPool
-from config.logger import viki_logger
+from viki.domain.entities.swarm import SubAgent, SwarmTask, AgentStatus
+from viki.domain.interfaces.agent_pool import IAgentPool
+from viki.config.logger import viki_logger
 
 class SwarmOrchestrator:
     def __init__(self, agent_pool: IAgentPool):

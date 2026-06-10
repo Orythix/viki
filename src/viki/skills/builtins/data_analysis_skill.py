@@ -6,9 +6,9 @@ import os
 import io
 from typing import Dict, Any, Optional
 
-from skills.base import BaseSkill
-from config.logger import viki_logger
-from core.utils.path_sandbox import validate_output_path
+from viki.skills.base import BaseSkill
+from viki.config.logger import viki_logger
+from viki.core.utils.path_sandbox import validate_output_path
 
 
 class DataAnalysisSkill(BaseSkill):

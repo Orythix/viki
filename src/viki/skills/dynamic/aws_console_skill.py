@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict
 
-from skills.base import BaseSkill
+from viki.skills.base import BaseSkill
 
 
 class AwsConsoleSkill(BaseSkill):

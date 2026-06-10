@@ -1,6 +1,6 @@
 import time
 from typing import Dict, Any
-from config.logger import viki_logger
+from viki.config.logger import viki_logger
 
 class CognitiveSignals:
     """

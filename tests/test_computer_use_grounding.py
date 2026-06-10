@@ -11,7 +11,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from skills.builtins.computer_use_skill import ComputerUseSkill, UIElement
+from viki.skills.builtins.computer_use_skill import ComputerUseSkill, UIElement
 
 
 def _run(coro):

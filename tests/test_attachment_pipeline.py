@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from types import SimpleNamespace
 
-from core.request_pipeline import _AttachmentStage, RequestContext
+from viki.core.request_pipeline import _AttachmentStage, RequestContext
 
 
 def _run(coro):

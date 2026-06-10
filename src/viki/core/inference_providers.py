@@ -25,8 +25,8 @@ from typing import Any, Dict, List, Optional, Type, TypeVar
 
 from pydantic import BaseModel
 
-from config.logger import viki_logger
-from core.inference_gateway import LLMProvider
+from viki.config.logger import viki_logger
+from viki.core.inference_gateway import LLMProvider
 
 T = TypeVar("T", bound=BaseModel)
 
