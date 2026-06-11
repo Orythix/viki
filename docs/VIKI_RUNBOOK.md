@@ -40,7 +40,7 @@ python viki/bootstrap.py
 - Exit: type `exit` at the prompt.
 - If you use a venv, activate it first (see [docs/SETUP.md](docs/SETUP.md)).
 
-1. Launch VIKI CLI: `python viki/main.py`
+1. Launch VIKI CLI: `python -m viki`
 2. Interact directly via the terminal. The CLI-first architecture has replaced the legacy web dashboard.
 
 ### 3.3 Environment overrides (common)

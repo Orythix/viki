@@ -113,7 +113,7 @@ These directories ship in the same repository but are **optional** sidecars:
 | [`labs/security-lab/`](labs/security-lab/) | Standalone FastAPI lab: prompt-injection heuristics, RBAC tools, audit DB |
 | [`labs/qa-automation/`](labs/qa-automation/) | Learning-oriented API/UI/perf test examples and CI samples |
 
-They do not change runtime imports for `python viki/main.py`; see each folder’s README for setup.
+They do not change runtime imports for `python -m viki`; see each folder’s README for setup.
 
 ---
 

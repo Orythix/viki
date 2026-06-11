@@ -7,6 +7,9 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 ## [Unreleased]
 
 ### Added
+- **Docker entrypoint config copy**: `docker-entrypoint.sh` copies `*.yaml` from `/host-config` to the app config directory at container startup, so host config files are used without volume-mounting them directly.
+- **Ollama host networking fix**: Documented the requirement to start Ollama with `OLLAMA_HOST=0.0.0.0:11434` so Docker containers can reach it via `host.docker.internal`.
+- **Docker trust bypass**: `VIKI_TRUST_WORKSPACE` env var skips the interactive security trust prompt for non-interactive Docker usage.
 - **opencode training pipeline**: New `scripts/train_viki_opencode.py` imports curated knowledge seed and generates comprehensive training datasets (JSONL/Alpaca format) using opencode (deepseek-v4-flash-free) — no Ollama required.
 - **Enhanced knowledge seed**: Expanded `config/knowledge_seed.jsonl` with 44 lessons covering Angular best practices, TypeScript patterns, performance optimization, coding workflows, design systems, and staff profiles.
 - **Enhanced core personality**: Updated `config/core_personality.md` with domain-specific frontend/Angular expertise section, autonomous agent guidelines, and Sachin-specific adaptation.
@@ -26,8 +29,13 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
   - `wellness_idle_threshold_s: 14400` — only after 4h idle instead of 2h
   - `memory.short_term_limit: 5` — lower context floor (5 instead of 10)
 - **Model config overhaul**: Fixed `models.yaml`:
-  - `default` changed from broken `viki-archived` to `gemma4`
+  - `default` changed to `phi3-mini` (was `viki-archived` → `gemma4`)
   - `viki-evolved` now points to `gemma4:12b` (was a non-existent evolved model tag)
+- **Docker networking**: Fixed Ollama connectivity — container now reaches host Ollama via `host.docker.internal:11434`.
+- **Docker volumes**: `./config` now mounts to `/host-config` (copied at runtime via entrypoint); added separate `./data-docker` volume to avoid SQLite locking.
+- **Docker env vars**: Added `VIKI_OLLAMA_THINK=false`, `VIKI_LOG_LEVEL=DEBUG`, `VIKI_TRUST_WORKSPACE=true` to `docker-compose.yml`.
+- **prompt-toolkit version**: Pinned `prompt-toolkit>=3.0.0,<4.0.0` in `pyproject.toml` to fix Docker build on Python 3.11.
+- **Governor fail-closed**: `semantic_veto_check` now catches model errors and fails closed (blocks request) instead of failing open.
   - Added `phi3-mini` profile (lightweight 3.8B/2.2GB, tier:fast) for quick responses
   - Added `chatter`/`general` capabilities to `gemma4` so prewarm/prompt routing works
   - Per-profile `ollama_options` for tuned context/output per model

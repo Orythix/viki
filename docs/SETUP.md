@@ -53,12 +53,10 @@
 To start the **Sovereign Intelligence Core** (CLI):
 
 ```powershell
-python viki/main.py
+python -m viki
 ```
 
 VIKI will initialize her **Nexus** and begin listening on all channels.
-
-VIKI will initialize her **Nexus** and begin listening on all channels. Use the CLI interface to interact with the core cognitive engine.
 
 ### Troubleshooting (Windows)
 

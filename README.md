@@ -284,8 +284,13 @@ Install the `viki` command so you can run it from any directory with the current
 - Unix: `curl -fsSL https://raw.githubusercontent.com/Orythix/viki/main/bin/install.sh | bash` (or from repo: `./bin/install.sh`)
 
 4.  **Run with Docker**:
-    Build and run the VIKI CLI in a container. Ollama should be running on the host (or in another container). See [docs/DOCKER.md](docs/DOCKER.md) for details.
+    Build and run the VIKI CLI in a container. Ollama must be running on the host and listening on all interfaces (`OLLAMA_HOST=0.0.0.0`). See [docs/DOCKER.md](docs/DOCKER.md) for details.
     ```powershell
+    # Start Ollama on the host (must listen on all interfaces for Docker access)
+    $env:OLLAMA_HOST = "0.0.0.0:11434"
+    Start-Process "ollama.exe" -ArgumentList "serve" -WindowStyle Hidden
+
+    # Build and run VIKI
     docker compose build
     docker compose run --rm -it viki
     ```
