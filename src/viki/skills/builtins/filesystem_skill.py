@@ -1,7 +1,9 @@
 import os
-from typing import Dict, Any
+from typing import Any
+
+from viki.core.utils.path_sandbox import BLOCKED_PATHS, get_allowed_roots
 from viki.skills.base import BaseSkill
-from viki.core.utils.path_sandbox import get_allowed_roots, BLOCKED_PATHS
+
 
 class FileSystemSkill(BaseSkill):
     def __init__(self, controller=None):
@@ -26,7 +28,7 @@ class FileSystemSkill(BaseSkill):
             os.path.expanduser("~/Documents"),
             os.path.expanduser("~/Desktop"),
         ]
-    
+
     @property
     def name(self) -> str:
         return "filesystem_skill"
@@ -43,48 +45,45 @@ class FileSystemSkill(BaseSkill):
                 "action": {
                     "type": "string",
                     "enum": ["list_dir", "read_file", "write_file"],
-                    "description": "File operation to perform"
+                    "description": "File operation to perform",
                 },
-                "path": {
-                    "type": "string",
-                    "description": "Path to the file or directory"
-                },
+                "path": {"type": "string", "description": "Path to the file or directory"},
                 "content": {
                     "type": "string",
-                    "description": "Content to write (for write_file action)"
-                }
+                    "description": "Content to write (for write_file action)",
+                },
             },
-            "required": ["action", "path"]
+            "required": ["action", "path"],
         }
-    
+
     def _validate_path(self, path: str) -> tuple[bool, str]:
         """Validate path is within allowed directories and not blocked."""
         try:
             # Normalize and resolve the path
             real_path = os.path.realpath(os.path.abspath(path))
-            
+
             # Check if path starts with any blocked directory
             for blocked in self.blocked_paths:
                 if real_path.startswith(os.path.realpath(blocked)):
                     return False, f"Access denied: {path} is in a protected system directory"
-            
+
             # Check if path is within allowed roots
             for allowed_root in self.allowed_roots:
                 if real_path.startswith(os.path.realpath(allowed_root)):
                     return True, real_path
-            
+
             return False, f"Access denied: {path} is outside allowed directories"
-        
+
         except Exception as e:
             return False, f"Path validation error: {str(e)}"
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         action = params.get("action")
         path = params.get("path")
-        
+
         if not action or not path:
             raise RuntimeError("Error: strict parameters 'action' and 'path' required.")
-        
+
         # Validate path before any operation
         is_valid, validated_path = self._validate_path(path)
         if not is_valid:
@@ -94,9 +93,9 @@ class FileSystemSkill(BaseSkill):
             if action == "list_dir":
                 items = os.listdir(validated_path)
                 return f"Contents of {validated_path}: {', '.join(items[:50])}"  # Limit output
-            
+
             elif action == "read_file":
-                with open(validated_path, 'r', encoding='utf-8') as f:
+                with open(validated_path, encoding="utf-8") as f:
                     content = f.read(2048)  # Limit read size
                 if self._controller:
                     self._controller.track_touched_item("touched_files", validated_path)
@@ -104,18 +103,18 @@ class FileSystemSkill(BaseSkill):
 
             elif action == "write_file":
                 content = params.get("content")
-                if not content: 
+                if not content:
                     raise RuntimeError("Error: No content provided.")
                 # Additional length check to prevent abuse
                 if len(content) > 100000:  # 100KB limit
                     raise RuntimeError("Error: Content too large (max 100KB)")
-                with open(validated_path, "w", encoding='utf-8') as f:
+                with open(validated_path, "w", encoding="utf-8") as f:
                     f.write(content)
                 if self._controller:
                     self._controller.track_touched_item("touched_files", validated_path)
                 return f"File written successfully to {validated_path}"
-                
+
             raise RuntimeError(f"Error: Unknown action '{action}'")
-            
+
         except Exception as e:
             raise RuntimeError(f"FileSystem Error: {str(e)}")

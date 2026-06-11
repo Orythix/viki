@@ -3,10 +3,9 @@ Unified messaging skill (CLAWDIS-style). Single interface for Telegram, Discord,
 Delegates to controller bridges when present; otherwise uses env-configured API tokens for send.
 """
 import os
-import asyncio
-from typing import Dict, Any
+from typing import Any
+
 from viki.skills.base import BaseSkill
-from viki.config.logger import viki_logger
 
 
 class UnifiedMessagingSkill(BaseSkill):
@@ -27,9 +26,20 @@ class UnifiedMessagingSkill(BaseSkill):
         return {
             "type": "object",
             "properties": {
-                "action": {"type": "string", "enum": ["send", "read", "list_channels"], "description": "Action to perform."},
-                "channel": {"type": "string", "enum": ["telegram", "discord", "slack", "whatsapp"], "description": "Channel name."},
-                "recipient": {"type": "string", "description": "Chat ID, channel ID, or user ID for send."},
+                "action": {
+                    "type": "string",
+                    "enum": ["send", "read", "list_channels"],
+                    "description": "Action to perform.",
+                },
+                "channel": {
+                    "type": "string",
+                    "enum": ["telegram", "discord", "slack", "whatsapp"],
+                    "description": "Channel name.",
+                },
+                "recipient": {
+                    "type": "string",
+                    "description": "Chat ID, channel ID, or user ID for send.",
+                },
                 "text": {"type": "string", "description": "Message text for send."},
             },
             "required": ["action"],
@@ -44,6 +54,7 @@ class UnifiedMessagingSkill(BaseSkill):
             return "Telegram not configured: set TELEGRAM_BOT_TOKEN."
         try:
             import aiohttp
+
             async with aiohttp.ClientSession() as session:
                 url = f"https://api.telegram.org/bot{token}/sendMessage"
                 async with session.post(url, json={"chat_id": recipient, "text": text}) as resp:
@@ -53,7 +64,7 @@ class UnifiedMessagingSkill(BaseSkill):
         except Exception as e:
             return f"Telegram send error: {e}"
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         action = params.get("action", "send")
         channel = (params.get("channel") or "").lower()
         recipient = params.get("recipient")

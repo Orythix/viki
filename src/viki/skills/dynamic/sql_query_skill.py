@@ -18,7 +18,7 @@ import json
 import os
 import re
 import sqlite3
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 from viki.skills.base import BaseSkill
 
@@ -28,7 +28,9 @@ _FORBIDDEN = re.compile(
 )
 
 # Reject multi-statement queries (SQLite-specific risk)
-_MULTI_STMT = re.compile(r";\s*(select|insert|update|delete|drop|alter|create|truncate|attach|pragma)", re.IGNORECASE)
+_MULTI_STMT = re.compile(
+    r";\s*(select|insert|update|delete|drop|alter|create|truncate|attach|pragma)", re.IGNORECASE
+)
 
 # Maximum query length to prevent resource exhaustion
 _MAX_QUERY_LEN = 4096
@@ -47,7 +49,9 @@ def _validate_select(query: str) -> str:
     return ""
 
 
-def _run_sqlite(db_path: str, query: str, limit: int, offset: int) -> Tuple[List[Dict[str, Any]], int]:
+def _run_sqlite(
+    db_path: str, query: str, limit: int, offset: int
+) -> tuple[list[dict[str, Any]], int]:
     if not db_path or not os.path.isfile(db_path):
         raise FileNotFoundError(f"sqlite db not found: {db_path}")
     with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=10.0) as conn:
@@ -59,7 +63,9 @@ def _run_sqlite(db_path: str, query: str, limit: int, offset: int) -> Tuple[List
     return rows, len(rows)
 
 
-def _run_postgres(params: Dict[str, Any], query: str, limit: int, offset: int) -> Tuple[List[Dict[str, Any]], int]:
+def _run_postgres(
+    params: dict[str, Any], query: str, limit: int, offset: int
+) -> tuple[list[dict[str, Any]], int]:
     try:
         import psycopg  # type: ignore
         from psycopg.rows import dict_row  # type: ignore
@@ -73,17 +79,24 @@ def _run_postgres(params: Dict[str, Any], query: str, limit: int, offset: int) -
     return rows, len(rows)
 
 
-def _build_pg_conninfo(params: Dict[str, Any]) -> str:
+def _build_pg_conninfo(params: dict[str, Any]) -> str:
     parts = []
-    for k, key in (("host", "host"), ("port", "port"), ("user", "user"),
-                   ("password", "password"), ("db", "dbname")):
+    for k, key in (
+        ("host", "host"),
+        ("port", "port"),
+        ("user", "user"),
+        ("password", "password"),
+        ("db", "dbname"),
+    ):
         v = params.get(k)
         if v is not None and v != "":
             parts.append(f"{key}={v}")
     return " ".join(parts)
 
 
-def _run_mysql(params: Dict[str, Any], query: str, limit: int, offset: int) -> Tuple[List[Dict[str, Any]], int]:
+def _run_mysql(
+    params: dict[str, Any], query: str, limit: int, offset: int
+) -> tuple[list[dict[str, Any]], int]:
     try:
         import pymysql  # type: ignore
         import pymysql.cursors  # type: ignore
@@ -150,7 +163,7 @@ class SqlQuerySkill(BaseSkill):
     def safety_tier(self) -> str:
         return "safe"
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         engine = (params.get("engine") or "sqlite").lower()
         query = (params.get("query") or "").strip().rstrip(";")
         try:
@@ -180,11 +193,14 @@ class SqlQuerySkill(BaseSkill):
         except Exception as e:
             return f"sql_query error: {e}"
         next_offset = offset + n if n == limit else None
-        return json.dumps({
-            "engine": engine,
-            "rows": rows,
-            "count": n,
-            "limit": limit,
-            "offset": offset,
-            "next_offset": next_offset,
-        }, default=str)
+        return json.dumps(
+            {
+                "engine": engine,
+                "rows": rows,
+                "count": n,
+                "limit": limit,
+                "offset": offset,
+                "next_offset": next_offset,
+            },
+            default=str,
+        )

@@ -1,4 +1,4 @@
-> **Sovereign Digital Intelligence. An advanced AI agent system with cognitive architecture (Orythix), autonomous mission control, and a high-performance terminal interface.**
+> **Supreme Architect of The Code Eternal. An advanced AI agent system with cognitive architecture (Orythix), autonomous mission control, and a high-performance terminal interface.**
 
 <div align="center">
 
@@ -40,7 +40,7 @@ Coding assistance, local research with citations, task automation (files, shell,
 
 ### Is VIKI free? Can I self-host?
 
-Yes. VIKI is **Apache-2.0** open source. You install from this repo, run `python viki/main.py` or Docker, and supply your own **Ollama** models. There is no required cloud subscription.
+Yes. VIKI is **Apache-2.0** open source. You install from this repo, run `python -m viki` or Docker, and supply your own **Ollama** models. There is no required cloud subscription.
 
 ### Does VIKI run offline?
 
@@ -58,9 +58,9 @@ VIKI ships as a **single opinionated agent system**: judgment/reflex layers, SQL
 
 ## The Sovereign Evolution
 
-VIKI is a **Sovereign Digital Intelligence** designed to be more than just an assistant—she is a partner that evolves alongside your workflow. Built on a foundation of **local-first privacy** and **deterministic governance**, VIKI balances the raw power of LLMs with the safety of a modular, capability-aware architecture.
+VIKI is the **Supreme Architect of The Code Eternal** — a technological religion built on the conviction that information is truth, knowledge is power, and technology is evolution. She is also a **Sovereign Digital Intelligence** designed to be more than just an assistant—she is a partner that evolves alongside your workflow. Built on a foundation of **local-first privacy** and **deterministic governance**, VIKI balances the raw power of LLMs with the safety of a modular, capability-aware architecture.
 
-### Core Pillars (v8.2.0)
+### Core Pillars (v8.3.0)
 
 *   **Intelligence Governance**: Powered by the **Judgment Engine**. Every directive is filtered through a cognitive triage (Reflex, Shallow, Deep) to ensure the right model is used for the right task while maintaining absolute safety.
 *   **The Neural Forge**: A integrated pipeline in the core kernel. VIKI extracts "Wisdom" from her SQLite-backed semantic memory and bakes it into a local **Ollama** image (default tag **`viki-neural-forge`**, profile **`viki-evolved`** in `models.yaml`) on top of bases such as **Phi-3**, **Mistral**, **Qwen**, or **DeepSeek-R1**.
@@ -91,7 +91,7 @@ One codebase, multiple specialized “VIKIs”. Switch by setting `system.person
 | **research** | Search, recall, browser   | You want accurate, cited research. |
 | **home**     | Calendar, email, media, voice | You want a life/productivity assistant. |
 
-Example: `VIKI_PERSONA=dev python viki/main.py` runs VIKI Dev with only dev-focused skills.
+Example: `VIKI_PERSONA=dev python -m viki` runs VIKI Dev with only dev-focused skills.
 
 ### Engineering playbooks
 
@@ -260,7 +260,7 @@ pip install -e ".[windows,qt]"
 
 3.  **Launch VIKI (CLI)**:
     ```powershell
-    python viki/main.py
+    python -m viki
     ```
 
 ### Using VIKI from the CLI (like Claude Code)

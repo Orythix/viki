@@ -1,15 +1,17 @@
-from typing import Dict, Any, List
 import asyncio
-from viki.skills.base import BaseSkill
+from typing import Any
+
 from viki.application.services.swarm_orchestrator import SwarmOrchestrator
-from viki.domain.entities.swarm import AgentStatus
 from viki.config.logger import viki_logger
+from viki.skills.base import BaseSkill
+
 
 class SwarmSkill(BaseSkill):
     """
     Sub-Agent Swarm (The Council).
     Delegates specialized tasks to sub-agents managed by the SwarmOrchestrator.
     """
+
     def __init__(self, orchestrator: SwarmOrchestrator, controller):
         self._orchestrator = orchestrator
         self.controller = controller
@@ -26,60 +28,68 @@ class SwarmSkill(BaseSkill):
         )
 
     @property
-    def schema(self) -> Dict[str, Any]:
+    def schema(self) -> dict[str, Any]:
         return {
             "type": "object",
             "properties": {
                 "action": {
                     "type": "string",
                     "enum": ["delegate_council", "status", "terminate"],
-                    "description": "Action to perform in the swarm."
+                    "description": "Action to perform in the swarm.",
                 },
                 "objective": {
                     "type": "string",
-                    "description": "The complex objective for the council to solve (required for 'delegate_council')."
+                    "description": "The complex objective for the council to solve (required for 'delegate_council').",
                 },
                 "agent_id": {
                     "type": "string",
-                    "description": "Specific agent ID (required for 'status' or 'terminate')."
-                }
+                    "description": "Specific agent ID (required for 'status' or 'terminate').",
+                },
             },
-            "required": ["action"]
+            "required": ["action"],
         }
 
     @property
     def safety_tier(self) -> str:
         return "medium"
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         action = params.get("action")
-        
+
         if action == "delegate_council":
             objective = params.get("objective")
             if not objective:
                 return "Error: No objective provided for the council."
-            
+
             viki_logger.info(f"Swarm: Convoking the council for '{objective}'")
-            
+
             # 1. Provision Agents and Delegate Tasks
             specialties = ["research", "coder", "reviewer"]
             workers = []
-            
+
             for specialty in specialties:
-                task = await self._orchestrator.delegate_task(f"{specialty} analysis for: {objective}", specialty)
+                task = await self._orchestrator.delegate_task(
+                    f"{specialty} analysis for: {objective}", specialty
+                )
                 workers.append(self._execute_worker(task, specialty, objective))
-            
+
             results = await asyncio.gather(*workers)
-            
+
             # 2. Synthesize Results using the main controller's reasoning model
             synthesis_prompt = [
-                {"role": "system", "content": "You are VIKI Manager. Compile the following worker reports into a final comprehensive master spec/report for the creator."},
-                {"role": "user", "content": f"Objective: {objective}\n\nREPORTS:\n" + "\n---\n".join(results)}
+                {
+                    "role": "system",
+                    "content": "You are VIKI Manager. Compile the following worker reports into a final comprehensive master spec/report for the creator.",
+                },
+                {
+                    "role": "user",
+                    "content": f"Objective: {objective}\n\nREPORTS:\n" + "\n---\n".join(results),
+                },
             ]
-            
+
             model = self.controller.model_router.get_model(capabilities=["reasoning"])
             final_report = await model.chat(synthesis_prompt)
-            
+
             return f"CONSOLIDATED COUNCIL REPORT:\n\n{final_report}"
 
         elif action == "status":
@@ -100,20 +110,23 @@ class SwarmSkill(BaseSkill):
         sys_prompts = {
             "research": "You are the Researcher Agent. Find facts and similar cases for this objective.",
             "coder": "You are the Architect Agent. Define the structure and logic for this objective.",
-            "reviewer": "You are the Critic Agent. Review findings and structure for potential flaws or gaps."
+            "reviewer": "You are the Critic Agent. Review findings and structure for potential flaws or gaps.",
         }
-        
+
         messages = [
-            {"role": "system", "content": sys_prompts.get(specialty, "You are a specialized worker.")},
-            {"role": "user", "content": objective}
+            {
+                "role": "system",
+                "content": sys_prompts.get(specialty, "You are a specialized worker."),
+            },
+            {"role": "user", "content": objective},
         ]
-        
+
         model = self.controller.model_router.get_model(capabilities=["fast_response"])
         report = await model.chat(messages)
-        
+
         # Mark task as completed in orchestrator
         task.status = "completed"
         task.result = report
         self._orchestrator.agent_pool.release_agent(task.assigned_to)
-        
+
         return f"[{specialty.upper()} REPORT]\n{report}"

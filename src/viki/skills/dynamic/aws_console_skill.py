@@ -11,7 +11,7 @@ operator-supplied capability promotion.
 from __future__ import annotations
 
 import json
-from typing import Any, Dict
+from typing import Any
 
 from viki.skills.base import BaseSkill
 
@@ -55,7 +55,7 @@ class AwsConsoleSkill(BaseSkill):
     def safety_tier(self) -> str:
         return "safe"
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         service = (params.get("service") or "").strip()
         operation = (params.get("operation") or "").strip()
         kwargs = params.get("kwargs") or {}
@@ -72,11 +72,7 @@ class AwsConsoleSkill(BaseSkill):
 
         if not service or not operation:
             return "Error: 'service' and 'operation' are required."
-        if not (
-            operation.startswith("list_")
-            or operation.startswith("describe_")
-            or operation.startswith("get_")
-        ):
+        if not (operation.startswith(("list_", "describe_", "get_"))):
             return "Error: only read-only operations (list_/describe_/get_) are allowed."
 
         try:
@@ -85,10 +81,14 @@ class AwsConsoleSkill(BaseSkill):
             return "Error: boto3 not installed; pip install boto3 to enable aws_console."
 
         try:
-            session = boto3.session.Session(
-                profile_name=profile,
-                region_name=region,
-            ) if (profile or region) else boto3.session.Session()
+            session = (
+                boto3.session.Session(
+                    profile_name=profile,
+                    region_name=region,
+                )
+                if (profile or region)
+                else boto3.session.Session()
+            )
             client = session.client(service)
             if client.can_paginate(operation):
                 pcfg = {"MaxItems": page_size * max_pages} if page_size else {"MaxItems": 1000}

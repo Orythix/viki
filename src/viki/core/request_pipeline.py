@@ -8,7 +8,7 @@ stages can be added per ARCHITECTURE_REFACTOR.md without growing _process_reques
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, List, Optional, Protocol
+from typing import Any, Protocol
 
 from viki.config.logger import viki_logger
 
@@ -20,7 +20,7 @@ class RequestContext:
     user_input: str
     session_id: str
     on_event: Any = None
-    attachment_paths: Optional[List[str]] = None
+    attachment_paths: list[str] | None = None
     narrative_wisdom: Any = None
     wisdom_block: str = ""
     safe_input: str = ""
@@ -29,11 +29,12 @@ class RequestContext:
 class PreflightStage(Protocol):
     """Single async step; return a user-facing string to short-circuit, or None to continue."""
 
-    async def run(self, ctrl: Any, ctx: RequestContext) -> Optional[str]: ...
+    async def run(self, ctrl: Any, ctx: RequestContext) -> str | None:
+        ...
 
 
 class _SuperAdminStage:
-    async def run(self, ctrl: Any, ctx: RequestContext) -> Optional[str]:
+    async def run(self, ctrl: Any, ctx: RequestContext) -> str | None:
         if getattr(ctrl.super_admin, "shutdown_triggered", False):
             return "HALTED"
         try:
@@ -56,11 +57,11 @@ class _AttachmentStage:
     AUDIO_EXT = {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".aac"}
     TEXT_EXT = {".txt", ".md", ".rst", ".log", ".csv", ".json", ".yaml", ".yml"}
 
-    async def run(self, ctrl: Any, ctx: RequestContext) -> Optional[str]:
+    async def run(self, ctrl: Any, ctx: RequestContext) -> str | None:
         if not ctx.attachment_paths:
             return None
         registry = getattr(ctrl, "skill_registry", None)
-        captions: List[str] = []
+        captions: list[str] = []
         for path in ctx.attachment_paths:
             try:
                 ext = self._extension(path)
@@ -82,6 +83,7 @@ class _AttachmentStage:
     @staticmethod
     def _extension(path: str) -> str:
         import os
+
         return os.path.splitext(path)[1].lower()
 
     async def _caption_image(self, registry: Any, path: str) -> str:
@@ -111,7 +113,7 @@ class _AttachmentStage:
     @staticmethod
     def _inline_text(path: str) -> str:
         try:
-            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            with open(path, encoding="utf-8", errors="ignore") as f:
                 content = f.read(8000)
         except Exception as e:
             return f"[Text attachment {path}: {e}]"
@@ -119,7 +121,7 @@ class _AttachmentStage:
 
 
 class _GovernorStage:
-    async def run(self, ctrl: Any, ctx: RequestContext) -> Optional[str]:
+    async def run(self, ctrl: Any, ctx: RequestContext) -> str | None:
         if ctrl.governor.check_shutdown(ctx.user_input):
             return "Orythix — Quiescent (shutdown key 970317 accepted)"
 
@@ -148,7 +150,7 @@ class _GovernorStage:
 
 
 class _SafetyStage:
-    async def run(self, ctrl: Any, ctx: RequestContext) -> Optional[str]:
+    async def run(self, ctrl: Any, ctx: RequestContext) -> str | None:
         ctx.safe_input = ctrl.safety.validate_request(ctx.user_input)
 
         security_scan_requests = ctrl.settings.get("system", {}).get("security_scan_requests")
@@ -158,20 +160,22 @@ class _SafetyStage:
             llm = ctrl.model_router.get_model()
             scan_result = await ctrl.safety.scan_request(llm, ctx.user_input)
             if not scan_result.get("safe", True):
-                viki_logger.warning(f"Security scan refused request: {scan_result.get('reason', '')}")
+                viki_logger.warning(
+                    f"Security scan refused request: {scan_result.get('reason', '')}"
+                )
                 return f"I cannot comply. {scan_result.get('reason', 'Request blocked by security policy.')}"
         return None
 
 
 class _SignalsResetStage:
-    async def run(self, ctrl: Any, ctx: RequestContext) -> Optional[str]:
+    async def run(self, ctrl: Any, ctx: RequestContext) -> str | None:
         ctrl.interrupt_signal.clear()
         ctrl.signals.decay_signals()
         return None
 
 
 class _PendingOpsStage:
-    async def run(self, ctrl: Any, ctx: RequestContext) -> Optional[str]:
+    async def run(self, ctrl: Any, ctx: RequestContext) -> str | None:
         pending_ops = ctrl.pending_ops_plans.get(ctx.session_id)
         if not pending_ops:
             return None
@@ -188,7 +192,7 @@ class _PendingOpsStage:
 
 
 class _PendingActionStage:
-    async def run(self, ctrl: Any, ctx: RequestContext) -> Optional[str]:
+    async def run(self, ctrl: Any, ctx: RequestContext) -> str | None:
         pending_action = ctrl.pending_actions.get(ctx.session_id)
         if not pending_action:
             return None
@@ -233,30 +237,67 @@ class _FileReferenceStage:
 
     # Extensions we auto-read when mentioned in user input
     CODE_EXT = {
-        ".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".c", ".cpp", ".h",
-        ".cs", ".go", ".rs", ".rb", ".php", ".swift", ".kt", ".scala",
-        ".sh", ".bash", ".ps1", ".bat", ".cmd",
-        ".html", ".css", ".scss", ".sass", ".less",
-        ".json", ".yaml", ".yml", ".toml", ".xml", ".ini", ".cfg", ".conf",
-        ".md", ".txt", ".rst", ".log", ".csv", ".sql", ".env",
-        ".dockerfile", ".makefile",
+        ".py",
+        ".js",
+        ".ts",
+        ".jsx",
+        ".tsx",
+        ".java",
+        ".c",
+        ".cpp",
+        ".h",
+        ".cs",
+        ".go",
+        ".rs",
+        ".rb",
+        ".php",
+        ".swift",
+        ".kt",
+        ".scala",
+        ".sh",
+        ".bash",
+        ".ps1",
+        ".bat",
+        ".cmd",
+        ".html",
+        ".css",
+        ".scss",
+        ".sass",
+        ".less",
+        ".json",
+        ".yaml",
+        ".yml",
+        ".toml",
+        ".xml",
+        ".ini",
+        ".cfg",
+        ".conf",
+        ".md",
+        ".txt",
+        ".rst",
+        ".log",
+        ".csv",
+        ".sql",
+        ".env",
+        ".dockerfile",
+        ".makefile",
     }
 
     # Max file size to inline (8KB keeps context manageable)
     MAX_INLINE_SIZE = 8192
 
-    def _extract_file_refs(self, text: str) -> List[str]:
+    def _extract_file_refs(self, text: str) -> list[str]:
         """Extract potential filenames from user input."""
         import re
+
         # Match words that look like filenames with known extensions
-        pattern = r'[\w./-]+\.(?:' + '|'.join(
-            ext.lstrip('.') for ext in self.CODE_EXT
-        ) + r')\b'
+        pattern = r"[\w./-]+\.(?:" + "|".join(ext.lstrip(".") for ext in self.CODE_EXT) + r")\b"
         return re.findall(pattern, text, re.IGNORECASE)
 
-    def _resolve_file(self, filename: str, search_dirs: List[str]) -> Optional[str]:
+    def _resolve_file(self, filename: str, search_dirs: list[str]) -> str | None:
         """Try to find the file in search directories with path traversal protection."""
         import os
+
         # Resolve absolute path, stripping any traversal components
         resolved = os.path.abspath(os.path.join(os.getcwd(), filename))
         # Verify resolved path is within one of the allowed search directories
@@ -282,7 +323,7 @@ class _FileReferenceStage:
                 return abs_candidate
         return None
 
-    async def run(self, ctrl: Any, ctx: RequestContext) -> Optional[str]:
+    async def run(self, ctrl: Any, ctx: RequestContext) -> str | None:
         import os
 
         file_refs = self._extract_file_refs(ctx.user_input)
@@ -300,7 +341,7 @@ class _FileReferenceStage:
             if dd:
                 search_dirs.append(os.path.abspath(os.path.expanduser(dd)))
 
-        inlined: List[str] = []
+        inlined: list[str] = []
         for ref in file_refs[:3]:  # Cap at 3 files per request
             resolved = self._resolve_file(ref, search_dirs)
             if not resolved:
@@ -308,11 +349,11 @@ class _FileReferenceStage:
             try:
                 # v26: Smart Context Management - Stubbing
                 file_size = os.path.getsize(resolved)
-                is_stub = file_size > 2048 # Anything over 2KB is stubbed
-                
-                with open(resolved, "r", encoding="utf-8", errors="ignore") as f:
+                is_stub = file_size > 2048  # Anything over 2KB is stubbed
+
+                with open(resolved, encoding="utf-8", errors="ignore") as f:
                     if is_stub:
-                        content = f.read(500) # Only first 500 chars for stub
+                        content = f.read(500)  # Only first 500 chars for stub
                         footer = f"\n\n... (file continues, {file_size} bytes total) ...\n"
                         inlined.append(
                             f"[CONTEXT STUB: {resolved}]\n"
@@ -323,14 +364,10 @@ class _FileReferenceStage:
                         content = f.read(self.MAX_INLINE_SIZE)
                         truncated = " (truncated)" if len(content) >= self.MAX_INLINE_SIZE else ""
                         inlined.append(
-                            f"[Auto-loaded file: {resolved}{truncated}]\n"
-                            f"```\n{content}\n```"
+                            f"[Auto-loaded file: {resolved}{truncated}]\n" f"```\n{content}\n```"
                         )
             except Exception as e:
                 viki_logger.debug(f"FileReferenceStage failed for {resolved}: {e}")
-                viki_logger.debug("FileReferenceStage: auto-inlined %s (%d bytes)", resolved, len(content))
-            except Exception as e:
-                viki_logger.debug("FileReferenceStage: failed to read %s: %s", resolved, e)
 
         if inlined:
             ctx.user_input = "\n\n".join(inlined) + "\n\n" + ctx.user_input
@@ -340,7 +377,7 @@ class _FileReferenceStage:
 class RequestPipeline:
     """Runs ordered preflight stages until one returns a terminal response."""
 
-    def __init__(self, stages: Optional[List[PreflightStage]] = None):
+    def __init__(self, stages: list[PreflightStage] | None = None):
         if stages is None:
             stages = [
                 _SuperAdminStage(),
@@ -352,9 +389,9 @@ class RequestPipeline:
                 _PendingOpsStage(),
                 _PendingActionStage(),
             ]
-        self._stages: List[PreflightStage] = stages
+        self._stages: list[PreflightStage] = stages
 
-    async def run_preflight(self, ctrl: Any, ctx: RequestContext) -> Optional[str]:
+    async def run_preflight(self, ctrl: Any, ctx: RequestContext) -> str | None:
         for stage in self._stages:
             out = await stage.run(ctrl, ctx)
             if out is not None:
@@ -364,4 +401,3 @@ class RequestPipeline:
 
 def build_default_preflight_pipeline() -> RequestPipeline:
     return RequestPipeline()
-

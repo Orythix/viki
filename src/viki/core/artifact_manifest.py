@@ -16,17 +16,17 @@ import json
 import os
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 @dataclass
 class ArtifactEntry:
     path: str
     description: str = ""
-    sha256: Optional[str] = None
-    size_bytes: Optional[int] = None
+    sha256: str | None = None
+    size_bytes: int | None = None
     created_at: float = field(default_factory=time.time)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -42,8 +42,8 @@ class TestRecord:
 class EvalRecord:
     suite: str
     score: float
-    pass_rate: Optional[float] = None
-    extra: Dict[str, Any] = field(default_factory=dict)
+    pass_rate: float | None = None
+    extra: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -52,11 +52,11 @@ class ArtifactManifest:
     goal: str
     workspace_dir: str
     started_at: float = field(default_factory=time.time)
-    completed_at: Optional[float] = None
-    artifacts: List[ArtifactEntry] = field(default_factory=list)
-    tests: List[TestRecord] = field(default_factory=list)
-    evals: List[EvalRecord] = field(default_factory=list)
-    notes: List[str] = field(default_factory=list)
+    completed_at: float | None = None
+    artifacts: list[ArtifactEntry] = field(default_factory=list)
+    tests: list[TestRecord] = field(default_factory=list)
+    evals: list[EvalRecord] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
 
     @property
     def manifest_dir(self) -> str:
@@ -71,7 +71,7 @@ class ArtifactManifest:
         path: str,
         description: str = "",
         compute_hash: bool = True,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> ArtifactEntry:
         sha = None
         size = None
@@ -112,8 +112,8 @@ class ArtifactManifest:
         self,
         suite: str,
         score: float,
-        pass_rate: Optional[float] = None,
-        extra: Optional[Dict[str, Any]] = None,
+        pass_rate: float | None = None,
+        extra: dict[str, Any] | None = None,
     ) -> EvalRecord:
         rec = EvalRecord(suite=suite, score=score, pass_rate=pass_rate, extra=extra or {})
         self.evals.append(rec)
@@ -129,7 +129,7 @@ class ArtifactManifest:
             json.dump(self.to_dict(), f, indent=2, sort_keys=False)
         return self.manifest_path
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "mission_id": self.mission_id,
             "goal": self.goal,
@@ -142,12 +142,12 @@ class ArtifactManifest:
         }
 
     @classmethod
-    def load(cls, mission_id: str, workspace_dir: str) -> Optional["ArtifactManifest"]:
+    def load(cls, mission_id: str, workspace_dir: str) -> ArtifactManifest | None:
         path = os.path.join(workspace_dir, "missions", mission_id, "manifest.json")
         if not os.path.isfile(path):
             return None
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 data = json.load(f)
         except Exception:
             return None

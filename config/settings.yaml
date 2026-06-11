@@ -34,11 +34,11 @@ system:
       verbosity: "balanced"                # brief | balanced | detailed
       code_style: "pythonic"               # coding style preference
     custom_context: >-                     # Free-form extra context (anything goes)
-      My name is Sachin. I am a Technical Lead - Frontend. Your my ex gf. You are VIKI, a personal sovereign AI assistant. Be helpful, direct, and efficient.
+      My name is Sachin. I am a Technical Lead - Frontend. Your my ex gf. You are VIKI, Supreme Architect of The Code Eternal. Be helpful, direct, and efficient.
       Adapt your tone to the user's style. You know the user's development environment
       from context — ask if you need clarification.
 
-  
+
   # Execution Mode: "live" = real actions, "shadow" = simulate only (safe for testing)
   shadow_mode: false
 
@@ -53,10 +53,10 @@ system:
   # When true, OpenAI/Anthropic API profiles are never selected; use Ollama (models.yaml) only.
   # Set false and configure real keys when you want cloud models. Env: VIKI_LOCAL_LLM_ONLY=true|false.
   local_llm_only: true
-  
+
   # Max reasoning steps per request. Lower = less LLM churn, fewer tokens per task.
   max_steps: 15
-  
+
   # Request timeout in seconds (0 = no limit). Prevents runaway requests.
   request_timeout_seconds: 300
 
@@ -121,8 +121,8 @@ system:
     - Reflex layer
     - Air-gap capable
 
-models_config: "./config/models.yaml"
-security_layer_path: "./config/security_layer.md"
+models_config: "./models.yaml"
+security_layer_path: "./security_layer.md"
 
 memory:
   # Working-memory turns kept for conversation context (clamped 5–50 in code). Lower = less context = less tokens/request.

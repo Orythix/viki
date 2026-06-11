@@ -3,18 +3,21 @@ Google Calendar API client for VIKI. Used by CalendarSkill when integrations.goo
 Requires: google-auth, google-auth-oauthlib, google-api-python-client.
 """
 import os
-from typing import Any, Dict, List, Optional
-from datetime import datetime
+from datetime import UTC, datetime
+
 
 def get_calendar_service(credentials_path: str, token_path: str):
     try:
+        from google.auth.transport.requests import Request
         from google.oauth2.credentials import Credentials
         from google_auth_oauthlib.flow import InstalledAppFlow
-        from google.auth.transport.requests import Request
         from googleapiclient.discovery import build
     except ImportError:
         return None
-    SCOPES = ["https://www.googleapis.com/auth/calendar.events", "https://www.googleapis.com/auth/calendar.readonly"]
+    SCOPES = [
+        "https://www.googleapis.com/auth/calendar.events",
+        "https://www.googleapis.com/auth/calendar.readonly",
+    ]
     creds = None
     if os.path.exists(token_path):
         creds = Credentials.from_authorized_user_file(token_path, SCOPES)
@@ -36,9 +39,18 @@ def calendar_list(service, calendar_id: str = "primary", max_results: int = 20) 
     if not service:
         return "Google Calendar not configured."
     try:
-        from datetime import timezone
-        now = datetime.now(timezone.utc).isoformat()
-        events = service.events().list(calendarId=calendar_id, timeMin=now, maxResults=max_results, singleEvents=True, orderBy="startTime").execute()
+        now = datetime.now(UTC).isoformat()
+        events = (
+            service.events()
+            .list(
+                calendarId=calendar_id,
+                timeMin=now,
+                maxResults=max_results,
+                singleEvents=True,
+                orderBy="startTime",
+            )
+            .execute()
+        )
         items = events.get("items", [])
         if not items:
             return "SCHEDULE: No upcoming events."
@@ -60,14 +72,19 @@ def calendar_add(service, calendar_id: str, title: str, time_str: str) -> str:
         # Default 1hr duration: if start has time, add 1 hour to end (simplified string hack for ISO)
         end = start
         if "T" in start and ":" in start:
-            from datetime import datetime, timezone, timedelta
+            from datetime import datetime, timedelta
+
             try:
                 dt = datetime.fromisoformat(start.replace("Z", "+00:00"))
                 end_dt = dt + timedelta(hours=1)
                 end = end_dt.isoformat()
             except ValueError:
                 end = start
-        event = {"summary": title, "start": {"dateTime": start, "timeZone": "UTC"}, "end": {"dateTime": end, "timeZone": "UTC"}}
+        event = {
+            "summary": title,
+            "start": {"dateTime": start, "timeZone": "UTC"},
+            "end": {"dateTime": end, "timeZone": "UTC"},
+        }
         service.events().insert(calendarId=calendar_id, body=event).execute()
         return f"SUCCEEDED: Event '{title}' scheduled for {time_str}."
     except Exception as e:

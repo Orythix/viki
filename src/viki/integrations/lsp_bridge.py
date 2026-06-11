@@ -24,7 +24,7 @@ import json
 import os
 import shutil
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from viki.config.logger import viki_logger
 
@@ -32,13 +32,19 @@ from viki.config.logger import viki_logger
 @dataclass
 class LSPSpec:
     name: str
-    command: List[str]
-    extensions: List[str] = field(default_factory=list)
+    command: list[str]
+    extensions: list[str] = field(default_factory=list)
 
 
-_DEFAULT_SPECS: Dict[str, LSPSpec] = {
-    "pyright": LSPSpec(name="pyright", command=["pyright-langserver", "--stdio"], extensions=[".py"]),
-    "ts": LSPSpec(name="typescript", command=["typescript-language-server", "--stdio"], extensions=[".ts", ".tsx", ".js", ".jsx"]),
+_DEFAULT_SPECS: dict[str, LSPSpec] = {
+    "pyright": LSPSpec(
+        name="pyright", command=["pyright-langserver", "--stdio"], extensions=[".py"]
+    ),
+    "ts": LSPSpec(
+        name="typescript",
+        command=["typescript-language-server", "--stdio"],
+        extensions=[".ts", ".tsx", ".js", ".jsx"],
+    ),
     "go": LSPSpec(name="gopls", command=["gopls"], extensions=[".go"]),
 }
 
@@ -58,14 +64,14 @@ class LSPSession:
     def __init__(self, spec: LSPSpec, workspace_dir: str):
         self.spec = spec
         self.workspace_dir = os.path.abspath(workspace_dir)
-        self.proc: Optional[asyncio.subprocess.Process] = None
+        self.proc: asyncio.subprocess.Process | None = None
         self._next_id = 1
-        self._pending: Dict[int, asyncio.Future] = {}
-        self._reader_task: Optional[asyncio.Task] = None
+        self._pending: dict[int, asyncio.Future] = {}
+        self._reader_task: asyncio.Task | None = None
         # Diagnostics published asynchronously by the server, keyed by URI.
-        self._diagnostics: Dict[str, List[Dict[str, Any]]] = {}
+        self._diagnostics: dict[str, list[dict[str, Any]]] = {}
         # Open documents (uri -> version) so we send the correct didChange version.
-        self._open_docs: Dict[str, int] = {}
+        self._open_docs: dict[str, int] = {}
 
     @property
     def is_alive(self) -> bool:
@@ -73,7 +79,9 @@ class LSPSession:
 
     async def start(self) -> bool:
         if shutil.which(self.spec.command[0]) is None:
-            viki_logger.debug("LSP %s: command '%s' not on PATH; skipping.", self.spec.name, self.spec.command[0])
+            viki_logger.debug(
+                "LSP %s: command '%s' not on PATH; skipping.", self.spec.name, self.spec.command[0]
+            )
             return False
         try:
             self.proc = await asyncio.create_subprocess_exec(
@@ -130,10 +138,12 @@ class LSPSession:
         self._next_id += 1
         fut: asyncio.Future = asyncio.get_event_loop().create_future()
         self._pending[msg_id] = fut
-        await self._write_message({"jsonrpc": "2.0", "id": msg_id, "method": method, "params": params})
+        await self._write_message(
+            {"jsonrpc": "2.0", "id": msg_id, "method": method, "params": params}
+        )
         try:
             return await asyncio.wait_for(fut, timeout=10)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self._pending.pop(msg_id, None)
             return None
 
@@ -142,7 +152,7 @@ class LSPSession:
             return
         await self._write_message({"jsonrpc": "2.0", "method": method, "params": params})
 
-    async def _write_message(self, payload: Dict[str, Any]) -> None:
+    async def _write_message(self, payload: dict[str, Any]) -> None:
         body = json.dumps(payload).encode("utf-8")
         header = f"Content-Length: {len(body)}\r\n\r\n".encode("ascii")
         if self.proc and self.proc.stdin:
@@ -193,7 +203,7 @@ class LSPSession:
     async def _ensure_open(self, path: str) -> str:
         """didOpen if first time, else didChange. Returns the doc URI."""
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 text = f.read()
         except Exception as e:
             raise RuntimeError(f"unreadable file {path}: {e}") from e
@@ -223,7 +233,7 @@ class LSPSession:
             )
         return uri
 
-    async def diagnose(self, path: str, wait_seconds: float = 1.5) -> List[Dict[str, Any]]:
+    async def diagnose(self, path: str, wait_seconds: float = 1.5) -> list[dict[str, Any]]:
         """
         Open the file, wait briefly for the server's `publishDiagnostics`, and
         return the latest set. Most servers publish within milliseconds; we use
@@ -241,7 +251,7 @@ class LSPSession:
             await asyncio.sleep(0.05)
         return list(self._diagnostics.get(uri, []))
 
-    async def hover(self, path: str, line: int, character: int) -> Optional[Dict[str, Any]]:
+    async def hover(self, path: str, line: int, character: int) -> dict[str, Any] | None:
         try:
             uri = await self._ensure_open(path)
         except RuntimeError:
@@ -274,7 +284,7 @@ class LSPSession:
 
     async def references(
         self, path: str, line: int, character: int, include_declaration: bool = True
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         try:
             uri = await self._ensure_open(path)
         except RuntimeError:
@@ -291,7 +301,7 @@ class LSPSession:
             return []
         return result
 
-    async def definition(self, path: str, line: int, character: int) -> List[Dict[str, Any]]:
+    async def definition(self, path: str, line: int, character: int) -> list[dict[str, Any]]:
         try:
             uri = await self._ensure_open(path)
         except RuntimeError:
@@ -313,19 +323,19 @@ class LSPSession:
 class LSPBridge:
     """Pool of LSP sessions keyed by file extension."""
 
-    def __init__(self, workspace_dir: str, specs: Optional[Dict[str, LSPSpec]] = None):
+    def __init__(self, workspace_dir: str, specs: dict[str, LSPSpec] | None = None):
         self.workspace_dir = workspace_dir
         self.specs = specs or _DEFAULT_SPECS
-        self.sessions: Dict[str, LSPSession] = {}
+        self.sessions: dict[str, LSPSession] = {}
 
-    def _spec_for_path(self, path: str) -> Optional[LSPSpec]:
+    def _spec_for_path(self, path: str) -> LSPSpec | None:
         ext = os.path.splitext(path)[1].lower()
         for spec in self.specs.values():
             if ext in spec.extensions:
                 return spec
         return None
 
-    async def session_for(self, path: str) -> Optional[LSPSession]:
+    async def session_for(self, path: str) -> LSPSession | None:
         spec = self._spec_for_path(path)
         if spec is None:
             return None
@@ -337,13 +347,13 @@ class LSPBridge:
             self.sessions[spec.name] = sess
         return self.sessions[spec.name]
 
-    async def diagnose_file(self, path: str) -> List[Dict[str, Any]]:
+    async def diagnose_file(self, path: str) -> list[dict[str, Any]]:
         session = await self.session_for(path)
         if session is None:
             return [{"severity": "info", "message": "no LSP available"}]
         return await session.diagnose(path)
 
-    async def hover(self, path: str, line: int, character: int) -> Optional[Dict[str, Any]]:
+    async def hover(self, path: str, line: int, character: int) -> dict[str, Any] | None:
         session = await self.session_for(path)
         if session is None:
             return None
@@ -351,13 +361,13 @@ class LSPBridge:
 
     async def references(
         self, path: str, line: int, character: int, include_declaration: bool = True
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         session = await self.session_for(path)
         if session is None:
             return []
         return await session.references(path, line, character, include_declaration)
 
-    async def definition(self, path: str, line: int, character: int) -> List[Dict[str, Any]]:
+    async def definition(self, path: str, line: int, character: int) -> list[dict[str, Any]]:
         session = await self.session_for(path)
         if session is None:
             return []

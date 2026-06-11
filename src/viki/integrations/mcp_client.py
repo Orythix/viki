@@ -42,13 +42,13 @@ import asyncio
 import os
 from contextlib import AsyncExitStack
 from dataclasses import dataclass, field, replace
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from viki.config.logger import viki_logger
 from viki.skills.base import BaseSkill
 
 
-def _normalize_transport(raw: Optional[str]) -> str:
+def _normalize_transport(raw: str | None) -> str:
     t = (raw or "stdio").strip().lower()
     if t in ("streamable_http", "streamable-http"):
         return "http"
@@ -59,16 +59,16 @@ def _normalize_transport(raw: Optional[str]) -> str:
 class MCPServerSpec:
     name: str
     transport: str = "stdio"
-    command: List[str] = field(default_factory=list)
+    command: list[str] = field(default_factory=list)
     url: str = ""
-    env: Dict[str, str] = field(default_factory=dict)
-    args: List[str] = field(default_factory=list)
-    headers: Dict[str, str] = field(default_factory=dict)
+    env: dict[str, str] = field(default_factory=dict)
+    args: list[str] = field(default_factory=list)
+    headers: dict[str, str] = field(default_factory=dict)
     timeout_s: float = 30.0
     enabled: bool = True
     default_safety_tier: str = "medium"
     default_requires_confirmation: bool = False
-    tool_policies: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    tool_policies: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 class MCPClient:
@@ -80,22 +80,23 @@ class MCPClient:
     """
 
     def __init__(self):
-        self._sessions: Dict[str, Any] = {}
-        self._tools: Dict[str, Dict[str, Any]] = {}  # full tool key -> tool dict
+        self._sessions: dict[str, Any] = {}
+        self._tools: dict[str, dict[str, Any]] = {}  # full tool key -> tool dict
         self._lock = asyncio.Lock()
         self._sdk_available = self._import_sdk()
-        self._server_status: Dict[str, Dict[str, Any]] = {}
+        self._server_status: dict[str, dict[str, Any]] = {}
 
     @staticmethod
     def _import_sdk() -> bool:
         try:
             import mcp  # noqa: F401
+
             return True
         except ImportError:
             viki_logger.debug("MCP SDK not installed; MCP integration is no-op.")
             return False
 
-    def get_server_status(self) -> List[Dict[str, Any]]:
+    def get_server_status(self) -> list[dict[str, Any]]:
         """Last-known connection status per server (for HTTP API / health)."""
         return [dict(v) for v in self._server_status.values()]
 
@@ -105,7 +106,7 @@ class MCPClient:
         *,
         connected: bool,
         tool_count: int = 0,
-        error: Optional[str] = None,
+        error: str | None = None,
     ) -> None:
         self._server_status[spec.name] = {
             "name": spec.name,
@@ -199,7 +200,6 @@ class MCPClient:
         return True
 
     async def _connect_sse(self, spec: MCPServerSpec) -> bool:
-        import httpx
         from mcp import ClientSession  # type: ignore
         from mcp.client.sse import sse_client  # type: ignore
 
@@ -254,14 +254,14 @@ class MCPClient:
         self._sessions.clear()
         self._tools.clear()
 
-    def list_tools(self) -> List[Dict[str, Any]]:
+    def list_tools(self) -> list[dict[str, Any]]:
         out = []
         for key, tool in self._tools.items():
             server, tool_name = key.split("::", 1)
             out.append({"server": server, "tool": tool_name, **tool})
         return out
 
-    async def call_tool(self, server: str, tool: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+    async def call_tool(self, server: str, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
         entry = self._sessions.get(server)
         if entry is None:
             return {"error": f"MCP server '{server}' not connected."}
@@ -285,7 +285,7 @@ class MCPSkillProxy(BaseSkill):
         self,
         client: MCPClient,
         server: str,
-        tool: Dict[str, Any],
+        tool: dict[str, Any],
         *,
         safety_tier: str = "medium",
         requires_confirmation: bool = False,
@@ -305,7 +305,7 @@ class MCPSkillProxy(BaseSkill):
         return f"[MCP/{self._server}] {self._tool.get('description', '')}".strip()
 
     @property
-    def schema(self) -> Dict[str, Any]:
+    def schema(self) -> dict[str, Any]:
         return self._tool.get("input_schema") or {"type": "object", "properties": {}}
 
     @property
@@ -316,14 +316,14 @@ class MCPSkillProxy(BaseSkill):
     def requires_user_confirmation(self) -> bool:
         return self._requires_confirmation
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         result = await self._client.call_tool(self._server, self._tool["name"], params or {})
         if result.get("error"):
             return f"MCP error: {result['error']}"
         return str(result.get("result") or "")
 
 
-def _resolve_tool_policy(spec: MCPServerSpec, tool_name: str) -> Tuple[str, bool]:
+def _resolve_tool_policy(spec: MCPServerSpec, tool_name: str) -> tuple[str, bool]:
     tier = spec.default_safety_tier or "medium"
     confirm = bool(spec.default_requires_confirmation)
     pol = spec.tool_policies.get(tool_name) or spec.tool_policies.get(tool_name.replace("_", "-"))
@@ -335,23 +335,23 @@ def _resolve_tool_policy(spec: MCPServerSpec, tool_name: str) -> Tuple[str, bool
     return tier, confirm
 
 
-def load_specs_from_yaml(path: str) -> List[MCPServerSpec]:
+def load_specs_from_yaml(path: str) -> list[MCPServerSpec]:
     """Read MCP server config (stdio, http, sse) and return MCPServerSpec list."""
     import yaml
 
     if not os.path.isfile(path):
         return []
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
     servers = data.get("servers", {}) or {}
-    out: List[MCPServerSpec] = []
+    out: list[MCPServerSpec] = []
     for name, cfg in servers.items():
         if not isinstance(cfg, dict):
             continue
         if cfg.get("enabled") is False:
             continue
         transport = _normalize_transport(cfg.get("transport"))
-        cmd: List[str] = []
+        cmd: list[str] = []
         if isinstance(cfg.get("command"), str):
             cmd = [cfg["command"]]
         elif isinstance(cfg.get("command"), list):
@@ -360,7 +360,9 @@ def load_specs_from_yaml(path: str) -> List[MCPServerSpec]:
         url = str(cfg.get("url") or "").strip()
         if transport == "stdio":
             if not cmd:
-                viki_logger.warning("MCP: skip '%s' — stdio transport requires non-empty command.", name)
+                viki_logger.warning(
+                    "MCP: skip '%s' — stdio transport requires non-empty command.", name
+                )
                 continue
         elif transport in ("http", "sse"):
             if not url:
@@ -389,7 +391,7 @@ def load_specs_from_yaml(path: str) -> List[MCPServerSpec]:
         tier = str(cfg.get("safety_tier") or "medium")
         def_confirm = bool(cfg.get("requires_confirmation", False))
         tools_raw = cfg.get("tools") or {}
-        tool_policies: Dict[str, Dict[str, Any]] = {}
+        tool_policies: dict[str, dict[str, Any]] = {}
         if isinstance(tools_raw, dict):
             for tname, pol in tools_raw.items():
                 if isinstance(pol, dict):
@@ -414,7 +416,7 @@ def load_specs_from_yaml(path: str) -> List[MCPServerSpec]:
     return out
 
 
-async def attach_mcp_skills(controller, mcp_config_path: Optional[str] = None) -> int:
+async def attach_mcp_skills(controller, mcp_config_path: str | None = None) -> int:
     """
     Load MCP servers from yaml, register their tools as VIKI skills, and return
     the count of skills installed.

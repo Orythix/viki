@@ -1,13 +1,15 @@
-import time
-from typing import Dict, Any, List, Optional
-from viki.skills.base import BaseSkill
+from typing import Any
+
 from viki.config.logger import viki_logger
+from viki.skills.base import BaseSkill
+
 
 class MindTraceSkill(BaseSkill):
     """
     Skill for visualizing the inner workings of VIKI's cognitive architecture.
     Provides visibility into routing decisions, complexity scores, and ensemble results.
     """
+
     def __init__(self, controller=None):
         super().__init__()
         self._controller = controller
@@ -28,20 +30,17 @@ class MindTraceSkill(BaseSkill):
                 "action": {
                     "type": "string",
                     "enum": ["last", "history"],
-                    "description": "Trace action"
+                    "description": "Trace action",
                 },
-                "session_id": {
-                    "type": "string",
-                    "description": "Target session ID (optional)"
-                }
+                "session_id": {"type": "string", "description": "Target session ID (optional)"},
             },
-            "required": ["action"]
+            "required": ["action"],
         }
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         action = params.get("action")
         session_id = params.get("session_id")
-        
+
         if not self._controller:
             return "Error: Controller not linked to this skill."
 
@@ -50,15 +49,15 @@ class MindTraceSkill(BaseSkill):
                 meta = self._controller.get_last_response_meta(session_id=session_id)
                 if not meta:
                     return "No recent cognitive trace found for this session."
-                
+
                 output = [
-                    f"--- VIKI Cognitive Trace (Last Turn) ---",
+                    "--- VIKI Cognitive Trace (Last Turn) ---",
                     f"Model Tier:   {meta.get('model_tier', 'N/A').upper()}",
                     f"Source:       {meta.get('source', 'N/A')}",
                     f"Elapsed:      {meta.get('elapsed_ms', 0):.2f} ms",
                     f"Ensemble Used: {meta.get('use_ensemble', False)}",
                 ]
-                
+
                 # Complexity Details
                 if "judgment" in meta:
                     j = meta["judgment"]
@@ -68,15 +67,15 @@ class MindTraceSkill(BaseSkill):
                     output.append(f" - Risk:    {j.get('risk', 0):.2f}")
                     output.append(f" - Novelty: {j.get('novelty', 0):.2f}")
                     output.append(f" - Reason:  {j.get('reason', 'N/A')}")
-                
+
                 # Usage info
                 usage = meta.get("usage", {})
                 if usage:
-                    output.append(f"\nResource Usage:")
+                    output.append("\nResource Usage:")
                     output.append(f" - Input:  {usage.get('input_tokens', 0)} tokens")
                     output.append(f" - Output: {usage.get('output_tokens', 0)} tokens")
                     output.append(f" - Cost:   ${usage.get('total_cost_usd', 0):.6f}")
-                
+
                 return "\n".join(output)
 
             elif action == "history":

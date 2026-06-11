@@ -1,97 +1,137 @@
-from pydantic import BaseModel, Field
-from typing import List, Dict, Any, Optional
 import time
+from typing import Any
+
+from pydantic import BaseModel, Field
+
 
 class ActionCall(BaseModel):
     """Represents a single skill execution."""
-    skill_name: str = Field("", description="The name of the skill to execute (e.g., 'research', 'system_control')")
-    parameters: Dict[str, Any] = Field(default_factory=dict, description="Parameters to pass to the skill")
+
+    skill_name: str = Field(
+        "", description="The name of the skill to execute (e.g., 'research', 'system_control')"
+    )
+    parameters: dict[str, Any] = Field(
+        default_factory=dict, description="Parameters to pass to the skill"
+    )
+
 
 class ThoughtObject(BaseModel):
     """v9: The fundamental unit of cognition, replacing raw text reasoning."""
-    intent_vector: Optional[List[float]] = Field(default_factory=list, description="Semantic direction of the task")
+
+    intent_vector: list[float] | None = Field(
+        default_factory=list, description="Semantic direction of the task"
+    )
     intent_summary: str = Field(..., description="Abstract human-readable intent")
-    assumptions: List[str] = Field(default_factory=list, description="Explicit base beliefs for this task")
-    constraints: List[str] = Field(default_factory=list, description="Logical and safety constraints")
+    assumptions: list[str] = Field(
+        default_factory=list, description="Explicit base beliefs for this task"
+    )
+    constraints: list[str] = Field(
+        default_factory=list, description="Logical and safety constraints"
+    )
     risk_score: float = Field(0.0, ge=0.0, le=1.0, description="Estimated danger (0-1)")
     primary_strategy: str = Field(..., description="The chosen path of action")
-    rejected_strategies: List[str] = Field(default_factory=list, description="Alternatives considered and discarded")
-    symbolic_graph: Optional[Dict[str, Any]] = None # v13 Internal Language (Nodes/Edges)
+    rejected_strategies: list[str] = Field(
+        default_factory=list, description="Alternatives considered and discarded"
+    )
+    symbolic_graph: dict[str, Any] | None = None  # v13 Internal Language (Nodes/Edges)
     confidence: float = Field(0.0, ge=0.0, le=1.0)
-    provenance: Optional[Any] = Field(None, description="Source of the knowledge used")
+    provenance: Any | None = Field(None, description="Source of the knowledge used")
+
 
 class ThoughtObjectLite(BaseModel):
     """Lightweight thought for SHALLOW reasoning — 3 fields instead of 10.
     Local models can reliably produce this without heuristic patching."""
+
     intent_summary: str = Field("Processing request", description="What the user wants")
     primary_strategy: str = Field("Direct response", description="How to address it")
     confidence: float = Field(0.7, ge=0.0, le=1.0, description="How confident (0-1)")
 
+
 class SolverOutput(BaseModel):
     """v9: Output from an internal Solver (Optimistic, conservative, etc)."""
+
     persona: str = Field(..., description="The solver's bias (e.g., Conservative)")
     thought: ThoughtObject
-    suggested_action: Optional[ActionCall] = None
+    suggested_action: ActionCall | None = None
+
 
 class VIKIResponse(BaseModel):
-    """v9: Final integrated response containing the judge's decision."""
+    """Final integrated response — simplified for local model reliability."""
+
     final_thought: ThoughtObject
-    action: Optional[ActionCall] = Field(None)
-    final_response: Optional[str] = Field(None)
-    internal_metacognition: Optional[str] = Field(None, description="Layer 5: Reflection on the process")
-    ensemble_trace: Optional[Dict[str, str]] = Field(None, description="v24: Internal Specialist Ensemble perspectives")
-    sentiment: Optional[str] = Field(None, description="Detected human sentiment")
-    intent_type: Optional[str] = Field(None, description="Classified intent category")
-    needs_escalation: bool = Field(False, description="Flag to trigger deeper reasoning if audit fails")
+    action: ActionCall | None = Field(None)
+    final_response: str | None = Field(None)
+    internal_metacognition: str | None = Field(None)
+    ensemble_trace: dict[str, str] | None = Field(None)
+    sentiment: str | None = Field(None)
+    intent_type: str | None = Field(None)
+    needs_escalation: bool = Field(False)
+
 
 class VIKIResponseLite(BaseModel):
     """Lightweight response for SHALLOW reasoning.
     Only 3 fields — local models produce this reliably with zero heuristic fixes."""
-    final_response: Optional[str] = Field(None, description="The actual textual answer to the user.")
-    action: Optional[ActionCall] = Field(None, description="Action to execute. MANDATORY if user asks for research, search, or system control.")
-    confidence: float = Field(0.7, description="Confidence in response (0-1)")
 
-    def to_full_response(self) -> 'VIKIResponse':
+    final_response: str | None = Field(None, description="The actual textual answer to the user.")
+    action: ActionCall | None = Field(
+        None,
+        description="Action to execute. MANDATORY if user asks for research, search, or system control.",
+    )
+    confidence: float = Field(0.7, ge=0.0, le=1.0, description="Confidence in response (0-1)")
+
+    def to_full_response(self) -> "VIKIResponse":
         """Convert lite response to full VIKIResponse for pipeline compatibility."""
         return VIKIResponse(
             final_thought=ThoughtObject(
                 intent_summary="Shallow reasoning",
-                primary_strategy=self.final_response[:100] if self.final_response else "Direct response",
+                primary_strategy=self.final_response[:100]
+                if self.final_response
+                else "Direct response",
                 confidence=self.confidence,
             ),
             action=self.action,
             final_response=self.final_response,
-            internal_metacognition="Shallow path — lite schema used."
+            internal_metacognition="Shallow path — lite schema used.",
         )
+
 
 class LayerState(BaseModel):
     """v9: Telemetry for a single consciousness layer."""
+
     name: str
     status: str = "Idle"
     load: float = 0.0
-    active_thought: Optional[ThoughtObject] = None
+    active_thought: ThoughtObject | None = None
+
 
 class WorldState(BaseModel):
     """v10: Long-term persistent world model."""
-    apps: Dict[str, Any] = Field(default_factory=dict)
-    workflows: Dict[str, Any] = Field(default_factory=dict)
-    user_habits: List[Dict[str, Any]] = Field(default_factory=list)
-    safety_zones: Dict[str, str] = Field(default_factory=dict)
-    semantic_paths: Dict[str, str] = Field(default_factory=dict) # Path -> Purpose/Label
-    codebase_graph: Dict[str, Dict[str, Any]] = Field(default_factory=dict) # v25: File -> {dependencies, signature_hash}
-    active_context: List[str] = Field(default_factory=list) # v25: List of recently hot files
+
+    apps: dict[str, Any] = Field(default_factory=dict)
+    workflows: dict[str, Any] = Field(default_factory=dict)
+    user_habits: list[dict[str, Any]] = Field(default_factory=list)
+    safety_zones: dict[str, str] = Field(default_factory=dict)
+    semantic_paths: dict[str, str] = Field(default_factory=dict)  # Path -> Purpose/Label
+    codebase_graph: dict[str, dict[str, Any]] = Field(
+        default_factory=dict
+    )  # v25: File -> {dependencies, signature_hash}
+    active_context: list[str] = Field(default_factory=list)  # v25: List of recently hot files
     last_updated: float = Field(default_factory=time.time)
 
     # v26: Autonomous Execution Context
-    active_goal: Optional[str] = None
-    active_project: Optional[str] = None
-    current_phase: Optional[str] = "IDLE" # e.g., 'IDLE', 'PLANNING', 'EXECUTING', 'TESTING', 'COMPLETE'
+    active_goal: str | None = None
+    active_project: str | None = None
+    current_phase: str | None = (
+        "IDLE"  # e.g., 'IDLE', 'PLANNING', 'EXECUTING', 'TESTING', 'COMPLETE'
+    )
     execution_started: bool = False
-    planning_depth: int = 0 # Track consecutive planning calls for the same goal
+    planning_depth: int = 0  # Track consecutive planning calls for the same goal
     retry_count: int = 0
-    last_phase: Optional[str] = None
+    last_phase: str | None = None
+
 
 class TaskProgress(BaseModel):
     """Status updates during processing."""
+
     status: str
     message: str

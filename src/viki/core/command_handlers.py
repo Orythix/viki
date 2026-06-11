@@ -1,5 +1,5 @@
-import os
 import asyncio
+import os
 from typing import Any
 
 
@@ -84,7 +84,9 @@ async def handle_dream_command(controller: Any) -> str:
 
 
 async def handle_scan_command(controller: Any) -> str:
-    workspace_dir = controller.settings.get("system", {}).get("workspace_dir", controller.DEFAULT_WORKSPACE_DIR)
+    workspace_dir = controller.settings.get("system", {}).get(
+        "workspace_dir", controller.DEFAULT_WORKSPACE_DIR
+    )
     controller.world.scan_codebase(workspace_dir)
     return f"World Engine: Codebase Graph rebuilt. {len(controller.world.state.codebase_graph)} modules mapped."
 
@@ -97,7 +99,9 @@ async def handle_restore_command(controller: Any, user_input: str) -> str:
             return "No checkpoints found. Checkpoints are created before file/shell actions."
         lines = ["ID       | Time                  | Action", "-" * 50]
         for cp in checkpoints:
-            lines.append(f"{cp.get('id', '?'):8} | {cp.get('timestamp', '')[:19]:20} | {cp.get('summary', '')[:40]}")
+            lines.append(
+                f"{cp.get('id', '?'):8} | {cp.get('timestamp', '')[:19]:20} | {cp.get('summary', '')[:40]}"
+            )
         return "CHECKPOINTS (use /restore <id> to revert):\n" + "\n".join(lines)
     cp_id = rest.split()[0] if rest.split() else ""
     if cp_id:

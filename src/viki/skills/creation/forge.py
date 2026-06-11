@@ -1,10 +1,10 @@
-import os
 import asyncio
-from typing import Any, Dict
+import os
+from typing import Any
 
-from viki.skills.base import BaseSkill
 from viki.config.logger import viki_logger
 from viki.core.forge_config import resolve_forge_output_ollama_tag
+from viki.skills.base import BaseSkill
 
 
 def _strip_env(name: str) -> str:
@@ -28,7 +28,9 @@ def _resolve_forge_base_ollama_model(controller: Any) -> str:
     b = _strip_env("VIKI_FORGE_BASE_OLLAMA_MODEL")
     if b:
         return b
-    sys_cfg = (controller.settings.get("system") or {}) if getattr(controller, "settings", None) else {}
+    sys_cfg = (
+        (controller.settings.get("system") or {}) if getattr(controller, "settings", None) else {}
+    )
     b = (sys_cfg.get("forge_base_ollama_model") or "").strip()
     if b:
         return b
@@ -67,17 +69,17 @@ def _unsloth_stack_available() -> bool:
 def _unsloth_train_sync(
     data_dir: str,
     dataset_path: str,
-    params: Dict[str, Any],
-    settings: Dict[str, Any],
+    params: dict[str, Any],
+    settings: dict[str, Any],
     summary: str,
 ) -> str:
     import torch
 
     try:
-        from unsloth import FastLanguageModel
-        from trl import SFTTrainer
-        from transformers import TrainingArguments
         from datasets import load_dataset
+        from transformers import TrainingArguments
+        from trl import SFTTrainer
+        from unsloth import FastLanguageModel
     except ImportError as e:
         return (
             f"LoRA: missing dependency ({e!r}). {summary} "
@@ -180,28 +182,28 @@ class ModelForgeSkill(BaseSkill):
                     "type": "string",
                     "enum": ["evolve", "bake", "list", "switch"],
                     "default": "evolve",
-                    "description": "The forge action to perform."
+                    "description": "The forge action to perform.",
                 },
                 "profile": {
                     "type": "string",
                     "description": "Profile to bake or switch to (e.g., 'security', 'gpt4').",
-                    "default": "general"
+                    "default": "general",
                 },
                 "steps": {
                     "type": "integer",
                     "description": "Training steps for evolution (default: 60).",
                     "default": 60,
-                }
+                },
             },
         }
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         action = params.get("action", "evolve")
-        
+
         if action == "list":
             profiles = list(self.controller.forge_orchestrator.profiles.keys())
             return f"Available Forge Profiles: {profiles}"
-            
+
         if action == "bake":
             profile = params.get("profile", "general")
             return await self.controller.forge_orchestrator.bake_profile(profile)
@@ -242,9 +244,7 @@ class ModelForgeSkill(BaseSkill):
 
         return f"Error: unknown forge strategy {strategy!r}. Use auto|dpo|orpo|lora|prompt_bake."
 
-    async def _execute_preference_training(
-        self, params: Dict[str, Any], method: str
-    ) -> str:
+    async def _execute_preference_training(self, params: dict[str, Any], method: str) -> str:
         from viki.core.preference_forge import (
             PreferenceDatasetBuilder,
             run_dpo_training,
@@ -285,7 +285,7 @@ class ModelForgeSkill(BaseSkill):
             viki_logger.exception("Preference training failed")
             return f"PreferenceForge: {e!s}. {summary}"
 
-    async def _build_ollama_model(self, params: Dict[str, Any]) -> str:
+    async def _build_ollama_model(self, params: dict[str, Any]) -> str:
         """
         Refactoring Strategy:
         Instead of weight updates, we rebuild the Ollama model definition
@@ -305,13 +305,13 @@ class ModelForgeSkill(BaseSkill):
 
         modelfile_content = (
             f"FROM {base_model}\n"
-            f"SYSTEM \"\"\"\n"
+            f'SYSTEM """\n'
             f"You are VIKI, a continuously evolving digital intelligence.\n"
             f"Here is your internalized knowledge base:\n"
             f"{knowledge_block}\n"
-            f"\"\"\"\n"
+            f'"""\n'
             f"PARAMETER temperature 0.6\n"
-            f"PARAMETER stop \"<|eot_id|>\"\n"
+            f'PARAMETER stop "<|eot_id|>"\n'
         )
 
         data_dir = self.controller.settings.get("system", {}).get("data_dir", "./data")
@@ -341,7 +341,7 @@ class ModelForgeSkill(BaseSkill):
         except Exception as e:
             return f"Forge Critical Error: {str(e)}"
 
-    async def _execute_unsloth_training(self, params: Dict[str, Any]) -> str:
+    async def _execute_unsloth_training(self, params: dict[str, Any]) -> str:
         """Export JSONL for LoRA; run a short Unsloth+TRL fine-tune only when VIKI_UNSLOTH_RUN_TRAIN=1 and CUDA is available."""
         data_dir = self.controller.settings.get("system", {}).get("data_dir", "./data")
         os.makedirs(data_dir, exist_ok=True)

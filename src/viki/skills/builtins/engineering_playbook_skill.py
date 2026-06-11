@@ -1,19 +1,19 @@
 from __future__ import annotations
 
-from pathlib import Path
 import re
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Any
 
 from viki.config.logger import viki_logger
 from viki.skills.base import BaseSkill
 
 
 class EngineeringPlaybookSkill(BaseSkill):
-    def __init__(self, controller: Optional[Any] = None) -> None:
+    def __init__(self, controller: Any | None = None) -> None:
         self._controller = controller
         self._playbooks_dir = Path(__file__).resolve().parent.parent / "playbooks"
-        self._slug_to_path: Dict[str, Path] = self._discover_playbooks()
-        self._cache: Dict[str, str] = {}
+        self._slug_to_path: dict[str, Path] = self._discover_playbooks()
+        self._cache: dict[str, str] = {}
 
     @property
     def name(self) -> str:
@@ -31,7 +31,7 @@ class EngineeringPlaybookSkill(BaseSkill):
         return "safe"
 
     @property
-    def schema(self) -> Dict[str, Any]:
+    def schema(self) -> dict[str, Any]:
         return {
             "type": "object",
             "properties": {
@@ -55,22 +55,59 @@ class EngineeringPlaybookSkill(BaseSkill):
         }
 
     @property
-    def triggers(self) -> List[str]:
+    def triggers(self) -> list[str]:
         return [
-            "spec", "prd", "requirements", "acceptance criteria", "task breakdown",
-            "plan", "implementation", "incremental", "tdd", "test-first", "build",
-            "source of truth", "api design", "interface design", "frontend", "ui",
-            "devtools", "browser testing", "debugging", "error recovery", "review",
-            "code review", "quality", "simplify", "refactor", "security", "threat model",
-            "hardening", "performance", "latency", "profiling", "git workflow",
-            "versioning", "ci", "cd", "automation", "deprecation", "migration",
-            "documentation", "adr", "launch", "rollout", "release",
+            "spec",
+            "prd",
+            "requirements",
+            "acceptance criteria",
+            "task breakdown",
+            "plan",
+            "implementation",
+            "incremental",
+            "tdd",
+            "test-first",
+            "build",
+            "source of truth",
+            "api design",
+            "interface design",
+            "frontend",
+            "ui",
+            "devtools",
+            "browser testing",
+            "debugging",
+            "error recovery",
+            "review",
+            "code review",
+            "quality",
+            "simplify",
+            "refactor",
+            "security",
+            "threat model",
+            "hardening",
+            "performance",
+            "latency",
+            "profiling",
+            "git workflow",
+            "versioning",
+            "ci",
+            "cd",
+            "automation",
+            "deprecation",
+            "migration",
+            "documentation",
+            "adr",
+            "launch",
+            "rollout",
+            "release",
         ]
 
-    def _discover_playbooks(self) -> Dict[str, Path]:
-        slug_to_path: Dict[str, Path] = {}
+    def _discover_playbooks(self) -> dict[str, Path]:
+        slug_to_path: dict[str, Path] = {}
         if not self._playbooks_dir.exists():
-            viki_logger.warning("engineering_playbook: playbooks dir not found at %s", self._playbooks_dir)
+            viki_logger.warning(
+                "engineering_playbook: playbooks dir not found at %s", self._playbooks_dir
+            )
             return slug_to_path
 
         # 1. Original logic for legacy folders
@@ -95,7 +132,7 @@ class EngineeringPlaybookSkill(BaseSkill):
 
         return slug_to_path
 
-    def _load_playbook(self, slug: str) -> Optional[str]:
+    def _load_playbook(self, slug: str) -> str | None:
         if slug in self._cache:
             return self._cache[slug]
         path = self._slug_to_path.get(slug)
@@ -106,7 +143,7 @@ class EngineeringPlaybookSkill(BaseSkill):
         return text
 
     @staticmethod
-    def _extract_section(markdown: str, section_name: str) -> Optional[str]:
+    def _extract_section(markdown: str, section_name: str) -> str | None:
         lines = markdown.splitlines()
         target = section_name.strip().lower()
         start = None
@@ -133,8 +170,8 @@ class EngineeringPlaybookSkill(BaseSkill):
         lines = markdown.splitlines()
         h1 = next((line.strip() for line in lines if line.strip().startswith("# ")), "# Untitled")
         first_paragraph = ""
-        headings: List[str] = []
-        paragraph_lines: List[str] = []
+        headings: list[str] = []
+        paragraph_lines: list[str] = []
         seen_h1 = False
         for line in lines:
             stripped = line.strip()
@@ -154,10 +191,12 @@ class EngineeringPlaybookSkill(BaseSkill):
                     first_paragraph = " ".join(paragraph_lines).strip()
         if not first_paragraph and paragraph_lines:
             first_paragraph = " ".join(paragraph_lines).strip()
-        heading_lines = "\n".join(f"- {heading}" for heading in headings) if headings else "- (none)"
+        heading_lines = (
+            "\n".join(f"- {heading}" for heading in headings) if headings else "- (none)"
+        )
         return f"{h1}\n\n{first_paragraph}\n\n## Headings\n{heading_lines}".strip()
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         slug = str(params.get("playbook") or "").strip()
         if not slug:
             return "engineering_playbook: 'playbook' is required."

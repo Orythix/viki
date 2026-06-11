@@ -2,13 +2,13 @@
 Spreadsheet skill: create or update XLSX and CSV files.
 Manus-style "delivers spreadsheets".
 """
-import os
 import csv
-from typing import Dict, Any, List
+import os
+from typing import Any
 
-from viki.skills.base import BaseSkill
 from viki.config.logger import viki_logger
 from viki.core.utils.path_sandbox import validate_output_path
+from viki.skills.base import BaseSkill
 
 
 class SpreadsheetSkill(BaseSkill):
@@ -31,7 +31,7 @@ class SpreadsheetSkill(BaseSkill):
         if d:
             os.makedirs(d, exist_ok=True)
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         path = params.get("path") or params.get("output_path") or params.get("file")
         if not path:
             return "Provide path= (output file path, .xlsx or .csv)."
@@ -53,13 +53,14 @@ class SpreadsheetSkill(BaseSkill):
                     with open(path, "a", newline="", encoding="utf-8") as f:
                         w = csv.writer(f)
                         for row in rows:
-                            w.writerow(row if isinstance(row, (list, tuple)) else list(row.values()))
+                            w.writerow(row if isinstance(row, list | tuple) else list(row.values()))
                 else:
                     from openpyxl import load_workbook
+
                     wb = load_workbook(path)
                     ws = wb.active
                     for row in rows:
-                        r = row if isinstance(row, (list, tuple)) else list(row.values())
+                        r = row if isinstance(row, list | tuple) else list(row.values())
                         ws.append(r)
                     wb.save(path)
                 return f"Appended {len(rows)} row(s) to {path}."
@@ -82,11 +83,12 @@ class SpreadsheetSkill(BaseSkill):
                         w.writerows(rows)
                 else:
                     from openpyxl import Workbook
+
                     wb = Workbook()
                     ws = wb.active
                     ws.append(headers)
                     for row in rows:
-                        if isinstance(row, (list, tuple)):
+                        if isinstance(row, list | tuple):
                             ws.append(list(row))
                         else:
                             ws.append([row.get(h) for h in headers])
@@ -110,6 +112,7 @@ class SpreadsheetSkill(BaseSkill):
                     w.writerows(data)
             else:
                 from openpyxl import Workbook
+
                 wb = Workbook()
                 ws = wb.active
                 keys = list(data[0].keys())

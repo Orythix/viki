@@ -1,142 +1,125 @@
-[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "viki-sdi"
-version = "8.2.0"
-description = "VIKI Sovereign Digital Intelligence — open-source self-hosted AI agent: Ollama local LLMs, Python CLI, MCP tools, RAG memory, Neural Forge, capability gating, Apache-2.0"
+version = "8.3.0"
+description = "VIKI Sovereign Intelligence"
 readme = "README.md"
-license = { text = "Apache-2.0" }
-authors = [
-    { name = "VIKI Project Contributors" },
-]
-urls = { Homepage = "https://github.com/Orythix/viki", Changelog = "https://github.com/Orythix/viki/blob/main/CHANGELOG.md", Issues = "https://github.com/Orythix/viki/issues" }
-requires-python = ">=3.10"
-keywords = [
-    "ai-agent",
-    "open-source-ai-agent",
-    "self-hosted-ai",
-    "autonomous-agent",
-    "ollama",
-    "local-llm",
-    "private-llm",
-    "privacy-first",
-    "sovereign-ai",
-    "cli-agent",
-    "mcp",
-    "rag",
-    "orythix",
-    "cognitive-architecture",
-    "tool-use",
-    "cli-assistant",
-    "python",
-    "ai-assistant",
-    "llm-agent",
-]
-classifiers = [
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: Developers",
-    "License :: OSI Approved :: Apache Software License",
-    "Operating System :: OS Independent",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence",
-]
+requires-python = ">=3.11"
 dependencies = [
-    "pydantic",
-    "pyyaml",
-    "python-dotenv",
-    "requests",
-    "rich",
-    "colorama",
-    "tqdm",
-    "psutil",
-    "sqlite-utils",
-    "openai",
-    "instructor",
-    "anthropic",
-    "ollama",
-    "sentence-transformers",
-    "duckduckgo-search",
-    "numpy",
-    "scipy",
-    "torch",
-    "torchaudio",
-    "pillow",
-    "opencv-python",
-    "playwright",
-    "watchdog",
-    "pyautogui",
-    "pyperclip",
-    "pyttsx3",
-    "beautifulsoup4",
-    "aiohttp",
-    "sounddevice",
-    "python-telegram-bot",
-    "discord.py",
-    "pandas",
-    "openpyxl",
-    "matplotlib",
-    "python-pptx",
-    "dependency-injector",
-    "sqlalchemy",
-    "rank_bm25",
-    "prompt-toolkit>=3.0.0,<4.0.0",
+    "rich>=13.7.0",
+    "pyyaml>=6.0",
+    "aiohttp>=3.9.0",
+    "pydantic>=2.5.0",
+    "python-dotenv>=1.0.0",
+    "cryptography>=41.0.0",
+    "prompt-toolkit>=3.0.0",
+    "pyperclip>=1.8.0",
+    "sentence-transformers>=2.2.0",
+    "sqlite-utils>=3.35.0",
+    "rank-bm25>=0.2.2",
+    "numpy>=1.24.0",
+    "watchdog>=3.0.0",
+    "huggingface-hub>=0.20.0",
+    "transformers>=4.36.0",
+    "torch>=2.1.0",
+    "accelerate>=0.25.0",
+    "peft>=0.7.0",
+    "trl>=0.7.0",
+    "datasets>=2.16.0",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-asyncio", "pytest-timeout", "ruff"]
-# Model Context Protocol (remote stdio/http/sse servers). See viki/config/mcp_servers.yaml.
-mcp = ["mcp>=1.12.0"]
-# Optional stacks (install on top of the base package). See README "Install profiles".
-windows = ["pypiwin32"]
-optional-network = ["scapy"]
-vad = ["silero-vad"]
-qt = ["PyQt5"]
-embeddings = ["sentence-transformers", "torch", "torchaudio"]
-browser = ["playwright"]
-vision = ["opencv-python"]
-agent-full = [
-    "sentence-transformers",
-    "torch",
-    "torchaudio",
-    "playwright",
-    "opencv-python",
-    "watchdog",
-    "pyautogui",
-    "pyperclip",
-    "pyttsx3",
-    "sounddevice",
-    "python-telegram-bot",
-    "discord.py",
-    "pandas",
-    "openpyxl",
-    "matplotlib",
-    "python-pptx",
-    "duckduckgo-search",
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.1.0",
+    "mypy>=1.7.0",
+    "pre-commit>=3.6.0",
+    "types-requests>=2.31.0",
+    "types-PyYAML>=6.0.0",
 ]
 
 [tool.ruff]
-target-version = "py310"
-line-length = 120
+line-length = 100
+target-version = "py311"
 
 [tool.ruff.lint]
-# CI: catch likely bugs without requiring a full style pass on legacy code.
-select = ["F821", "F822", "F823", "F632"]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+    "PIE", # flake8-pie
+    "T20", # flake8-print
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "B008",  # function calls in default arguments (intentional in some cases)
+    "T201",  # print statements (used for debug)
+    "TRY003", # avoid bare except (too many to fix now)
+]
+per-file-ignores = { "tests/*" = ["S101", "T201"], "src/viki/skills/**" = ["T201", "E701", "E402", "E741", "B904", "B008"], "src/viki/skills/playbooks/**" = ["T201", "E402", "B008"], "src/viki/evolution_engine.py" = ["E402"], "src/viki/core/vector_memory.py" = ["B904"], "src/viki/core/inference_gateway.py" = ["B904"], "src/viki/core/autonomous_monitor.py" = ["E741"], "src/viki/core/continuous_learning.py" = ["E741"], "src/viki/ops/tenant_ops.py" = ["E741"], "src/viki/application/**" = ["E741"] }
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = true
+no_implicit_optional = true
+strict_optional = true
+ignore_missing_imports = true
+namespace_packages = true
+explicit_package_bases = true
+files = ["src/viki"]
+exclude = [
+  "src/viki/skills/playbooks/**",
+  "src/viki/evolution_engine.py",
+  "skill-comply",
+]
+
+[[tool.mypy.overrides]]
+module = "viki.*"
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
 asyncio_mode = "auto"
-testpaths = ["./tests"]
-pythonpath = ["src"]
-timeout = 120
-timeout_method = "thread"
+addopts = "-v --tb=short --cov --cov-report=term-missing --cov-report=html"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
 
-[project.scripts]
-viki = "viki.cli:run"
+[tool.coverage.run]
+source = ["src/viki"]
+omit = ["tests/*", "*/playbooks/**"]
 
-[tool.setuptools.packages.find]
-where = ["src"]
-include = ["viki*"]
+[tool.coverage.report]
+fail_under = 20
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
+
+[tool.coverage.html]
+directory = "coverage_html"
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"

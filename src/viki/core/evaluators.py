@@ -14,7 +14,6 @@ graders:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import subprocess
@@ -23,21 +22,21 @@ import tempfile
 import textwrap
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from viki.config.logger import viki_logger
 
 
 @dataclass
 class EvalScore:
-    score: float                      # 0.0..1.0
+    score: float  # 0.0..1.0
     passed: bool
     reason: str = ""
     runtime_seconds: float = 0.0
-    judge_votes: List[Dict[str, Any]] = field(default_factory=list)
-    metrics: Dict[str, Any] = field(default_factory=dict)
+    judge_votes: list[dict[str, Any]] = field(default_factory=list)
+    metrics: dict[str, Any] = field(default_factory=dict)
 
-    def as_dict(self) -> Dict[str, Any]:
+    def as_dict(self) -> dict[str, Any]:
         return {
             "score": round(self.score, 4),
             "passed": bool(self.passed),
@@ -67,7 +66,7 @@ class ExecutionEvaluator:
 
     DEFAULT_TIMEOUT = 8
 
-    def evaluate(self, task: Dict[str, Any], candidate: str) -> EvalScore:
+    def evaluate(self, task: dict[str, Any], candidate: str) -> EvalScore:
         t0 = time.perf_counter()
         language = (task.get("language") or "python").lower()
         timeout = int(task.get("timeout", self.DEFAULT_TIMEOUT))
@@ -115,29 +114,55 @@ class ExecutionEvaluator:
         return s.strip()
 
     @staticmethod
-    def _validate_code_safety(code: str, test_code: str) -> Optional[str]:
+    def _validate_code_safety(code: str, test_code: str) -> str | None:
         """Return an error string if dangerous patterns are found, else None."""
         full = code + "\n" + test_code
         dangerous_patterns = [
-            "os.system", "subprocess", "eval(", "exec(", "compile(",
-            "__import__", "importlib", "ctypes", "multiprocessing",
-            "pickle.loads", "marshal.loads", "open(",
+            "os.system",
+            "subprocess",
+            "eval(",
+            "exec(",
+            "compile(",
+            "__import__",
+            "importlib",
+            "ctypes",
+            "multiprocessing",
+            "pickle.loads",
+            "marshal.loads",
+            "open(",
         ]
         for pat in dangerous_patterns:
             if pat in full:
                 return f"Dangerous pattern detected: {pat}"
         try:
             import ast
+
             tree = ast.parse(full)
         except SyntaxError as e:
             return f"Syntax error: {e}"
         dangerous_calls = {"eval", "exec", "compile", "__import__", "open"}
-        dangerous_attrs = {"__globals__", "__code__", "__builtins__", "__class__",
-                           "__mro__", "__subclasses__", "__reduce__", "__reduce_ex__"}
+        dangerous_attrs = {
+            "__globals__",
+            "__code__",
+            "__builtins__",
+            "__class__",
+            "__mro__",
+            "__subclasses__",
+            "__reduce__",
+            "__reduce_ex__",
+        }
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    if alias.name in {"subprocess", "os", "sys", "ctypes", "importlib", "pickle", "marshal"}:
+                    if alias.name in {
+                        "subprocess",
+                        "os",
+                        "sys",
+                        "ctypes",
+                        "importlib",
+                        "pickle",
+                        "marshal",
+                    }:
                         return f"Dangerous import: {alias.name}"
             if isinstance(node, ast.ImportFrom) and node.module:
                 if node.module in {"subprocess", "os", "ctypes", "importlib", "pickle", "marshal"}:
@@ -152,7 +177,7 @@ class ExecutionEvaluator:
                 return f"Dangerous attribute access: {node.attr}"
         return None
 
-    def _run_python(self, code: str, task: Dict[str, Any], timeout: int) -> EvalScore:
+    def _run_python(self, code: str, task: dict[str, Any], timeout: int) -> EvalScore:
         """Run candidate Python code under hidden checks in a fresh subprocess."""
         test_code = task.get("test_code") or ""
         stdin = task.get("stdin") or ""
@@ -162,7 +187,7 @@ class ExecutionEvaluator:
         if safety_err:
             return EvalScore(score=0.0, passed=False, reason=f"Security rejection: {safety_err}")
 
-        prelude = textwrap.dedent(
+        textwrap.dedent(
             """
             import sys
             import io
@@ -230,10 +255,14 @@ class ExecutionEvaluator:
             score=1.0 if passed else 0.0,
             passed=passed,
             reason="ok" if passed else (stderr[:500] or stdout[:500] or "unknown"),
-            metrics={"stdout": stdout[:2000], "stderr": stderr[:2000], "returncode": proc.returncode},
+            metrics={
+                "stdout": stdout[:2000],
+                "stderr": stderr[:2000],
+                "returncode": proc.returncode,
+            },
         )
 
-    def _run_shell(self, code: str, task: Dict[str, Any], timeout: int) -> EvalScore:
+    def _run_shell(self, code: str, task: dict[str, Any], timeout: int) -> EvalScore:
         expected_stdout = (task.get("expected_stdout") or "").strip()
         try:
             proc = subprocess.run(
@@ -257,7 +286,11 @@ class ExecutionEvaluator:
             score=1.0 if passed else 0.0,
             passed=passed,
             reason="ok" if passed else (proc.stderr or stdout)[:500],
-            metrics={"stdout": stdout[:2000], "stderr": (proc.stderr or "")[:2000], "returncode": proc.returncode},
+            metrics={
+                "stdout": stdout[:2000],
+                "stderr": (proc.stderr or "")[:2000],
+                "returncode": proc.returncode,
+            },
         )
 
 
@@ -273,22 +306,27 @@ class LLMJudgeEvaluator:
 
     DEFAULT_PASS_THRESHOLD = 0.6
 
-    def __init__(self, model_router, num_judges: int = 3, pass_threshold: float = DEFAULT_PASS_THRESHOLD):
+    def __init__(
+        self, model_router, num_judges: int = 3, pass_threshold: float = DEFAULT_PASS_THRESHOLD
+    ):
         self.model_router = model_router
         self.num_judges = max(1, int(num_judges))
         self.pass_threshold = float(pass_threshold)
 
-    async def evaluate(self, task: Dict[str, Any], candidate: str) -> EvalScore:
+    async def evaluate(self, task: dict[str, Any], candidate: str) -> EvalScore:
         t0 = time.perf_counter()
         prompt = self._build_prompt(task, candidate)
         judges = self._select_judges()
 
-        votes: List[Dict[str, Any]] = []
+        votes: list[dict[str, Any]] = []
         for i, judge in enumerate(judges):
             try:
                 raw = await judge.chat(
                     [
-                        {"role": "system", "content": "You are an impartial agent evaluator. Output only JSON."},
+                        {
+                            "role": "system",
+                            "content": "You are an impartial agent evaluator. Output only JSON.",
+                        },
                         {"role": "user", "content": prompt},
                     ],
                     temperature=0.0,
@@ -327,7 +365,7 @@ class LLMJudgeEvaluator:
             judge_votes=votes,
         )
 
-    def _select_judges(self) -> List[Any]:
+    def _select_judges(self) -> list[Any]:
         """Pick `num_judges` distinct allowed models from the router's failover chain."""
         try:
             chain = self.model_router.get_failover_chain(["reasoning"], max_models=8)
@@ -353,8 +391,10 @@ class LLMJudgeEvaluator:
         return judges
 
     @staticmethod
-    def _build_prompt(task: Dict[str, Any], candidate: str) -> str:
-        rubric = task.get("rubric") or "Score correctness, completeness, and faithfulness to the prompt."
+    def _build_prompt(task: dict[str, Any], candidate: str) -> str:
+        rubric = (
+            task.get("rubric") or "Score correctness, completeness, and faithfulness to the prompt."
+        )
         ground_truth = task.get("ground_truth") or task.get("expected_outcome") or "(none)"
         return textwrap.dedent(
             f"""
@@ -378,7 +418,7 @@ class LLMJudgeEvaluator:
         ).strip()
 
     @staticmethod
-    def _parse_judge_response(raw: Any) -> Dict[str, Any]:
+    def _parse_judge_response(raw: Any) -> dict[str, Any]:
         text = raw if isinstance(raw, str) else str(raw or "")
         text = text.strip()
         # Extract first JSON object.

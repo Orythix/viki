@@ -1,13 +1,16 @@
-from typing import Dict, Any, List
 import re
-from viki.skills.base import BaseSkill
+from typing import Any
+
 from viki.config.logger import viki_logger
+from viki.skills.base import BaseSkill
+
 
 class RecallSkill(BaseSkill):
     """
     Skill for targeted semantic memory recall.
     Allows VIKI to explicitly search her long-term "lessons" database.
     """
+
     def __init__(self, controller):
         self.controller = controller
         self._name = "recall"
@@ -21,14 +24,15 @@ class RecallSkill(BaseSkill):
     def description(self) -> str:
         return self._description
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         query = params.get("query")
         if not query:
             return "Error: No query provided."
         limit = int(params.get("limit", 10))
         viki_logger.info(f"Recall: Hybrid search for '{query}'")
         try:
-            from core.memory.hybrid_search import search_memory
+            from viki.core.memory.hybrid_search import search_memory
+
             results = await search_memory(self.controller, query, limit=limit, rerank=False)
         except Exception as e:
             viki_logger.debug(f"Hybrid search fallback: {e}")

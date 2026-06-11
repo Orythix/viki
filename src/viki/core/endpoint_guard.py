@@ -14,7 +14,8 @@ import re
 import shutil
 import subprocess
 import time
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from collections.abc import Callable
+from typing import Any
 
 from viki.config.logger import viki_logger
 
@@ -62,7 +63,7 @@ _HIGH_RISK_EXT = frozenset(
 )
 
 
-def assess_path_risk(path: str) -> Tuple[str, str]:
+def assess_path_risk(path: str) -> tuple[str, str]:
     """
     Return (severity, reason) for a filesystem path. severity in low|medium|high.
     """
@@ -91,7 +92,7 @@ def severity_meets(minimum: str, actual: str) -> bool:
     return _SEVERITY_ORDER.get(actual, 0) >= _SEVERITY_ORDER.get(minimum, 1)
 
 
-def find_mp_cmd_run() -> Optional[str]:
+def find_mp_cmd_run() -> str | None:
     if os.name != "nt":
         return None
     pf = os.environ.get("ProgramFiles", r"C:\Program Files")
@@ -123,7 +124,7 @@ def scan_with_windows_defender(file_path: str, timeout_s: int = 120) -> str:
         return f"Defender scan failed: {e}"
 
 
-def find_clamscan() -> Optional[str]:
+def find_clamscan() -> str | None:
     """First of clamdscan / clamscan on PATH (Linux, macOS, BSD)."""
     for name in ("clamdscan", "clamscan"):
         p = shutil.which(name)
@@ -166,13 +167,13 @@ def scan_file_with_best_os_cli(file_path: str, use_defender: bool, use_clamav: b
     return "Set endpoint_guard.use_clamav_cli: true and install ClamAV for CLI scanning on this OS."
 
 
-def candidate_download_directories() -> List[str]:
+def candidate_download_directories() -> list[str]:
     """
     Resolved download folders: XDG (Linux), ~/Downloads, and workspace-adjacent common names.
     De-duplicated, only existing directories.
     """
     seen: set[str] = set()
-    out: List[str] = []
+    out: list[str] = []
 
     def add(raw: str) -> None:
         if not raw or not isinstance(raw, str):
@@ -215,12 +216,12 @@ class _GuardHandler(FileSystemEventHandler):
         self,
         on_event: Callable[[str], None],
         debounce_s: float,
-        ignore_prefixes: Tuple[str, ...],
+        ignore_prefixes: tuple[str, ...],
     ):
         super().__init__()
         self._on_event = on_event
         self._debounce_s = debounce_s
-        self._last: Dict[str, float] = {}
+        self._last: dict[str, float] = {}
         self._ignore = ignore_prefixes
 
     def on_created(self, event):
@@ -250,16 +251,16 @@ class EndpointGuardService:
 
     def __init__(self, controller: Any):
         self.controller = controller
-        self._observer: Optional[Any] = None
+        self._observer: Any | None = None
         self._running = False
 
-    def _cfg(self) -> Dict[str, Any]:
+    def _cfg(self) -> dict[str, Any]:
         raw = getattr(self.controller, "settings", {}) or {}
         eg = raw.get("endpoint_guard")
         return eg if isinstance(eg, dict) else {}
 
-    def _default_watch_paths(self) -> List[str]:
-        out: List[str] = []
+    def _default_watch_paths(self) -> list[str]:
+        out: list[str] = []
         seen: set[str] = set()
         for dl in candidate_download_directories():
             if dl not in seen:
@@ -275,7 +276,7 @@ class EndpointGuardService:
             pass
         return out
 
-    def resolve_watch_paths(self) -> List[str]:
+    def resolve_watch_paths(self) -> list[str]:
         cfg = self._cfg()
         paths = cfg.get("watch_paths")
         if isinstance(paths, list) and paths:
@@ -339,9 +340,7 @@ class EndpointGuardService:
                 )
             except Exception as e:
                 viki_logger.debug("endpoint_guard lesson: %s", e)
-            if sev == "high" and (
-                (os.name == "nt" and use_def) or (os.name != "nt" and use_clam)
-            ):
+            if sev == "high" and ((os.name == "nt" and use_def) or (os.name != "nt" and use_clam)):
                 report = scan_file_with_best_os_cli(src_path, use_def, use_clam)
                 viki_logger.info("endpoint_guard AV scan: %s", report[:500])
 

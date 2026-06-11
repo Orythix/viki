@@ -18,10 +18,12 @@ and a capability scope; it does not rely on the global controller's ReAct loop.
 from __future__ import annotations
 
 import asyncio
+import builtins
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Set
+from typing import Any
 
 from viki.config.logger import viki_logger
 
@@ -55,24 +57,24 @@ class SubAgent:
     def __init__(
         self,
         name: str,
-        capabilities: Optional[Set[str]] = None,
+        capabilities: set[str] | None = None,
         inbox_max: int = 64,
         outbox_max: int = 64,
-        parent: Optional[str] = None,
+        parent: str | None = None,
     ):
         self.id = uuid.uuid4().hex[:8]
         self.name = name
         self.parent = parent
-        self.capabilities: Set[str] = set(capabilities or set())
-        self.scratchpad: List[Dict[str, Any]] = []
-        self.metadata: Dict[str, Any] = {}
+        self.capabilities: set[str] = set(capabilities or set())
+        self.scratchpad: list[dict[str, Any]] = []
+        self.metadata: dict[str, Any] = {}
         self.inbox: asyncio.Queue[AgentMessage] = asyncio.Queue(maxsize=inbox_max)
         self.outbox: asyncio.Queue[AgentMessage] = asyncio.Queue(maxsize=outbox_max)
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
         self.result: Any = None
-        self.error: Optional[str] = None
-        self.started_at: Optional[float] = None
-        self.finished_at: Optional[float] = None
+        self.error: str | None = None
+        self.started_at: float | None = None
+        self.finished_at: float | None = None
 
     @property
     def is_running(self) -> bool:
@@ -110,26 +112,26 @@ class SubAgent:
         """Parent -> sub-agent."""
         await self.inbox.put(AgentMessage(sender=self.parent or "parent", body=body, tag=tag))
 
-    async def recv(self, timeout: Optional[float] = None) -> Optional[AgentMessage]:
+    async def recv(self, timeout: float | None = None) -> AgentMessage | None:
         """Sub-agent -> parent (consume outbox)."""
         try:
             if timeout is None:
                 return await self.outbox.get()
             return await asyncio.wait_for(self.outbox.get(), timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return None
 
     async def emit(self, body: Any, tag: str = "info") -> None:
         """Used by the runner to push to the parent's outbox."""
         await self.outbox.put(AgentMessage(sender=self.name, body=body, tag=tag))
 
-    async def pull(self, timeout: Optional[float] = None) -> Optional[AgentMessage]:
+    async def pull(self, timeout: float | None = None) -> AgentMessage | None:
         """Used by the runner to pull from the parent's inbox."""
         try:
             if timeout is None:
                 return await self.inbox.get()
             return await asyncio.wait_for(self.inbox.get(), timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return None
 
     def cancel(self) -> None:
@@ -137,12 +139,12 @@ class SubAgent:
         if self._task and not self._task.done():
             self._task.cancel()
 
-    async def join(self, timeout: Optional[float] = None) -> Any:
+    async def join(self, timeout: float | None = None) -> Any:
         if self._task is None:
             return self.result
         try:
             await asyncio.wait_for(self._task, timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self.cancel()
             raise
         except asyncio.CancelledError:
@@ -157,12 +159,12 @@ class SubAgentManager:
     """
 
     def __init__(self):
-        self._agents: Dict[str, SubAgent] = {}
+        self._agents: dict[str, SubAgent] = {}
 
     def register(self, agent: SubAgent) -> None:
         self._agents[agent.id] = agent
 
-    def list(self) -> List[Dict[str, Any]]:
+    def list(self) -> builtins.list[dict[str, Any]]:
         return [
             {
                 "id": a.id,
@@ -176,7 +178,7 @@ class SubAgentManager:
             for a in self._agents.values()
         ]
 
-    def get(self, agent_id: str) -> Optional[SubAgent]:
+    def get(self, agent_id: str) -> SubAgent | None:
         return self._agents.get(agent_id)
 
     async def cancel_all(self) -> None:

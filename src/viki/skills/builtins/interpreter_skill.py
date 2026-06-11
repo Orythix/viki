@@ -1,11 +1,8 @@
 import os
-import subprocess
-import asyncio
-import sys
-import tempfile
-from typing import Dict, Any, Optional
-from viki.skills.base import BaseSkill
+from typing import Any
+
 from viki.config.logger import viki_logger
+from viki.skills.base import BaseSkill
 
 DEFAULT_INTERPRETER_TIMEOUT = 30
 MAX_INTERPRETER_TIMEOUT = 120
@@ -16,6 +13,7 @@ class InterpreterSkill(BaseSkill):
     Skill for executing Python code in a Sandboxed (Restricted) environment.
     Prevents accidental system modifications.
     """
+
     def __init__(self, controller=None):
         self._name = "python_interpreter"
         self._controller = controller
@@ -33,7 +31,7 @@ class InterpreterSkill(BaseSkill):
             return min(MAX_INTERPRETER_TIMEOUT, max(1, val))
         except (TypeError, ValueError):
             return DEFAULT_INTERPRETER_TIMEOUT
-        
+
     @property
     def name(self) -> str:
         return self._name
@@ -42,16 +40,16 @@ class InterpreterSkill(BaseSkill):
     def description(self) -> str:
         return self._description
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         code = params.get("code")
         if not code:
             return "Error: No 'code' provided."
-            
+
         return await self._execute_sandboxed(code)
 
     async def _execute_sandboxed(self, code: str) -> str:
         """Runs python code via the configured sandbox backend (docker or subprocess)."""
-        from core.execution_environment import get_sandbox
+        from viki.core.execution_environment import get_sandbox
 
         viki_logger.info("Executing Python in Sandbox...")
         timeout_sec = self._get_timeout()

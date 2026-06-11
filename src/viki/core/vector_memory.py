@@ -22,12 +22,12 @@ where possible.
 from __future__ import annotations
 
 import json
-import math
 import os
 import sqlite3
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any
 
 from viki.config.logger import viki_logger
 
@@ -37,7 +37,7 @@ class VectorHit:
     id: Any
     text: str
     score: float
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
 
 class _BaseVectorBackend:
@@ -45,10 +45,12 @@ class _BaseVectorBackend:
 
     backend_name: str = "abstract"
 
-    def upsert(self, id: Any, embedding: List[float], text: str, metadata: Optional[Dict[str, Any]] = None) -> None:
+    def upsert(
+        self, id: Any, embedding: list[float], text: str, metadata: dict[str, Any] | None = None
+    ) -> None:
         raise NotImplementedError
 
-    def upsert_many(self, rows: Iterable[Tuple[Any, List[float], str, Dict[str, Any]]]) -> int:
+    def upsert_many(self, rows: Iterable[tuple[Any, list[float], str, dict[str, Any]]]) -> int:
         n = 0
         for _id, emb, txt, meta in rows:
             self.upsert(_id, emb, txt, meta)
@@ -60,13 +62,13 @@ class _BaseVectorBackend:
 
     def search(
         self,
-        query: List[float],
+        query: list[float],
         top_k: int = 5,
-        query_text: Optional[str] = None,
-    ) -> List[VectorHit]:
+        query_text: str | None = None,
+    ) -> list[VectorHit]:
         raise NotImplementedError
 
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         return {"backend": self.backend_name}
 
 
@@ -144,7 +146,7 @@ class _SqliteVssBackend(_BaseVectorBackend):
                 f"SELECT id, text, metadata FROM vmem WHERE id IN ({placeholders})", ids
             ).fetchall()
         }
-        out: List[VectorHit] = []
+        out: list[VectorHit] = []
         for r in rows:
             meta_row = meta_rows.get(r["rowid"])
             if not meta_row:
@@ -156,7 +158,9 @@ class _SqliteVssBackend(_BaseVectorBackend):
             # sqlite-vss returns L2 distance; convert to similarity-ish score.
             distance = float(r["distance"])
             score = 1.0 / (1.0 + distance)
-            out.append(VectorHit(id=meta_row["id"], text=meta_row["text"], score=score, metadata=meta))
+            out.append(
+                VectorHit(id=meta_row["id"], text=meta_row["text"], score=score, metadata=meta)
+            )
         return out
 
     def stats(self):
@@ -170,7 +174,7 @@ class _NumpyMemoryBackend(_BaseVectorBackend):
 
     backend_name = "numpy-memory"
 
-    def __init__(self, dim: int, snapshot_path: Optional[str] = None):
+    def __init__(self, dim: int, snapshot_path: str | None = None):
         try:
             import numpy as np  # type: ignore
         except Exception as e:
@@ -178,9 +182,9 @@ class _NumpyMemoryBackend(_BaseVectorBackend):
         self.np = np
         self.dim = dim
         self.snapshot_path = snapshot_path
-        self._ids: List[Any] = []
-        self._texts: List[str] = []
-        self._metas: List[Dict[str, Any]] = []
+        self._ids: list[Any] = []
+        self._texts: list[str] = []
+        self._metas: list[dict[str, Any]] = []
         self._matrix = None  # type: ignore
         self._load_snapshot()
 
@@ -188,7 +192,7 @@ class _NumpyMemoryBackend(_BaseVectorBackend):
         if not self.snapshot_path or not os.path.isfile(self.snapshot_path):
             return
         try:
-            with open(self.snapshot_path, "r", encoding="utf-8") as f:
+            with open(self.snapshot_path, encoding="utf-8") as f:
                 data = json.load(f)
             embs = data.get("embeddings", [])
             if embs:
@@ -271,17 +275,54 @@ class _NumpyMemoryBackend(_BaseVectorBackend):
 
 
 _STOPWORDS = {
-    "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "has",
-    "have", "in", "is", "it", "of", "on", "or", "that", "the", "to", "with",
-    "i", "you", "we", "they", "this", "these", "those", "what", "how", "why",
-    "do", "does", "did", "but", "if", "then", "so", "not", "no",
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "be",
+    "by",
+    "for",
+    "from",
+    "has",
+    "have",
+    "in",
+    "is",
+    "it",
+    "of",
+    "on",
+    "or",
+    "that",
+    "the",
+    "to",
+    "with",
+    "i",
+    "you",
+    "we",
+    "they",
+    "this",
+    "these",
+    "those",
+    "what",
+    "how",
+    "why",
+    "do",
+    "does",
+    "did",
+    "but",
+    "if",
+    "then",
+    "so",
+    "not",
+    "no",
 }
 
 
-def _tokenize(text: str) -> List[str]:
+def _tokenize(text: str) -> list[str]:
     if not text:
         return []
-    out: List[str] = []
+    out: list[str] = []
     word = []
     for ch in text.lower():
         if ch.isalnum() or ch == "_":
@@ -309,9 +350,9 @@ class _LexicalFallbackBackend(_BaseVectorBackend):
     backend_name = "lexical-fallback"
 
     def __init__(self):
-        self._texts: Dict[Any, str] = {}
-        self._metas: Dict[Any, Dict[str, Any]] = {}
-        self._token_cache: Dict[Any, set] = {}
+        self._texts: dict[Any, str] = {}
+        self._metas: dict[Any, dict[str, Any]] = {}
+        self._token_cache: dict[Any, set] = {}
 
     def upsert(self, id, embedding, text, metadata=None):
         self._texts[id] = text
@@ -335,7 +376,7 @@ class _LexicalFallbackBackend(_BaseVectorBackend):
         q_tokens = set(_tokenize(query_text))
         if not q_tokens:
             return []
-        scored: List[Tuple[float, Any, str]] = []
+        scored: list[tuple[float, Any, str]] = []
         for _id, tokens in self._token_cache.items():
             if not tokens:
                 continue
@@ -358,8 +399,8 @@ class _LexicalFallbackBackend(_BaseVectorBackend):
 
 def build_vector_backend(
     dim: int,
-    db_path: Optional[str] = None,
-    prefer: Optional[List[str]] = None,
+    db_path: str | None = None,
+    prefer: list[str] | None = None,
 ) -> _BaseVectorBackend:
     """
     Pick the best available backend in priority order. Returns the lexical

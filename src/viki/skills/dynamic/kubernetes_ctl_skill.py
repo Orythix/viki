@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import shutil
-from typing import Any, Dict
+from typing import Any
 
 from viki.skills.base import BaseSkill
 
@@ -51,12 +51,12 @@ class KubernetesCtlSkill(BaseSkill):
     def safety_tier(self) -> str:
         return "safe"
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         verb = (params.get("verb") or "").strip().lower()
         if verb not in _ALLOWED_VERBS:
             return f"Error: verb must be one of {sorted(_ALLOWED_VERBS)}."
         args = params.get("args") or []
-        if not isinstance(args, list) or not all(isinstance(a, (str, int, float)) for a in args):
+        if not isinstance(args, list) or not all(isinstance(a, str | int | float) for a in args):
             return "Error: 'args' must be a list of strings/numbers."
         namespace = params.get("namespace")
         follow = bool(params.get("follow", False))
@@ -96,8 +96,10 @@ class KubernetesCtlSkill(BaseSkill):
             err = stderr.decode("utf-8", "ignore")
             ok = proc.returncode == 0
             tail = out if ok else (out + "\n" + err)
-            return tail[:max_bytes] if tail else ("ok" if ok else f"kubectl exited {proc.returncode}")
-        except asyncio.TimeoutError:
+            return (
+                tail[:max_bytes] if tail else ("ok" if ok else f"kubectl exited {proc.returncode}")
+            )
+        except TimeoutError:
             return "kubernetes_ctl error: kubectl command timed out."
         except Exception as e:
             return f"kubernetes_ctl error: {e}"
@@ -111,6 +113,7 @@ class KubernetesCtlSkill(BaseSkill):
         chunks = []
         total = 0
         try:
+
             async def reader():
                 nonlocal total
                 while True:
@@ -121,8 +124,9 @@ class KubernetesCtlSkill(BaseSkill):
                     total += len(line)
                     if total >= max_bytes:
                         break
+
             await asyncio.wait_for(reader(), timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             chunks.append("\n[stream truncated by timeout]")
         finally:
             try:

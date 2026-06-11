@@ -16,17 +16,16 @@ Commands:
 """
 
 import argparse
-import json
 import hashlib
+import json
 import os
+import re
 import subprocess
 import sys
-import re
 import urllib.request
-from pathlib import Path
-from datetime import datetime, timedelta, timezone
 from collections import defaultdict
-from typing import Optional
+from datetime import UTC, datetime
+from pathlib import Path
 
 if sys.platform == "win32":
     try:
@@ -37,6 +36,7 @@ if sys.platform == "win32":
 
 try:
     import fcntl
+
     _HAS_FCNTL = True
 except ImportError:
     _HAS_FCNTL = False  # Windows — skip file locking
@@ -44,6 +44,7 @@ except ImportError:
 # ─────────────────────────────────────────────
 # Configuration
 # ─────────────────────────────────────────────
+
 
 def _resolve_homunculus_dir() -> Path:
     override = os.environ.get("CLV2_HOMUNCULUS_DIR")
@@ -69,9 +70,8 @@ def _normalize_remote_url(remote_url: str) -> str:
     if not remote_url:
         return ""
 
-    is_network = (
-        not remote_url.startswith("file://")
-        and ("://" in remote_url or re.match(r"^[^@/:]+@[^:/]+:", remote_url) is not None)
+    is_network = not remote_url.startswith("file://") and (
+        "://" in remote_url or re.match(r"^[^@/:]+@[^:/]+:", remote_url) is not None
     )
     normalized = _strip_remote_credentials(remote_url)
     normalized = re.sub(r"^[A-Za-z][A-Za-z0-9+.-]*://", "", normalized)
@@ -107,17 +107,24 @@ PENDING_TTL_DAYS = 30
 # Warning threshold: show expiry warning when instinct expires within this many days
 PENDING_EXPIRY_WARNING_DAYS = 7
 
+
 # Ensure global directories exist (deferred to avoid side effects at import time)
 def _ensure_global_dirs():
-    for d in [GLOBAL_PERSONAL_DIR, GLOBAL_INHERITED_DIR,
-              GLOBAL_EVOLVED_DIR / "skills", GLOBAL_EVOLVED_DIR / "commands", GLOBAL_EVOLVED_DIR / "agents",
-              PROJECTS_DIR]:
+    for d in [
+        GLOBAL_PERSONAL_DIR,
+        GLOBAL_INHERITED_DIR,
+        GLOBAL_EVOLVED_DIR / "skills",
+        GLOBAL_EVOLVED_DIR / "commands",
+        GLOBAL_EVOLVED_DIR / "agents",
+        PROJECTS_DIR,
+    ]:
         d.mkdir(parents=True, exist_ok=True)
 
 
 # ─────────────────────────────────────────────
 # Path Validation
 # ─────────────────────────────────────────────
+
 
 def _validate_file_path(path_str: str, must_exist: bool = False) -> Path:
     """Validate and resolve a file path, guarding against path traversal.
@@ -129,11 +136,21 @@ def _validate_file_path(path_str: str, must_exist: bool = False) -> Path:
     # Block paths that escape into system directories
     # We block specific system paths but allow temp dirs (/var/folders on macOS)
     blocked_prefixes = [
-        "/etc", "/usr", "/bin", "/sbin", "/proc", "/sys",
-        "/var/log", "/var/run", "/var/lib", "/var/spool",
+        "/etc",
+        "/usr",
+        "/bin",
+        "/sbin",
+        "/proc",
+        "/sys",
+        "/var/log",
+        "/var/run",
+        "/var/lib",
+        "/var/spool",
         # macOS resolves /etc → /private/etc
         "/private/etc",
-        "/private/var/log", "/private/var/run", "/private/var/db",
+        "/private/var/log",
+        "/private/var/run",
+        "/private/var/db",
     ]
     path_s = str(path)
     for prefix in blocked_prefixes:
@@ -165,13 +182,14 @@ def _yaml_quote(value: str) -> str:
     Uses double quotes and escapes embedded double-quote characters to
     prevent malformed YAML when the value contains quotes.
     """
-    escaped = value.replace('\\', '\\\\').replace('"', '\\"')
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
     return f'"{escaped}"'
 
 
 # ─────────────────────────────────────────────
 # Project Detection (Python equivalent of detect-project.sh)
 # ─────────────────────────────────────────────
+
 
 def detect_project() -> dict:
     """Detect current project context. Returns dict with id, name, root, project_dir."""
@@ -186,8 +204,7 @@ def detect_project() -> dict:
     if not project_root:
         try:
             result = subprocess.run(
-                ["git", "rev-parse", "--show-toplevel"],
-                capture_output=True, text=True, timeout=5
+                ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, timeout=5
             )
             if result.returncode == 0:
                 project_root = result.stdout.strip()
@@ -218,7 +235,9 @@ def detect_project() -> dict:
     try:
         result = subprocess.run(
             ["git", "-C", project_root, "remote", "get-url", "origin"],
-            capture_output=True, text=True, timeout=5
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         if result.returncode == 0:
             remote_url = result.stdout.strip()
@@ -307,7 +326,7 @@ def _update_registry(pid: str, pname: str, proot: str, premote: str) -> None:
             "name": pname,
             "root": proot,
             "remote": premote,
-            "last_seen": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "last_seen": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         }
 
         tmp_file = REGISTRY_FILE.parent / f".{REGISTRY_FILE.name}.tmp.{os.getpid()}"
@@ -335,6 +354,7 @@ def load_registry() -> dict:
 # Instinct Parser
 # ─────────────────────────────────────────────
 
+
 def parse_instinct_file(content: str) -> list[dict]:
     """Parse YAML-like instinct file format.
 
@@ -347,8 +367,8 @@ def parse_instinct_file(content: str) -> list[dict]:
     in_frontmatter = False
     content_lines = []
 
-    for line in content.split('\n'):
-        if line.strip() == '---':
+    for line in content.split("\n"):
+        if line.strip() == "---":
             if in_frontmatter:
                 # End of frontmatter - content comes next
                 in_frontmatter = False
@@ -356,22 +376,22 @@ def parse_instinct_file(content: str) -> list[dict]:
                 # Start of new frontmatter block
                 in_frontmatter = True
                 if current:
-                    current['content'] = '\n'.join(content_lines).strip()
+                    current["content"] = "\n".join(content_lines).strip()
                     instincts.append(current)
                 current = {}
                 content_lines = []
         elif in_frontmatter:
             # Parse YAML-like frontmatter
-            if ':' in line:
-                key, value = line.split(':', 1)
+            if ":" in line:
+                key, value = line.split(":", 1)
                 key = key.strip()
                 value = value.strip()
                 # Unescape quoted YAML strings
                 if value.startswith('"') and value.endswith('"'):
-                    value = value[1:-1].replace('\\"', '"').replace('\\\\', '\\')
+                    value = value[1:-1].replace('\\"', '"').replace("\\\\", "\\")
                 elif value.startswith("'") and value.endswith("'"):
                     value = value[1:-1].replace("''", "'")
-                if key == 'confidence':
+                if key == "confidence":
                     try:
                         current[key] = float(value)
                     except ValueError:
@@ -383,10 +403,10 @@ def parse_instinct_file(content: str) -> list[dict]:
 
     # Don't forget the last instinct
     if current:
-        current['content'] = '\n'.join(content_lines).strip()
+        current["content"] = "\n".join(content_lines).strip()
         instincts.append(current)
 
-    return [i for i in instincts if i.get('id')]
+    return [i for i in instincts if i.get("id")]
 
 
 def _load_instincts_from_dir(directory: Path, source_type: str, scope_label: str) -> list[dict]:
@@ -395,7 +415,8 @@ def _load_instincts_from_dir(directory: Path, source_type: str, scope_label: str
     if not directory.exists():
         return instincts
     files = [
-        file for file in sorted(directory.iterdir())
+        file
+        for file in sorted(directory.iterdir())
         if file.is_file() and file.suffix.lower() in ALLOWED_INSTINCT_EXTENSIONS
     ]
     for file in files:
@@ -403,12 +424,12 @@ def _load_instincts_from_dir(directory: Path, source_type: str, scope_label: str
             content = file.read_text(encoding="utf-8")
             parsed = parse_instinct_file(content)
             for inst in parsed:
-                inst['_source_file'] = str(file)
-                inst['_source_type'] = source_type
-                inst['_scope_label'] = scope_label
+                inst["_source_file"] = str(file)
+                inst["_source_type"] = source_type
+                inst["_scope_label"] = scope_label
                 # Default scope if not set in frontmatter
-                if 'scope' not in inst:
-                    inst['scope'] = scope_label
+                if "scope" not in inst:
+                    inst["scope"] = scope_label
             instincts.extend(parsed)
         except Exception as e:
             print(f"Warning: Failed to parse {file}: {e}", file=sys.stderr)
@@ -424,27 +445,25 @@ def load_all_instincts(project: dict, include_global: bool = True) -> list[dict]
 
     # 1. Load project-scoped instincts (if not already global)
     if project["id"] != "global":
-        instincts.extend(_load_instincts_from_dir(
-            project["instincts_personal"], "personal", "project"
-        ))
-        instincts.extend(_load_instincts_from_dir(
-            project["instincts_inherited"], "inherited", "project"
-        ))
+        instincts.extend(
+            _load_instincts_from_dir(project["instincts_personal"], "personal", "project")
+        )
+        instincts.extend(
+            _load_instincts_from_dir(project["instincts_inherited"], "inherited", "project")
+        )
 
     # 2. Load global instincts
     if include_global:
         global_instincts = []
-        global_instincts.extend(_load_instincts_from_dir(
-            GLOBAL_PERSONAL_DIR, "personal", "global"
-        ))
-        global_instincts.extend(_load_instincts_from_dir(
-            GLOBAL_INHERITED_DIR, "inherited", "global"
-        ))
+        global_instincts.extend(_load_instincts_from_dir(GLOBAL_PERSONAL_DIR, "personal", "global"))
+        global_instincts.extend(
+            _load_instincts_from_dir(GLOBAL_INHERITED_DIR, "inherited", "global")
+        )
 
         # Deduplicate: project-scoped wins over global when same ID
-        project_ids = {i.get('id') for i in instincts}
+        project_ids = {i.get("id") for i in instincts}
         for gi in global_instincts:
-            if gi.get('id') not in project_ids:
+            if gi.get("id") not in project_ids:
                 instincts.append(gi)
 
     return instincts
@@ -466,6 +485,7 @@ def load_project_only_instincts(project: dict) -> list[dict]:
 # Status Command
 # ─────────────────────────────────────────────
 
+
 def cmd_status(args) -> int:
     """Show status of all instincts (project + global)."""
     project = detect_project()
@@ -478,8 +498,8 @@ def cmd_status(args) -> int:
         print(f"  Global instincts:   {GLOBAL_PERSONAL_DIR}")
     else:
         # Split by scope
-        project_instincts = [i for i in instincts if i.get('_scope_label') == 'project']
-        global_instincts = [i for i in instincts if i.get('_scope_label') == 'global']
+        project_instincts = [i for i in instincts if i.get("_scope_label") == "project"]
+        global_instincts = [i for i in instincts if i.get("_scope_label") == "global"]
 
         # Print header
         print(f"\n{'='*60}")
@@ -508,7 +528,7 @@ def cmd_status(args) -> int:
         if obs_file and Path(obs_file).exists():
             with open(obs_file, encoding="utf-8") as f:
                 obs_count = sum(1 for _ in f)
-            print(f"-" * 60)
+            print("-" * 60)
             print(f"  Observations: {obs_count} events logged")
             print(f"  File: {obs_file}")
 
@@ -519,13 +539,18 @@ def cmd_status(args) -> int:
         print(f"  Pending instincts: {len(pending)} awaiting review")
 
         if len(pending) >= 5:
-            print(f"\n  \u26a0 {len(pending)} pending instincts awaiting review."
-                  f" Unreviewed instincts auto-delete after {PENDING_TTL_DAYS} days.")
+            print(
+                f"\n  \u26a0 {len(pending)} pending instincts awaiting review."
+                f" Unreviewed instincts auto-delete after {PENDING_TTL_DAYS} days."
+            )
 
         # Show instincts expiring within PENDING_EXPIRY_WARNING_DAYS
         expiry_threshold = PENDING_TTL_DAYS - PENDING_EXPIRY_WARNING_DAYS
-        expiring_soon = [p for p in pending
-                         if p["age_days"] >= expiry_threshold and p["age_days"] < PENDING_TTL_DAYS]
+        expiring_soon = [
+            p
+            for p in pending
+            if p["age_days"] >= expiry_threshold and p["age_days"] < PENDING_TTL_DAYS
+        ]
         if expiring_soon:
             print(f"\n  Expiring within {PENDING_EXPIRY_WARNING_DAYS} days:")
             for item in expiring_soon:
@@ -540,7 +565,7 @@ def _print_instincts_by_domain(instincts: list[dict]) -> None:
     """Helper to print instincts grouped by domain."""
     by_domain = defaultdict(list)
     for inst in instincts:
-        domain = inst.get('domain', 'general')
+        domain = inst.get("domain", "general")
         by_domain[domain].append(inst)
 
     for domain in sorted(by_domain.keys()):
@@ -548,20 +573,20 @@ def _print_instincts_by_domain(instincts: list[dict]) -> None:
         print(f"  ### {domain.upper()} ({len(domain_instincts)})")
         print()
 
-        for inst in sorted(domain_instincts, key=lambda x: -x.get('confidence', 0.5)):
-            conf = inst.get('confidence', 0.5)
-            conf_bar = '\u2588' * int(conf * 10) + '\u2591' * (10 - int(conf * 10))
-            trigger = inst.get('trigger', 'unknown trigger')
+        for inst in sorted(domain_instincts, key=lambda x: -x.get("confidence", 0.5)):
+            conf = inst.get("confidence", 0.5)
+            conf_bar = "\u2588" * int(conf * 10) + "\u2591" * (10 - int(conf * 10))
+            trigger = inst.get("trigger", "unknown trigger")
             scope_tag = f"[{inst.get('scope', '?')}]"
 
             print(f"    {conf_bar} {int(conf*100):3d}%  {inst.get('id', 'unnamed')} {scope_tag}")
             print(f"              trigger: {trigger}")
 
             # Extract action from content
-            content = inst.get('content', '')
-            action_match = re.search(r'## Action\s*\n\s*(.+?)(?:\n\n|\n##|$)', content, re.DOTALL)
+            content = inst.get("content", "")
+            action_match = re.search(r"## Action\s*\n\s*(.+?)(?:\n\n|\n##|$)", content, re.DOTALL)
             if action_match:
-                action = action_match.group(1).strip().split('\n')[0]
+                action = action_match.group(1).strip().split("\n")[0]
                 print(f"              action: {action[:60]}{'...' if len(action) > 60 else ''}")
 
             print()
@@ -570,6 +595,7 @@ def _print_instincts_by_domain(instincts: list[dict]) -> None:
 # ─────────────────────────────────────────────
 # Import Command
 # ─────────────────────────────────────────────
+
 
 def cmd_import(args) -> int:
     """Import instincts from file or URL."""
@@ -583,11 +609,11 @@ def cmd_import(args) -> int:
         target_scope = "global"
 
     # Fetch content
-    if source.startswith('http://') or source.startswith('https://'):
+    if source.startswith(("http://", "https://")):
         print(f"Fetching from URL: {source}")
         try:
             with urllib.request.urlopen(source) as response:
-                content = response.read().decode('utf-8')
+                content = response.read().decode("utf-8")
         except Exception as e:
             print(f"Error fetching URL: {e}", file=sys.stderr)
             return 1
@@ -621,13 +647,15 @@ def cmd_import(args) -> int:
         existing += _load_instincts_from_dir(GLOBAL_INHERITED_DIR, "inherited", "global")
     else:
         existing = load_project_only_instincts(project)
-    existing_ids = {i.get('id') for i in existing}
+    existing_ids = {i.get("id") for i in existing}
 
     # Deduplicate within the import source: keep highest confidence per ID
     best_by_id = {}
     for inst in new_instincts:
-        inst_id = inst.get('id')
-        if inst_id not in best_by_id or inst.get('confidence', 0.5) > best_by_id[inst_id].get('confidence', 0.5):
+        inst_id = inst.get("id")
+        if inst_id not in best_by_id or inst.get("confidence", 0.5) > best_by_id[inst_id].get(
+            "confidence", 0.5
+        ):
             best_by_id[inst_id] = inst
     deduped_instincts = list(best_by_id.values())
 
@@ -637,11 +665,11 @@ def cmd_import(args) -> int:
     to_update = []
 
     for inst in deduped_instincts:
-        inst_id = inst.get('id')
+        inst_id = inst.get("id")
         if inst_id in existing_ids:
-            existing_inst = next((e for e in existing if e.get('id') == inst_id), None)
+            existing_inst = next((e for e in existing if e.get("id") == inst_id), None)
             if existing_inst:
-                if inst.get('confidence', 0) > existing_inst.get('confidence', 0):
+                if inst.get("confidence", 0) > existing_inst.get("confidence", 0):
                     to_update.append(inst)
                 else:
                     duplicates.append(inst)
@@ -650,8 +678,8 @@ def cmd_import(args) -> int:
 
     # Filter by minimum confidence
     min_conf = args.min_confidence if args.min_confidence is not None else 0.0
-    to_add = [i for i in to_add if i.get('confidence', 0.5) >= min_conf]
-    to_update = [i for i in to_update if i.get('confidence', 0.5) >= min_conf]
+    to_add = [i for i in to_add if i.get("confidence", 0.5) >= min_conf]
+    to_update = [i for i in to_update if i.get("confidence", 0.5) >= min_conf]
 
     # Display summary
     if to_add:
@@ -682,7 +710,7 @@ def cmd_import(args) -> int:
     # Confirm
     if not args.force:
         response = input(f"\nImport {len(to_add)} new, update {len(to_update)}? [y/N] ")
-        if response.lower() != 'y':
+        if response.lower() != "y":
             print("Cancelled.")
             return 0
 
@@ -701,23 +729,29 @@ def cmd_import(args) -> int:
     if target_scope == "global":
         scope_root = GLOBAL_INSTINCTS_DIR.resolve()
     else:
-        scope_root = (project["project_dir"] / "instincts").resolve() if project["id"] != "global" else GLOBAL_INSTINCTS_DIR.resolve()
+        scope_root = (
+            (project["project_dir"] / "instincts").resolve()
+            if project["id"] != "global"
+            else GLOBAL_INSTINCTS_DIR.resolve()
+        )
     stale_paths = []
     for inst in to_update:
-        inst_id = inst.get('id')
-        stale = next((e for e in existing if e.get('id') == inst_id), None)
-        if stale and stale.get('_source_file'):
-            stale_path = Path(stale['_source_file']).resolve()
+        inst_id = inst.get("id")
+        stale = next((e for e in existing if e.get("id") == inst_id), None)
+        if stale and stale.get("_source_file"):
+            stale_path = Path(stale["_source_file"]).resolve()
             if stale_path.exists() and str(stale_path).startswith(str(scope_root) + os.sep):
                 stale_paths.append(stale_path)
 
     # Write new file first (safe: if this fails, stale files are preserved)
-    timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
-    source_name = Path(source).stem if not source.startswith('http') else 'web-import'
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    source_name = Path(source).stem if not source.startswith("http") else "web-import"
     output_file = output_dir / f"{source_name}-{timestamp}.yaml"
 
     all_to_write = to_add + to_update
-    output_content = f"# Imported from {source}\n# Date: {datetime.now().isoformat()}\n# Scope: {target_scope}\n"
+    output_content = (
+        f"# Imported from {source}\n# Date: {datetime.now().isoformat()}\n# Scope: {target_scope}\n"
+    )
     if target_scope == "project":
         output_content += f"# Project: {project['name']} ({project['id']})\n"
     output_content += "\n"
@@ -734,10 +768,10 @@ def cmd_import(args) -> int:
         if target_scope == "project":
             output_content += f"project_id: {project['id']}\n"
             output_content += f"project_name: {project['name']}\n"
-        if inst.get('source_repo'):
+        if inst.get("source_repo"):
             output_content += f"source_repo: {inst.get('source_repo')}\n"
         output_content += "---\n\n"
-        output_content += inst.get('content', '') + "\n\n"
+        output_content += inst.get("content", "") + "\n\n"
 
     output_file.write_text(output_content, encoding="utf-8")
 
@@ -748,7 +782,7 @@ def cmd_import(args) -> int:
         except OSError:
             pass  # best-effort removal
 
-    print(f"\nImport complete!")
+    print("\nImport complete!")
     print(f"   Scope: {target_scope}")
     print(f"   Added: {len(to_add)}")
     print(f"   Updated: {len(to_update)}")
@@ -760,6 +794,7 @@ def cmd_import(args) -> int:
 # ─────────────────────────────────────────────
 # Export Command
 # ─────────────────────────────────────────────
+
 
 def cmd_export(args) -> int:
     """Export instincts to file."""
@@ -780,18 +815,20 @@ def cmd_export(args) -> int:
 
     # Filter by domain if specified
     if args.domain:
-        instincts = [i for i in instincts if i.get('domain') == args.domain]
+        instincts = [i for i in instincts if i.get("domain") == args.domain]
 
     # Filter by minimum confidence
     if args.min_confidence:
-        instincts = [i for i in instincts if i.get('confidence', 0.5) >= args.min_confidence]
+        instincts = [i for i in instincts if i.get("confidence", 0.5) >= args.min_confidence]
 
     if not instincts:
         print("No instincts match the criteria.")
         return 1
 
     # Generate output
-    output = f"# Instincts export\n# Date: {datetime.now().isoformat()}\n# Total: {len(instincts)}\n"
+    output = (
+        f"# Instincts export\n# Date: {datetime.now().isoformat()}\n# Total: {len(instincts)}\n"
+    )
     if args.scope:
         output += f"# Scope: {args.scope}\n"
     if project["id"] != "global":
@@ -800,16 +837,25 @@ def cmd_export(args) -> int:
 
     for inst in instincts:
         output += "---\n"
-        for key in ['id', 'trigger', 'confidence', 'domain', 'source', 'scope',
-                     'project_id', 'project_name', 'source_repo']:
+        for key in [
+            "id",
+            "trigger",
+            "confidence",
+            "domain",
+            "source",
+            "scope",
+            "project_id",
+            "project_name",
+            "source_repo",
+        ]:
             if inst.get(key):
                 value = inst[key]
-                if key == 'trigger':
-                    output += f'{key}: {_yaml_quote(value)}\n'
+                if key == "trigger":
+                    output += f"{key}: {_yaml_quote(value)}\n"
                 else:
                     output += f"{key}: {value}\n"
         output += "---\n\n"
-        output += inst.get('content', '') + "\n\n"
+        output += inst.get("content", "") + "\n\n"
 
     # Write to file or stdout
     if args.output:
@@ -834,6 +880,7 @@ def cmd_export(args) -> int:
 # Evolve Command
 # ─────────────────────────────────────────────
 
+
 def cmd_evolve(args) -> int:
     """Analyze instincts and suggest evolutions to skills/commands/agents."""
     project = detect_project()
@@ -844,8 +891,8 @@ def cmd_evolve(args) -> int:
         print(f"Currently have: {len(instincts)}")
         return 1
 
-    project_instincts = [i for i in instincts if i.get('_scope_label') == 'project']
-    global_instincts = [i for i in instincts if i.get('_scope_label') == 'global']
+    project_instincts = [i for i in instincts if i.get("_scope_label") == "project"]
+    global_instincts = [i for i in instincts if i.get("_scope_label") == "global"]
 
     print(f"\n{'='*60}")
     print(f"  EVOLVE ANALYSIS - {len(instincts)} instincts")
@@ -856,74 +903,80 @@ def cmd_evolve(args) -> int:
     # Group by domain
     by_domain = defaultdict(list)
     for inst in instincts:
-        domain = inst.get('domain', 'general')
+        domain = inst.get("domain", "general")
         by_domain[domain].append(inst)
 
     # High-confidence instincts by domain (candidates for skills)
-    high_conf = [i for i in instincts if i.get('confidence', 0) >= 0.8]
+    high_conf = [i for i in instincts if i.get("confidence", 0) >= 0.8]
     print(f"High confidence instincts (>=80%): {len(high_conf)}")
 
     # Find clusters (instincts with similar triggers)
     trigger_clusters = defaultdict(list)
     for inst in instincts:
-        trigger = inst.get('trigger', '')
+        trigger = inst.get("trigger", "")
         # Normalize trigger
         trigger_key = trigger.lower()
-        for keyword in ['when', 'creating', 'writing', 'adding', 'implementing', 'testing']:
-            trigger_key = trigger_key.replace(keyword, '').strip()
+        for keyword in ["when", "creating", "writing", "adding", "implementing", "testing"]:
+            trigger_key = trigger_key.replace(keyword, "").strip()
         trigger_clusters[trigger_key].append(inst)
 
     # Find clusters with 2+ instincts (good skill candidates)
     skill_candidates = []
     for trigger, cluster in trigger_clusters.items():
         if len(cluster) >= 2:
-            avg_conf = sum(i.get('confidence', 0.5) for i in cluster) / len(cluster)
-            skill_candidates.append({
-                'trigger': trigger,
-                'instincts': cluster,
-                'avg_confidence': avg_conf,
-                'domains': list(set(i.get('domain', 'general') for i in cluster)),
-                'scopes': list(set(i.get('scope', 'project') for i in cluster)),
-            })
+            avg_conf = sum(i.get("confidence", 0.5) for i in cluster) / len(cluster)
+            skill_candidates.append(
+                {
+                    "trigger": trigger,
+                    "instincts": cluster,
+                    "avg_confidence": avg_conf,
+                    "domains": list({i.get("domain", "general") for i in cluster}),
+                    "scopes": list({i.get("scope", "project") for i in cluster}),
+                }
+            )
 
     # Sort by cluster size and confidence
-    skill_candidates.sort(key=lambda x: (-len(x['instincts']), -x['avg_confidence']))
+    skill_candidates.sort(key=lambda x: (-len(x["instincts"]), -x["avg_confidence"]))
 
     print(f"\nPotential skill clusters found: {len(skill_candidates)}")
 
     if skill_candidates:
-        print(f"\n## SKILL CANDIDATES\n")
+        print("\n## SKILL CANDIDATES\n")
         for i, cand in enumerate(skill_candidates[:5], 1):
-            scope_info = ', '.join(cand['scopes'])
+            scope_info = ", ".join(cand["scopes"])
             print(f"{i}. Cluster: \"{cand['trigger']}\"")
             print(f"   Instincts: {len(cand['instincts'])}")
             print(f"   Avg confidence: {cand['avg_confidence']:.0%}")
             print(f"   Domains: {', '.join(cand['domains'])}")
             print(f"   Scopes: {scope_info}")
-            print(f"   Instincts:")
-            for inst in cand['instincts'][:3]:
+            print("   Instincts:")
+            for inst in cand["instincts"][:3]:
                 print(f"     - {inst.get('id')} [{inst.get('scope', '?')}]")
             print()
 
     # Command candidates (workflow instincts with high confidence)
-    workflow_instincts = [i for i in instincts if i.get('domain') == 'workflow' and i.get('confidence', 0) >= 0.7]
+    workflow_instincts = [
+        i for i in instincts if i.get("domain") == "workflow" and i.get("confidence", 0) >= 0.7
+    ]
     if workflow_instincts:
         print(f"\n## COMMAND CANDIDATES ({len(workflow_instincts)})\n")
         for inst in workflow_instincts[:5]:
-            trigger = inst.get('trigger', 'unknown')
-            cmd_name = trigger.replace('when ', '').replace('implementing ', '').replace('a ', '')
-            cmd_name = cmd_name.replace(' ', '-')[:20]
+            trigger = inst.get("trigger", "unknown")
+            cmd_name = trigger.replace("when ", "").replace("implementing ", "").replace("a ", "")
+            cmd_name = cmd_name.replace(" ", "-")[:20]
             print(f"  /{cmd_name}")
             print(f"    From: {inst.get('id')} [{inst.get('scope', '?')}]")
             print(f"    Confidence: {inst.get('confidence', 0.5):.0%}")
             print()
 
     # Agent candidates (complex multi-step patterns)
-    agent_candidates = [c for c in skill_candidates if len(c['instincts']) >= 3 and c['avg_confidence'] >= 0.75]
+    agent_candidates = [
+        c for c in skill_candidates if len(c["instincts"]) >= 3 and c["avg_confidence"] >= 0.75
+    ]
     if agent_candidates:
         print(f"\n## AGENT CANDIDATES ({len(agent_candidates)})\n")
         for cand in agent_candidates[:3]:
-            agent_name = cand['trigger'].replace(' ', '-')[:20] + '-agent'
+            agent_name = cand["trigger"].replace(" ", "-")[:20] + "-agent"
             print(f"  {agent_name}")
             print(f"    Covers {len(cand['instincts'])} instincts")
             print(f"    Avg confidence: {cand['avg_confidence']:.0%}")
@@ -934,7 +987,9 @@ def cmd_evolve(args) -> int:
 
     if args.generate:
         evolved_dir = project["evolved_dir"] if project["id"] != "global" else GLOBAL_EVOLVED_DIR
-        generated = _generate_evolved(skill_candidates, workflow_instincts, agent_candidates, evolved_dir)
+        generated = _generate_evolved(
+            skill_candidates, workflow_instincts, agent_candidates, evolved_dir
+        )
         if generated:
             print(f"\nGenerated {len(generated)} evolved structures:")
             for path in generated:
@@ -949,6 +1004,7 @@ def cmd_evolve(args) -> int:
 # ─────────────────────────────────────────────
 # Promote Command
 # ─────────────────────────────────────────────
+
 
 def _find_cross_project_instincts() -> dict:
     """Find instincts that appear in multiple projects (promotion candidates).
@@ -968,10 +1024,10 @@ def _find_cross_project_instincts() -> dict:
         seen_in_project = set()
         for d, stype in [(personal_dir, "personal"), (inherited_dir, "inherited")]:
             for inst in _load_instincts_from_dir(d, stype, "project"):
-                iid = inst.get('id')
+                iid = inst.get("id")
                 if iid and iid not in seen_in_project:
                     seen_in_project.add(iid)
-                    cross_project[iid].append((pid, pinfo.get('name', pid), inst))
+                    cross_project[iid].append((pid, pinfo.get("name", pid), inst))
 
     # Filter to only those appearing in 2+ unique projects
     return {iid: entries for iid, entries in cross_project.items() if len(entries) >= 2}
@@ -987,30 +1043,34 @@ def _show_promotion_candidates(project: dict) -> None:
     # Filter to high-confidence ones not already global
     global_instincts = _load_instincts_from_dir(GLOBAL_PERSONAL_DIR, "personal", "global")
     global_instincts += _load_instincts_from_dir(GLOBAL_INHERITED_DIR, "inherited", "global")
-    global_ids = {i.get('id') for i in global_instincts}
+    global_ids = {i.get("id") for i in global_instincts}
 
     candidates = []
     for iid, entries in cross.items():
         if iid in global_ids:
             continue
-        avg_conf = sum(e[2].get('confidence', 0.5) for e in entries) / len(entries)
+        avg_conf = sum(e[2].get("confidence", 0.5) for e in entries) / len(entries)
         if avg_conf >= PROMOTE_CONFIDENCE_THRESHOLD:
-            candidates.append({
-                'id': iid,
-                'projects': [(pid, pname) for pid, pname, _ in entries],
-                'avg_confidence': avg_conf,
-                'sample': entries[0][2],
-            })
+            candidates.append(
+                {
+                    "id": iid,
+                    "projects": [(pid, pname) for pid, pname, _ in entries],
+                    "avg_confidence": avg_conf,
+                    "sample": entries[0][2],
+                }
+            )
 
     if candidates:
-        print(f"\n## PROMOTION CANDIDATES (project -> global)\n")
-        print(f"  These instincts appear in {PROMOTE_MIN_PROJECTS}+ projects with high confidence:\n")
+        print("\n## PROMOTION CANDIDATES (project -> global)\n")
+        print(
+            f"  These instincts appear in {PROMOTE_MIN_PROJECTS}+ projects with high confidence:\n"
+        )
         for cand in candidates[:10]:
-            proj_names = ', '.join(pname for _, pname in cand['projects'])
+            proj_names = ", ".join(pname for _, pname in cand["projects"])
             print(f"  * {cand['id']} (avg: {cand['avg_confidence']:.0%})")
             print(f"    Found in: {proj_names}")
             print()
-        print(f"  Run `instinct-cli.py promote` to promote these to global scope.\n")
+        print("  Run `instinct-cli.py promote` to promote these to global scope.\n")
 
 
 def cmd_promote(args) -> int:
@@ -1032,7 +1092,7 @@ def _promote_specific(project: dict, instinct_id: str, force: bool, dry_run: boo
         return 1
 
     project_instincts = load_project_only_instincts(project)
-    target = next((i for i in project_instincts if i.get('id') == instinct_id), None)
+    target = next((i for i in project_instincts if i.get("id") == instinct_id), None)
 
     if not target:
         print(f"Instinct '{instinct_id}' not found in project {project['name']}.")
@@ -1041,7 +1101,7 @@ def _promote_specific(project: dict, instinct_id: str, force: bool, dry_run: boo
     # Check if already global
     global_instincts = _load_instincts_from_dir(GLOBAL_PERSONAL_DIR, "personal", "global")
     global_instincts += _load_instincts_from_dir(GLOBAL_INHERITED_DIR, "inherited", "global")
-    if any(i.get('id') == instinct_id for i in global_instincts):
+    if any(i.get("id") == instinct_id for i in global_instincts):
         print(f"Instinct '{instinct_id}' already exists in global scope.")
         return 1
 
@@ -1055,8 +1115,8 @@ def _promote_specific(project: dict, instinct_id: str, force: bool, dry_run: boo
         return 0
 
     if not force:
-        response = input(f"\nPromote to global? [y/N] ")
-        if response.lower() != 'y':
+        response = input("\nPromote to global? [y/N] ")
+        if response.lower() != "y":
             print("Cancelled.")
             return 0
 
@@ -1068,11 +1128,11 @@ def _promote_specific(project: dict, instinct_id: str, force: bool, dry_run: boo
     output_content += f"confidence: {target.get('confidence', 0.5)}\n"
     output_content += f"domain: {target.get('domain', 'general')}\n"
     output_content += f"source: {target.get('source', 'promoted')}\n"
-    output_content += f"scope: global\n"
+    output_content += "scope: global\n"
     output_content += f"promoted_from: {project['id']}\n"
-    output_content += f"promoted_date: {datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')}\n"
+    output_content += f"promoted_date: {datetime.now(UTC).isoformat().replace('+00:00', 'Z')}\n"
     output_content += "---\n\n"
-    output_content += target.get('content', '') + "\n"
+    output_content += target.get("content", "") + "\n"
 
     output_file.write_text(output_content, encoding="utf-8")
     print(f"\nPromoted '{instinct_id}' to global scope.")
@@ -1086,23 +1146,27 @@ def _promote_auto(project: dict, force: bool, dry_run: bool) -> int:
 
     global_instincts = _load_instincts_from_dir(GLOBAL_PERSONAL_DIR, "personal", "global")
     global_instincts += _load_instincts_from_dir(GLOBAL_INHERITED_DIR, "inherited", "global")
-    global_ids = {i.get('id') for i in global_instincts}
+    global_ids = {i.get("id") for i in global_instincts}
 
     candidates = []
     for iid, entries in cross.items():
         if iid in global_ids:
             continue
-        avg_conf = sum(e[2].get('confidence', 0.5) for e in entries) / len(entries)
+        avg_conf = sum(e[2].get("confidence", 0.5) for e in entries) / len(entries)
         if avg_conf >= PROMOTE_CONFIDENCE_THRESHOLD and len(entries) >= PROMOTE_MIN_PROJECTS:
-            candidates.append({
-                'id': iid,
-                'entries': entries,
-                'avg_confidence': avg_conf,
-            })
+            candidates.append(
+                {
+                    "id": iid,
+                    "entries": entries,
+                    "avg_confidence": avg_conf,
+                }
+            )
 
     if not candidates:
         print("No instincts qualify for auto-promotion.")
-        print(f"  Criteria: appears in {PROMOTE_MIN_PROJECTS}+ projects, avg confidence >= {PROMOTE_CONFIDENCE_THRESHOLD:.0%}")
+        print(
+            f"  Criteria: appears in {PROMOTE_MIN_PROJECTS}+ projects, avg confidence >= {PROMOTE_CONFIDENCE_THRESHOLD:.0%}"
+        )
         return 0
 
     print(f"\n{'='*60}")
@@ -1110,28 +1174,28 @@ def _promote_auto(project: dict, force: bool, dry_run: bool) -> int:
     print(f"{'='*60}\n")
 
     for cand in candidates:
-        proj_names = ', '.join(pname for _, pname, _ in cand['entries'])
+        proj_names = ", ".join(pname for _, pname, _ in cand["entries"])
         print(f"  {cand['id']} (avg: {cand['avg_confidence']:.0%})")
         print(f"    Found in {len(cand['entries'])} projects: {proj_names}")
 
     if dry_run:
-        print(f"\n[DRY RUN] No changes made.")
+        print("\n[DRY RUN] No changes made.")
         return 0
 
     if not force:
         response = input(f"\nPromote {len(candidates)} instincts to global? [y/N] ")
-        if response.lower() != 'y':
+        if response.lower() != "y":
             print("Cancelled.")
             return 0
 
     promoted = 0
     for cand in candidates:
-        if not _validate_instinct_id(cand['id']):
+        if not _validate_instinct_id(cand["id"]):
             print(f"Skipping invalid instinct ID during promotion: {cand['id']}", file=sys.stderr)
             continue
 
         # Use the highest-confidence version
-        best_entry = max(cand['entries'], key=lambda e: e[2].get('confidence', 0.5))
+        best_entry = max(cand["entries"], key=lambda e: e[2].get("confidence", 0.5))
         inst = best_entry[2]
 
         output_file = GLOBAL_PERSONAL_DIR / f"{cand['id']}.yaml"
@@ -1140,12 +1204,12 @@ def _promote_auto(project: dict, force: bool, dry_run: bool) -> int:
         output_content += f"trigger: {_yaml_quote(inst.get('trigger', 'unknown'))}\n"
         output_content += f"confidence: {cand['avg_confidence']}\n"
         output_content += f"domain: {inst.get('domain', 'general')}\n"
-        output_content += f"source: auto-promoted\n"
-        output_content += f"scope: global\n"
-        output_content += f"promoted_date: {datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')}\n"
+        output_content += "source: auto-promoted\n"
+        output_content += "scope: global\n"
+        output_content += f"promoted_date: {datetime.now(UTC).isoformat().replace('+00:00', 'Z')}\n"
         output_content += f"seen_in_projects: {len(cand['entries'])}\n"
         output_content += "---\n\n"
-        output_content += inst.get('content', '') + "\n"
+        output_content += inst.get("content", "") + "\n"
 
         output_file.write_text(output_content, encoding="utf-8")
         promoted += 1
@@ -1157,6 +1221,7 @@ def _promote_auto(project: dict, force: bool, dry_run: bool) -> int:
 # ─────────────────────────────────────────────
 # Projects Command
 # ─────────────────────────────────────────────
+
 
 def cmd_projects(args) -> int:
     """List all known projects and their instinct counts."""
@@ -1171,7 +1236,9 @@ def cmd_projects(args) -> int:
     print(f"  KNOWN PROJECTS - {len(registry)} total")
     print(f"{'='*60}\n")
 
-    for pid, pinfo in sorted(registry.items(), key=lambda x: x[1].get('last_seen', ''), reverse=True):
+    for pid, pinfo in sorted(
+        registry.items(), key=lambda x: x[1].get("last_seen", ""), reverse=True
+    ):
         project_dir = PROJECTS_DIR / pid
         personal_dir = project_dir / "instincts" / "personal"
         inherited_dir = project_dir / "instincts" / "inherited"
@@ -1187,7 +1254,7 @@ def cmd_projects(args) -> int:
 
         print(f"  {pinfo.get('name', pid)} [{pid}]")
         print(f"    Root: {pinfo.get('root', 'unknown')}")
-        if pinfo.get('remote'):
+        if pinfo.get("remote"):
             print(f"    Remote: {pinfo['remote']}")
         print(f"    Instincts: {personal_count} personal, {inherited_count} inherited")
         print(f"    Observations: {obs_count} events")
@@ -1197,7 +1264,7 @@ def cmd_projects(args) -> int:
     # Global stats
     global_personal = len(_load_instincts_from_dir(GLOBAL_PERSONAL_DIR, "personal", "global"))
     global_inherited = len(_load_instincts_from_dir(GLOBAL_INHERITED_DIR, "inherited", "global"))
-    print(f"  GLOBAL")
+    print("  GLOBAL")
     print(f"    Instincts: {global_personal} personal, {global_inherited} inherited")
 
     print(f"\n{'='*60}\n")
@@ -1208,16 +1275,19 @@ def cmd_projects(args) -> int:
 # Generate Evolved Structures
 # ─────────────────────────────────────────────
 
-def _generate_evolved(skill_candidates: list, workflow_instincts: list, agent_candidates: list, evolved_dir: Path) -> list[str]:
+
+def _generate_evolved(
+    skill_candidates: list, workflow_instincts: list, agent_candidates: list, evolved_dir: Path
+) -> list[str]:
     """Generate skill/command/agent files from analyzed instinct clusters."""
     generated = []
 
     # Generate skills from top candidates
     for cand in skill_candidates[:5]:
-        trigger = cand['trigger'].strip()
+        trigger = cand["trigger"].strip()
         if not trigger:
             continue
-        name = re.sub(r'[^a-z0-9]+', '-', trigger.lower()).strip('-')[:30]
+        name = re.sub(r"[^a-z0-9]+", "-", trigger.lower()).strip("-")[:30]
         if not name:
             continue
 
@@ -1227,13 +1297,15 @@ def _generate_evolved(skill_candidates: list, workflow_instincts: list, agent_ca
         content = f"# {name}\n\n"
         content += f"Evolved from {len(cand['instincts'])} instincts "
         content += f"(avg confidence: {cand['avg_confidence']:.0%})\n\n"
-        content += f"## When to Apply\n\n"
+        content += "## When to Apply\n\n"
         content += f"Trigger: {trigger}\n\n"
-        content += f"## Actions\n\n"
-        for inst in cand['instincts']:
-            inst_content = inst.get('content', '')
-            action_match = re.search(r'## Action\s*\n\s*(.+?)(?:\n\n|\n##|$)', inst_content, re.DOTALL)
-            action = action_match.group(1).strip() if action_match else inst.get('id', 'unnamed')
+        content += "## Actions\n\n"
+        for inst in cand["instincts"]:
+            inst_content = inst.get("content", "")
+            action_match = re.search(
+                r"## Action\s*\n\s*(.+?)(?:\n\n|\n##|$)", inst_content, re.DOTALL
+            )
+            action = action_match.group(1).strip() if action_match else inst.get("id", "unnamed")
             content += f"- {action}\n"
 
         (skill_dir / "SKILL.md").write_text(content, encoding="utf-8")
@@ -1241,9 +1313,11 @@ def _generate_evolved(skill_candidates: list, workflow_instincts: list, agent_ca
 
     # Generate commands from workflow instincts
     for inst in workflow_instincts[:5]:
-        trigger = inst.get('trigger', 'unknown')
-        cmd_name = re.sub(r'[^a-z0-9]+', '-', trigger.lower().replace('when ', '').replace('implementing ', ''))
-        cmd_name = cmd_name.strip('-')[:20]
+        trigger = inst.get("trigger", "unknown")
+        cmd_name = re.sub(
+            r"[^a-z0-9]+", "-", trigger.lower().replace("when ", "").replace("implementing ", "")
+        )
+        cmd_name = cmd_name.strip("-")[:20]
         if not cmd_name:
             continue
 
@@ -1251,28 +1325,28 @@ def _generate_evolved(skill_candidates: list, workflow_instincts: list, agent_ca
         content = f"# {cmd_name}\n\n"
         content += f"Evolved from instinct: {inst.get('id', 'unnamed')}\n"
         content += f"Confidence: {inst.get('confidence', 0.5):.0%}\n\n"
-        content += inst.get('content', '')
+        content += inst.get("content", "")
 
         cmd_file.write_text(content, encoding="utf-8")
         generated.append(str(cmd_file))
 
     # Generate agents from complex clusters
     for cand in agent_candidates[:3]:
-        trigger = cand['trigger'].strip()
-        agent_name = re.sub(r'[^a-z0-9]+', '-', trigger.lower()).strip('-')[:20]
+        trigger = cand["trigger"].strip()
+        agent_name = re.sub(r"[^a-z0-9]+", "-", trigger.lower()).strip("-")[:20]
         if not agent_name:
             continue
 
         agent_file = evolved_dir / "agents" / f"{agent_name}.md"
-        domains = ', '.join(cand['domains'])
-        instinct_ids = [i.get('id', 'unnamed') for i in cand['instincts']]
+        domains = ", ".join(cand["domains"])
+        instinct_ids = [i.get("id", "unnamed") for i in cand["instincts"]]
 
-        content = f"---\nmodel: sonnet\ntools: Read, Grep, Glob\n---\n"
+        content = "---\nmodel: sonnet\ntools: Read, Grep, Glob\n---\n"
         content += f"# {agent_name}\n\n"
         content += f"Evolved from {len(cand['instincts'])} instincts "
         content += f"(avg confidence: {cand['avg_confidence']:.0%})\n"
         content += f"Domains: {domains}\n\n"
-        content += f"## Source Instincts\n\n"
+        content += "## Source Instincts\n\n"
         for iid in instinct_ids:
             content += f"- {iid}\n"
 
@@ -1285,6 +1359,7 @@ def _generate_evolved(skill_candidates: list, workflow_instincts: list, agent_ca
 # ─────────────────────────────────────────────
 # Pending Instinct Helpers
 # ─────────────────────────────────────────────
+
 
 def _collect_pending_dirs() -> list[Path]:
     """Return all pending instinct directories (global + per-project)."""
@@ -1301,7 +1376,7 @@ def _collect_pending_dirs() -> list[Path]:
     return dirs
 
 
-def _parse_created_date(file_path: Path) -> Optional[datetime]:
+def _parse_created_date(file_path: Path) -> datetime | None:
     """Parse the 'created' date from YAML frontmatter of an instinct file.
 
     Falls back to file mtime if no 'created' field is found.
@@ -1312,16 +1387,16 @@ def _parse_created_date(file_path: Path) -> Optional[datetime]:
         return None
 
     in_frontmatter = False
-    for line in content.split('\n'):
+    for line in content.split("\n"):
         stripped = line.strip()
-        if stripped == '---':
+        if stripped == "---":
             if in_frontmatter:
                 break  # end of frontmatter without finding created
             in_frontmatter = True
             continue
-        if in_frontmatter and ':' in line:
-            key, value = line.split(':', 1)
-            if key.strip() == 'created':
+        if in_frontmatter and ":" in line:
+            key, value = line.split(":", 1)
+            if key.strip() == "created":
                 date_str = value.strip().strip('"').strip("'")
                 for fmt in (
                     "%Y-%m-%dT%H:%M:%S%z",
@@ -1332,7 +1407,7 @@ def _parse_created_date(file_path: Path) -> Optional[datetime]:
                     try:
                         dt = datetime.strptime(date_str, fmt)
                         if dt.tzinfo is None:
-                            dt = dt.replace(tzinfo=timezone.utc)
+                            dt = dt.replace(tzinfo=UTC)
                         return dt
                     except ValueError:
                         continue
@@ -1340,7 +1415,7 @@ def _parse_created_date(file_path: Path) -> Optional[datetime]:
     # Fallback: file modification time
     try:
         mtime = file_path.stat().st_mtime
-        return datetime.fromtimestamp(mtime, tz=timezone.utc)
+        return datetime.fromtimestamp(mtime, tz=UTC)
     except OSError:
         return None
 
@@ -1350,32 +1425,39 @@ def _collect_pending_instincts() -> list[dict]:
 
     Each dict contains: path, created, age_days, name, parent_dir.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     results = []
     for pending_dir in _collect_pending_dirs():
         files = [
-            f for f in sorted(pending_dir.iterdir())
+            f
+            for f in sorted(pending_dir.iterdir())
             if f.is_file() and f.suffix.lower() in ALLOWED_INSTINCT_EXTENSIONS
         ]
         for file_path in files:
             created = _parse_created_date(file_path)
             if created is None:
-                print(f"Warning: could not parse age for pending instinct: {file_path.name}", file=sys.stderr)
+                print(
+                    f"Warning: could not parse age for pending instinct: {file_path.name}",
+                    file=sys.stderr,
+                )
                 continue
             age = now - created
-            results.append({
-                "path": file_path,
-                "created": created,
-                "age_days": age.days,
-                "name": file_path.stem,
-                "parent_dir": str(pending_dir),
-            })
+            results.append(
+                {
+                    "path": file_path,
+                    "created": created,
+                    "age_days": age.days,
+                    "name": file_path.stem,
+                    "parent_dir": str(pending_dir),
+                }
+            )
     return results
 
 
 # ─────────────────────────────────────────────
 # Prune Command
 # ─────────────────────────────────────────────
+
 
 def cmd_prune(args) -> int:
     """Delete pending instincts older than the TTL threshold."""
@@ -1391,7 +1473,9 @@ def cmd_prune(args) -> int:
     if dry_run:
         if not quiet:
             if expired:
-                print(f"\n[DRY RUN] Would prune {len(expired)} pending instinct(s) older than {max_age} days:\n")
+                print(
+                    f"\n[DRY RUN] Would prune {len(expired)} pending instinct(s) older than {max_age} days:\n"
+                )
                 for item in expired:
                     print(f"  - {item['name']} (age: {item['age_days']}d) — {item['path']}")
             else:
@@ -1428,71 +1512,92 @@ def cmd_prune(args) -> int:
 # Main
 # ─────────────────────────────────────────────
 
+
 def main() -> int:
     _ensure_global_dirs()
-    parser = argparse.ArgumentParser(description='Instinct CLI for Continuous Learning v2.1 (Project-Scoped)')
-    subparsers = parser.add_subparsers(dest='command', help='Available commands')
+    parser = argparse.ArgumentParser(
+        description="Instinct CLI for Continuous Learning v2.1 (Project-Scoped)"
+    )
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # Status
-    status_parser = subparsers.add_parser('status', help='Show instinct status (project + global)')
+    subparsers.add_parser("status", help="Show instinct status (project + global)")
 
     # Import
-    import_parser = subparsers.add_parser('import', help='Import instincts')
-    import_parser.add_argument('source', help='File path or URL')
-    import_parser.add_argument('--dry-run', action='store_true', help='Preview without importing')
-    import_parser.add_argument('--force', action='store_true', help='Skip confirmation')
-    import_parser.add_argument('--min-confidence', type=float, help='Minimum confidence threshold')
-    import_parser.add_argument('--scope', choices=['project', 'global'], default='project',
-                               help='Import scope (default: project)')
+    import_parser = subparsers.add_parser("import", help="Import instincts")
+    import_parser.add_argument("source", help="File path or URL")
+    import_parser.add_argument("--dry-run", action="store_true", help="Preview without importing")
+    import_parser.add_argument("--force", action="store_true", help="Skip confirmation")
+    import_parser.add_argument("--min-confidence", type=float, help="Minimum confidence threshold")
+    import_parser.add_argument(
+        "--scope",
+        choices=["project", "global"],
+        default="project",
+        help="Import scope (default: project)",
+    )
 
     # Export
-    export_parser = subparsers.add_parser('export', help='Export instincts')
-    export_parser.add_argument('--output', '-o', help='Output file')
-    export_parser.add_argument('--domain', help='Filter by domain')
-    export_parser.add_argument('--min-confidence', type=float, help='Minimum confidence')
-    export_parser.add_argument('--scope', choices=['project', 'global', 'all'], default='all',
-                               help='Export scope (default: all)')
+    export_parser = subparsers.add_parser("export", help="Export instincts")
+    export_parser.add_argument("--output", "-o", help="Output file")
+    export_parser.add_argument("--domain", help="Filter by domain")
+    export_parser.add_argument("--min-confidence", type=float, help="Minimum confidence")
+    export_parser.add_argument(
+        "--scope",
+        choices=["project", "global", "all"],
+        default="all",
+        help="Export scope (default: all)",
+    )
 
     # Evolve
-    evolve_parser = subparsers.add_parser('evolve', help='Analyze and evolve instincts')
-    evolve_parser.add_argument('--generate', action='store_true', help='Generate evolved structures')
+    evolve_parser = subparsers.add_parser("evolve", help="Analyze and evolve instincts")
+    evolve_parser.add_argument(
+        "--generate", action="store_true", help="Generate evolved structures"
+    )
 
     # Promote (new in v2.1)
-    promote_parser = subparsers.add_parser('promote', help='Promote project instincts to global scope')
-    promote_parser.add_argument('instinct_id', nargs='?', help='Specific instinct ID to promote')
-    promote_parser.add_argument('--force', action='store_true', help='Skip confirmation')
-    promote_parser.add_argument('--dry-run', action='store_true', help='Preview without promoting')
+    promote_parser = subparsers.add_parser(
+        "promote", help="Promote project instincts to global scope"
+    )
+    promote_parser.add_argument("instinct_id", nargs="?", help="Specific instinct ID to promote")
+    promote_parser.add_argument("--force", action="store_true", help="Skip confirmation")
+    promote_parser.add_argument("--dry-run", action="store_true", help="Preview without promoting")
 
     # Projects (new in v2.1)
-    projects_parser = subparsers.add_parser('projects', help='List known projects and instinct counts')
+    subparsers.add_parser("projects", help="List known projects and instinct counts")
 
     # Prune (pending instinct TTL)
-    prune_parser = subparsers.add_parser('prune', help='Delete pending instincts older than TTL')
-    prune_parser.add_argument('--max-age', type=int, default=PENDING_TTL_DAYS,
-                              help=f'Max age in days before pruning (default: {PENDING_TTL_DAYS})')
-    prune_parser.add_argument('--dry-run', action='store_true', help='Preview without deleting')
-    prune_parser.add_argument('--quiet', action='store_true', help='Suppress output (for automated use)')
+    prune_parser = subparsers.add_parser("prune", help="Delete pending instincts older than TTL")
+    prune_parser.add_argument(
+        "--max-age",
+        type=int,
+        default=PENDING_TTL_DAYS,
+        help=f"Max age in days before pruning (default: {PENDING_TTL_DAYS})",
+    )
+    prune_parser.add_argument("--dry-run", action="store_true", help="Preview without deleting")
+    prune_parser.add_argument(
+        "--quiet", action="store_true", help="Suppress output (for automated use)"
+    )
 
     args = parser.parse_args()
 
-    if args.command == 'status':
+    if args.command == "status":
         return cmd_status(args)
-    elif args.command == 'import':
+    elif args.command == "import":
         return cmd_import(args)
-    elif args.command == 'export':
+    elif args.command == "export":
         return cmd_export(args)
-    elif args.command == 'evolve':
+    elif args.command == "evolve":
         return cmd_evolve(args)
-    elif args.command == 'promote':
+    elif args.command == "promote":
         return cmd_promote(args)
-    elif args.command == 'projects':
+    elif args.command == "projects":
         return cmd_projects(args)
-    elif args.command == 'prune':
+    elif args.command == "prune":
         return cmd_prune(args)
     else:
         parser.print_help()
         return 1
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

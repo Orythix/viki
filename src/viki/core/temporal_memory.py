@@ -1,60 +1,73 @@
-import sqlite_utils
 import datetime
-import os
 import json
+import os
 import shutil
 import uuid
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Any
+
+import sqlite_utils
+
 from viki.config.logger import viki_logger
 from viki.core.security_guard import safe_for_log
+
 
 class TimeTravelModule:
     """
     "Time Travel" Debugging: Records state snapshots and allows undoing actions.
     Includes checkpointing before file/shell modifications for /restore (Gemini CLI-style).
     """
+
     def __init__(self, data_dir: str):
         self.db_path = os.path.join(data_dir, "history.db")
         # v21: Explicitly handle multi-threading
         import sqlite3 as _sqlite3
+
         conn = _sqlite3.connect(self.db_path, check_same_thread=False, timeout=30.0)
         conn.execute("PRAGMA journal_mode=WAL")
         self.db = sqlite_utils.Database(conn)
         self.backup_dir = os.path.join(data_dir, "backups")
         os.makedirs(self.backup_dir, exist_ok=True)
-        
+
         # Initialize tables
         if "snapshots" not in self.db.table_names():
-            self.db["snapshots"].create({
-                "id": int,
-                "timestamp": str,
-                "event_type": str,
-                "description": str,
-                "metadata": str # JSON string of state
-            }, pk="id")
+            self.db["snapshots"].create(
+                {
+                    "id": int,
+                    "timestamp": str,
+                    "event_type": str,
+                    "description": str,
+                    "metadata": str,  # JSON string of state
+                },
+                pk="id",
+            )
 
         if "checkpoints" not in self.db.table_names():
-            self.db["checkpoints"].create({
-                "id": str,
-                "timestamp": str,
-                "skill_name": str,
-                "params_json": str,
-                "conversation_snippet_json": str,
-                "backups_json": str,
-            }, pk="id")
+            self.db["checkpoints"].create(
+                {
+                    "id": str,
+                    "timestamp": str,
+                    "skill_name": str,
+                    "params_json": str,
+                    "conversation_snippet_json": str,
+                    "backups_json": str,
+                },
+                pk="id",
+            )
 
-    def take_snapshot(self, event_type: str, description: str, state: Dict[str, Any]):
+    def take_snapshot(self, event_type: str, description: str, state: dict[str, Any]):
         timestamp = datetime.datetime.now().isoformat()
         viki_logger.info(f"Taking snapshot: {description}")
-        
-        self.db["snapshots"].insert({
-            "timestamp": timestamp,
-            "event_type": event_type,
-            "description": description,
-            "metadata": json.dumps(state)
-        })
 
-    def backup_file(self, file_path: str) -> Optional[str]:
+        self.db["snapshots"].insert(
+            {
+                "timestamp": timestamp,
+                "event_type": event_type,
+                "description": description,
+                "metadata": json.dumps(state),
+            }
+        )
+
+    def backup_file(self, file_path: str) -> str | None:
         if not os.path.exists(file_path):
             return None
         filename = os.path.basename(file_path)
@@ -70,14 +83,16 @@ class TimeTravelModule:
         self,
         controller: Any,
         skill_name: str,
-        params: Dict[str, Any],
+        params: dict[str, Any],
     ) -> str:
         """Create a checkpoint before a file/shell action. Backs up affected files. Returns checkpoint id."""
         cid = str(uuid.uuid4())[:8]
         timestamp = datetime.datetime.now().isoformat()
         trace = controller.memory.working.get_trace()
         snippet = trace[-10:] if len(trace) >= 10 else trace
-        conversation_snippet_json = json.dumps([{"role": m.get("role"), "content": (m.get("content") or "")[:500]} for m in snippet])
+        conversation_snippet_json = json.dumps(
+            [{"role": m.get("role"), "content": (m.get("content") or "")[:500]} for m in snippet]
+        )
         params_json = json.dumps(params)
 
         paths_to_backup = []
@@ -97,18 +112,20 @@ class TimeTravelModule:
                 backups.append({"original": orig, "backup": backup_path})
         backups_json = json.dumps(backups)
 
-        self.db["checkpoints"].insert({
-            "id": cid,
-            "timestamp": timestamp,
-            "skill_name": skill_name,
-            "params_json": params_json,
-            "conversation_snippet_json": conversation_snippet_json,
-            "backups_json": backups_json,
-        })
+        self.db["checkpoints"].insert(
+            {
+                "id": cid,
+                "timestamp": timestamp,
+                "skill_name": skill_name,
+                "params_json": params_json,
+                "conversation_snippet_json": conversation_snippet_json,
+                "backups_json": backups_json,
+            }
+        )
         viki_logger.info(f"Checkpoint {cid} created for {skill_name}")
         return cid
 
-    def list_checkpoints(self, limit: int = 20) -> List[Dict[str, Any]]:
+    def list_checkpoints(self, limit: int = 20) -> list[dict[str, Any]]:
         try:
             rows = list(self.db["checkpoints"].rows_where(order_by="timestamp desc", limit=limit))
         except Exception:
@@ -124,17 +141,26 @@ class TimeTravelModule:
                     summary += f" {safe_for_log(str(params.get('path', '')), max_len=40)}"
                 if params.get("command"):
                     summary += f" cmd: {safe_for_log(str(params.get('command', '')), max_len=40)}"
-                out.append({
-                    "id": r.get("id"),
-                    "timestamp": r.get("timestamp"),
-                    "skill_name": r.get("skill_name"),
-                    "summary": summary,
-                })
+                out.append(
+                    {
+                        "id": r.get("id"),
+                        "timestamp": r.get("timestamp"),
+                        "skill_name": r.get("skill_name"),
+                        "summary": summary,
+                    }
+                )
             except (json.JSONDecodeError, TypeError):
-                out.append({"id": r.get("id"), "timestamp": r.get("timestamp"), "skill_name": r.get("skill_name"), "summary": "?"})
+                out.append(
+                    {
+                        "id": r.get("id"),
+                        "timestamp": r.get("timestamp"),
+                        "skill_name": r.get("skill_name"),
+                        "summary": "?",
+                    }
+                )
         return out
 
-    def restore_checkpoint(self, checkpoint_id: str) -> Tuple[bool, List[str], str]:
+    def restore_checkpoint(self, checkpoint_id: str) -> tuple[bool, list[str], str]:
         """Restore files from a checkpoint. Returns (success, list of restored paths, message)."""
         row = self.db["checkpoints"].get(checkpoint_id)
         if not row:
@@ -159,7 +185,7 @@ class TimeTravelModule:
                 viki_logger.error(f"Restore failed for {orig}: {e}")
         return True, restored, f"Restored {len(restored)} file(s) from checkpoint {checkpoint_id}."
 
-    def get_last_checkpoint(self) -> Optional[Dict[str, Any]]:
+    def get_last_checkpoint(self) -> dict[str, Any] | None:
         """Return the most recent checkpoint row, or None if there are none."""
         try:
             rows = list(self.db["checkpoints"].rows_where(order_by="timestamp desc", limit=1))
@@ -171,7 +197,7 @@ class TimeTravelModule:
             return rows[0]
         return None
 
-    def undo_last(self) -> Tuple[bool, List[str], str]:
+    def undo_last(self) -> tuple[bool, list[str], str]:
         """
         Restore files from the most recent checkpoint.
 

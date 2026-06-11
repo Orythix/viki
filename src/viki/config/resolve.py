@@ -2,6 +2,7 @@
 Resolve soul/persona config path from settings and VIKI_PERSONA env.
 """
 import os
+
 import yaml
 
 
@@ -16,11 +17,12 @@ def get_soul_path(settings_path: str) -> str:
     persona = os.environ.get("VIKI_PERSONA", "").strip()
     if not persona:
         try:
-            with open(settings_path, "r") as f:
+            with open(settings_path) as f:
                 settings = yaml.safe_load(f)
             persona = (settings.get("system") or {}).get("persona", "").strip()
         except Exception as e:
             import logging
+
             logging.getLogger("viki").debug("Resolve soul path: %s", e)
     if persona:
         path = os.path.join(config_dir, "personas", f"{persona}.yaml")

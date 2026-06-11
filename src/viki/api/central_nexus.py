@@ -1,5 +1,5 @@
 import asyncio
-from typing import Any, Dict, List
+from typing import Any
 
 from viki.config.logger import viki_logger
 from viki.core.ports import RequestProcessorPort
@@ -25,17 +25,14 @@ class MessagingNexus:
         30 = Proactive (Wellness/Analysis)
         """
         viki_logger.info(f"Nexus Ingest: [{source}/{user_id}] (P{priority}) -> {text[:50]}...")
-        await self.queue.put((priority, {
-            'source': source,
-            'user_id': user_id,
-            'text': text,
-            'callback': callback
-        }))
+        await self.queue.put(
+            (priority, {"source": source, "user_id": user_id, "text": text, "callback": callback})
+        )
 
     async def start_processing(self, on_event=None):
         self.active = True
         viki_logger.info("Nexus: Unified Priority Processor ONLINE.")
-        
+
         while self.active:
             try:
                 priority, task_data = await self.queue.get()
@@ -46,19 +43,21 @@ class MessagingNexus:
             except asyncio.CancelledError:
                 break
 
-    async def _process_task(self, task: Dict[str, Any], on_event=None):
+    async def _process_task(self, task: dict[str, Any], on_event=None):
         task_id = f"{task['source']}/P{task.get('priority', 'na')}"
         try:
-            if on_event: on_event("nexus_task", ("add", task_id))
+            if on_event:
+                on_event("nexus_task", ("add", task_id))
             response = await self._request_processor.process_request(
                 task["text"], on_event=on_event
             )
-            await task['callback'](response)
+            await task["callback"](response)
         except Exception as e:
             viki_logger.error(f"Nexus Error: {e}")
-            await task['callback'](f"Internal error: {e}")
+            await task["callback"](f"Internal error: {e}")
         finally:
-            if on_event: on_event("nexus_task", ("remove", task_id))
+            if on_event:
+                on_event("nexus_task", ("remove", task_id))
 
     def stop(self):
         self.active = False

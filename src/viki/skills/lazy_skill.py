@@ -33,7 +33,8 @@ from __future__ import annotations
 
 import asyncio
 import importlib
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from typing import Any
 
 from viki.config.logger import viki_logger
 from viki.skills.base import BaseSkill
@@ -49,11 +50,11 @@ class LazySkillProxy(BaseSkill):
         description: str,
         module_path: str,
         class_name: str,
-        ctor_args: Optional[Callable[[Any], tuple]] = None,
+        ctor_args: Callable[[Any], tuple] | None = None,
         controller: Any = None,
-        schema: Optional[Dict[str, Any]] = None,
+        schema: dict[str, Any] | None = None,
         safety_tier: str = "safe",
-        triggers: Optional[List[str]] = None,
+        triggers: list[str] | None = None,
         version: str = "1.0.0",
     ):
         self._name = name
@@ -66,9 +67,9 @@ class LazySkillProxy(BaseSkill):
         self._safety_tier = safety_tier
         self._triggers = list(triggers or [])
         self._version = version
-        self._real: Optional[BaseSkill] = None
+        self._real: BaseSkill | None = None
         self._lock = asyncio.Lock()
-        self._load_failed: Optional[str] = None
+        self._load_failed: str | None = None
 
     @property
     def name(self) -> str:
@@ -83,7 +84,7 @@ class LazySkillProxy(BaseSkill):
         return self._version
 
     @property
-    def schema(self) -> Dict[str, Any]:
+    def schema(self) -> dict[str, Any]:
         if self._real is not None:
             try:
                 return self._real.schema or self._schema
@@ -101,7 +102,7 @@ class LazySkillProxy(BaseSkill):
         return self._safety_tier
 
     @property
-    def triggers(self) -> List[str]:
+    def triggers(self) -> list[str]:
         if self._real is not None:
             try:
                 return self._real.triggers or self._triggers
@@ -112,7 +113,7 @@ class LazySkillProxy(BaseSkill):
     def is_loaded(self) -> bool:
         return self._real is not None
 
-    async def _load(self) -> Optional[BaseSkill]:
+    async def _load(self) -> BaseSkill | None:
         if self._real is not None:
             return self._real
         if self._load_failed:
@@ -134,8 +135,28 @@ class LazySkillProxy(BaseSkill):
                 viki_logger.warning("LazySkillProxy: failed to load '%s': %s", self._name, e)
                 return None
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         skill = await self._load()
         if skill is None:
             return f"Error: skill '{self._name}' is unavailable ({self._load_failed or 'unknown'})."
-        return await skill.execute(params or {})
+
+        # Circuit breaker check
+        registry = getattr(self._controller, "skill_registry", None)
+        if registry is not None and hasattr(registry, "is_skill_available"):
+            if not registry.is_skill_available(self._name):
+                return f"Skill '{self._name}' is temporarily unavailable (circuit open). Try again later."
+
+        import time
+
+        start = time.time()
+        try:
+            result = await skill.execute(params or {})
+            elapsed = time.time() - start
+            if registry is not None and hasattr(registry, "record_execution"):
+                registry.record_execution(self._name, True, elapsed)
+            return result
+        except Exception:
+            elapsed = time.time() - start
+            if registry is not None and hasattr(registry, "record_execution"):
+                registry.record_execution(self._name, False, elapsed)
+            raise

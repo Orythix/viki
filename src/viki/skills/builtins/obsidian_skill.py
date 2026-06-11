@@ -2,10 +2,9 @@
 Obsidian vault skill: search, read, create, refactor notes. Config: obsidian.vault_path in settings.
 """
 import os
-import re
-from typing import Dict, Any
+from typing import Any
+
 from viki.skills.base import BaseSkill
-from viki.config.logger import viki_logger
 
 
 class ObsidianSkill(BaseSkill):
@@ -25,7 +24,11 @@ class ObsidianSkill(BaseSkill):
         return {
             "type": "object",
             "properties": {
-                "action": {"type": "string", "enum": ["list", "search", "read_note", "create_note"], "description": "Action."},
+                "action": {
+                    "type": "string",
+                    "enum": ["list", "search", "read_note", "create_note"],
+                    "description": "Action.",
+                },
                 "path": {"type": "string", "description": "Note path or filename."},
                 "content": {"type": "string", "description": "Content for create_note."},
                 "query": {"type": "string", "description": "Search query."},
@@ -36,9 +39,11 @@ class ObsidianSkill(BaseSkill):
     def _vault_path(self) -> str:
         if not self._controller:
             return ""
-        return (self._controller.settings.get("obsidian") or {}).get("vault_path") or os.environ.get("VIKI_OBSIDIAN_VAULT", "")
+        return (self._controller.settings.get("obsidian") or {}).get(
+            "vault_path"
+        ) or os.environ.get("VIKI_OBSIDIAN_VAULT", "")
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         action = (params.get("action") or "list").lower()
         vault = self._vault_path()
         if not vault or not os.path.isdir(vault):
@@ -62,7 +67,7 @@ class ObsidianSkill(BaseSkill):
                         if not f.endswith(".md"):
                             continue
                         path = os.path.join(root, f)
-                        with open(path, "r", encoding="utf-8", errors="ignore") as file:
+                        with open(path, encoding="utf-8", errors="ignore") as file:
                             text = file.read()
                         if query in text.lower():
                             results.append(os.path.relpath(path, vault))
@@ -78,7 +83,7 @@ class ObsidianSkill(BaseSkill):
             if not os.path.isfile(full):
                 return f"Note not found: {path}"
             try:
-                with open(full, "r", encoding="utf-8", errors="ignore") as f:
+                with open(full, encoding="utf-8", errors="ignore") as f:
                     return f.read()[:8000]
             except Exception as e:
                 return f"Read error: {e}"

@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, List
+from typing import Any
 
-from viki.config.logger import viki_logger
-from viki.skills.base import BaseSkill
 from viki.core.endpoint_guard import (
     assess_path_risk,
     find_clamscan,
@@ -12,6 +10,7 @@ from viki.core.endpoint_guard import (
     scan_file_with_best_os_cli,
     severity_meets,
 )
+from viki.skills.base import BaseSkill
 
 
 class EndpointGuardSkill(BaseSkill):
@@ -40,7 +39,7 @@ class EndpointGuardSkill(BaseSkill):
         return "safe"
 
     @property
-    def schema(self) -> Dict[str, Any]:
+    def schema(self) -> dict[str, Any]:
         return {
             "type": "object",
             "properties": {
@@ -66,7 +65,7 @@ class EndpointGuardSkill(BaseSkill):
         }
 
     @property
-    def triggers(self) -> List[str]:
+    def triggers(self) -> list[str]:
         return [
             "malware",
             "virus",
@@ -78,7 +77,7 @@ class EndpointGuardSkill(BaseSkill):
             "endpoint guard",
         ]
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         action = (params.get("action") or "").strip().lower()
         if not action:
             return "endpoint_guard: 'action' is required."
@@ -86,7 +85,7 @@ class EndpointGuardSkill(BaseSkill):
         svc = getattr(self.controller, "endpoint_guard", None) if self.controller else None
 
         if action == "defender_status":
-            lines: List[str] = []
+            lines: list[str] = []
             mpcmd = find_mp_cmd_run()
             if mpcmd:
                 lines.append(f"Windows Defender CLI: {mpcmd}")
@@ -105,7 +104,7 @@ class EndpointGuardSkill(BaseSkill):
             if not path or not os.path.isfile(os.path.expanduser(path)):
                 return "defender_scan: provide a valid file path."
             ap = os.path.abspath(os.path.expanduser(path))
-            eg: Dict[str, Any] = {}
+            eg: dict[str, Any] = {}
             if self.controller and getattr(self.controller, "settings", None):
                 raw = self.controller.settings.get("endpoint_guard") or {}
                 eg = raw if isinstance(raw, dict) else {}
@@ -133,11 +132,11 @@ class EndpointGuardSkill(BaseSkill):
             max_files = max(10, min(int(params.get("max_files") or 400), 5000))
             cfg_min = "medium"
             if self.controller and getattr(self.controller, "settings", None):
-                eg = (self.controller.settings.get("endpoint_guard") or {})
+                eg = self.controller.settings.get("endpoint_guard") or {}
                 if isinstance(eg, dict) and eg.get("alert_on_severity"):
                     cfg_min = str(eg["alert_on_severity"]).lower()
 
-            findings: List[str] = []
+            findings: list[str] = []
             count = 0
             for dirpath, _dirnames, filenames in os.walk(root):
                 for fn in filenames:
@@ -152,9 +151,11 @@ class EndpointGuardSkill(BaseSkill):
                     break
             if not findings:
                 return f"scan_directory: scanned {count} files under {root}; no paths matched threshold '{cfg_min}'."
-            return f"scan_directory: {len(findings)} finding(s) (threshold {cfg_min}, cap {max_files} files):\n" + "\n".join(
-                findings[:50]
-            ) + (f"\n... and {len(findings) - 50} more" if len(findings) > 50 else "")
+            return (
+                f"scan_directory: {len(findings)} finding(s) (threshold {cfg_min}, cap {max_files} files):\n"
+                + "\n".join(findings[:50])
+                + (f"\n... and {len(findings) - 50} more" if len(findings) > 50 else "")
+            )
 
         if action == "start_watcher":
             if not svc or not self.controller:

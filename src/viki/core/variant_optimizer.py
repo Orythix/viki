@@ -2,245 +2,242 @@
 A/B Testing Framework for Model Comparison
 Enables data-driven model selection and validation.
 """
-import time
 import asyncio
-from typing import Dict, Any, List
+import time
+from typing import Any
+
 from viki.config.logger import viki_logger
 
 
 class ModelABTest:
     """A/B test new models against current model."""
-    
+
     def __init__(self, controller):
         self.controller = controller
         self.test_prompts = self._load_default_test_prompts()
-    
-    def _load_default_test_prompts(self) -> List[Dict[str, Any]]:
+
+    def _load_default_test_prompts(self) -> list[dict[str, Any]]:
         """Load default test prompts for model comparison."""
         return [
             {
-                'prompt': 'What is 2 + 2?',
-                'expected_keywords': ['4', 'four'],
-                'category': 'basic_math'
+                "prompt": "What is 2 + 2?",
+                "expected_keywords": ["4", "four"],
+                "category": "basic_math",
             },
             {
-                'prompt': 'Write a Python function to calculate factorial.',
-                'expected_keywords': ['def', 'factorial', 'return'],
-                'category': 'coding'
+                "prompt": "Write a Python function to calculate factorial.",
+                "expected_keywords": ["def", "factorial", "return"],
+                "category": "coding",
             },
             {
-                'prompt': 'Explain what machine learning is in one sentence.',
-                'expected_keywords': ['algorithm', 'data', 'learn'],
-                'category': 'explanation'
+                "prompt": "Explain what machine learning is in one sentence.",
+                "expected_keywords": ["algorithm", "data", "learn"],
+                "category": "explanation",
             },
             {
-                'prompt': 'What are three benefits of exercise?',
-                'expected_keywords': ['health', 'fitness', 'benefit'],
-                'category': 'reasoning'
+                "prompt": "What are three benefits of exercise?",
+                "expected_keywords": ["health", "fitness", "benefit"],
+                "category": "reasoning",
             },
             {
-                'prompt': 'Translate "hello world" to Spanish.',
-                'expected_keywords': ['hola', 'mundo'],
-                'category': 'translation'
+                "prompt": 'Translate "hello world" to Spanish.',
+                "expected_keywords": ["hola", "mundo"],
+                "category": "translation",
             },
             {
-                'prompt': 'What is the capital of France?',
-                'expected_keywords': ['Paris'],
-                'category': 'factual'
+                "prompt": "What is the capital of France?",
+                "expected_keywords": ["Paris"],
+                "category": "factual",
             },
             {
-                'prompt': 'List three programming languages.',
-                'expected_keywords': ['Python', 'Java', 'JavaScript', 'C++', 'Ruby'],
-                'category': 'listing'
+                "prompt": "List three programming languages.",
+                "expected_keywords": ["Python", "Java", "JavaScript", "C++", "Ruby"],
+                "category": "listing",
             },
             {
-                'prompt': 'Summarize the importance of clean code.',
-                'expected_keywords': ['maintainable', 'readable', 'quality'],
-                'category': 'summarization'
+                "prompt": "Summarize the importance of clean code.",
+                "expected_keywords": ["maintainable", "readable", "quality"],
+                "category": "summarization",
             },
         ]
-    
-    async def compare_models(self, model_a_name: str, model_b_name: str) -> Dict[str, Any]:
+
+    async def compare_models(self, model_a_name: str, model_b_name: str) -> dict[str, Any]:
         """Compare two models on test prompts."""
         viki_logger.info(f"A/B Test: Comparing {model_a_name} vs {model_b_name}")
-        
+
         model_a = self.controller.model_router.models.get(model_a_name)
         model_b = self.controller.model_router.models.get(model_b_name)
-        
+
         if not model_a:
-            return {'error': f"Model {model_a_name} not found"}
+            return {"error": f"Model {model_a_name} not found"}
         if not model_b:
-            return {'error': f"Model {model_b_name} not found"}
-        
+            return {"error": f"Model {model_b_name} not found"}
+
         test_count = len(self.test_prompts)
         if test_count == 0:
-            return {'error': "No test prompts loaded"}
+            return {"error": "No test prompts loaded"}
 
         results = {
-            'model_a': {
-                'name': model_a_name,
-                'scores': [],
-                'latencies': [],
-                'errors': 0
-            },
-            'model_b': {
-                'name': model_b_name,
-                'scores': [],
-                'latencies': [],
-                'errors': 0
-            },
-            'test_count': test_count
+            "model_a": {"name": model_a_name, "scores": [], "latencies": [], "errors": 0},
+            "model_b": {"name": model_b_name, "scores": [], "latencies": [], "errors": 0},
+            "test_count": test_count,
         }
-        
+
         # Test each prompt on both models
         for i, test_case in enumerate(self.test_prompts):
             viki_logger.debug(f"A/B Test: Running test {i+1}/{test_count}")
-            
+
             # Run models in parallel for this test case
             task_a = self._test_model(model_a, test_case)
             task_b = self._test_model(model_b, test_case)
-            
-            (response_a, latency_a, error_a), (response_b, latency_b, error_b) = await asyncio.gather(task_a, task_b)
-            
+
+            (
+                (response_a, latency_a, error_a),
+                (response_b, latency_b, error_b),
+            ) = await asyncio.gather(task_a, task_b)
+
             # Score model A
             score_a = self._score_response(test_case, response_a)
-            results['model_a']['scores'].append(score_a)
-            results['model_a']['latencies'].append(latency_a)
+            results["model_a"]["scores"].append(score_a)
+            results["model_a"]["latencies"].append(latency_a)
             if error_a:
-                results['model_a']['errors'] += 1
-            
+                results["model_a"]["errors"] += 1
+
             # Score model B
             score_b = self._score_response(test_case, response_b)
-            results['model_b']['scores'].append(score_b)
-            results['model_b']['latencies'].append(latency_b)
+            results["model_b"]["scores"].append(score_b)
+            results["model_b"]["latencies"].append(latency_b)
             if error_b:
-                results['model_b']['errors'] += 1
-            
+                results["model_b"]["errors"] += 1
+
             # Small delay between tests to avoid overloading local model server
             await asyncio.sleep(0.2)
-        
+
         # Calculate aggregates (safe because test_count > 0)
-        results['model_a']['avg_score'] = sum(results['model_a']['scores']) / test_count
-        results['model_a']['avg_latency'] = sum(results['model_a']['latencies']) / test_count
-        
-        results['model_b']['avg_score'] = sum(results['model_b']['scores']) / test_count
-        results['model_b']['avg_latency'] = sum(results['model_b']['latencies']) / test_count
-        
+        results["model_a"]["avg_score"] = sum(results["model_a"]["scores"]) / test_count
+        results["model_a"]["avg_latency"] = sum(results["model_a"]["latencies"]) / test_count
+
+        results["model_b"]["avg_score"] = sum(results["model_b"]["scores"]) / test_count
+        results["model_b"]["avg_latency"] = sum(results["model_b"]["latencies"]) / test_count
+
         # Determine winner (weighted: 70% score, 30% speed)
         # Latency is normalized (10s = 1.0) for the weighted score
-        score_a_weighted = results['model_a']['avg_score'] * 0.7 - (results['model_a']['avg_latency'] / 10.0) * 0.3
-        score_b_weighted = results['model_b']['avg_score'] * 0.7 - (results['model_b']['avg_latency'] / 10.0) * 0.3
-        
-        results['winner'] = model_a_name if score_a_weighted >= score_b_weighted else model_b_name
-        results['score_difference'] = abs(score_a_weighted - score_b_weighted)
-        
-        viki_logger.info(f"A/B Test Complete: Winner is {results['winner']} "
-                        f"(Scores: A={results['model_a']['avg_score']:.2f}, B={results['model_b']['avg_score']:.2f})")
-        
+        score_a_weighted = (
+            results["model_a"]["avg_score"] * 0.7 - (results["model_a"]["avg_latency"] / 10.0) * 0.3
+        )
+        score_b_weighted = (
+            results["model_b"]["avg_score"] * 0.7 - (results["model_b"]["avg_latency"] / 10.0) * 0.3
+        )
+
+        results["winner"] = model_a_name if score_a_weighted >= score_b_weighted else model_b_name
+        results["score_difference"] = abs(score_a_weighted - score_b_weighted)
+
+        viki_logger.info(
+            f"A/B Test Complete: Winner is {results['winner']} "
+            f"(Scores: A={results['model_a']['avg_score']:.2f}, B={results['model_b']['avg_score']:.2f})"
+        )
+
         return results
-    
-    async def _test_model(self, model, test_case: Dict) -> tuple:
+
+    async def _test_model(self, model, test_case: dict) -> tuple:
         """Test a model with a single prompt. Returns (response, latency, error)."""
-        prompt = test_case['prompt']
+        prompt = test_case["prompt"]
         messages = [
-            {'role': 'system', 'content': 'You are VIKI, a helpful AI assistant.'},
-            {'role': 'user', 'content': prompt}
+            {"role": "system", "content": "You are VIKI, a helpful AI assistant."},
+            {"role": "user", "content": prompt},
         ]
-        
+
         try:
             start_time = time.perf_counter()
             # Standard project model interface is chat_structured or chat
-            if hasattr(model, 'chat'):
+            if hasattr(model, "chat"):
                 response = await model.chat(messages, temperature=0.7)
             else:
                 # Fallback if it's a raw provider
                 viki_logger.warning(f"Model {model} missing 'chat' method, trying alternative.")
                 return "", 0.0, True
-                
+
             latency = time.perf_counter() - start_time
             return response, latency, False
-        
+
         except Exception as e:
             viki_logger.warning(f"Model test failed: {e}")
             return "", 0.0, True
-    
-    def _score_response(self, test_case: Dict, response: str) -> float:
+
+    def _score_response(self, test_case: dict, response: str) -> float:
         """Score response quality (0-1)."""
         if not response:
             return 0.0
-        
+
         score = 0.5  # Baseline
-        
+
         # 1. Length check (reasonable response)
         if 10 < len(response) < 500:
             score += 0.15
         elif len(response) >= 500:
             score += 0.05  # Too long is less preferred
-        
+
         # 2. Contains expected keywords
-        expected = test_case.get('expected_keywords', [])
+        expected = test_case.get("expected_keywords", [])
         if expected:
             response_lower = response.lower()
             matches = sum(1 for kw in expected if kw.lower() in response_lower)
             keyword_score = min(0.3, (matches / len(expected)) * 0.3)
             score += keyword_score
-        
+
         # 3. Not a placeholder response
-        placeholders = ['processing', 'thinking', 'one moment', 'working on it', 'please wait']
+        placeholders = ["processing", "thinking", "one moment", "working on it", "please wait"]
         if not any(p in response.lower() for p in placeholders):
             score += 0.1
-        
+
         # 4. Contains proper formatting (for code)
-        if test_case.get('category') == 'coding':
-            if 'def ' in response or 'function' in response or '```' in response:
+        if test_case.get("category") == "coding":
+            if "def " in response or "function" in response or "```" in response:
                 score += 0.1
-        
+
         # 5. Not an error message
-        error_indicators = ['error', 'failed', 'cannot', 'unable', 'sorry']
+        error_indicators = ["error", "failed", "cannot", "unable", "sorry"]
         if not any(err in response.lower() for err in error_indicators):
             score += 0.05
-        
+
         return min(1.0, score)
-    
-    def load_custom_test_prompts(self, prompts: List[Dict[str, Any]]):
+
+    def load_custom_test_prompts(self, prompts: list[dict[str, Any]]):
         """Load custom test prompts for specialized testing."""
         self.test_prompts = prompts
         viki_logger.info(f"Loaded {len(prompts)} custom test prompts")
-    
-    async def quick_validation(self, model_name: str) -> Dict[str, Any]:
+
+    async def quick_validation(self, model_name: str) -> dict[str, Any]:
         """Quick validation of a single model."""
         model = self.controller.model_router.models.get(model_name)
-        
+
         if not model:
-            return {'error': f"Model {model_name} not found"}
-        
+            return {"error": f"Model {model_name} not found"}
+
         test_subset = self.test_prompts[:5]
         test_count = len(test_subset)
         if test_count == 0:
-            return {'error': "No test prompts available for validation"}
+            return {"error": "No test prompts available for validation"}
 
-        results = {
-            'model': model_name,
-            'scores': [],
-            'latencies': [],
-            'errors': 0
-        }
-        
+        results = {"model": model_name, "scores": [], "latencies": [], "errors": 0}
+
         # Test on subset of prompts (faster)
         for test_case in test_subset:
             response, latency, error = await self._test_model(model, test_case)
             score = self._score_response(test_case, response)
-            
-            results['scores'].append(score)
-            results['latencies'].append(latency)
+
+            results["scores"].append(score)
+            results["latencies"].append(latency)
             if error:
-                results['errors'] += 1
-        
-        results['avg_score'] = sum(results['scores']) / test_count
-        results['avg_latency'] = sum(results['latencies']) / test_count
-        results['passed'] = results['avg_score'] > 0.6 and results['errors'] == 0
-        
-        viki_logger.info(f"Validation: {model_name} - Score: {results['avg_score']:.2f}, "
-                        f"Latency: {results['avg_latency']:.2f}s, Passed: {results['passed']}")
-        
+                results["errors"] += 1
+
+        results["avg_score"] = sum(results["scores"]) / test_count
+        results["avg_latency"] = sum(results["latencies"]) / test_count
+        results["passed"] = results["avg_score"] > 0.6 and results["errors"] == 0
+
+        viki_logger.info(
+            f"Validation: {model_name} - Score: {results['avg_score']:.2f}, "
+            f"Latency: {results['avg_latency']:.2f}s, Passed: {results['passed']}"
+        )
+
         return results

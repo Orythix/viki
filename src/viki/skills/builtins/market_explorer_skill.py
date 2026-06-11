@@ -1,14 +1,15 @@
-import os
-import asyncio
-from typing import Dict, Any, List, Optional
-from viki.skills.base import BaseSkill
+from typing import Any
+
 from viki.config.logger import viki_logger
+from viki.skills.base import BaseSkill
+
 
 class MarketExplorerSkill(BaseSkill):
     """
     MarketExplorerSkill: A high-level orchestrator that demonstrates Multi-Tool Synergy.
     It combines web research, sandboxed data analysis, and report generation.
     """
+
     def __init__(self, controller=None):
         super().__init__()
         self._controller = controller
@@ -28,21 +29,21 @@ class MarketExplorerSkill(BaseSkill):
             "properties": {
                 "topic": {
                     "type": "string",
-                    "description": "The market research topic (e.g., 'AI chip trends 2024')"
+                    "description": "The market research topic (e.g., 'AI chip trends 2024')",
                 },
                 "output_file": {
                     "type": "string",
                     "default": "market_report.md",
-                    "description": "Path to save the final report."
-                }
+                    "description": "Path to save the final report.",
+                },
             },
-            "required": ["topic"]
+            "required": ["topic"],
         }
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         topic = params.get("topic")
         output_file = params.get("output_file", "market_report.md")
-        
+
         if not self._controller:
             return "Error: Controller is required for tool synergy."
 
@@ -53,9 +54,9 @@ class MarketExplorerSkill(BaseSkill):
             research_skill = self._controller.skill_registry.get_skill("research")
             if not research_skill:
                 return "Error: research_skill not found."
-            
+
             search_results = await research_skill.execute({"query": topic})
-            
+
             # 2. ANALYZE: Use ManusSkill for sandboxed processing
             manus_skill = self._controller.skill_registry.get_skill("manus")
             if not manus_skill:
@@ -72,13 +73,15 @@ class MarketExplorerSkill(BaseSkill):
             # 3. REPORT: Save via FileSystemSkill
             fs_skill = self._controller.skill_registry.get_skill("filesystem_skill")
             if fs_skill:
-                await fs_skill.execute({
-                    "action": "write_file",
-                    "path": output_file,
-                    "content": f"# Market Research Report: {topic}\n\n{analysis_report}"
-                })
+                await fs_skill.execute(
+                    {
+                        "action": "write_file",
+                        "path": output_file,
+                        "content": f"# Market Research Report: {topic}\n\n{analysis_report}",
+                    }
+                )
                 return f"COMPLETED: Market research for '{topic}' finalized. Report saved to {output_file}."
-            
+
             return f"COMPLETED: Market research for '{topic}' finalized.\n\n{analysis_report}"
 
         except Exception as e:

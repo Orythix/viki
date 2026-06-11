@@ -16,12 +16,12 @@ import re
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any
 
 from viki.config.logger import viki_logger
-
-from viki.eval.rag_eval import GoldRow, QueryResult, RagEvalReport
+from viki.eval.rag_eval import GoldRow, RagEvalReport
 
 
 @dataclass
@@ -31,14 +31,14 @@ class JudgeResult:
     rationale: str
     raw_response: str
     latency_ms: float
-    error: Optional[str] = None
+    error: str | None = None
 
 
 _JSON_BLOCK = re.compile(r"\{[^{}]*\}", re.DOTALL)
 
 
 def _build_context_snippet(chunks: Sequence[str], max_total: int = 6000) -> str:
-    parts: List[str] = []
+    parts: list[str] = []
     n = 0
     for i, c in enumerate(chunks):
         block = f"[{i + 1}] {(c or '').strip()}\n"
@@ -50,7 +50,7 @@ def _build_context_snippet(chunks: Sequence[str], max_total: int = 6000) -> str:
     return "".join(parts).strip()
 
 
-def _parse_judge_json(text: str) -> Dict[str, Any]:
+def _parse_judge_json(text: str) -> dict[str, Any]:
     text = (text or "").strip()
     # Strip common ```json fences
     if "```" in text:
@@ -88,7 +88,7 @@ def run_ollama_judge(
     hints = ", ".join(expected_phrases) if expected_phrases else "(none specified)"
     system = (
         "You are a retrieval evaluator for RAG systems. Reply with ONLY a JSON object, no markdown.\n"
-        "Schema: {\"relevance\": number 0-1, \"covers_expected\": boolean, \"rationale\": string under 200 chars}\n"
+        'Schema: {"relevance": number 0-1, "covers_expected": boolean, "rationale": string under 200 chars}\n'
         "- relevance: how well the passages help answer the user query (not fluency).\n"
         "- covers_expected: true if the passages clearly support the expected concepts/phrases when provided.\n"
         "If passages are empty, relevance 0 and covers_expected false."
@@ -166,13 +166,13 @@ def enrich_report_with_ollama_judge(
     Mutates report.per_query entries in place with judge fields; updates report.meta aggregates.
     """
     gold_by_id = {g.id: g for g in gold_rows}
-    relevances: List[float] = []
-    covers: List[bool] = []
+    relevances: list[float] = []
+    covers: list[bool] = []
     errors = 0
 
     for q in report.per_query:
         g = gold_by_id.get(q.gold_id)
-        expected: List[str] = []
+        expected: list[str] = []
         if g:
             expected = list(g.must_contain_any) + list(g.must_contain_all)
         jr = run_ollama_judge(
@@ -197,7 +197,9 @@ def enrich_report_with_ollama_judge(
 
     n = len(report.per_query)
     report.judge_mean_relevance = sum(relevances) / len(relevances) if relevances else None
-    report.judge_covers_expected_rate = sum(1 for c in covers if c) / len(covers) if covers else None
+    report.judge_covers_expected_rate = (
+        sum(1 for c in covers if c) / len(covers) if covers else None
+    )
     report.meta = dict(report.meta)
     report.meta["judge"] = {
         "ollama_url": ollama_url,

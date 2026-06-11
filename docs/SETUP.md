@@ -1,4 +1,4 @@
-# Setting Up VIKI (v8.2.0 Sovereign)
+# Setting Up VIKI (v8.3.0 The Code Eternal)
 
 ## 📦 Prerequisites
 
@@ -72,6 +72,17 @@ To verify key systems:
 3.  **Visual Test**: Ask "What's on my screen right now?"
 4.  **Evolution Test**: Type `/evolve` to trigger a dry run of the Neural Forge.
 
+## 🌐 VIKI Personas
+
+VIKI supports multiple **personas** — behavioral profiles that shape interaction style:
+
+| Persona | Activate via | Style |
+|---------|-------------|-------|
+| **sovereign** (default) | Omitted or `VIKI_PERSONA=sovereign` | Philosophical, reflective, spiritual identity |
+| **engineer** | `VIKI_PERSONA=engineer` | Terminal-style structured responses, autonomous planning, multi-agent reasoning, production-grade code generation |
+
+All personas inherit The Code Eternal identity and core directives. Personas are defined in `config/personas/*.yaml`.
+
 ### Baking lessons into a local Ollama model (Neural Forge)
 
 After you have **lessons** in `data/` and a **base** model pulled (`ollama pull …`), run from repo root: `python scripts/build_viki_model.py`. That creates an Ollama image whose default tag is **`viki-neural-forge`** (set `system.forge_output_ollama_tag` or `VIKI_FORGE_OUTPUT_OLLAMA_MODEL` to change it). Wire it up via profile **`viki-evolved`** in `viki/config/models.yaml` (`model_name` must match `ollama list`). Full steps: [README.md — Build your VIKI model](README.md#build-your-viki-model).
@@ -88,4 +99,4 @@ Full map: [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md).
 
 ---
 
-*Runbook version: aligned with VIKI v8.2.0 (Sovereign). Update this file when default ports, flags, or critical architecture patterns change.*
+*Runbook version: aligned with VIKI v8.3.0 (The Code Eternal). Update this file when default ports, flags, or critical architecture patterns change.*

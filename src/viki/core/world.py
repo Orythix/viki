@@ -1,17 +1,20 @@
-import os
-import json
-import time
 import ast
-from typing import Dict, Any, List, Optional
-from viki.core.schema import WorldState
+import json
+import os
+import time
+from typing import Any
+
 from viki.config.logger import viki_logger
+from viki.core.schema import WorldState
 from viki.core.utils.debouncer import SyncDebouncer
+
 
 class WorldModel:
     """
     v10: Persistent Internal model of the environment.
     Unlike Memory, this is absolute stateful understanding.
     """
+
     def __init__(self, data_path: str):
         self.path = os.path.join(data_path, "world_state.json")
         self.state = self._load()
@@ -21,24 +24,24 @@ class WorldModel:
     def _load(self) -> WorldState:
         if os.path.exists(self.path):
             try:
-                with open(self.path, 'r') as f:
+                with open(self.path) as f:
                     data = json.load(f)
                     return WorldState(**data)
-            except (json.JSONDecodeError, IOError, TypeError) as e:
+            except (OSError, json.JSONDecodeError, TypeError) as e:
                 viki_logger.warning(f"Failed to load world state from {self.path}: {e}")
         return WorldState()
 
     def _do_save(self):
         """Internal save method called by debouncer."""
         self.state.last_updated = time.time()
-        with open(self.path, 'w') as f:
+        with open(self.path, "w") as f:
             json.dump(self.state.model_dump(), f, indent=4)
-    
+
     def save(self):
         """Debounced save - actual write happens after delay."""
         self._debouncer.mark_dirty()
         self._debouncer.execute(self._do_save)
-    
+
     def flush(self):
         """Force immediate save (call on shutdown)."""
         self._debouncer.flush(self._do_save)
@@ -48,7 +51,7 @@ class WorldModel:
         self.state.apps[app_name] = {
             "status": status,
             "last_used": time.time(),
-            "count": self.state.apps.get(app_name, {}).get("count", 0) + 1
+            "count": self.state.apps.get(app_name, {}).get("count", 0) + 1,
         }
         self.save()
 
@@ -73,11 +76,9 @@ class WorldModel:
 
     def add_habit(self, pattern: str, frequency: str = "occasional"):
         """Records a recurring user behavior for context injection."""
-        self.state.user_habits.append({
-            "pattern": pattern,
-            "frequency": frequency,
-            "recorded_at": time.time()
-        })
+        self.state.user_habits.append(
+            {"pattern": pattern, "frequency": frequency, "recorded_at": time.time()}
+        )
         # Keep only latest 10 habits
         if len(self.state.user_habits) > 10:
             self.state.user_habits.pop(0)
@@ -85,14 +86,16 @@ class WorldModel:
 
     def _exceeds_depth(self, root: str, root_dir: str, max_depth: int) -> bool:
         """Returns True when the walk depth exceeds the limit."""
-        depth = root[len(root_dir):].count(os.sep)
+        depth = root[len(root_dir) :].count(os.sep)
         return depth > max_depth
 
-    def _to_lower_set(self, items: List[str]) -> set:
+    def _to_lower_set(self, items: list[str]) -> set:
         """Lowercase a list of path parts for efficient set intersections."""
         return {str(x).lower() for x in items}
 
-    def _maybe_record_project(self, root: str, dirs_l: set, files_l: set, project_markers_l: set) -> int:
+    def _maybe_record_project(
+        self, root: str, dirs_l: set, files_l: set, project_markers_l: set
+    ) -> int:
         """Record a semantic path landmark when project markers are present."""
         if not (project_markers_l & dirs_l) and not (project_markers_l & files_l):
             return 0
@@ -144,7 +147,9 @@ class WorldModel:
                 files_l=files_l,
                 project_markers_l=project_markers_l,
             )
-            discovered_paths += self._protect_dev_envs(root=root, dirs_l=dirs_l, safe_envs=safe_envs)
+            discovered_paths += self._protect_dev_envs(
+                root=root, dirs_l=dirs_l, safe_envs=safe_envs
+            )
 
         if discovered_paths <= 0:
             return
@@ -161,7 +166,7 @@ class WorldModel:
         """
         viki_logger.info(f"WorldModel: Building Codebase Graph for {root_dir}...")
 
-        graph: Dict[str, Any] = {}
+        graph: dict[str, Any] = {}
         for root, _, files in os.walk(root_dir):
             if "node_modules" in root or ".venv" in root or "__pycache__" in root:
                 continue
@@ -180,9 +185,9 @@ class WorldModel:
         viki_logger.info(f"WorldModel: Codebase Graph complete. {len(graph)} modules mapped.")
         self.save()
 
-    def _extract_imports_from_ast(self, tree: ast.AST) -> List[str]:
+    def _extract_imports_from_ast(self, tree: ast.AST) -> list[str]:
         """Extract import targets from an AST."""
-        imports: List[str] = []
+        imports: list[str] = []
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
@@ -191,10 +196,10 @@ class WorldModel:
                 imports.append(node.module or "")
         return imports
 
-    def _scan_python_file(self, full_path: str, rel_path: str) -> Optional[Dict[str, Any]]:
+    def _scan_python_file(self, full_path: str, rel_path: str) -> dict[str, Any] | None:
         """Scan a single Python file for structural metadata."""
         try:
-            with open(full_path, "r", encoding="utf-8") as f:
+            with open(full_path, encoding="utf-8") as f:
                 content = f.read()
             tree = ast.parse(content)
 
@@ -208,7 +213,7 @@ class WorldModel:
             viki_logger.debug(f"WorldModel: Failed to parse {rel_path}: {e}")
             return None
 
-    def start_mission(self, goal: str, project: Optional[str] = None):
+    def start_mission(self, goal: str, project: str | None = None):
         """v26: Initializes an autonomous execution mission."""
         self.state.active_goal = goal
         self.state.active_project = project or os.path.basename(os.getcwd())
@@ -234,13 +239,13 @@ class WorldModel:
         self.state.execution_started = False
         self._save_state()
 
-    def get_active_mission(self) -> Optional[Dict[str, Any]]:
+    def get_active_mission(self) -> dict[str, Any] | None:
         """Returns the current active mission if one exists."""
         if self.state.active_goal and self.state.current_phase.upper() != "COMPLETE":
             return {
                 "goal": self.state.active_goal,
                 "project": self.state.active_project,
-                "phase": self.state.current_phase
+                "phase": self.state.current_phase,
             }
         return None
 
@@ -249,17 +254,17 @@ class WorldModel:
         apps = ", ".join(list(self.state.apps.keys())[:5])
         zones = ", ".join([f"{k}({v})" for k, v in list(self.state.safety_zones.items())[:3]])
         paths = ", ".join([f"{v}" for v in list(self.state.semantic_paths.values())[:5]])
-        habits = ", ".join([h['pattern'] for h in self.state.user_habits[-3:]])
-        
+        habits = ", ".join([h["pattern"] for h in self.state.user_habits[-3:]])
+
         # v25: Graph Insight
         active = self.state.active_context
         graph_size = len(self.state.codebase_graph)
 
-        lines: List[str] = ["WORLD MODEL AWARENESS:"]
+        lines: list[str] = ["WORLD MODEL AWARENESS:"]
         # Always show CWD so the LLM knows what directory it can read files from
         cwd = os.path.abspath(os.getcwd())
         lines.append(f"- Current Working Directory: {cwd}")
-        
+
         # v26: Mission Status
         if self.state.active_goal:
             lines.append(f"- Active Goal: {self.state.active_goal}")
@@ -280,7 +285,7 @@ class WorldModel:
 
         return "\n".join(lines)
 
-    def _build_graph_focus_line(self, graph_size: int, active: List[str]) -> Optional[str]:
+    def _build_graph_focus_line(self, graph_size: int, active: list[str]) -> str | None:
         """Build the single-line codebase graph insight block."""
         if graph_size <= 0:
             return None
@@ -296,13 +301,15 @@ class WorldModel:
 
         dependents = self._find_dependents(primary_mod=primary_mod)
         if dependents:
-            graph_line += f" Note: Impacted by changes to {primary_path}: {', '.join(dependents[:3])}."
+            graph_line += (
+                f" Note: Impacted by changes to {primary_path}: {', '.join(dependents[:3])}."
+            )
 
         return graph_line
 
-    def _find_dependents(self, primary_mod: str) -> List[str]:
+    def _find_dependents(self, primary_mod: str) -> list[str]:
         """Find files impacted by changes to the given module."""
-        dependents: List[str] = []
+        dependents: list[str] = []
         primary_tail = primary_mod.split(".")[-1]
         for p, data in self.state.codebase_graph.items():
             for imp in data.get("imports", []):

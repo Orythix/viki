@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from pathlib import Path
 import re
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Any
 
 from viki.config.logger import viki_logger
 from viki.skills.base import BaseSkill
@@ -11,11 +11,11 @@ from viki.skills.base import BaseSkill
 class MegatronLmPlaybookSkill(BaseSkill):
     """Loads Cursor-style SKILL.md bundles vendored from NVIDIA Megatron-LM."""
 
-    def __init__(self, controller: Optional[Any] = None) -> None:
+    def __init__(self, controller: Any | None = None) -> None:
         self._controller = controller
         self._skills_root = Path(__file__).resolve().parent.parent / "playbooks" / "megatron_lm"
-        self._slug_to_path: Dict[str, Path] = self._discover_skills()
-        self._cache: Dict[str, str] = {}
+        self._slug_to_path: dict[str, Path] = self._discover_skills()
+        self._cache: dict[str, str] = {}
 
     @property
     def name(self) -> str:
@@ -33,7 +33,7 @@ class MegatronLmPlaybookSkill(BaseSkill):
         return "safe"
 
     @property
-    def schema(self) -> Dict[str, Any]:
+    def schema(self) -> dict[str, Any]:
         return {
             "type": "object",
             "properties": {
@@ -57,7 +57,7 @@ class MegatronLmPlaybookSkill(BaseSkill):
         }
 
     @property
-    def triggers(self) -> List[str]:
+    def triggers(self) -> list[str]:
         return [
             "megatron",
             "megatron-lm",
@@ -76,10 +76,12 @@ class MegatronLmPlaybookSkill(BaseSkill):
             "nvidia megatron",
         ]
 
-    def _discover_skills(self) -> Dict[str, Path]:
-        slug_to_path: Dict[str, Path] = {}
+    def _discover_skills(self) -> dict[str, Path]:
+        slug_to_path: dict[str, Path] = {}
         if not self._skills_root.exists():
-            viki_logger.warning("megatron_lm_playbook: skills root not found at %s", self._skills_root)
+            viki_logger.warning(
+                "megatron_lm_playbook: skills root not found at %s", self._skills_root
+            )
             return slug_to_path
         for path in sorted(self._skills_root.iterdir()):
             if not path.is_dir():
@@ -91,7 +93,7 @@ class MegatronLmPlaybookSkill(BaseSkill):
                 slug_to_path[path.name] = skill_md
         return slug_to_path
 
-    def _load_playbook(self, slug: str) -> Optional[str]:
+    def _load_playbook(self, slug: str) -> str | None:
         if slug in self._cache:
             return self._cache[slug]
         path = self._slug_to_path.get(slug)
@@ -102,7 +104,7 @@ class MegatronLmPlaybookSkill(BaseSkill):
         return text
 
     @staticmethod
-    def _extract_section(markdown: str, section_name: str) -> Optional[str]:
+    def _extract_section(markdown: str, section_name: str) -> str | None:
         lines = markdown.splitlines()
         target = section_name.strip().lower()
         start = None
@@ -129,8 +131,8 @@ class MegatronLmPlaybookSkill(BaseSkill):
         lines = markdown.splitlines()
         h1 = next((line.strip() for line in lines if line.strip().startswith("# ")), "# Untitled")
         first_paragraph = ""
-        headings: List[str] = []
-        paragraph_lines: List[str] = []
+        headings: list[str] = []
+        paragraph_lines: list[str] = []
         seen_h1 = False
         for line in lines:
             stripped = line.strip()
@@ -150,10 +152,12 @@ class MegatronLmPlaybookSkill(BaseSkill):
                     first_paragraph = " ".join(paragraph_lines).strip()
         if not first_paragraph and paragraph_lines:
             first_paragraph = " ".join(paragraph_lines).strip()
-        heading_lines = "\n".join(f"- {heading}" for heading in headings) if headings else "- (none)"
+        heading_lines = (
+            "\n".join(f"- {heading}" for heading in headings) if headings else "- (none)"
+        )
         return f"{h1}\n\n{first_paragraph}\n\n## Headings\n{heading_lines}".strip()
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         pfx = "megatron_lm_playbook"
         slug = str(params.get("playbook") or "").strip()
         if not slug:

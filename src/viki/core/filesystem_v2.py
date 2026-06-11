@@ -1,14 +1,15 @@
 import os
-import ctypes
 import subprocess
-from typing import List, Dict, Any
+
 from viki.config.logger import viki_logger
+
 
 class SemanticFS:
     """
     "Semantic Filesystem": Manages a focus folder (Drive V equivalent)
     populated with symlinks based on semantic context.
     """
+
     def __init__(self, workspace_root: str):
         self.focus_dir = os.path.join(workspace_root, "FOCUS")
         os.makedirs(self.focus_dir, exist_ok=True)
@@ -26,17 +27,18 @@ class SemanticFS:
             except Exception as e:
                 viki_logger.error(f"Failed to delete {file_path}: {e}")
 
-    def mount_context(self, file_paths: List[str]):
+    def mount_context(self, file_paths: list[str]):
         """Creates symlinks for the given file paths in the focus directory."""
         viki_logger.info(f"Mounting {len(file_paths)} files into Semantic FS...")
         self.clear_focus()
-        
+
         for path in file_paths:
-            if not os.path.exists(path): continue
-            
+            if not os.path.exists(path):
+                continue
+
             filename = os.path.basename(path)
             link_path = os.path.join(self.focus_dir, filename)
-            
+
             try:
                 # On Windows, creating symlinks needs 'mklink' or os.symlink (with dev mode)
                 # We'll try os.symlink first
@@ -47,15 +49,19 @@ class SemanticFS:
                 try:
                     if os.path.isdir(path):
                         subprocess.run(
-                            ['cmd', '/c', 'mklink', '/J', link_path, path],
-                            capture_output=True, text=True, check=False,
+                            ["cmd", "/c", "mklink", "/J", link_path, path],
+                            capture_output=True,
+                            text=True,
+                            check=False,
                         )
                     else:
                         subprocess.run(
-                            ['cmd', '/c', 'mklink', link_path, path],
-                            capture_output=True, text=True, check=False,
+                            ["cmd", "/c", "mklink", link_path, path],
+                            capture_output=True,
+                            text=True,
+                            check=False,
                         )
                 except Exception as e:
                     viki_logger.error(f"Failed to mount {path}: {e}")
-        
+
         return self.focus_dir

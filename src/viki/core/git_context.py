@@ -9,9 +9,8 @@ from __future__ import annotations
 import os
 import subprocess
 import time
-from typing import Dict, Tuple
 
-_CACHE: Dict[str, Tuple[float, str]] = {}
+_CACHE: dict[str, tuple[float, str]] = {}
 _DEFAULT_TTL = 45.0
 _GIT_TIMEOUT = 4.0
 

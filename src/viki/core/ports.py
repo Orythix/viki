@@ -5,7 +5,7 @@ Controllers implement these protocols structurally; callers depend on the interf
 
 from __future__ import annotations
 
-from typing import Any, List, Optional, Protocol
+from typing import Any, Protocol
 
 
 class RequestProcessorPort(Protocol):
@@ -15,7 +15,7 @@ class RequestProcessorPort(Protocol):
         self,
         user_input: str,
         on_event: Any = None,
-        attachment_paths: Optional[List[str]] = None,
-        session_id: Optional[str] = None,
+        attachment_paths: list[str] | None = None,
+        session_id: str | None = None,
     ) -> str:
         ...

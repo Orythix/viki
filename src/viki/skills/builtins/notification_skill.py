@@ -1,12 +1,14 @@
 import asyncio
-import subprocess
-from typing import Dict, Any
+from typing import Any
+
 from viki.skills.base import BaseSkill
+
 
 class NotificationSkill(BaseSkill):
     """
     Send Windows Toast Notifications.
     """
+
     @property
     def name(self) -> str:
         return "notification"
@@ -20,22 +22,16 @@ class NotificationSkill(BaseSkill):
         return {
             "type": "object",
             "properties": {
-                "title": {
-                    "type": "string",
-                    "description": "Title of the notification"
-                },
-                "message": {
-                    "type": "string",
-                    "description": "Body text of the notification"
-                }
+                "title": {"type": "string", "description": "Title of the notification"},
+                "message": {"type": "string", "description": "Body text of the notification"},
             },
-            "required": ["message"]
+            "required": ["message"],
         }
 
-    async def execute(self, params: Dict[str, Any]) -> str:
-        title = params.get('title', 'VIKI Notification')
-        message = params.get('message', '') # Required
-        
+    async def execute(self, params: dict[str, Any]) -> str:
+        title = params.get("title", "VIKI Notification")
+        message = params.get("message", "")  # Required
+
         if not message:
             return "Error: Message required."
 
@@ -43,7 +39,7 @@ class NotificationSkill(BaseSkill):
         def escape_powershell(text: str) -> str:
             """Escape special characters for PowerShell string literals."""
             return text.replace("'", "''").replace("`", "``").replace("$", "`$")
-        
+
         title_escaped = escape_powershell(title)
         message_escaped = escape_powershell(message)
 
@@ -59,16 +55,20 @@ class NotificationSkill(BaseSkill):
         Start-Sleep -Seconds 1
         $notify.Dispose()
         """
-        
+
         try:
             import base64
+
             # PowerShell requires UTF-16LE encoding for Base64 commands
-            encoded_cmd = base64.b64encode(ps_script.encode('utf_16_le')).decode('utf-8')
-            
+            encoded_cmd = base64.b64encode(ps_script.encode("utf_16_le")).decode("utf-8")
+
             process = await asyncio.create_subprocess_exec(
-                "powershell", "-NoProfile", "-EncodedCommand", encoded_cmd,
+                "powershell",
+                "-NoProfile",
+                "-EncodedCommand",
+                encoded_cmd,
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                stderr=asyncio.subprocess.PIPE,
             )
             await process.communicate()
             return f"Notification sent: {title} - {message}"

@@ -13,12 +13,11 @@ import json
 import os
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date
-from typing import Any, Dict, Optional
+from typing import Any
 
 from viki.config.logger import viki_logger
-
 
 _DEFAULT_BUDGET = {
     "daily_usd_cap": 5.00,
@@ -64,16 +63,16 @@ class LLMBudget:
 
     def __init__(
         self,
-        config: Optional[Dict[str, Any]] = None,
-        state_path: Optional[str] = None,
+        config: dict[str, Any] | None = None,
+        state_path: str | None = None,
     ):
         self._lock = threading.Lock()
         self.config = {**_DEFAULT_BUDGET, **(config or {})}
         self.state_path = state_path
         self._today: str = date.today().isoformat()
         self._spent_today: float = 0.0
-        self._spent_by_provider: Dict[str, float] = {}
-        self._breakers: Dict[str, CircuitBreakerState] = {}
+        self._spent_by_provider: dict[str, float] = {}
+        self._breakers: dict[str, CircuitBreakerState] = {}
         self._explicit_cloud_override: bool = False
         self._load_state()
 
@@ -82,7 +81,7 @@ class LLMBudget:
         if not self.state_path or not os.path.exists(self.state_path):
             return
         try:
-            with open(self.state_path, "r", encoding="utf-8") as f:
+            with open(self.state_path, encoding="utf-8") as f:
                 data = json.load(f) or {}
             if data.get("date") == self._today:
                 self._spent_today = float(data.get("spent_today", 0.0))
@@ -145,10 +144,7 @@ class LLMBudget:
             if not is_cloud:
                 return True, ""
 
-            if (
-                self.config.get("explicit_cloud_only")
-                and not self._explicit_cloud_override
-            ):
+            if self.config.get("explicit_cloud_only") and not self._explicit_cloud_override:
                 return False, "Cloud calls require explicit_cloud override."
 
             per_call_cap = float(self.config.get("per_call_usd_cap", 0.50))
@@ -188,9 +184,9 @@ class LLMBudget:
         with self._lock:
             self._maybe_rollover()
             self._spent_today += float(usd)
-            self._spent_by_provider[provider_name] = (
-                self._spent_by_provider.get(provider_name, 0.0) + float(usd)
-            )
+            self._spent_by_provider[provider_name] = self._spent_by_provider.get(
+                provider_name, 0.0
+            ) + float(usd)
             self._save_state()
 
     def record_failure(self, provider_name: str) -> None:
@@ -203,7 +199,7 @@ class LLMBudget:
             breaker = self._breakers.setdefault(provider_name, CircuitBreakerState())
             breaker.record_success()
 
-    def snapshot(self) -> Dict[str, Any]:
+    def snapshot(self) -> dict[str, Any]:
         with self._lock:
             self._maybe_rollover()
             return {

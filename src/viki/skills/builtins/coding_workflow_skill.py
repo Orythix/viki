@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any
 
 from viki.skills.base import BaseSkill
 from viki.skills.builtins.engineering_playbook_skill import EngineeringPlaybookSkill
 
 
 class CodingWorkflowSkill(BaseSkill):
-    PHASE_PLAYBOOKS: Dict[str, List[str]] = {
+    PHASE_PLAYBOOKS: dict[str, list[str]] = {
         "spec": [
             "idea_refine",
             "spec_driven_development",
@@ -80,7 +80,7 @@ class CodingWorkflowSkill(BaseSkill):
             "observability_and_monitoring",
         ],
     }
-    NEXT_PHASE: Dict[str, str] = {
+    NEXT_PHASE: dict[str, str] = {
         "spec": "plan",
         "plan": "build",
         "build": "test",
@@ -111,7 +111,7 @@ class CodingWorkflowSkill(BaseSkill):
         )
 
     @property
-    def schema(self) -> Dict[str, Any]:
+    def schema(self) -> dict[str, Any]:
         return {
             "type": "object",
             "properties": {
@@ -128,42 +128,53 @@ class CodingWorkflowSkill(BaseSkill):
                 },
                 "task": {"type": "string", "description": "Goal/Task description."},
                 "context": {"type": "string", "description": "Optional paths/decisions context."},
-                "success": {"type": "boolean", "default": True, "description": "Used with 'finish' action."}
+                "success": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Used with 'finish' action.",
+                },
             },
-            "required": ["action"]
+            "required": ["action"],
         }
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         action = str(params.get("action") or "run").strip().lower()
         world = self._controller.world if self._controller else None
 
         if action == "start":
             goal = params.get("task") or params.get("goal")
-            if not goal: return "Error: 'task' is required to start a mission."
-            if world: world.start_mission(goal, params.get("project"))
+            if not goal:
+                return "Error: 'task' is required to start a mission."
+            if world:
+                world.start_mission(goal, params.get("project"))
             return f"Mission Started: {goal}"
 
         elif action == "update":
             phase = params.get("phase")
-            if not phase: return "Error: 'phase' is required for update."
-            if world: world.update_mission_phase(phase)
+            if not phase:
+                return "Error: 'phase' is required for update."
+            if world:
+                world.update_mission_phase(phase)
             return f"Mission Phase Updated to: {phase}"
 
         elif action == "finish":
             success = params.get("success", True)
             summary = params.get("summary", "")
-            if world: world.finish_mission(summary, success)
+            if world:
+                world.finish_mission(summary, success)
             return f"Mission Finished (Success={success})"
 
         elif action == "resume":
             if not world or not world.state.active_goal:
                 return "Error: No active mission found in WorldModel to resume."
             # Reroute to 'run' with current world state
-            return await self.execute({
-                "action": "run",
-                "phase": world.state.current_phase.lower(),
-                "task": world.state.active_goal
-            })
+            return await self.execute(
+                {
+                    "action": "run",
+                    "phase": world.state.current_phase.lower(),
+                    "task": world.state.active_goal,
+                }
+            )
 
         elif action == "run":
             phase = str(params.get("phase") or "").strip().lower()
@@ -174,7 +185,8 @@ class CodingWorkflowSkill(BaseSkill):
                 # If we have an active mission, use its phase
                 if world and world.state.active_goal:
                     phase = world.state.current_phase.lower()
-                    if not task: task = world.state.active_goal
+                    if not task:
+                        task = world.state.active_goal
                 else:
                     return "Error: 'phase' is required when no active mission exists."
 
@@ -185,24 +197,28 @@ class CodingWorkflowSkill(BaseSkill):
             stack = self.PHASE_PLAYBOOKS[phase]
             primary = stack[0]
 
-            playbook_lines: List[str] = []
+            playbook_lines: list[str] = []
             for slug in stack:
                 title = await self._h1_for(slug)
                 playbook_lines.append(f"- `{slug}`: {title}")
 
-            checklist_sections: List[str] = []
+            checklist_sections: list[str] = []
             for heading in ("Process", "Verification", "Red Flags"):
-                section = await self._playbooks.execute({"playbook": primary, "section": heading, "format": "markdown"})
+                section = await self._playbooks.execute(
+                    {"playbook": primary, "section": heading, "format": "markdown"}
+                )
                 if section.startswith("engineering_playbook: section"):
                     continue
                 checklist_sections.append(section)
 
-            checklist_body = "\n\n".join(checklist_sections).strip() or "No checklist sections found."
+            checklist_body = (
+                "\n\n".join(checklist_sections).strip() or "No checklist sections found."
+            )
             next_step = self.NEXT_PHASE.get(phase, "complete")
             stack_text = "\n".join(playbook_lines)
 
             context_block = f"\n\n## Context\n{context}" if context else ""
-            
+
             # Auto-update world phase if running through phases
             if world and world.state.active_goal:
                 world.update_mission_phase(phase)
@@ -216,7 +232,7 @@ class CodingWorkflowSkill(BaseSkill):
                 f"## Next Step\nMove to `{next_step}`."
                 f"{context_block}\n"
             )
-        
+
         return f"Error: Unknown action '{action}'"
 
     async def _h1_for(self, slug: str) -> str:
@@ -229,4 +245,3 @@ class CodingWorkflowSkill(BaseSkill):
             if stripped.startswith("# "):
                 return stripped[2:].strip()
         return "Untitled Playbook"
-

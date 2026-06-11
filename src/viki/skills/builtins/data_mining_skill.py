@@ -1,15 +1,15 @@
 import os
-import asyncio
-import json
-import re
-from typing import Dict, Any, List, Optional
-from viki.skills.base import BaseSkill
+from typing import Any
+
 from viki.config.logger import viki_logger
+from viki.skills.base import BaseSkill
+
 
 class DataMiningSkill(BaseSkill):
     """
     Skill for web data extraction, pattern discovery, and entity mining.
     """
+
     def __init__(self, controller=None):
         super().__init__()
         self._controller = controller
@@ -36,20 +36,24 @@ class DataMiningSkill(BaseSkill):
                 "action": {
                     "type": "string",
                     "enum": ["scrape_topic", "discover_patterns", "extract_entities"],
-                    "description": "Mining action to perform"
+                    "description": "Mining action to perform",
                 },
                 "topic": {"type": "string", "description": "Topic to scrape and mine"},
                 "limit": {"type": "integer", "default": 5, "description": "Max results to process"},
                 "data_path": {"type": "string", "description": "Path to data file (CSV/JSON)"},
                 "text": {"type": "string", "description": "Raw text for entity extraction"},
-                "entity_types": {"type": "array", "items": {"type": "string"}, "description": "Types of entities to mine (e.g., 'price', 'product')"}
+                "entity_types": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Types of entities to mine (e.g., 'price', 'product')",
+                },
             },
-            "required": ["action"]
+            "required": ["action"],
         }
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         action = params.get("action")
-        
+
         try:
             if action == "scrape_topic":
                 topic = params.get("topic")
@@ -72,14 +76,16 @@ class DataMiningSkill(BaseSkill):
 
     async def _scrape_and_mine(self, topic: str, limit: int) -> str:
         """Combine Research and LLM to mine data from the web."""
-        if not self._controller: return "Error: Controller required."
-        
+        if not self._controller:
+            return "Error: Controller required."
+
         research = self._controller.skill_registry.get_skill("research")
-        if not research: return "Error: research skill not found."
-        
+        if not research:
+            return "Error: research skill not found."
+
         viki_logger.info(f"DataMining: Scaping web for '{topic}'...")
         raw_data = await research.execute({"query": f"site:*.csv OR site:*.json OR 'data' {topic}"})
-        
+
         model = self._controller.model_router.get_model(["reasoning"])
         prompt = (
             f"I am mining data about: {topic}\n\n"
@@ -91,18 +97,20 @@ class DataMiningSkill(BaseSkill):
 
     async def _discover_patterns(self, path: str) -> str:
         """Use Pandas to find basic correlations or LLM for deeper insights."""
-        if not path or not os.path.exists(path): return f"Error: File {path} not found."
-        
+        if not path or not os.path.exists(path):
+            return f"Error: File {path} not found."
+
         try:
             import pandas as pd
-            df = pd.read_csv(path) if path.endswith('.csv') else pd.read_json(path)
-            
+
+            df = pd.read_csv(path) if path.endswith(".csv") else pd.read_json(path)
+
             # Basic correlation
-            numeric = df.select_dtypes(include=['number'])
+            numeric = df.select_dtypes(include=["number"])
             if not numeric.empty and numeric.shape[1] >= 2:
                 corr = numeric.corr().to_string()
                 return f"DATA MINING PATTERNS for {os.path.basename(path)}:\n\nCORRELATION MATRIX:\n{corr}\n\nTOP CORRELATIONS:\n{self._get_top_corrs(numeric.corr())}"
-            
+
             return f"No numeric data for correlation in {path}. Rows: {len(df)}"
         except ImportError:
             return "Error: pandas is required for pattern discovery."
@@ -116,8 +124,9 @@ class DataMiningSkill(BaseSkill):
         top = so[(abs(so) > 0.5) & (so < 1.0)]
         return top.to_string()
 
-    async def _extract_entities(self, text: str, types: List[str]) -> str:
-        if not self._controller: return "Error: Controller required."
+    async def _extract_entities(self, text: str, types: list[str]) -> str:
+        if not self._controller:
+            return "Error: Controller required."
         model = self._controller.model_router.get_model(["reasoning"])
         prompt = (
             f"Mine the following text for these entity types: {', '.join(types)}\n\n"

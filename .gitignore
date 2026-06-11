@@ -37,6 +37,7 @@ Desktop.ini
 data/
 !data/sovereign_library.json
 !data/missions.json
+data-docker/
 logs/
 workspace/
 *.log

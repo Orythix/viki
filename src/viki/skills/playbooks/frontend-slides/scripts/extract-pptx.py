@@ -12,6 +12,7 @@ Requires: pip install python-pptx
 import json
 import os
 import sys
+
 from pptx import Presentation
 
 
@@ -42,9 +43,7 @@ def extract_pptx(file_path, output_dir="."):
                 if shape == slide.shapes.title:
                     slide_data["title"] = shape.text
                 else:
-                    slide_data["content"].append(
-                        {"type": "text", "content": shape.text}
-                    )
+                    slide_data["content"].append({"type": "text", "content": shape.text})
 
             # Extract images
             if shape.shape_type == 13:  # Picture type

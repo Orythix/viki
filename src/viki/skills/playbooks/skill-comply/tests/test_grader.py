@@ -5,8 +5,15 @@ from unittest.mock import patch
 
 import pytest
 
-from ..scripts.grader import ComplianceResult, StepResult, grade
-from ..scripts.parser import ComplianceSpec, Detector, ObservationEvent, Step, parse_spec, parse_trace
+from ..scripts.grader import ComplianceResult, grade
+from ..scripts.parser import (
+    ComplianceSpec,
+    Detector,
+    ObservationEvent,
+    Step,
+    parse_spec,
+    parse_trace,
+)
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
 
@@ -40,8 +47,8 @@ def _mock_compliant_classification(spec, trace, model="haiku"):  # noqa: ARG001
 def _mock_noncompliant_classification(spec, trace, model="haiku"):
     """Simulate LLM classifying a noncompliant trace (impl before test)."""
     return {
-        "write_impl": [0],    # src/fib.py written first
-        "write_test": [1],    # test written second
+        "write_impl": [0],  # src/fib.py written first
+        "write_test": [1],  # test written second
         "run_test_green": [2],  # only a passing test run
     }
 
@@ -64,8 +71,11 @@ class TestGradeCompliant:
     @patch("scripts.grader.classify_events", side_effect=_mock_compliant_classification)
     def test_all_required_steps_detected(self, mock_cls, tdd_spec, compliant_trace) -> None:
         result = grade(tdd_spec, compliant_trace)
-        required_results = [s for s in result.steps if s.step_id in
-                           ("write_test", "run_test_red", "write_impl", "run_test_green")]
+        required_results = [
+            s
+            for s in result.steps
+            if s.step_id in ("write_test", "run_test_red", "write_impl", "run_test_green")
+        ]
         assert all(s.detected for s in required_results)
 
     @patch("scripts.grader.classify_events", side_effect=_mock_compliant_classification)
@@ -127,7 +137,9 @@ class TestGradeEdgeCases:
         assert result.recommend_hook_promotion is True
 
     @patch("scripts.grader.classify_events", side_effect=_mock_compliant_classification)
-    def test_compliance_rate_is_ratio_of_required_only(self, mock_cls, tdd_spec, compliant_trace) -> None:
+    def test_compliance_rate_is_ratio_of_required_only(
+        self, mock_cls, tdd_spec, compliant_trace
+    ) -> None:
         result = grade(tdd_spec, compliant_trace)
         assert result.compliance_rate == 1.0
 

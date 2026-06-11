@@ -19,12 +19,11 @@ Design notes:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import time
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from dataclasses import dataclass
+from typing import Any
 
 from viki.config.logger import viki_logger
 from viki.skills.base import BaseSkill
@@ -35,12 +34,12 @@ class UIElement:
     """A grounded UI element from the vision system."""
 
     label: str
-    bbox: Tuple[int, int, int, int]  # (x1, y1, x2, y2)
+    bbox: tuple[int, int, int, int]  # (x1, y1, x2, y2)
     confidence: float = 0.0
-    role: Optional[str] = None
-    text: Optional[str] = None
+    role: str | None = None
+    text: str | None = None
 
-    def center(self) -> Tuple[int, int]:
+    def center(self) -> tuple[int, int]:
         x1, y1, x2, y2 = self.bbox
         return ((x1 + x2) // 2, (y1 + y2) // 2)
 
@@ -70,15 +69,17 @@ class ComputerUseSkill(BaseSkill):
         os.makedirs(self.data_dir, exist_ok=True)
         self._pyautogui = None
         self._playwright_browser = None
-        self._last_screenshot: Optional[str] = None
-        self._last_elements: List[UIElement] = []
+        self._last_screenshot: str | None = None
+        self._last_elements: list[UIElement] = []
         # P0 (computer-use grounding): minimum detector confidence required to
         # auto-act on a found element. Falls back to 0.5 to reject the previous
         # "screen" dummy bbox (confidence=0.1).
-        self._min_action_confidence: float = float(os.environ.get("VIKI_COMPUTER_USE_MIN_CONF", "0.5"))
+        self._min_action_confidence: float = float(
+            os.environ.get("VIKI_COMPUTER_USE_MIN_CONF", "0.5")
+        )
         # Path to a local OmniParser-V2 ONNX model. When present, we use the
         # bundled lightweight ONNX adapter; absent => grounding stays None.
-        self._omniparser_onnx_path: Optional[str] = os.environ.get("VIKI_OMNIPARSER_ONNX")
+        self._omniparser_onnx_path: str | None = os.environ.get("VIKI_OMNIPARSER_ONNX")
 
     @property
     def name(self) -> str:
@@ -121,7 +122,7 @@ class ComputerUseSkill(BaseSkill):
     def safety_tier(self) -> str:
         return "destructive"
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         action = (params.get("action") or "").strip()
         if action not in self.SUPPORTED_ACTIONS:
             return f"Error: unsupported action {action!r}. Use one of {sorted(self.SUPPORTED_ACTIONS)}."
@@ -165,7 +166,7 @@ class ComputerUseSkill(BaseSkill):
         except Exception as e:
             raise RuntimeError(f"pyautogui not available: {e}")
 
-    async def _do_screenshot(self, params: Dict[str, Any]) -> str:
+    async def _do_screenshot(self, params: dict[str, Any]) -> str:
         path = self._capture_screenshot()
         elements = await self._ground_elements(path, params.get("instruction"))
         return json.dumps(
@@ -178,9 +179,11 @@ class ComputerUseSkill(BaseSkill):
             }
         )
 
-    async def _do_find_element(self, params: Dict[str, Any]) -> str:
+    async def _do_find_element(self, params: dict[str, Any]) -> str:
         path = self._last_screenshot or self._capture_screenshot()
-        elements = self._last_elements or await self._ground_elements(path, params.get("instruction"))
+        elements = self._last_elements or await self._ground_elements(
+            path, params.get("instruction")
+        )
         label = (params.get("label") or "").lower().strip()
         if not label:
             return "Error: 'label' is required for find_element."
@@ -191,7 +194,7 @@ class ComputerUseSkill(BaseSkill):
             {"found": True, "label": match.label, "bbox": match.bbox, "center": match.center()}
         )
 
-    async def _do_click(self, params: Dict[str, Any]) -> str:
+    async def _do_click(self, params: dict[str, Any]) -> str:
         x = params.get("x")
         y = params.get("y")
         if x is None or y is None:
@@ -200,12 +203,14 @@ class ComputerUseSkill(BaseSkill):
         pyautogui.click(int(x), int(y))
         return f"clicked ({x}, {y})"
 
-    async def _do_click_element(self, params: Dict[str, Any]) -> str:
+    async def _do_click_element(self, params: dict[str, Any]) -> str:
         label = (params.get("label") or "").lower().strip()
         if not label:
             return "Error: click_element requires 'label'."
         path = self._last_screenshot or self._capture_screenshot()
-        elements = self._last_elements or await self._ground_elements(path, params.get("instruction"))
+        elements = self._last_elements or await self._ground_elements(
+            path, params.get("instruction")
+        )
         match = self._find_by_label(elements, label)
         if not match:
             return f"click_element: no match for {label!r}"
@@ -214,33 +219,37 @@ class ComputerUseSkill(BaseSkill):
         # behaviour returned a synthetic full-screen bbox at confidence 0.1
         # that caused the cursor to slam the screen center.
         if match.confidence < self._min_action_confidence:
-            return json.dumps({
-                "status": "rejected",
-                "reason": "low_confidence",
-                "label": match.label,
-                "confidence": match.confidence,
-                "min_confidence": self._min_action_confidence,
-                "hint": (
-                    "Install OmniParser-V2 ONNX (set VIKI_OMNIPARSER_ONNX to the model path) "
-                    "or set VIKI_COMPUTER_USE_MIN_CONF=0.0 to override at your own risk."
-                ),
-            })
+            return json.dumps(
+                {
+                    "status": "rejected",
+                    "reason": "low_confidence",
+                    "label": match.label,
+                    "confidence": match.confidence,
+                    "min_confidence": self._min_action_confidence,
+                    "hint": (
+                        "Install OmniParser-V2 ONNX (set VIKI_OMNIPARSER_ONNX to the model path) "
+                        "or set VIKI_COMPUTER_USE_MIN_CONF=0.0 to override at your own risk."
+                    ),
+                }
+            )
 
         # P0 fix: refuse to click on degenerate boxes (zero-area or full-screen).
         x1, y1, x2, y2 = match.bbox
         if (x2 - x1) <= 1 or (y2 - y1) <= 1:
-            return json.dumps({
-                "status": "rejected",
-                "reason": "degenerate_bbox",
-                "bbox": match.bbox,
-            })
+            return json.dumps(
+                {
+                    "status": "rejected",
+                    "reason": "degenerate_bbox",
+                    "bbox": match.bbox,
+                }
+            )
 
         pyautogui = self._ensure_pyautogui()
         cx, cy = match.center()
         pyautogui.click(cx, cy)
         return f"clicked element {match.label!r} at ({cx}, {cy})"
 
-    async def _do_type(self, params: Dict[str, Any]) -> str:
+    async def _do_type(self, params: dict[str, Any]) -> str:
         text = params.get("text")
         if text is None:
             return "Error: 'text' is required for type."
@@ -248,7 +257,7 @@ class ComputerUseSkill(BaseSkill):
         pyautogui.typewrite(str(text), interval=0.01)
         return f"typed {len(text)} chars"
 
-    async def _do_key(self, params: Dict[str, Any]) -> str:
+    async def _do_key(self, params: dict[str, Any]) -> str:
         key = params.get("key")
         if not key:
             return "Error: 'key' is required."
@@ -259,13 +268,13 @@ class ComputerUseSkill(BaseSkill):
             pyautogui.press(key)
         return f"pressed {key}"
 
-    async def _do_scroll(self, params: Dict[str, Any]) -> str:
+    async def _do_scroll(self, params: dict[str, Any]) -> str:
         amount = int(params.get("amount", 0))
         pyautogui = self._ensure_pyautogui()
         pyautogui.scroll(amount)
         return f"scrolled {amount}"
 
-    async def _do_hover(self, params: Dict[str, Any]) -> str:
+    async def _do_hover(self, params: dict[str, Any]) -> str:
         x = params.get("x")
         y = params.get("y")
         if x is None or y is None:
@@ -274,7 +283,7 @@ class ComputerUseSkill(BaseSkill):
         pyautogui.moveTo(int(x), int(y), duration=0.1)
         return f"hovered ({x}, {y})"
 
-    async def _do_drag(self, params: Dict[str, Any]) -> str:
+    async def _do_drag(self, params: dict[str, Any]) -> str:
         x = params.get("x")
         y = params.get("y")
         if x is None or y is None:
@@ -283,7 +292,7 @@ class ComputerUseSkill(BaseSkill):
         pyautogui.dragTo(int(x), int(y), duration=0.2, button="left")
         return f"dragged to ({x}, {y})"
 
-    async def _do_navigate(self, params: Dict[str, Any]) -> str:
+    async def _do_navigate(self, params: dict[str, Any]) -> str:
         url = params.get("url")
         if not url:
             return "Error: 'url' is required for navigate_url."
@@ -308,7 +317,7 @@ class ComputerUseSkill(BaseSkill):
             viki_logger.debug("ComputerUseSkill: screenshot failed: %s", e)
             return ""
 
-    async def _ground_elements(self, path: str, instruction: Optional[str]) -> List[UIElement]:
+    async def _ground_elements(self, path: str, instruction: str | None) -> list[UIElement]:
         """
         Try OmniParser-V2 (ONNX or Python pkg) → Set-of-Marks. If no detector
         is available we explicitly return an empty list rather than a
@@ -328,7 +337,7 @@ class ComputerUseSkill(BaseSkill):
         self._last_elements = elements
         return elements
 
-    def _try_omniparser_onnx(self, path: str) -> Optional[List[UIElement]]:
+    def _try_omniparser_onnx(self, path: str) -> list[UIElement] | None:
         """
         Lightweight OmniParser-V2 ONNX adapter.
 
@@ -342,9 +351,9 @@ class ComputerUseSkill(BaseSkill):
         if not model_path or not os.path.isfile(model_path):
             return None
         try:
+            import numpy as np  # type: ignore
             import onnxruntime as ort  # type: ignore
             from PIL import Image  # type: ignore
-            import numpy as np  # type: ignore
         except Exception:
             return None
         try:
@@ -363,7 +372,7 @@ class ComputerUseSkill(BaseSkill):
             labels = next((o for o in outputs if o.ndim == 1 and o.dtype == np.int64), None)
             if boxes is None or scores is None:
                 return None
-            out: List[UIElement] = []
+            out: list[UIElement] = []
             for i in range(boxes.shape[0]):
                 conf = float(scores[i])
                 if conf < 0.2:
@@ -386,14 +395,14 @@ class ComputerUseSkill(BaseSkill):
             viki_logger.debug("OmniParser ONNX ground failed: %s", e)
             return None
 
-    def _try_omniparser(self, path: str) -> Optional[List[UIElement]]:
+    def _try_omniparser(self, path: str) -> list[UIElement] | None:
         try:
             import omniparser  # type: ignore
         except Exception:
             return None
         try:
             res = omniparser.parse(path)  # type: ignore
-            out: List[UIElement] = []
+            out: list[UIElement] = []
             for r in res.get("elements", []):
                 out.append(
                     UIElement(
@@ -409,7 +418,7 @@ class ComputerUseSkill(BaseSkill):
             viki_logger.debug("OmniParser ground failed: %s", e)
             return None
 
-    def _try_set_of_marks(self, path: str) -> Optional[List[UIElement]]:
+    def _try_set_of_marks(self, path: str) -> list[UIElement] | None:
         try:
             import set_of_marks  # type: ignore
         except Exception:
@@ -430,7 +439,7 @@ class ComputerUseSkill(BaseSkill):
             return None
 
     @staticmethod
-    def _find_by_label(elements: List[UIElement], label: str) -> Optional[UIElement]:
+    def _find_by_label(elements: list[UIElement], label: str) -> UIElement | None:
         label = label.lower().strip()
         if not elements:
             return None

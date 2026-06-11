@@ -25,14 +25,15 @@ import json
 import os
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from enum import StrEnum
+from typing import Any
 
 from viki.config.logger import viki_logger
 
 
-class NodeStatus(str, Enum):
+class NodeStatus(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     BLOCKED = "blocked"
@@ -48,28 +49,28 @@ class MissionNode:
     id: str
     title: str
     description: str = ""
-    parent_id: Optional[str] = None
-    depends_on: List[str] = field(default_factory=list)
-    skill: Optional[str] = None
-    parameters: Dict[str, Any] = field(default_factory=dict)
+    parent_id: str | None = None
+    depends_on: list[str] = field(default_factory=list)
+    skill: str | None = None
+    parameters: dict[str, Any] = field(default_factory=dict)
     status: NodeStatus = NodeStatus.PENDING
     attempts: int = 0
     max_attempts: int = 3
-    result: Optional[str] = None
-    error: Optional[str] = None
-    started_at: Optional[float] = None
-    completed_at: Optional[float] = None
-    artifacts: List[str] = field(default_factory=list)
-    sub_agent_id: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    result: str | None = None
+    error: str | None = None
+    started_at: float | None = None
+    completed_at: float | None = None
+    artifacts: list[str] = field(default_factory=list)
+    sub_agent_id: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         d = self.__dict__.copy()
         d["status"] = self.status.value
         return d
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "MissionNode":
+    def from_dict(cls, data: dict[str, Any]) -> MissionNode:
         if "status" in data and isinstance(data["status"], str):
             data = dict(data)
             data["status"] = NodeStatus(data["status"])
@@ -86,7 +87,7 @@ class MissionGraph:
 
     mission_id: str
     goal: str
-    nodes: Dict[str, MissionNode] = field(default_factory=dict)
+    nodes: dict[str, MissionNode] = field(default_factory=dict)
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
 
@@ -99,10 +100,10 @@ class MissionGraph:
         self,
         title: str,
         description: str = "",
-        parent_id: Optional[str] = None,
-        depends_on: Optional[List[str]] = None,
-        skill: Optional[str] = None,
-        parameters: Optional[Dict[str, Any]] = None,
+        parent_id: str | None = None,
+        depends_on: list[str] | None = None,
+        skill: str | None = None,
+        parameters: dict[str, Any] | None = None,
     ) -> str:
         node = MissionNode(
             id=uuid.uuid4().hex[:8],
@@ -115,12 +116,14 @@ class MissionGraph:
         )
         return self.add_node(node)
 
-    def ready_nodes(self) -> List[MissionNode]:
-        out: List[MissionNode] = []
+    def ready_nodes(self) -> list[MissionNode]:
+        out: list[MissionNode] = []
         for n in self.nodes.values():
             if n.status != NodeStatus.PENDING:
                 continue
-            if all(self.nodes[d].status == NodeStatus.DONE for d in n.depends_on if d in self.nodes):
+            if all(
+                self.nodes[d].status == NodeStatus.DONE for d in n.depends_on if d in self.nodes
+            ):
                 out.append(n)
         return out
 
@@ -133,14 +136,14 @@ class MissionGraph:
     def has_active(self) -> bool:
         return any(n.status == NodeStatus.RUNNING for n in self.nodes.values())
 
-    def summary(self) -> Dict[str, int]:
-        counts: Dict[str, int] = {s.value: 0 for s in NodeStatus}
+    def summary(self) -> dict[str, int]:
+        counts: dict[str, int] = {s.value: 0 for s in NodeStatus}
         for n in self.nodes.values():
             counts[n.status.value] += 1
         counts["total"] = len(self.nodes)
         return counts
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "mission_id": self.mission_id,
             "goal": self.goal,
@@ -150,7 +153,7 @@ class MissionGraph:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "MissionGraph":
+    def from_dict(cls, data: dict[str, Any]) -> MissionGraph:
         g = cls(
             mission_id=data["mission_id"],
             goal=data["goal"],
@@ -175,8 +178,8 @@ class MissionGraphRunner:
     def __init__(
         self,
         controller: Any = None,
-        callbacks: Optional[Dict[str, SkillCallback]] = None,
-        persistence_path: Optional[str] = None,
+        callbacks: dict[str, SkillCallback] | None = None,
+        persistence_path: str | None = None,
         max_parallel: int = 3,
     ):
         self.controller = controller
@@ -293,12 +296,12 @@ class MissionGraphRunner:
             viki_logger.debug("MissionGraph persist failed: %s", e)
 
 
-def load_graph(path: str) -> Optional[MissionGraph]:
+def load_graph(path: str) -> MissionGraph | None:
     """Resume a saved mission graph from disk."""
     if not os.path.isfile(path):
         return None
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             return MissionGraph.from_dict(json.load(f))
     except Exception as e:
         viki_logger.warning("MissionGraph load failed (%s): %s", path, e)

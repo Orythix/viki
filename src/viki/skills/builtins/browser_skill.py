@@ -1,13 +1,15 @@
-import asyncio
-from typing import Dict, Any, Optional
-from viki.skills.base import BaseSkill
+from typing import Any
+
 from viki.config.logger import viki_logger
+from viki.skills.base import BaseSkill
+
 
 class BrowserSkill(BaseSkill):
     """
     Advanced Browser Automation Skill using Playwright.
     Enables VIKI to navigate, click, and interact with live web pages.
     """
+
     def __init__(self):
         self._name = "browser"
         self._description = (
@@ -31,12 +33,13 @@ class BrowserSkill(BaseSkill):
     async def _init_browser(self, headless=True):
         if not self.playwright:
             from playwright.async_api import async_playwright
+
             self.playwright = await async_playwright().start()
             self.browser = await self.playwright.chromium.launch(headless=headless)
             self.context = await self.browser.new_context()
             self.page = await self.context.new_page()
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         # ABSOLUTE HEADLESS ENFORCEMENT
         # We ignore any 'headless' param from LLM to respect user wish
         action = params.get("action", "navigate")
@@ -53,31 +56,32 @@ class BrowserSkill(BaseSkill):
                 await self.page.goto(url)
                 title = await self.page.title()
                 return f"Navigated to {url}. Title: {title}"
-                
+
             elif action == "click":
                 selector = params.get("selector")
                 await self.page.click(selector)
                 return f"Clicked element: {selector}"
-                
+
             elif action == "type":
                 selector = params.get("selector")
                 text = params.get("text")
                 await self.page.fill(selector, text)
                 return f"Typed '{text}' into {selector}"
-                
+
             elif action == "screenshot":
                 path = "data/browser_screenshot.png"
                 await self.page.screenshot(path=path)
                 return f"Browser screenshot saved to {path}"
-            
+
             elif action == "content":
                 # Extract clean text from the body to save tokens for local models
                 text = await self.page.evaluate("document.body.innerText")
-                
+
                 # --- TOKEN OPTIMIZATION for Local Models ---
-                from core.utils.token_optimizer import condense_text
+                from viki.core.utils.token_optimizer import condense_text
+
                 clean_text = condense_text(text, max_chars=3000)
-                
+
                 return f"Page content captured:\n\n{clean_text}"
 
             return f"Error: Unknown browser action '{action}'"

@@ -3,11 +3,10 @@ PDF edit skill (Nano PDF-style): extract text, optional simple edit. Heavy: PyMu
 Paths are restricted to allowed roots (workspace, data).
 """
 import os
-import asyncio
-from typing import Dict, Any
-from viki.skills.base import BaseSkill
-from viki.config.logger import viki_logger
+from typing import Any
+
 from viki.core.utils.path_sandbox import validate_output_path
+from viki.skills.base import BaseSkill
 
 
 class PdfSkill(BaseSkill):
@@ -39,7 +38,7 @@ class PdfSkill(BaseSkill):
     def safety_tier(self) -> str:
         return "medium"
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         path = params.get("path")
         if not path:
             return "Provide path= to an existing PDF file."
@@ -54,6 +53,7 @@ class PdfSkill(BaseSkill):
         if action == "extract":
             try:
                 import fitz
+
                 doc = fitz.open(path)
                 text = "\n".join([page.get_text() for page in doc])[:15000]
                 doc.close()
@@ -61,6 +61,7 @@ class PdfSkill(BaseSkill):
             except ImportError:
                 try:
                     import pdfplumber
+
                     with pdfplumber.open(path) as pdf:
                         text = "\n".join([(p.extract_text() or "") for p in pdf.pages])[:15000]
                     return f"EXTRACT:\n{text}" if text.strip() else "No text in PDF."
@@ -76,6 +77,7 @@ class PdfSkill(BaseSkill):
                 return "For edit provide target= and replacement=."
             try:
                 import fitz
+
                 doc = fitz.open(path)
                 for page in doc:
                     text_instances = page.search_for(target)

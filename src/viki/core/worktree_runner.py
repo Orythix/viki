@@ -18,19 +18,18 @@ from __future__ import annotations
 
 import asyncio
 import os
-import shlex
 import shutil
 import subprocess
 import tempfile
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
+from typing import Any
 
 from viki.config.logger import viki_logger
 
-
-AttemptFn = Callable[[str], Awaitable[Dict[str, Any]]]
+AttemptFn = Callable[[str], Awaitable[dict[str, Any]]]
 
 
 @dataclass
@@ -44,10 +43,10 @@ class AttemptResult:
     verify_exit: int = -1
     diff: str = ""
     duration_seconds: float = 0.0
-    error: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    error: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def as_dict(self) -> Dict[str, Any]:
+    def as_dict(self) -> dict[str, Any]:
         return {
             "branch": self.branch,
             "worktree_path": self.worktree_path,
@@ -71,20 +70,18 @@ class WorktreeRunner:
     def __init__(
         self,
         workspace_dir: str,
-        verify_cmd: Optional[List[str]] = None,
+        verify_cmd: list[str] | None = None,
         verify_timeout: int = 600,
-        worktree_root: Optional[str] = None,
+        worktree_root: str | None = None,
     ):
         self.workspace_dir = os.path.abspath(workspace_dir)
         self.verify_cmd = verify_cmd or self.DEFAULT_VERIFY_CMD
         self.verify_timeout = verify_timeout
-        self.worktree_root = worktree_root or os.path.join(
-            tempfile.gettempdir(), "viki_worktrees"
-        )
+        self.worktree_root = worktree_root or os.path.join(tempfile.gettempdir(), "viki_worktrees")
         os.makedirs(self.worktree_root, exist_ok=True)
 
     # --- git plumbing ---
-    def _git(self, args: List[str], cwd: Optional[str] = None) -> Tuple[int, str, str]:
+    def _git(self, args: list[str], cwd: str | None = None) -> tuple[int, str, str]:
         proc = subprocess.run(
             ["git"] + args,
             cwd=cwd or self.workspace_dir,
@@ -100,7 +97,7 @@ class WorktreeRunner:
         rc, _, _ = self._git(["rev-parse", "--is-inside-work-tree"])
         return rc == 0
 
-    def _create_worktree(self, branch: str) -> Optional[str]:
+    def _create_worktree(self, branch: str) -> str | None:
         wt_path = os.path.join(self.worktree_root, f"viki_{branch}_{uuid.uuid4().hex[:6]}")
         rc, _, err = self._git(["worktree", "add", "-b", branch, wt_path, "HEAD"])
         if rc != 0:
@@ -118,7 +115,7 @@ class WorktreeRunner:
                 pass
 
     # --- verification ---
-    def _run_verify(self, wt_path: str) -> Tuple[int, str, str]:
+    def _run_verify(self, wt_path: str) -> tuple[int, str, str]:
         try:
             proc = subprocess.run(
                 self.verify_cmd,
@@ -143,7 +140,7 @@ class WorktreeRunner:
         attempt: AttemptFn,
         n: int = 3,
         merge_winner: bool = False,
-    ) -> Tuple[Optional[AttemptResult], List[AttemptResult]]:
+    ) -> tuple[AttemptResult | None, list[AttemptResult]]:
         """
         Run `n` attempts in parallel; return (winner, all_results).
         Each attempt is invoked as `await attempt(worktree_path)` and is
@@ -153,11 +150,14 @@ class WorktreeRunner:
         branch is fast-forward-merged into the current branch.
         """
         if not self._is_git_repo():
-            viki_logger.warning("WorktreeRunner: %s is not a git repo; running 1 in-place attempt.", self.workspace_dir)
+            viki_logger.warning(
+                "WorktreeRunner: %s is not a git repo; running 1 in-place attempt.",
+                self.workspace_dir,
+            )
             return await self._run_inplace(attempt)
 
         n = max(1, int(n))
-        worktrees: List[Tuple[str, str]] = []  # (branch, path)
+        worktrees: list[tuple[str, str]] = []  # (branch, path)
         for i in range(n):
             branch = f"viki/attempt-{int(time.time())}-{i}-{uuid.uuid4().hex[:4]}"
             path = self._create_worktree(branch)
@@ -170,8 +170,8 @@ class WorktreeRunner:
 
         async def _one(branch: str, path: str) -> AttemptResult:
             t0 = time.perf_counter()
-            err: Optional[str] = None
-            meta: Dict[str, Any] = {}
+            err: str | None = None
+            meta: dict[str, Any] = {}
             try:
                 meta = await attempt(path) or {}
             except Exception as e:
@@ -208,10 +208,12 @@ class WorktreeRunner:
 
         return winner, results
 
-    async def _run_inplace(self, attempt: AttemptFn) -> Tuple[Optional[AttemptResult], List[AttemptResult]]:
+    async def _run_inplace(
+        self, attempt: AttemptFn
+    ) -> tuple[AttemptResult | None, list[AttemptResult]]:
         t0 = time.perf_counter()
-        err: Optional[str] = None
-        meta: Dict[str, Any] = {}
+        err: str | None = None
+        meta: dict[str, Any] = {}
         try:
             meta = await attempt(self.workspace_dir) or {}
         except Exception as e:

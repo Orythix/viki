@@ -24,8 +24,7 @@ import os
 import random
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set, Tuple
-
+from typing import Any
 
 # P2: minimum number of tasks required for a suite to count toward the
 # index. Suites below this floor still appear in the breakdown but are
@@ -35,7 +34,7 @@ DEFAULT_MIN_TASKS = int(os.environ.get("VIKI_CAPABILITY_MIN_TASKS", "20"))
 DEFAULT_BOOTSTRAP_ITERS = int(os.environ.get("VIKI_CAPABILITY_BOOTSTRAP_ITERS", "300"))
 
 
-SUITE_AXIS_MAP: Dict[str, str] = {
+SUITE_AXIS_MAP: dict[str, str] = {
     "swe_bench_verified": "coding",
     "humaneval_plus": "coding",
     "livecodebench": "coding",
@@ -62,14 +61,14 @@ class SuiteResult:
     task_count: int
     air_gap: bool = False
     timestamp: float = 0.0
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    model: Optional[str] = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+    model: str | None = None
     qualifies: bool = True
     ci_low: float = 0.0
     ci_high: float = 0.0
     provenance_sha256: str = ""
 
-    def as_dict(self) -> Dict[str, Any]:
+    def as_dict(self) -> dict[str, Any]:
         return {
             "suite": self.suite,
             "run_id": self.run_id,
@@ -87,8 +86,9 @@ class SuiteResult:
         }
 
 
-def _bootstrap_ci(passes: List[bool], iters: int = DEFAULT_BOOTSTRAP_ITERS,
-                  seed: int = 1337) -> Tuple[float, float]:
+def _bootstrap_ci(
+    passes: list[bool], iters: int = DEFAULT_BOOTSTRAP_ITERS, seed: int = 1337
+) -> tuple[float, float]:
     """
     P2: 95% bootstrap CI for the pass rate of a sample of bool outcomes.
 
@@ -98,7 +98,7 @@ def _bootstrap_ci(passes: List[bool], iters: int = DEFAULT_BOOTSTRAP_ITERS,
     if n == 0:
         return 0.0, 0.0
     rng = random.Random(seed)
-    samples: List[float] = []
+    samples: list[float] = []
     for _ in range(iters):
         boot = [passes[rng.randrange(n)] for _ in range(n)]
         samples.append(sum(1 for p in boot if p) / n)
@@ -130,7 +130,7 @@ MODEL_ID_KEYS = (
 )
 
 
-def _model_aliases(value: Any) -> Set[str]:
+def _model_aliases(value: Any) -> set[str]:
     """Return exact-match aliases for profile names and Ollama `:latest` tags."""
     if not isinstance(value, str):
         return set()
@@ -145,8 +145,8 @@ def _model_aliases(value: Any) -> Set[str]:
     return aliases
 
 
-def _model_values(obj: Dict[str, Any]) -> List[str]:
-    values: List[str] = []
+def _model_values(obj: dict[str, Any]) -> list[str]:
+    values: list[str] = []
     for key in MODEL_ID_KEYS:
         value = obj.get(key)
         if isinstance(value, str) and value.strip():
@@ -154,7 +154,7 @@ def _model_values(obj: Dict[str, Any]) -> List[str]:
     return values
 
 
-def _matches_model_filter(values: List[str], model_filter: Optional[str]) -> bool:
+def _matches_model_filter(values: list[str], model_filter: str | None) -> bool:
     if not model_filter:
         return True
     wanted = _model_aliases(model_filter)
@@ -167,14 +167,14 @@ class CapabilityIndex:
         results_root: str,
         min_tasks: int = DEFAULT_MIN_TASKS,
         bootstrap_iters: int = DEFAULT_BOOTSTRAP_ITERS,
-        model_filter: Optional[str] = None,
+        model_filter: str | None = None,
     ):
         self.results_root = results_root
         self.min_tasks = max(0, int(min_tasks))
         self.bootstrap_iters = max(0, int(bootstrap_iters))
         self.model_filter = model_filter
 
-    def latest_runs(self) -> List[SuiteResult]:
+    def latest_runs(self) -> list[SuiteResult]:
         """
         Walk `<root>/<suite>/` and pick the most recent `.jsonl` per suite.
 
@@ -183,7 +183,7 @@ class CapabilityIndex:
         ignored for model-scoped comparisons because they cannot prove which
         model produced the score.
         """
-        runs: List[SuiteResult] = []
+        runs: list[SuiteResult] = []
         if not os.path.isdir(self.results_root):
             return runs
         for suite in os.listdir(self.results_root):
@@ -202,14 +202,14 @@ class CapabilityIndex:
                     break
         return runs
 
-    def _load_run(self, suite: str, run_id: str, path: str) -> Optional[SuiteResult]:
+    def _load_run(self, suite: str, run_id: str, path: str) -> SuiteResult | None:
         try:
-            scores: List[float] = []
-            passes: List[bool] = []
+            scores: list[float] = []
+            passes: list[bool] = []
             air_gap = False
-            metadata: Dict[str, Any] = {}
-            run_model_values: List[str] = []
-            with open(path, "r", encoding="utf-8") as f:
+            metadata: dict[str, Any] = {}
+            run_model_values: list[str] = []
+            with open(path, encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
                     if not line:
@@ -259,11 +259,11 @@ class CapabilityIndex:
         except Exception:
             return None
 
-    def compute(self) -> Dict[str, Any]:
+    def compute(self) -> dict[str, Any]:
         runs = self.latest_runs()
-        per_axis: Dict[str, List[float]] = {"coding": [], "autonomy": [], "reasoning": []}
-        local_only_scores: List[float] = []
-        suite_breakdown: List[Dict[str, Any]] = []
+        per_axis: dict[str, list[float]] = {"coding": [], "autonomy": [], "reasoning": []}
+        local_only_scores: list[float] = []
+        suite_breakdown: list[dict[str, Any]] = []
 
         for sr in runs:
             axis = SUITE_AXIS_MAP.get(sr.suite)
@@ -273,7 +273,7 @@ class CapabilityIndex:
                 local_only_scores.append(sr.pass_rate)
             suite_breakdown.append(sr.as_dict())
 
-        axis_scores: Dict[str, float] = {}
+        axis_scores: dict[str, float] = {}
         for axis, vals in per_axis.items():
             axis_scores[axis] = (sum(vals) / len(vals)) if vals else 0.0
         axis_scores["local_supremacy"] = (
@@ -281,7 +281,10 @@ class CapabilityIndex:
         )
 
         # Geometric mean of the four axes (with smoothing to keep zero from collapsing).
-        smoothed = [max(0.001, axis_scores[a]) for a in ("coding", "autonomy", "reasoning", "local_supremacy")]
+        smoothed = [
+            max(0.001, axis_scores[a])
+            for a in ("coding", "autonomy", "reasoning", "local_supremacy")
+        ]
         capability_index = math.exp(sum(math.log(v) for v in smoothed) / len(smoothed))
 
         return {

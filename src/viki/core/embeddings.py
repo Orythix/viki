@@ -3,7 +3,7 @@ Shared embedding model for semantic memory and narrative.
 Loads SentenceTransformer once on first use and reuses across LearningModule and NarrativeMemory.
 """
 import os
-from typing import Any, Optional
+from typing import Any
 
 from viki.config.logger import viki_logger
 
@@ -17,9 +17,14 @@ def get_encoder():
         return _encoder
     try:
         from sentence_transformers import SentenceTransformer
-        _device = "cuda" if (os.getenv("VIKI_EMBED_GPU", "").lower() in ("1", "true", "yes")) else "cpu"
+
+        _device = (
+            "cuda" if (os.getenv("VIKI_EMBED_GPU", "").lower() in ("1", "true", "yes")) else "cpu"
+        )
         _encoder = SentenceTransformer("all-MiniLM-L6-v2", device=_device)
         return _encoder
     except Exception as e:
-        viki_logger.warning(f"Shared embedding model unavailable ({e}). Semantic features will use keyword fallback.")
+        viki_logger.warning(
+            f"Shared embedding model unavailable ({e}). Semantic features will use keyword fallback."
+        )
         return None

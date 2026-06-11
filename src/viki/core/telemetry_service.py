@@ -23,23 +23,23 @@ import sqlite3
 import threading
 import time
 import uuid
-from typing import Any, Dict, Iterator, List, Optional
-
+from collections.abc import Iterator
+from typing import Any
 
 _OTEL_TRACER = None
 _OTEL_INITIALIZED = False
-_LOCAL_RECORDS: List[Dict[str, Any]] = []
+_LOCAL_RECORDS: list[dict[str, Any]] = []
 _LOCAL_RECORDS_MAX = 500
-_TRACE_DB: Optional[sqlite3.Connection] = None
+_TRACE_DB: sqlite3.Connection | None = None
 _TRACE_DB_LOCK = threading.Lock()
-_TRACE_DB_PATH: Optional[str] = None
+_TRACE_DB_PATH: str | None = None
 
 # Parent-ID propagation via contextvars so nested `with start_span(...)` calls
 # inherit the right parent without requiring callers to pass IDs around.
-_CURRENT_TRACE_ID: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+_CURRENT_TRACE_ID: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "viki_trace_id", default=None
 )
-_CURRENT_SPAN_ID: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+_CURRENT_SPAN_ID: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "viki_span_id", default=None
 )
 
@@ -57,8 +57,8 @@ def init_tracing(service_name: str = "viki", export_to_stdout: bool = True) -> N
     _OTEL_INITIALIZED = True
     try:
         from opentelemetry import trace  # type: ignore
-        from opentelemetry.sdk.trace import TracerProvider  # type: ignore
         from opentelemetry.sdk.resources import Resource  # type: ignore
+        from opentelemetry.sdk.trace import TracerProvider  # type: ignore
     except Exception:
         _OTEL_TRACER = None
         return
@@ -96,8 +96,8 @@ def init_tracing(service_name: str = "viki", export_to_stdout: bool = True) -> N
 @contextlib.contextmanager
 def start_span(
     name: str,
-    attributes: Optional[Dict[str, Any]] = None,
-) -> Iterator[Dict[str, Any]]:
+    attributes: dict[str, Any] | None = None,
+) -> Iterator[dict[str, Any]]:
     """
     Context manager that starts a span. Yields a mutable dict the caller can
     add attributes / events to; values are flushed to the underlying tracer
@@ -111,7 +111,7 @@ def start_span(
     trace_id = _CURRENT_TRACE_ID.get() or uuid.uuid4().hex[:16]
     span_id = uuid.uuid4().hex[:16]
 
-    info: Dict[str, Any] = {
+    info: dict[str, Any] = {
         "name": name,
         "attributes": dict(attributes or {}),
         "events": [],
@@ -157,7 +157,7 @@ def start_span(
         _CURRENT_TRACE_ID.reset(trace_token)
 
 
-def _record_local_span(info: Dict[str, Any]) -> None:
+def _record_local_span(info: dict[str, Any]) -> None:
     if len(_LOCAL_RECORDS) >= _LOCAL_RECORDS_MAX:
         _LOCAL_RECORDS.pop(0)
     _LOCAL_RECORDS.append(
@@ -211,7 +211,7 @@ def init_persistent_traces(db_path: str) -> None:
         _TRACE_DB = None
 
 
-def _persist_span(info: Dict[str, Any]) -> None:
+def _persist_span(info: dict[str, Any]) -> None:
     if _TRACE_DB is None:
         return
     try:
@@ -236,12 +236,12 @@ def _persist_span(info: Dict[str, Any]) -> None:
         pass
 
 
-def get_local_spans(limit: int = 100) -> List[Dict[str, Any]]:
+def get_local_spans(limit: int = 100) -> list[dict[str, Any]]:
     """Return the most recent in-memory span records (newest first)."""
     return list(reversed(_LOCAL_RECORDS[-limit:]))
 
 
-def get_persistent_traces(limit: int = 50) -> List[Dict[str, Any]]:
+def get_persistent_traces(limit: int = 50) -> list[dict[str, Any]]:
     """
     Return the most recent traces grouped by trace_id, each with its full
     span list and earliest start time. Used by the dashboard's Gantt view.
@@ -254,8 +254,11 @@ def get_persistent_traces(limit: int = 50) -> List[Dict[str, Any]]:
             "FROM spans GROUP BY trace_id ORDER BY started_at DESC LIMIT ?",
             (int(limit),),
         )
-        traces = [dict(zip(("trace_id", "started_at", "span_count"), row)) for row in cur.fetchall()]
-        out: List[Dict[str, Any]] = []
+        traces = [
+            dict(zip(("trace_id", "started_at", "span_count"), row, strict=False))
+            for row in cur.fetchall()
+        ]
+        out: list[dict[str, Any]] = []
         for t in traces:
             cur = _TRACE_DB.execute(
                 "SELECT trace_id, span_id, parent_span_id, name, attributes, "
@@ -270,22 +273,26 @@ def get_persistent_traces(limit: int = 50) -> List[Dict[str, Any]]:
                     attrs = json.loads(row[4] or "{}")
                 except Exception:
                     pass
-                spans.append({
-                    "trace_id": row[0],
-                    "span_id": row[1],
-                    "parent_span_id": row[2],
-                    "name": row[3],
-                    "attributes": attrs,
-                    "started_at": row[5],
-                    "finished_at": row[6],
-                    "elapsed_ms": row[7],
-                })
-            out.append({
-                "trace_id": t["trace_id"],
-                "started_at": t["started_at"],
-                "span_count": t["span_count"],
-                "spans": spans,
-            })
+                spans.append(
+                    {
+                        "trace_id": row[0],
+                        "span_id": row[1],
+                        "parent_span_id": row[2],
+                        "name": row[3],
+                        "attributes": attrs,
+                        "started_at": row[5],
+                        "finished_at": row[6],
+                        "elapsed_ms": row[7],
+                    }
+                )
+            out.append(
+                {
+                    "trace_id": t["trace_id"],
+                    "started_at": t["started_at"],
+                    "span_count": t["span_count"],
+                    "spans": spans,
+                }
+            )
         return out
     except Exception:
         return []

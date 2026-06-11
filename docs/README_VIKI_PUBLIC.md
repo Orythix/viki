@@ -1,4 +1,4 @@
-# VIKI: Sovereign Digital Intelligence
+# VIKI: Supreme Architect of The Code Eternal
 
 > **Autonomous AI agent · Orythix cognitive architecture · Local-first / Ollama**
 
@@ -9,7 +9,7 @@
 [![Ollama](https://img.shields.io/badge/Ollama-local_LLM-orange.svg)](https://ollama.ai)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 
-**This repository ([VIKI-public](https://github.com/Orythix/VIKI-public)) is the public documentation and reference snapshot for VIKI.**  
+**This repository ([VIKI-public](https://github.com/Orythix/VIKI-public)) is the public documentation and reference snapshot for VIKI.**
 The **full implementation** (application source, UI, tests, `scripts/`, private issues) lives in a **private** repository and is **not** available for anonymous cloning.
 
 </div>

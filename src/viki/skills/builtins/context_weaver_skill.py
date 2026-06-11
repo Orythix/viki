@@ -1,13 +1,16 @@
 import os
-from typing import Dict, Any, List
-from viki.skills.base import BaseSkill
+from typing import Any
+
 from viki.config.logger import viki_logger
+from viki.skills.base import BaseSkill
+
 
 class ContextWeaverSkill(BaseSkill):
     """
     Skill for manually weaving (pinning) specific files or directories into the RAG context.
     Overrides automatic pruning to ensure critical code is always available.
     """
+
     def __init__(self, controller=None):
         super().__init__()
         self._controller = controller
@@ -37,20 +40,20 @@ class ContextWeaverSkill(BaseSkill):
                 "action": {
                     "type": "string",
                     "enum": ["pin", "unpin", "list", "clear", "expand"],
-                    "description": "Context weaving action"
+                    "description": "Context weaving action",
                 },
                 "path": {
                     "type": "string",
-                    "description": "Path to the file or directory to pin/unpin"
-                }
+                    "description": "Path to the file or directory to pin/unpin",
+                },
             },
-            "required": ["action"]
+            "required": ["action"],
         }
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         action = params.get("action")
         retriever = self._get_retriever()
-        
+
         if not retriever:
             return "Error: ContextRetriever not available in this controller."
 
@@ -59,7 +62,7 @@ class ContextWeaverSkill(BaseSkill):
                 path = params.get("path")
                 if not path:
                     return "Error: Path is required for 'pin' action."
-                
+
                 # Resolve path
                 abs_path = os.path.abspath(path)
                 if not os.path.exists(abs_path):
@@ -67,7 +70,7 @@ class ContextWeaverSkill(BaseSkill):
                     abs_path = os.path.join(retriever.workspace_dir, path)
                     if not os.path.exists(abs_path):
                         return f"Error: Path '{path}' not found."
-                
+
                 if abs_path not in retriever.pinned_paths:
                     retriever.pinned_paths.append(abs_path)
                     rel = os.path.relpath(abs_path, retriever.workspace_dir)
@@ -79,11 +82,15 @@ class ContextWeaverSkill(BaseSkill):
                 path = params.get("path")
                 if not path:
                     return "Error: Path is required for 'unpin' action."
-                
+
                 abs_path = os.path.abspath(path)
                 found = False
                 for p in list(retriever.pinned_paths):
-                    if os.path.exists(p) and os.path.exists(abs_path) and os.path.samefile(p, abs_path):
+                    if (
+                        os.path.exists(p)
+                        and os.path.exists(abs_path)
+                        and os.path.samefile(p, abs_path)
+                    ):
                         retriever.pinned_paths.remove(p)
                         found = True
                         break
@@ -91,19 +98,19 @@ class ContextWeaverSkill(BaseSkill):
                         retriever.pinned_paths.remove(p)
                         found = True
                         break
-                
+
                 return f"Unpinned '{path}'." if found else f"Path '{path}' was not pinned."
 
             elif action == "list":
                 if not retriever.pinned_paths:
                     return "No paths currently pinned to context."
-                
+
                 lines = ["--- Currently Pinned Context ---"]
                 for p in retriever.pinned_paths:
                     try:
                         rel = os.path.relpath(p, retriever.workspace_dir)
                         lines.append(f" - {rel} ({'DIR' if os.path.isdir(p) else 'FILE'})")
-                    except:
+                    except Exception:
                         lines.append(f" - {p} (Invalid Path)")
                 return "\n".join(lines)
 
@@ -116,20 +123,20 @@ class ContextWeaverSkill(BaseSkill):
                 path = params.get("path")
                 if not path:
                     return "Error: Path is required for 'expand' action."
-                
+
                 # Resolve path
                 abs_path = os.path.abspath(path)
                 if not os.path.exists(abs_path):
                     abs_path = os.path.join(retriever.workspace_dir, path)
                     if not os.path.exists(abs_path):
                         return f"Error: Path '{path}' not found."
-                
+
                 # Load full content
                 try:
-                    with open(abs_path, "r", encoding="utf-8", errors="ignore") as f:
-                        content = f.read(16384) # Expand to 16KB
-                    
-                    # We inject this into the response. 
+                    with open(abs_path, encoding="utf-8", errors="ignore") as f:
+                        content = f.read(16384)  # Expand to 16KB
+
+                    # We inject this into the response.
                     # The controller/loop will see it as the result of the action.
                     return f"CONTENT EXPANSION for {path}:\n```\n{content}\n```"
                 except Exception as e:

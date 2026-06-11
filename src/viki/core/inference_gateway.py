@@ -1,21 +1,28 @@
-import os
+import asyncio
 import json
+import os
 import re
 import time
-import yaml
-import asyncio
-import aiohttp
 import urllib.request
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional, Type, TypeVar
+from typing import Any, TypeVar
+
+import aiohttp
+import yaml
 from pydantic import BaseModel
-from viki.core.schema import VIKIResponse, VIKIResponseLite, ThoughtObject
+
 from viki.config.logger import viki_logger
+from viki.core.schema import ThoughtObject, VIKIResponse, VIKIResponseLite
+
+
+def _debug_enabled() -> bool:
+    return os.environ.get("VIKI_DEBUG", "").lower() in ("true", "1", "yes")
+
 
 T = TypeVar("T", bound=BaseModel)
 
 
-def _resolve_ollama_thinking_from_settings(system_settings: Optional[Dict[str, Any]]) -> bool:
+def _resolve_ollama_thinking_from_settings(system_settings: dict[str, Any] | None) -> bool:
     """Env VIKI_OLLAMA_THINK overrides settings.system.ollama_enable_thinking."""
     env = (os.environ.get("VIKI_OLLAMA_THINK") or "").strip().lower()
     if env in ("1", "true", "yes"):
@@ -26,17 +33,17 @@ def _resolve_ollama_thinking_from_settings(system_settings: Optional[Dict[str, A
     return bool(sys.get("ollama_enable_thinking", False))
 
 
-def _resolve_ollama_options_from_settings(system_settings: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+def _resolve_ollama_options_from_settings(system_settings: dict[str, Any] | None) -> dict[str, Any]:
     sys = (system_settings or {}).get("system") or {}
     opts = sys.get("ollama_options")
     return dict(opts) if isinstance(opts, dict) else {}
 
 
 def _effective_profile_for_factory(
-    profile: Dict[str, Any],
-    provider_conf: Dict[str, Any],
-    system_settings: Optional[Dict[str, Any]],
-) -> Dict[str, Any]:
+    profile: dict[str, Any],
+    provider_conf: dict[str, Any],
+    system_settings: dict[str, Any] | None,
+) -> dict[str, Any]:
     """Merge Ollama tuning from settings (and optional per-profile overrides) into the profile dict."""
     if provider_conf.get("type") != "local":
         return profile
@@ -55,37 +62,38 @@ def _effective_profile_for_factory(
 
 
 class StructuredPrompt:
-    def __init__(self, request: str, messages: List[Dict[str, str]] = None):
+    def __init__(self, request: str, messages: list[dict[str, str]] = None):
         self.request = request
         self.messages = messages or []
         self.identity = ""
         self.cognitive_instructions = ""
         self.context = ""
-    
+
     def set_identity(self, identity: str):
         self.identity = identity
-        
+
     def add_cognitive(self, instruction: str):
         self.cognitive_instructions += f"\n- {instruction}"
-        
+
     def add_context(self, context: str):
         self.context = context
-        
-    def build(self) -> List[Dict[str, str]]:
+
+    def build(self) -> list[dict[str, str]]:
         system_content = f"{self.identity}\n\nCOGNITIVE PROTOCOLS:{self.cognitive_instructions}\n\nCONTEXT:\n{self.context}"
-        
+
         final_messages = [{"role": "system", "content": system_content}]
         final_messages.extend(self.messages)
-        
+
         # Always add the current request as the last user message
         final_messages.append({"role": "user", "content": self.request})
-             
+
         return final_messages
+
 
 class LLMProvider(ABC):
     """Abstract base class for LLM providers."""
-    
-    def __init__(self, config: Dict[str, Any]):
+
+    def __init__(self, config: dict[str, Any]):
         self.config = config
         self.model_name = config.get("model_name", "unknown")
         # v11 Model Governance (HR)
@@ -113,8 +121,8 @@ class LLMProvider(ABC):
     def record_performance(self, latency: float, success: bool):
         self.call_count += 1
         n = self.call_count
-        self.avg_latency = ((self.avg_latency * (n-1)) + latency) / n
-        
+        self.avg_latency = ((self.avg_latency * (n - 1)) + latency) / n
+
         if not success:
             self.error_count += 1
             self.trust_score = max(0.0, self.trust_score - 0.1)
@@ -122,7 +130,7 @@ class LLMProvider(ABC):
             self.trust_score = min(1.0, self.trust_score + 0.01)
 
         try:
-            from core.usage_log import emit_model_feedback
+            from viki.core.usage_log import emit_model_feedback
 
             emit_model_feedback(self, latency, success)
         except Exception:
@@ -133,44 +141,47 @@ class LLMProvider(ABC):
         Rough cost estimator using the provider's per-1k pricing config.
         Returns 0.0 for local models (no `cost_per_1k_*` set).
         """
-        return (
-            (prompt_tokens / 1000.0) * self.cost_per_1k_in
-            + (completion_tokens / 1000.0) * self.cost_per_1k_out
-        )
+        return (prompt_tokens / 1000.0) * self.cost_per_1k_in + (
+            completion_tokens / 1000.0
+        ) * self.cost_per_1k_out
 
     def record_token_usage(self, input_tokens: int, output_tokens: int) -> float:
         """Update token counters and return the delta cost for this call."""
         self.input_tokens += int(input_tokens or 0)
         self.output_tokens += int(output_tokens or 0)
-        delta = (
-            (input_tokens / 1000.0) * self.cost_per_1k_in
-            + (output_tokens / 1000.0) * self.cost_per_1k_out
-        )
+        delta = (input_tokens / 1000.0) * self.cost_per_1k_in + (
+            output_tokens / 1000.0
+        ) * self.cost_per_1k_out
         self.total_cost_usd += delta
-        
+
         try:
             from api.events import get_event_bus
-            get_event_bus().publish("usage", {
-                "input": input_tokens,
-                "output": output_tokens,
-                "model": self.model_name
-            }, channel="system")
+
+            get_event_bus().publish(
+                "usage",
+                {"input": input_tokens, "output": output_tokens, "model": self.model_name},
+                channel="system",
+            )
         except Exception:
             pass
-            
+
         return delta
 
     @abstractmethod
-    async def chat(self, messages: List[Dict[str, str]], temperature: float = 0.7) -> str:
+    async def chat(self, messages: list[dict[str, str]], temperature: float = 0.7) -> str:
         """Send a asynchronous chat request to the LLM."""
-        pass
 
     @abstractmethod
-    async def chat_structured(self, messages: List[Dict[str, str]], response_model: Type[T], temperature: float = 0.0, image_path: str = None) -> T:
+    async def chat_structured(
+        self,
+        messages: list[dict[str, str]],
+        response_model: type[T],
+        temperature: float = 0.0,
+        image_path: str = None,
+    ) -> T:
         """Send a structured chat request returning a Pydantic model with optional visual context."""
-        pass
 
-    async def chat_stream(self, messages: List[Dict[str, str]], temperature: float = 0.7):
+    async def chat_stream(self, messages: list[dict[str, str]], temperature: float = 0.7):
         """
         Default streaming implementation: yields the full response as a single chunk.
         Concrete providers should override with native streaming where supported.
@@ -179,13 +190,14 @@ class LLMProvider(ABC):
         if result:
             yield result
 
+
 class FallbackLLM(LLMProvider):
     """Fallback LLM used when no configured model is available (dev/edge case)."""
 
     def is_cloud(self) -> bool:
         return False
 
-    async def chat(self, messages: List[Dict[str, str]], temperature: float = 0.0) -> str:
+    async def chat(self, messages: list[dict[str, str]], temperature: float = 0.0) -> str:
         t0 = time.perf_counter()
         success = False
         try:
@@ -194,12 +206,19 @@ class FallbackLLM(LLMProvider):
             return f"Fallback response for {self.model_name}"
         finally:
             try:
-                from core.usage_log import emit_llm_inference
+                from viki.core.usage_log import emit_llm_inference
+
                 emit_llm_inference(self, time.perf_counter() - t0, success, "chat")
             except Exception:
                 pass
 
-    async def chat_structured(self, messages: List[Dict[str, str]], response_model: Type[T], temperature: float = 0.0, image_path: str = None) -> T:
+    async def chat_structured(
+        self,
+        messages: list[dict[str, str]],
+        response_model: type[T],
+        temperature: float = 0.0,
+        image_path: str = None,
+    ) -> T:
         t0 = time.perf_counter()
         success = False
         try:
@@ -208,58 +227,77 @@ class FallbackLLM(LLMProvider):
             return response_model()
         finally:
             try:
-                from core.usage_log import emit_llm_inference
+                from viki.core.usage_log import emit_llm_inference
+
                 emit_llm_inference(self, time.perf_counter() - t0, success, "chat_structured")
             except Exception:
                 pass
 
 
-def _looks_like_openai_secret(key: Optional[str]) -> bool:
+def _looks_like_openai_secret(key: str | None) -> bool:
     """True only for keys that can authenticate api.openai.com (not placeholders like 'ollama')."""
     if not key or not str(key).strip():
         return False
     s = str(key).strip()
     lowered = s.lower()
-    if lowered in ("ollama", "none", "dummy", "placeholder", "test", "your-api-key-here", "changeme"):
+    if lowered in (
+        "ollama",
+        "none",
+        "dummy",
+        "placeholder",
+        "test",
+        "your-api-key-here",
+        "changeme",
+    ):
         return False
     return s.startswith("sk-")  # includes sk-proj-
 
 
-def _looks_like_anthropic_secret(key: Optional[str]) -> bool:
+def _looks_like_anthropic_secret(key: str | None) -> bool:
     if not key or not str(key).strip():
         return False
     s = str(key).strip()
     lowered = s.lower()
-    if lowered in ("ollama", "none", "dummy", "placeholder", "test", "your-api-key-here", "changeme"):
+    if lowered in (
+        "ollama",
+        "none",
+        "dummy",
+        "placeholder",
+        "test",
+        "your-api-key-here",
+        "changeme",
+    ):
         return False
     return s.startswith("sk-ant-")
 
 
 class APILLM(LLMProvider):
     """OpenAI-compatible API provider with Instructor support."""
-    
-    def __init__(self, config: Dict[str, Any]):
+
+    def __init__(self, config: dict[str, Any]):
         super().__init__(config)
-        
+
         self.provider_type = config.get("provider", "openai")
         api_key = os.getenv(self.config.get("api_key_env", "OPENAI_API_KEY"))
-        
+
         try:
             import instructor
+
             if self.provider_type == "anthropic":
                 from anthropic import AsyncAnthropic
+
                 if not _looks_like_anthropic_secret(api_key):
                     raise ValueError(
                         f"Anthropic API key missing or invalid ({self.config.get('api_key_env', 'ANTHROPIC_API_KEY')}). "
                         "Expected a key starting with sk-ant-. Remove placeholder values or use local Ollama profiles."
                     )
                 self.client = instructor.from_anthropic(
-                    AsyncAnthropic(api_key=api_key),
-                    mode=instructor.Mode.ANTHROPIC_JSON
+                    AsyncAnthropic(api_key=api_key), mode=instructor.Mode.ANTHROPIC_JSON
                 )
             else:
                 from openai import AsyncOpenAI
-                base_url = self.config.get('base_url', 'https://api.openai.com/v1')
+
+                base_url = self.config.get("base_url", "https://api.openai.com/v1")
                 uses_official_openai = "api.openai.com" in (base_url or "")
                 if uses_official_openai and not _looks_like_openai_secret(api_key):
                     raise ValueError(
@@ -272,7 +310,7 @@ class APILLM(LLMProvider):
 
                 self.client = instructor.from_openai(
                     AsyncOpenAI(api_key=api_key or "not-needed", base_url=base_url),
-                    mode=instructor.Mode.JSON
+                    mode=instructor.Mode.JSON,
                 )
         except ImportError as e:
             viki_logger.warning(
@@ -282,12 +320,16 @@ class APILLM(LLMProvider):
             self.available = False
             self.unavailable_reason = f"optional dependency missing or broken: {e}"
         except Exception as e:
-            viki_logger.warning(f"Model '{self.model_name}' (provider: {self.provider_type}) disabled: {e}")
+            viki_logger.warning(
+                f"Model '{self.model_name}' (provider: {self.provider_type}) disabled: {e}"
+            )
             self.client = None
             self.available = False
             self.unavailable_reason = str(e)
 
-    async def chat(self, messages: List[Dict[str, str]], temperature: float = 0.7, image_path: str = None) -> str:
+    async def chat(
+        self, messages: list[dict[str, str]], temperature: float = 0.7, image_path: str = None
+    ) -> str:
         t0 = time.perf_counter()
         success = False
         try:
@@ -295,19 +337,23 @@ class APILLM(LLMProvider):
                 return f"Error: Model '{self.model_name}' is unavailable (likely due to missing API key)."
             if image_path:
                 import base64
+
                 # Use asyncio.to_thread for file I/O
                 def read_image():
                     with open(image_path, "rb") as image_file:
-                        return base64.b64encode(image_file.read()).decode('utf-8')
+                        return base64.b64encode(image_file.read()).decode("utf-8")
 
                 base64_image = await asyncio.to_thread(read_image)
 
                 for i in range(len(messages) - 1, -1, -1):
-                    if messages[i]['role'] == 'user':
-                        original_text = messages[i]['content']
-                        messages[i]['content'] = [
+                    if messages[i]["role"] == "user":
+                        original_text = messages[i]["content"]
+                        messages[i]["content"] = [
                             {"type": "text", "text": original_text},
-                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
+                            },
                         ]
                         break
 
@@ -332,13 +378,19 @@ class APILLM(LLMProvider):
             return f"Error calling API Model '{self.model_name}'. Check logs for details."
         finally:
             try:
-                from core.usage_log import emit_llm_inference
+                from viki.core.usage_log import emit_llm_inference
 
                 emit_llm_inference(self, time.perf_counter() - t0, success, "chat")
             except Exception:
                 pass
 
-    async def chat_structured(self, messages: List[Dict[str, str]], response_model: Type[T], temperature: float = 0.0, image_path: str = None) -> T:
+    async def chat_structured(
+        self,
+        messages: list[dict[str, str]],
+        response_model: type[T],
+        temperature: float = 0.0,
+        image_path: str = None,
+    ) -> T:
         t0 = time.perf_counter()
         success = False
         try:
@@ -346,19 +398,23 @@ class APILLM(LLMProvider):
                 raise ValueError(f"Model '{self.model_name}' is unavailable.")
             if image_path:
                 import base64
+
                 # Use asyncio.to_thread for file I/O
                 def read_image():
                     with open(image_path, "rb") as image_file:
-                        return base64.b64encode(image_file.read()).decode('utf-8')
+                        return base64.b64encode(image_file.read()).decode("utf-8")
 
                 base64_image = await asyncio.to_thread(read_image)
 
                 for i in range(len(messages) - 1, -1, -1):
-                    if messages[i]['role'] == 'user':
-                        original_text = messages[i]['content'] or ""
-                        messages[i]['content'] = [
+                    if messages[i]["role"] == "user":
+                        original_text = messages[i]["content"] or ""
+                        messages[i]["content"] = [
                             {"type": "text", "text": str(original_text)},
-                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
+                            },
                         ]
                         break
 
@@ -381,13 +437,13 @@ class APILLM(LLMProvider):
             return out
         finally:
             try:
-                from core.usage_log import emit_llm_inference
+                from viki.core.usage_log import emit_llm_inference
 
                 emit_llm_inference(self, time.perf_counter() - t0, success, "chat_structured")
             except Exception:
                 pass
 
-    async def chat_stream(self, messages: List[Dict[str, str]], temperature: float = 0.7):
+    async def chat_stream(self, messages: list[dict[str, str]], temperature: float = 0.7):
         """Native streaming for OpenAI-compatible / Anthropic via instructor's underlying client."""
         if not self.available or self.client is None:
             yield f"Error: Model '{self.model_name}' is unavailable."
@@ -431,15 +487,15 @@ def _ollama_model_exists(base_url: str, model_name: str) -> bool:
 class LocalLLM(LLMProvider):
     """Ollama provider with Async support and JSON mode."""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         super().__init__(config)
-        env_url = (os.environ.get("OLLAMA_HOST") or "").strip().rstrip('/')
-        self.base_url = env_url or self.config.get('base_url', 'http://127.0.0.1:11434').rstrip('/')
-        if 'localhost' in self.base_url:
-            self.base_url = self.base_url.replace('localhost', '127.0.0.1')
+        env_url = (os.environ.get("OLLAMA_HOST") or "").strip().rstrip("/")
+        self.base_url = env_url or self.config.get("base_url", "http://127.0.0.1:11434").rstrip("/")
+        if "localhost" in self.base_url:
+            self.base_url = self.base_url.replace("localhost", "127.0.0.1")
         self._ollama_enable_thinking = bool(config.get("ollama_enable_thinking", False))
         _oo = config.get("ollama_options")
-        self._ollama_options: Dict[str, Any] = dict(_oo) if isinstance(_oo, dict) else {}
+        self._ollama_options: dict[str, Any] = dict(_oo) if isinstance(_oo, dict) else {}
         # Verify the model actually exists in Ollama so the router can fall back.
         if not _ollama_model_exists(self.base_url, self.model_name):
             self.available = False
@@ -453,8 +509,8 @@ class LocalLLM(LLMProvider):
                 self.unavailable_reason,
             )
 
-    def _ollama_options_merged(self, temperature: float) -> Dict[str, Any]:
-        o: Dict[str, Any] = {"temperature": float(temperature)}
+    def _ollama_options_merged(self, temperature: float) -> dict[str, Any]:
+        o: dict[str, Any] = {"temperature": float(temperature)}
         o.update(self._ollama_options)
         return o
 
@@ -471,7 +527,7 @@ class LocalLLM(LLMProvider):
         except Exception:
             return False
 
-    async def chat_stream(self, messages: List[Dict[str, str]], temperature: float = 0.7):
+    async def chat_stream(self, messages: list[dict[str, str]], temperature: float = 0.7):
         """Native Ollama token streaming."""
         data = {
             "model": self.model_name,
@@ -482,7 +538,9 @@ class LocalLLM(LLMProvider):
         }
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.post(f"{self.base_url}/api/chat", json=data, timeout=300) as resp:
+                async with session.post(
+                    f"{self.base_url}/api/chat", json=data, timeout=300
+                ) as resp:
                     if resp.status == 404:
                         yield f"Error: Model '{self.model_name}' not found."
                         return
@@ -507,10 +565,22 @@ class LocalLLM(LLMProvider):
         except Exception as e:
             yield f"Error streaming Local Model: {e}"
 
-    async def chat(self, messages: List[Dict[str, str]], temperature: float = 0.7, format: str = None, image_path: str = None, tools: List[Dict[str, Any]] = None) -> str:
+    async def chat(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float = 0.7,
+        format: str = None,
+        image_path: str = None,
+        tools: list[dict[str, Any]] = None,
+        response_format: dict = None,
+    ) -> str:
         t0 = time.perf_counter()
         success = False
-        print(f"VIKI_DEBUG: LocalLLM.chat CALLED model={self.model_name} format={format}", flush=True)
+        if _debug_enabled():
+            print(
+                f"VIKI_DEBUG: LocalLLM.chat CALLED model={self.model_name} format={format}",
+                flush=True,
+            )
         try:
             data = {
                 "model": self.model_name,
@@ -521,6 +591,8 @@ class LocalLLM(LLMProvider):
             }
             if format:
                 data["format"] = format
+            if response_format:
+                data["response_format"] = response_format
 
             if tools:
                 data["tools"] = tools
@@ -555,11 +627,10 @@ class LocalLLM(LLMProvider):
                         # Handle Tool Calls
                         _msg = resp_json["message"]
                         _msg.pop("thinking", None)
-                        
+
                         # Record token usage
                         self.record_token_usage(
-                            resp_json.get("prompt_eval_count", 0),
-                            resp_json.get("eval_count", 0)
+                            resp_json.get("prompt_eval_count", 0), resp_json.get("eval_count", 0)
                         )
 
                         if _msg.get("tool_calls"):
@@ -572,13 +643,15 @@ class LocalLLM(LLMProvider):
                     return f"Error calling Local Model: {str(e)}"
         finally:
             try:
-                from core.usage_log import emit_llm_inference
+                from viki.core.usage_log import emit_llm_inference
 
                 emit_llm_inference(self, time.perf_counter() - t0, success, "chat")
             except Exception:
                 pass
 
-    async def chat_with_tools(self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]], temperature: float = 0.0) -> Dict[str, Any]:
+    async def chat_with_tools(
+        self, messages: list[dict[str, str]], tools: list[dict[str, Any]], temperature: float = 0.0
+    ) -> dict[str, Any]:
         """Specific method for tool use that returns the full message object (content + tool_calls)."""
         t0 = time.perf_counter()
         success = False
@@ -612,8 +685,7 @@ class LocalLLM(LLMProvider):
 
                     # Record token usage
                     self.record_token_usage(
-                        resp_json.get("prompt_eval_count", 0),
-                        resp_json.get("eval_count", 0)
+                        resp_json.get("prompt_eval_count", 0), resp_json.get("eval_count", 0)
                     )
 
                     success = True
@@ -625,26 +697,26 @@ class LocalLLM(LLMProvider):
                 return {"role": "assistant", "content": f"Ollama Error: {str(e)}"}
             finally:
                 try:
-                    from core.usage_log import emit_llm_inference
+                    from viki.core.usage_log import emit_llm_inference
 
                     emit_llm_inference(self, time.perf_counter() - t0, success, "chat_with_tools")
                 except Exception:
                     pass
 
-    def _compact_json_output_guide(self, response_model: Type[T]) -> str:
+    def _compact_json_output_guide(self, response_model: type[T]) -> str:
         """Short output instructions — full Pydantic JSON Schema makes Ollama echo the schema back."""
         if response_model == VIKIResponse:
             return (
                 "### JSON OUTPUT (required) ###\n"
                 "Return one JSON object only. Use keys: final_thought (object), final_response (string), "
                 "and action (optional object with skill_name and parameters).\n"
-                "Do NOT return a JSON Schema. Example: {\"final_thought\":{\"intent_summary\":\"...\",\"primary_strategy\":\"...\",\"confidence\":0.8},"
-                "\"final_response\":\"...\",\"action\":{\"skill_name\":\"...\",\"parameters\":{}}}"
+                'Do NOT return a JSON Schema. Example: {"final_thought":{"intent_summary":"...","primary_strategy":"...","confidence":0.8},'
+                '"final_response":"...","action":{"skill_name":"...","parameters":{}}}'
             )
         if response_model == VIKIResponseLite:
             return (
                 "### JSON OUTPUT (required) ###\n"
-                "Return one JSON object: {\"final_response\":\"your answer\",\"confidence\":0.85,\"action\":null}\n"
+                'Return one JSON object: {"final_response":"your answer","confidence":0.85,"action":null}\n'
                 "Include action only when a tool call is needed."
             )
         try:
@@ -670,10 +742,10 @@ class LocalLLM(LLMProvider):
 
     async def _ollama_recover_after_schema_echo(
         self,
-        msgs_without_guide: List[Dict[str, Any]],
-        response_model: Type[T],
+        msgs_without_guide: list[dict[str, Any]],
+        response_model: type[T],
         temperature: float,
-        image_path: Optional[str],
+        image_path: str | None,
     ) -> str:
         """Second JSON attempt with stricter anti-schema instructions; then plain text if needed."""
         recovery = [dict(m) for m in msgs_without_guide]
@@ -700,6 +772,10 @@ class LocalLLM(LLMProvider):
             temperature=min(0.4, max(0.1, temperature)),
             format="json",
             image_path=image_path,
+            response_format={
+                "type": "json_schema",
+                "json_schema": response_model.model_json_schema(),
+            },
         )
         text = (text if isinstance(text, str) else str(text or "")).strip()
         try:
@@ -726,10 +802,20 @@ class LocalLLM(LLMProvider):
             image_path=image_path,
         )
 
-    async def chat_structured(self, messages: List[Dict[str, str]], response_model: Type[T], temperature: float = 0.0, image_path: str = None) -> T:
+    async def chat_structured(
+        self,
+        messages: list[dict[str, str]],
+        response_model: type[T],
+        temperature: float = 0.0,
+        image_path: str = None,
+    ) -> T:
         """Parse structured output from local Ollama models with heuristic patching."""
-        print(f"VIKI_DEBUG: chat_structured ENTERED for {self.__class__.__name__} model={self.model_name} response_model={response_model.__name__}", flush=True)
-        msgs: List[Dict[str, Any]] = [dict(m) for m in messages]
+        if _debug_enabled():
+            print(
+                f"VIKI_DEBUG: chat_structured ENTERED for {self.__class__.__name__} model={self.model_name} response_model={response_model.__name__}",
+                flush=True,
+            )
+        msgs: list[dict[str, Any]] = [dict(m) for m in messages]
 
         if image_path:
             import base64
@@ -747,20 +833,34 @@ class LocalLLM(LLMProvider):
         guide = self._compact_json_output_guide(response_model)
         msgs.append({"role": "system", "content": guide})
 
-        content = await self.chat(msgs, temperature=temperature, format="json", image_path=image_path)
+        # Generate JSON schema for constrained decoding (Ollama 0.1.34+)
+        json_schema = response_model.model_json_schema()
+        content = await self.chat(
+            msgs,
+            temperature=temperature,
+            format="json",
+            image_path=image_path,
+            response_format={"type": "json_schema", "json_schema": json_schema},
+        )
         content = (content if isinstance(content, str) else str(content or "")).strip()
-        print(f"VIKI_DEBUG: Raw response ({len(content)} bytes) from {self.config.get('model_name')}: {repr(content[:500])}", flush=True)
+        if _debug_enabled():
+            print(
+                f"VIKI_DEBUG: Raw response ({len(content)} bytes) from {self.config.get('model_name')}: {repr(content[:500])}",
+                flush=True,
+            )
         viki_logger.debug("DEBUG: Raw response from %s", self.config.get("model_name"))
 
         try:
             data = self._parse_structured_json_heuristics(content)
             if response_model == VIKIResponse and self._data_is_json_schema_echo(data):
-                viki_logger.info("Local model echoed JSON Schema; recovering with follow-up prompt.")
+                viki_logger.info(
+                    "Local model echoed JSON Schema; recovering with follow-up prompt."
+                )
                 content = await self._ollama_recover_after_schema_echo(
                     msgs[:-1], response_model, temperature, image_path
                 )
                 content = (content if isinstance(content, str) else str(content or "")).strip()
-                if content.startswith("{") or content.startswith("["):
+                if content.startswith(("{", "[")):
                     data = self._parse_structured_json_heuristics(content)
                 else:
                     return VIKIResponse(
@@ -772,13 +872,53 @@ class LocalLLM(LLMProvider):
                         final_response=content[:8000] if len(content) > 8000 else content,
                     )
                 if response_model == VIKIResponse and self._data_is_json_schema_echo(data):
-                    return self._structured_fallback(response_model, content, ValueError("schema echo persisted"))
+                    return self._structured_fallback(
+                        response_model, content, ValueError("schema echo persisted")
+                    )
 
             if response_model == VIKIResponse:
                 data = self._patch_viki_response(data)
             return response_model.model_validate_json(json.dumps(data))
         except Exception as e:
             viki_logger.warning("Structured parse failed for %s: %s", response_model.__name__, e)
+            max_retries = 2
+            retry_count = 0
+            while retry_count < max_retries:
+                retry_count += 1
+                guide_text = self._compact_json_output_guide(response_model)
+                retry_msgs = [dict(m) for m in msgs[:-1]]
+                retry_msgs.append(
+                    {
+                        "role": "system",
+                        "content": (
+                            "Your previous response was not valid JSON. "
+                            "Return ONLY a single valid JSON object with no other text.\n"
+                            + guide_text
+                        ),
+                    }
+                )
+                content2 = await self.chat(
+                    retry_msgs,
+                    temperature=min(0.5, temperature + 0.1 * retry_count),
+                    format="json",
+                    image_path=image_path,
+                    response_format={
+                        "type": "json_schema",
+                        "json_schema": response_model.model_json_schema(),
+                    },
+                )
+                content2 = (content2 if isinstance(content2, str) else str(content2 or "")).strip()
+                try:
+                    data2 = self._parse_structured_json_heuristics(content2)
+                    if response_model == VIKIResponse and self._data_is_json_schema_echo(data2):
+                        content = content2
+                        continue
+                    if response_model == VIKIResponse:
+                        data2 = self._patch_viki_response(data2)
+                    return response_model.model_validate_json(json.dumps(data2))
+                except Exception:
+                    content = content2
+                    continue
             return self._structured_fallback(response_model, content, e)
 
     def _parse_structured_json_heuristics(self, content: str) -> dict:
@@ -802,6 +942,7 @@ class LocalLLM(LLMProvider):
             # Try ast.literal_eval for single-quoted Python-dict-style output
             try:
                 import ast
+
                 val = ast.literal_eval(content)
                 if isinstance(val, dict):
                     return val
@@ -817,7 +958,7 @@ class LocalLLM(LLMProvider):
                     pass
             raise
 
-    def _structured_fallback(self, response_model: Type[T], content: str, err: Exception) -> T:
+    def _structured_fallback(self, response_model: type[T], content: str, err: Exception) -> T:
         """Construct the response when structured parsing fails."""
         fallback_text = self._extract_text(content)
         if response_model == VIKIResponseLite:
@@ -845,11 +986,13 @@ class LocalLLM(LLMProvider):
 
         raw = self._try_parse_json_object(content)
         if isinstance(raw, dict):
-            extracted = self._first_non_empty_string(raw, ["final_response", "response", "message", "text", "content", "answer"])
+            extracted = self._first_non_empty_string(
+                raw, ["final_response", "response", "message", "text", "content", "answer"]
+            )
             if extracted:
                 return extracted
 
-        if s.startswith("{") or s.startswith("["):
+        if s.startswith(("{", "[")):
             return fallback
         if self._looks_like_ollama_connection_error(s):
             viki_logger.debug("Detected Ollama connection error in fallback")
@@ -866,7 +1009,7 @@ class LocalLLM(LLMProvider):
         except (json.JSONDecodeError, TypeError):
             return None
 
-    def _first_non_empty_string(self, obj: Dict[str, Any], keys: List[str]) -> Optional[str]:
+    def _first_non_empty_string(self, obj: dict[str, Any], keys: list[str]) -> str | None:
         for key in keys:
             val = obj.get(key)
             if isinstance(val, str) and val.strip():
@@ -894,13 +1037,21 @@ class LocalLLM(LLMProvider):
         self._patch_missing_final_thought(data)
         return data
 
-    def _patch_response_plan(self, data: dict) -> Optional[dict]:
+    def _patch_response_plan(self, data: dict) -> dict | None:
         if "response" in data and "plan" in data and "final_thought" not in data:
             response_obj = data["response"]
-            intent = response_obj.get("intent", "unknown") if isinstance(response_obj, dict) else str(response_obj)
+            intent = (
+                response_obj.get("intent", "unknown")
+                if isinstance(response_obj, dict)
+                else str(response_obj)
+            )
             plan = str(data.get("plan", []))
             return {
-                "final_thought": {"intent_summary": intent, "primary_strategy": plan, "confidence": 0.8},
+                "final_thought": {
+                    "intent_summary": intent,
+                    "primary_strategy": plan,
+                    "confidence": 0.8,
+                },
                 "action": data.get("action"),
                 "final_response": data.get("final_response", f"Plan: {plan}"),
             }
@@ -924,7 +1075,7 @@ class LocalLLM(LLMProvider):
                 "confidence",
                 "provenance",
             ]
-            thought_obj: Dict[str, Any] = {}
+            thought_obj: dict[str, Any] = {}
             for f in thought_fields:
                 if f in data:
                     thought_obj[f] = data.pop(f)
@@ -941,7 +1092,10 @@ class LocalLLM(LLMProvider):
 
     def _patch_flattened_action(self, data: dict) -> None:
         if "skill_name" in data and "parameters" in data and "action" not in data:
-            data["action"] = {"skill_name": data.pop("skill_name"), "parameters": data.pop("parameters")}
+            data["action"] = {
+                "skill_name": data.pop("skill_name"),
+                "parameters": data.pop("parameters"),
+            }
 
     def _patch_missing_final_thought(self, data: dict) -> None:
         if "final_thought" not in data:
@@ -949,13 +1103,18 @@ class LocalLLM(LLMProvider):
             strategy = data.get("internal_metacognition", summary)
             data["final_thought"] = {
                 "intent_summary": summary[:200] if isinstance(summary, str) else "User request",
-                "primary_strategy": strategy[:200] if isinstance(strategy, str) else "Direct response",
+                "primary_strategy": strategy[:200]
+                if isinstance(strategy, str)
+                else "Direct response",
                 "confidence": 0.7,
             }
 
+
 class ModelFactory:
     @staticmethod
-    def create(profile_name: str, profile_config: Dict[str, Any], provider_config: Dict[str, Any]) -> LLMProvider:
+    def create(
+        profile_name: str, profile_config: dict[str, Any], provider_config: dict[str, Any]
+    ) -> LLMProvider:
         provider_type = provider_config.get("type", "mock")
         merged_config = {**provider_config, **profile_config}
         merged_config.setdefault("provider", provider_type)
@@ -973,41 +1132,52 @@ class ModelFactory:
             merged_config.setdefault("supports_native_tools", False)
             return LocalLLM(merged_config)
         if provider_type in ("gemini", "google", "vertex"):
-            from core.inference_providers import GeminiLLM
+            from viki.core.inference_providers import GeminiLLM
+
             return GeminiLLM(merged_config)
         if provider_type == "groq":
-            from core.inference_providers import GroqLLM
+            from viki.core.inference_providers import GroqLLM
+
             return GroqLLM(merged_config)
         if provider_type == "mistral":
-            from core.inference_providers import MistralLLM
+            from viki.core.inference_providers import MistralLLM
+
             return MistralLLM(merged_config)
         if provider_type in ("bedrock", "aws_bedrock"):
-            from core.inference_providers import BedrockLLM
+            from viki.core.inference_providers import BedrockLLM
+
             return BedrockLLM(merged_config)
         raise ValueError(f"Unknown provider type: {provider_type}")
 
+
 class ModelRouter:
+    CONSECUTIVE_FAIL_THRESHOLD = 3
+    COOLDOWN_SECONDS = 60
+
     def __init__(
         self,
         config_path: str,
         air_gap: bool = False,
         local_llm_only: bool = False,
         budget=None,
-        system_settings: Optional[Dict[str, Any]] = None,
+        system_settings: dict[str, Any] | None = None,
     ):
         self.models = {}
         self.default_model = None
         self.air_gap = air_gap
         self.local_llm_only = local_llm_only
         self.budget = budget
-        self._budget_config: Dict[str, Any] = {}
+        self._budget_config: dict[str, Any] = {}
         self._system_settings = system_settings
+        self._model_cooldowns: dict[str, dict[str, Any]] = {}
         self._load_config(config_path)
 
     def _model_allowed(self, model: LLMProvider) -> bool:
         if not model.available:
             return False
-        if model.config.get('training_only'):
+        if model.config.get("training_only"):
+            return False
+        if self._model_on_cooldown(model.model_name):
             return False
         try:
             cloud = model.is_cloud()
@@ -1026,7 +1196,34 @@ class ModelRouter:
                 pass
         return True
 
-    def _first_allowed_model(self) -> Optional[LLMProvider]:
+    def _model_on_cooldown(self, model_name: str) -> bool:
+        entry = self._model_cooldowns.get(model_name)
+        if not entry:
+            return False
+        if time.time() >= entry["cooldown_until"]:
+            del self._model_cooldowns[model_name]
+            return False
+        return True
+
+    def record_model_failure(self, model_name: str):
+        now = time.time()
+        entry = self._model_cooldowns.setdefault(
+            model_name, {"consecutive_failures": 0, "cooldown_until": 0}
+        )
+        entry["consecutive_failures"] += 1
+        if entry["consecutive_failures"] >= self.CONSECUTIVE_FAIL_THRESHOLD:
+            entry["cooldown_until"] = now + self.COOLDOWN_SECONDS
+            viki_logger.warning(
+                "Model '%s' failed %d times; cooling down for %ds",
+                model_name,
+                self.CONSECUTIVE_FAIL_THRESHOLD,
+                self.COOLDOWN_SECONDS,
+            )
+
+    def record_model_success(self, model_name: str):
+        self._model_cooldowns.pop(model_name, None)
+
+    def _first_allowed_model(self) -> LLMProvider | None:
         for m in self.models.values():
             if self._model_allowed(m):
                 return m
@@ -1040,25 +1237,25 @@ class ModelRouter:
 
     def _load_config(self, path: str):
         try:
-            with open(path, 'r') as f:
+            with open(path) as f:
                 config = yaml.safe_load(f)
-                
-            providers = config.get('models', {}).get('providers', {})
-            profiles = config.get('models', {}).get('profiles', {})
-            default_profile = config.get('models', {}).get('default', 'mock-model')
-            self._budget_config = dict(config.get('models', {}).get('budget', {}) or {})
+
+            providers = config.get("models", {}).get("providers", {})
+            profiles = config.get("models", {}).get("profiles", {})
+            default_profile = config.get("models", {}).get("default", "mock-model")
+            self._budget_config = dict(config.get("models", {}).get("budget", {}) or {})
 
             # Build a default LLMBudget if the controller didn't pass one in.
             if self.budget is None and self._budget_config:
                 try:
-                    from core.resource_budget import LLMBudget
+                    from viki.core.resource_budget import LLMBudget
 
                     self.budget = LLMBudget(self._budget_config)
                 except Exception as e:
                     viki_logger.debug("Failed to init LLMBudget: %s", e)
 
             for name, profile in profiles.items():
-                provider_name = profile.get('provider')
+                provider_name = profile.get("provider")
                 if provider_name in providers:
                     provider_conf = providers[provider_name]
                     # Merge `provider` name into config so providers know which one they are.
@@ -1068,7 +1265,7 @@ class ModelRouter:
                     )
                     self.models[name] = ModelFactory.create(name, eff_profile, merged_provider_conf)
 
-            preferred: Optional[LLMProvider] = None
+            preferred: LLMProvider | None = None
             if default_profile in self.models:
                 preferred = self.models[default_profile]
             elif self.models:
@@ -1077,7 +1274,9 @@ class ModelRouter:
             if preferred and self._model_allowed(preferred):
                 self.default_model = preferred
             else:
-                self.default_model = self._first_allowed_model() or FallbackLLM({'model_name': 'fallback-mock'})
+                self.default_model = self._first_allowed_model() or FallbackLLM(
+                    {"model_name": "fallback-mock"}
+                )
                 if preferred and not preferred.available:
                     viki_logger.warning(
                         "Default model profile '%s' is unavailable (%s). Using '%s' instead.",
@@ -1085,64 +1284,64 @@ class ModelRouter:
                         getattr(preferred, "unavailable_reason", "unknown"),
                         getattr(self.default_model, "model_name", "fallback"),
                     )
-                 
-        except (yaml.YAMLError, IOError, FileNotFoundError, KeyError) as e:
-            viki_logger.error(f"Failed to load model config from {path}: {e}")
-            self.default_model = FallbackLLM({'model_name': 'error-fallback'})
 
-    def get_model(self, capabilities: List[str] = None, tier: str = "standard") -> LLMProvider:
+        except (OSError, yaml.YAMLError, FileNotFoundError, KeyError) as e:
+            viki_logger.error(f"Failed to load model config from {path}: {e}")
+            self.default_model = FallbackLLM({"model_name": "error-fallback"})
+
+    def get_model(self, capabilities: list[str] = None, tier: str = "standard") -> LLMProvider:
         if not capabilities and tier == "standard":
             if self._model_allowed(self.default_model):
                 return self.default_model
             fb = self._first_allowed_model()
             return fb or self.default_model
-            
+
         best_candidate = None
         best_score = -1
-        
+
         for model in self.models.values():
             if not self._model_allowed(model):
                 continue
 
-            model_caps = model.config.get('capabilities', [])
-            model_tier = model.config.get('tier', 'standard').lower()
-            
+            model_caps = model.config.get("capabilities", [])
+            model_tier = model.config.get("tier", "standard").lower()
+
             # 1. Capability matching
             matched_caps = sum(1 for cap in (capabilities or []) if cap in model_caps)
-            
+
             # 2. Priority from config (1-4, higher is better)
-            priority = model.config.get('priority', 2)
-            
+            priority = model.config.get("priority", 2)
+
             # 3. Calculate base score
             score = (matched_caps * priority) + (model.trust_score * 0.5)
-            
+
             # 4. Tier matching bonus (Strong bias)
             if model_tier == tier.lower():
                 score += 10.0
-            
+
             # 5. Penalize high latency for fast_response capability or fast tier
-            is_fast = 'fast_response' in (capabilities or []) or tier == "fast"
+            is_fast = "fast_response" in (capabilities or []) or tier == "fast"
             if is_fast and model.avg_latency > 0:
                 latency_penalty = model.avg_latency / 10.0
                 score -= latency_penalty
-            
+
             # 6. Penalize high error rate
             if model.call_count > 10:
                 error_rate = model.error_count / model.call_count
                 error_penalty = error_rate * 5.0
                 score -= error_penalty
-            
+
             if score > best_score:
                 best_score = score
                 best_candidate = model
-        
+
         if best_candidate:
             return best_candidate
         if self._model_allowed(self.default_model):
             return self.default_model
         return self._first_allowed_model() or self.default_model
 
-    def get_health_snapshot(self) -> Dict[str, Any]:
+    def get_health_snapshot(self) -> dict[str, Any]:
         available = []
         unavailable = {}
         for name, model in self.models.items():
@@ -1176,18 +1375,20 @@ class ModelRouter:
         updated = max(0.0, min(1.0, 0.7 * prev + 0.3 * float(pass_rate)))
         model.trust_score = updated
 
-    def get_failover_chain(self, capabilities: Optional[List[str]] = None, max_models: int = 4) -> List[LLMProvider]:
+    def get_failover_chain(
+        self, capabilities: list[str] | None = None, max_models: int = 4
+    ) -> list[LLMProvider]:
         """
         Ranked list of allowed models for the given capabilities.
         Used by `chat_with_failover` and the cross-provider Ensemble.
         """
-        scored: List[tuple] = []
+        scored: list[tuple] = []
         for model in self.models.values():
             if not self._model_allowed(model):
                 continue
-            model_caps = model.config.get('capabilities', [])
+            model_caps = model.config.get("capabilities", [])
             matched = sum(1 for cap in (capabilities or []) if cap in model_caps)
-            priority = model.config.get('priority', 2)
+            priority = model.config.get("priority", 2)
             score = (matched * priority) + (model.trust_score * 0.5)
             if model.call_count > 10:
                 error_rate = model.error_count / model.call_count
@@ -1212,12 +1413,12 @@ class ModelRouter:
         return any(text.startswith(p) for p in prefixes)
 
     @staticmethod
-    def _redact_messages_for_cloud(messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    def _redact_messages_for_cloud(messages: list[dict[str, str]]) -> list[dict[str, str]]:
         """Apply secret redaction so credentials never leak across cloud boundaries."""
         try:
-            from core.security_guard import redact_secrets
+            from viki.core.security_guard import redact_secrets
 
-            redacted: List[Dict[str, str]] = []
+            redacted: list[dict[str, str]] = []
             for m in messages:
                 content = m.get("content")
                 if isinstance(content, str):
@@ -1238,11 +1439,11 @@ class ModelRouter:
 
     async def chat_with_failover(
         self,
-        messages: List[Dict[str, str]],
-        capabilities: Optional[List[str]] = None,
+        messages: list[dict[str, str]],
+        capabilities: list[str] | None = None,
         temperature: float = 0.7,
         max_attempts: int = 3,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Try the highest-scoring allowed model; on transient error, retry with the next one.
         Returns a dict with `text`, `model_name`, `attempts`, `errors`.
@@ -1250,7 +1451,7 @@ class ModelRouter:
         chain = self.get_failover_chain(capabilities, max_models=max_attempts)
         if not chain:
             chain = [self.get_model(capabilities)]
-        errors: List[Dict[str, Any]] = []
+        errors: list[dict[str, Any]] = []
         for attempt, model in enumerate(chain):
             try:
                 outbound = (

@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import List, Optional, Dict, Any
-from viki.domain.entities.learning import Lesson, FailureRecord, Relationship
+
+from viki.domain.entities.learning import FailureRecord, Lesson, Relationship
+
 
 class ILearningRepository(ABC):
     @abstractmethod
@@ -8,11 +9,11 @@ class ILearningRepository(ABC):
         pass
 
     @abstractmethod
-    def get_lesson(self, lesson_id: str) -> Optional[Lesson]:
+    def get_lesson(self, lesson_id: str) -> Lesson | None:
         pass
 
     @abstractmethod
-    def get_relevant_lessons(self, query: str, limit: int = 5) -> List[Lesson]:
+    def get_relevant_lessons(self, query: str, limit: int = 5) -> list[Lesson]:
         pass
 
     @abstractmethod
@@ -20,7 +21,7 @@ class ILearningRepository(ABC):
         pass
 
     @abstractmethod
-    def get_relevant_failures(self, query: str, limit: int = 5) -> List[FailureRecord]:
+    def get_relevant_failures(self, query: str, limit: int = 5) -> list[FailureRecord]:
         pass
 
     @abstractmethod
@@ -28,5 +29,5 @@ class ILearningRepository(ABC):
         pass
 
     @abstractmethod
-    def get_related_concepts(self, lesson_id: str) -> List[Lesson]:
+    def get_related_concepts(self, lesson_id: str) -> list[Lesson]:
         pass

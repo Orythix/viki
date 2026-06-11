@@ -1,25 +1,66 @@
 import importlib
-import pkgutil
 import inspect
 import json
 import os
 import sys
 import time
-import asyncio
-from typing import Dict, Any, Type, List, Optional
-from viki.skills.base import BaseSkill
+from dataclasses import dataclass
+from typing import Any
+
 from viki.config.logger import viki_logger
+from viki.skills.base import BaseSkill
+
+
+@dataclass
+class SkillCircuitBreaker:
+    """Per-skill circuit breaker: trips after N consecutive failures, cooldown period."""
+
+    failures: int = 0
+    last_failure_ts: float = 0.0
+    open_until_ts: float = 0.0
+    cooldown_seconds: float = 60.0
+    failure_threshold: int = 3
+
+    def is_open(self) -> bool:
+        return time.time() < self.open_until_ts
+
+    def record_success(self) -> None:
+        self.failures = 0
+        self.open_until_ts = 0.0
+
+    def record_failure(self, skill_name: str = "") -> None:
+        self.failures += 1
+        self.last_failure_ts = time.time()
+        if self.failures >= self.failure_threshold:
+            self.open_until_ts = time.time() + self.cooldown_seconds
+            viki_logger.warning(
+                "SkillCircuitBreaker tripped for '%s' (failures=%d) — cooldown %.0fs.",
+                skill_name,
+                self.failures,
+                self.cooldown_seconds,
+            )
+
 
 class SkillRegistry:
     def __init__(self):
-        self.skills: Dict[str, BaseSkill] = {}
-        self.metrics: Dict[str, Dict[str, Any]] = {} # name -> {attempts, successes, failures, avg_latency}
-        
+        self.skills: dict[str, BaseSkill] = {}
+        self.metrics: dict[
+            str, dict[str, Any]
+        ] = {}  # name -> {attempts, successes, failures, avg_latency}
+        self._breakers: dict[str, SkillCircuitBreaker] = {}
+
         # v26: Intent to Skill Mapping for Progressive Disclosure
         self.intent_map = {
             "media_control": ["media_control", "voice"],
             "system_command": ["system_control", "shell", "endpoint_guard"],
-            "coding": ["dev_skill", "python_interpreter", "filesystem_skill", "coding_workflow", "manus", "lsp_tools"],
+            "coding": [
+                "dev_skill",
+                "python_interpreter",
+                "filesystem_skill",
+                "coding_workflow",
+                "manus",
+                "lsp_tools",
+            ],
             "research": ["research", "summarize", "market_explorer", "pdf"],
             "security": ["security_tools", "autonomous_auditor", "mutation_pilot"],
             "governance": ["cache_pilot", "context_weaver", "mind_trace", "log_voyager"],
@@ -30,7 +71,7 @@ class SkillRegistry:
             "ai": [],
             "productivity": [],
         }
-        
+
         # Path for persistence
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self.data_path = os.path.join(base_dir, "data", "skill_metrics.json")
@@ -53,104 +94,132 @@ class SkillRegistry:
         """Retrieve a skill by name."""
         return self.skills.get(name)
 
-    def list_skills(self) -> List[str]:
+    def list_skills(self) -> list[str]:
         """List all registered skill names."""
         return list(self.skills.keys())
 
+    def is_skill_available(self, skill_name: str) -> bool:
+        """Check if skill circuit breaker allows execution."""
+        breaker = self._breakers.get(skill_name)
+        if breaker is not None and breaker.is_open():
+            viki_logger.warning("Skill '%s' is circuit-broken — skipping.", skill_name)
+            return False
+        return True
+
     def record_execution(self, skill_name: str, success: bool, latency: float):
-        """Update metrics for a skill execution."""
+        """Update metrics for a skill execution and update circuit breaker."""
         if skill_name not in self.metrics:
-            self.metrics[skill_name] = {"attempts": 0, "successes": 0, "failures": 0, "avg_latency": 0.0}
-        
+            self.metrics[skill_name] = {
+                "attempts": 0,
+                "successes": 0,
+                "failures": 0,
+                "avg_latency": 0.0,
+            }
+
         m = self.metrics[skill_name]
         m["attempts"] += 1
         if success:
             m["successes"] += 1
+            breaker = self._breakers.get(skill_name)
+            if breaker is not None:
+                breaker.record_success()
         else:
             m["failures"] += 1
-            
+            breaker = self._breakers.setdefault(skill_name, SkillCircuitBreaker())
+            breaker.record_failure(skill_name)
+
         # Running average for latency
         prev_avg = m["avg_latency"]
         n = m["attempts"]
         m["avg_latency"] = ((prev_avg * (n - 1)) + latency) / n
-        
+
         self._save_metrics()
 
     def get_reliability_score(self, skill_name: str) -> str:
         """Return a formatted reliability string (e.g., '95% Success')."""
         if skill_name not in self.metrics:
             return "(Untested)"
-        
+
         m = self.metrics[skill_name]
         if m["attempts"] == 0:
             return "(Untested)"
-            
+
         rate = (m["successes"] / m["attempts"]) * 100
         latency = m["avg_latency"]
-        
+
         status = ""
-        if rate < 50: status = "UNSTABLE"
-        elif rate > 90: status = "RELIABLE"
-        
+        if rate < 50:
+            status = "UNSTABLE"
+        elif rate > 90:
+            status = "RELIABLE"
+
         return f"{rate:.0f}% Success ({latency:.2f}s) {status}"
 
-    def get_context_description(self, mode: str = "metadata", names: List[str] = None, skip_escalation: bool = False) -> str:
+    def get_context_description(
+        self, mode: str = "metadata", names: list[str] = None, skip_escalation: bool = False
+    ) -> str:
         """Generate formatted skill list for LLM context.
-        
+
         Args:
             mode: 'metadata' (name+desc) or 'full' (schema+instructions)
             names: Optional list of skill names to include (if None, all are included)
             skip_escalation: If True, skip skills marked as escalation-only (playbooks, etc.)
         """
         escalation_skills = {"engineering_playbook", "megatron_lm_playbook", "coding_workflow"}
-        
+
         if mode == "metadata":
             lines = ["TOOLS (Metadata Only):"]
             for name, skill in self.skills.items():
-                if names and name not in names: continue
-                if skip_escalation and name in escalation_skills: continue
+                if names and name not in names:
+                    continue
+                if skip_escalation and name in escalation_skills:
+                    continue
                 metrics = self.get_reliability_score(name)
                 # Keep it very short (~100 tokens for all)
                 lines.append(f"- {name}: {skill.description[:100]}... [{metrics}]")
             return "\n".join(lines)
-        
-        else: # Full mode
+
+        else:  # Full mode
             lines = ["TOOL MANIFESTS (Full Specs):"]
             for name, skill in self.skills.items():
-                if names and name not in names: continue
-                if skip_escalation and name in escalation_skills: continue
+                if names and name not in names:
+                    continue
+                if skip_escalation and name in escalation_skills:
+                    continue
                 schema_json = json.dumps(skill.schema, indent=2)
-                lines.append(f"## {name}\n{skill.description}\n\nINSTRUCTIONS:\n{skill.instructions}\n\nSCHEMA:\n{schema_json}\n")
+                lines.append(
+                    f"## {name}\n{skill.description}\n\nINSTRUCTIONS:\n{skill.instructions}\n\nSCHEMA:\n{schema_json}\n"
+                )
             return "\n".join(lines)
 
-    def get_relevant_skill_names(self, intent: str, user_input: str) -> List[str]:
+    def get_relevant_skill_names(self, intent: str, user_input: str) -> list[str]:
         """Find skill names relevant to the current intent and input."""
         relevant = set(self.intent_map.get(intent, []))
-        
+
         # Also check for direct name mentions in input
         input_lower = user_input.lower()
         for name in self.skills:
             if name in input_lower:
                 relevant.add(name)
-        
+
         return list(relevant)
 
     def _load_metrics(self):
         if os.path.exists(self.data_path):
             try:
-                with open(self.data_path, 'r') as f:
+                with open(self.data_path) as f:
                     self.metrics = json.load(f)
             except Exception as e:
                 viki_logger.error(f"Failed to load metrics: {e}")
 
     def _save_metrics(self):
         try:
-            with open(self.data_path, 'w') as f:
+            with open(self.data_path, "w") as f:
                 json.dump(self.metrics, f, indent=2)
         except Exception as e:
             viki_logger.error(f"Failed to save metrics: {e}")
 
-    def get_refactor_recommendations(self) -> List[str]:
+    def get_refactor_recommendations(self) -> list[str]:
         """Identify skills that are chronically unstable and recommend refactors."""
         recommendations = []
         for name, m in self.metrics.items():
@@ -175,28 +244,32 @@ class SkillRegistry:
             return
 
         viki_logger.info(f"Discovering skills in {plugin_dir}...")
-        
+
         sys.path.insert(0, plugin_dir)
-        
+
         for filename in os.listdir(plugin_dir):
             if filename.endswith(".py") and not filename.startswith("__"):
                 module_name = filename[:-3]
                 try:
                     module = importlib.import_module(module_name)
-                    
+
                     # Inspect for BaseSkill subclasses
                     for name, obj in inspect.getmembers(module):
-                        if inspect.isclass(obj) and issubclass(obj, BaseSkill) and obj is not BaseSkill:
+                        if (
+                            inspect.isclass(obj)
+                            and issubclass(obj, BaseSkill)
+                            and obj is not BaseSkill
+                        ):
                             try:
                                 skill_instance = obj()
                                 self.register_skill(skill_instance)
                                 viki_logger.info(f"Loaded plugin skill: {skill_instance.name}")
                             except Exception as e:
                                 viki_logger.error(f"Failed to instantiate skill {name}: {e}")
-                                
+
                 except Exception as e:
                     viki_logger.error(f"Failed to load module {module_name}: {e}")
-        
+
         # Clean up path
         sys.path.pop(0)
 
@@ -207,34 +280,36 @@ class SkillRegistry:
             return
 
         try:
-            with open(path, "r") as f:
+            with open(path) as f:
                 data = json.load(f)
-            
+
             count = 0
             for category, skills in data.items():
                 for spec in skills:
                     name = spec["name"]
                     desc = spec["description"]
                     cmd = spec["command"]
-                    
+
                     # Register as a BridgeSkill
                     skill = LibrarySkillBridge(name, desc, cmd, controller)
                     self.register_skill(skill)
-                    
+
                     # Also update intent map
                     if category in self.intent_map:
                         self.intent_map[category].append(name)
                     else:
                         self.intent_map.setdefault("general", []).append(name)
-                    
+
                     count += 1
-            
+
             viki_logger.info(f"Sovereign Tool Hub: Successfully loaded {count} skills.")
         except Exception as e:
             viki_logger.error(f"Failed to load Sovereign Library: {e}")
 
+
 class LibrarySkillBridge(BaseSkill):
     """A generic skill that executes a predefined command template."""
+
     def __init__(self, name: str, description: str, command_template: str, controller: Any):
         super().__init__()
         self._name = name
@@ -251,32 +326,30 @@ class LibrarySkillBridge(BaseSkill):
         return self._description
 
     @property
-    def schema(self) -> Dict[str, Any]:
+    def schema(self) -> dict[str, Any]:
         # Extract variables from template like {path}
         import re
-        vars = re.findall(r'\{(\w+)\}', self._command_template)
+
+        vars = re.findall(r"\{(\w+)\}", self._command_template)
         properties = {}
         for v in vars:
             properties[v] = {"type": "string", "description": f"Value for {v}"}
-        
-        return {
-            "type": "object",
-            "properties": properties,
-            "required": vars
-        }
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+        return {"type": "object", "properties": properties, "required": vars}
+
+    async def execute(self, params: dict[str, Any]) -> str:
         try:
             # Format command
             cmd = self._command_template.format(**params)
-            
+
             # Execute via shell skill or controller's sandbox
             shell = self._controller.skill_registry.get_skill("shell")
             if shell:
                 return await shell.execute({"command": cmd})
-            
+
             # Fallback to subprocess if shell skill not available
             import subprocess
+
             proc = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
             return proc.stdout or proc.stderr or "Success (No Output)"
         except Exception as e:

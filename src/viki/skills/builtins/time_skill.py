@@ -1,5 +1,6 @@
 from datetime import datetime
-from typing import Dict, Any
+from typing import Any
+
 from viki.skills.base import BaseSkill
 
 # Fuzzy location -> IANA timezone name mapping for common queries
@@ -125,7 +126,7 @@ class TimeSkill(BaseSkill):
         return (
             "Returns the current time and date. "
             "Accepts an optional 'location' or 'timezone' parameter to get time in any city or country. "
-            "Examples: {\"location\": \"Sweden\"}, {\"timezone\": \"America/New_York\"}, {} for local time."
+            'Examples: {"location": "Sweden"}, {"timezone": "America/New_York"}, {} for local time.'
         )
 
     @property
@@ -135,16 +136,16 @@ class TimeSkill(BaseSkill):
             "properties": {
                 "location": {
                     "type": "string",
-                    "description": "City or country name, e.g. 'Sweden', 'Tokyo', 'New York'"
+                    "description": "City or country name, e.g. 'Sweden', 'Tokyo', 'New York'",
                 },
                 "timezone": {
                     "type": "string",
-                    "description": "IANA timezone string, e.g. 'Europe/Stockholm', 'America/New_York'"
-                }
-            }
+                    "description": "IANA timezone string, e.g. 'Europe/Stockholm', 'America/New_York'",
+                },
+            },
         }
 
-    async def execute(self, params: Dict[str, Any] = None) -> str:
+    async def execute(self, params: dict[str, Any] = None) -> str:
         params = params or {}
         location = (params.get("location") or "").strip()
         tz_name = (params.get("timezone") or "").strip()
@@ -162,6 +163,7 @@ class TimeSkill(BaseSkill):
         if tz_name:
             try:
                 from zoneinfo import ZoneInfo
+
                 tz = ZoneInfo(tz_name)
                 now = datetime.now(tz)
                 label = location or tz_name

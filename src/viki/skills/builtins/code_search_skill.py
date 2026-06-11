@@ -22,16 +22,17 @@ import os
 import re
 import sqlite3
 import time
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from dataclasses import dataclass
+from typing import Any
 
 from viki.config.logger import viki_logger
 from viki.skills.base import BaseSkill
 
-
 _PY_DEF_RE = re.compile(r"^\s*(?:async\s+)?def\s+(?P<name>\w+)\s*\(", re.MULTILINE)
 _PY_CLASS_RE = re.compile(r"^\s*class\s+(?P<name>\w+)\s*[\(:]", re.MULTILINE)
-_TS_FN_RE = re.compile(r"^\s*(?:export\s+)?(?:async\s+)?function\s+(?P<name>\w+)\s*\(", re.MULTILINE)
+_TS_FN_RE = re.compile(
+    r"^\s*(?:export\s+)?(?:async\s+)?function\s+(?P<name>\w+)\s*\(", re.MULTILINE
+)
 _TS_CLASS_RE = re.compile(r"^\s*(?:export\s+)?class\s+(?P<name>\w+)\b", re.MULTILINE)
 
 
@@ -42,10 +43,10 @@ class CodeChunk:
     end_line: int
     language: str
     text: str
-    symbol: Optional[str] = None
-    embedding: Optional[List[float]] = None
+    symbol: str | None = None
+    embedding: list[float] | None = None
 
-    def as_dict(self) -> Dict[str, Any]:
+    def as_dict(self) -> dict[str, Any]:
         return {
             "path": self.path,
             "start_line": self.start_line,
@@ -83,22 +84,33 @@ class CodeSearchSkill(BaseSkill):
         ".hpp": "cpp",
         ".cs": "csharp",
     }
-    IGNORE_DIRS = {".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build", ".tox", ".cursor", ".pytest_cache"}
+    IGNORE_DIRS = {
+        ".git",
+        "node_modules",
+        ".venv",
+        "venv",
+        "__pycache__",
+        "dist",
+        "build",
+        ".tox",
+        ".cursor",
+        ".pytest_cache",
+    }
     MAX_CHUNK_LINES = 60
 
     def __init__(self, controller=None):
         self._controller = controller
-        self._chunks: List[CodeChunk] = []
-        self._symbols: List[SymbolEntry] = []
+        self._chunks: list[CodeChunk] = []
+        self._symbols: list[SymbolEntry] = []
         self._encoder = None
         try:
-            from core.embeddings import get_encoder
+            from viki.core.embeddings import get_encoder
 
             self._encoder = get_encoder()
         except Exception as e:
             viki_logger.debug("code_search: encoder unavailable (%s); using lexical ranking.", e)
-        self._index_db: Optional[sqlite3.Connection] = None
-        self._index_db_path: Optional[str] = None
+        self._index_db: sqlite3.Connection | None = None
+        self._index_db_path: str | None = None
         self._open_index_db()
         self._load_from_index()
 
@@ -112,7 +124,9 @@ class CodeSearchSkill(BaseSkill):
             data_dir = self._data_dir()
             os.makedirs(data_dir, exist_ok=True)
             self._index_db_path = os.path.join(data_dir, "code_index.db")
-            self._index_db = sqlite3.connect(self._index_db_path, check_same_thread=False, timeout=30.0)
+            self._index_db = sqlite3.connect(
+                self._index_db_path, check_same_thread=False, timeout=30.0
+            )
             self._index_db.execute("PRAGMA journal_mode=WAL")
             self._index_db.row_factory = sqlite3.Row
             self._index_db.executescript(
@@ -148,7 +162,9 @@ class CodeSearchSkill(BaseSkill):
             )
             self._index_db.commit()
         except Exception as e:
-            viki_logger.debug("code_search: index DB unavailable (%s); falling back to memory only.", e)
+            viki_logger.debug(
+                "code_search: index DB unavailable (%s); falling back to memory only.", e
+            )
             self._index_db = None
 
     def _load_from_index(self) -> None:
@@ -156,7 +172,7 @@ class CodeSearchSkill(BaseSkill):
             return
         try:
             cur = self._index_db.cursor()
-            chunks: List[CodeChunk] = []
+            chunks: list[CodeChunk] = []
             for r in cur.execute(
                 "SELECT path, start_line, end_line, language, symbol, text, embedding FROM chunks"
             ):
@@ -166,21 +182,35 @@ class CodeSearchSkill(BaseSkill):
                         emb = json.loads(r["embedding"])
                     except Exception:
                         emb = None
-                chunks.append(CodeChunk(
-                    path=r["path"], start_line=r["start_line"], end_line=r["end_line"],
-                    language=r["language"], text=r["text"], symbol=r["symbol"], embedding=emb,
-                ))
+                chunks.append(
+                    CodeChunk(
+                        path=r["path"],
+                        start_line=r["start_line"],
+                        end_line=r["end_line"],
+                        language=r["language"],
+                        text=r["text"],
+                        symbol=r["symbol"],
+                        embedding=emb,
+                    )
+                )
             self._chunks = chunks
-            symbols: List[SymbolEntry] = []
+            symbols: list[SymbolEntry] = []
             for r in cur.execute("SELECT name, path, line, language, kind FROM symbols"):
-                symbols.append(SymbolEntry(
-                    name=r["name"], path=r["path"], line=r["line"],
-                    language=r["language"] or "", kind=r["kind"] or "function",
-                ))
+                symbols.append(
+                    SymbolEntry(
+                        name=r["name"],
+                        path=r["path"],
+                        line=r["line"],
+                        language=r["language"] or "",
+                        kind=r["kind"] or "function",
+                    )
+                )
             self._symbols = symbols
             viki_logger.info(
                 "code_search: loaded %d chunks / %d symbols from %s",
-                len(chunks), len(symbols), self._index_db_path,
+                len(chunks),
+                len(symbols),
+                self._index_db_path,
             )
         except Exception as e:
             viki_logger.debug("code_search: failed to load index: %s", e)
@@ -220,7 +250,7 @@ class CodeSearchSkill(BaseSkill):
         )
 
     @property
-    def schema(self) -> Dict[str, Any]:
+    def schema(self) -> dict[str, Any]:
         return {
             "type": "object",
             "properties": {
@@ -231,20 +261,28 @@ class CodeSearchSkill(BaseSkill):
                 },
                 "query": {"type": "string", "description": "Search text or symbol name."},
                 "top_k": {"type": "integer", "default": 5},
-                "language": {"type": "string", "description": "Optional language filter for symbol search."},
+                "language": {
+                    "type": "string",
+                    "description": "Optional language filter for symbol search.",
+                },
                 "path": {"type": "string", "description": "File path for explain_code."},
-                "workspace_dir": {"type": "string", "description": "Optional workspace dir override for scan."},
+                "workspace_dir": {
+                    "type": "string",
+                    "description": "Optional workspace dir override for scan.",
+                },
             },
             "required": ["action"],
         }
 
     # --- public API used by Planner / DevSkill ---
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         action = (params.get("action") or "").lower()
         if action == "scan":
             workspace = params.get("workspace_dir") or self._workspace_dir()
             n_files, n_chunks, n_symbols = self.scan(workspace)
-            return f"Indexed {n_files} files, {n_chunks} chunks, {n_symbols} symbols from {workspace}."
+            return (
+                f"Indexed {n_files} files, {n_chunks} chunks, {n_symbols} symbols from {workspace}."
+            )
         if action == "search":
             query = params.get("query") or ""
             top_k = int(params.get("top_k") or 5)
@@ -255,7 +293,16 @@ class CodeSearchSkill(BaseSkill):
             language = params.get("language")
             results = self.find_symbol(name, language=language)
             return json.dumps(
-                [{"name": s.name, "path": s.path, "line": s.line, "kind": s.kind, "language": s.language} for s in results],
+                [
+                    {
+                        "name": s.name,
+                        "path": s.path,
+                        "line": s.line,
+                        "kind": s.kind,
+                        "language": s.language,
+                    }
+                    for s in results
+                ],
                 indent=2,
             )
         if action == "explain_code":
@@ -275,20 +322,20 @@ class CodeSearchSkill(BaseSkill):
                 return f"Error: File '{path}' not found."
 
         try:
-            with open(path, 'r', encoding='utf-8', errors='ignore') as f:
+            with open(path, encoding="utf-8", errors="ignore") as f:
                 content = f.read()
-            
+
             # Truncate if too large for prompt
             if len(content) > 10000:
                 content = content[:10000] + "\n... (truncated)"
-            
+
             model = self._controller.model_router.get_model(["reasoning", "fast_response"])
             prompt = (
                 f"Explain the purpose and architectural logic of the following file: {path}\n\n"
                 f"```\n{content}\n```\n\n"
                 f"Provide a concise summary of main classes, functions, and the overall flow."
             )
-            
+
             return await model.chat([{"role": "user", "content": prompt}])
         except Exception as e:
             return f"Explain Error: {e}"
@@ -299,14 +346,14 @@ class CodeSearchSkill(BaseSkill):
         return os.getcwd()
 
     # --- index build ---
-    def scan(self, workspace_dir: str, incremental: bool = True) -> Tuple[int, int, int]:
+    def scan(self, workspace_dir: str, incremental: bool = True) -> tuple[int, int, int]:
         """
         Walk `workspace_dir` and refresh the index. When `incremental=True`
         and a SQLite cache exists, only files whose `(mtime, size, sha256)`
         changed are re-indexed; everything else is loaded from cache.
         """
         t0 = time.perf_counter()
-        existing: Dict[str, Tuple[float, int, str]] = {}
+        existing: dict[str, tuple[float, int, str]] = {}
         if self._index_db is not None and incremental:
             try:
                 cur = self._index_db.cursor()
@@ -316,12 +363,12 @@ class CodeSearchSkill(BaseSkill):
                 viki_logger.debug("code_search: existing-files lookup failed: %s", e)
                 existing = {}
 
-        seen_paths: List[str] = []
+        seen_paths: list[str] = []
         n_files_visited = 0
         n_files_reindexed = 0
-        new_chunks: List[CodeChunk] = []
-        new_symbols: List[SymbolEntry] = []
-        new_file_meta: List[Tuple[str, float, int, str, str]] = []
+        new_chunks: list[CodeChunk] = []
+        new_symbols: list[SymbolEntry] = []
+        new_file_meta: list[tuple[str, float, int, str, str]] = []
 
         for root, dirs, files in os.walk(workspace_dir):
             dirs[:] = [d for d in dirs if d not in self.IGNORE_DIRS]
@@ -337,7 +384,7 @@ class CodeSearchSkill(BaseSkill):
                 except Exception:
                     continue
                 try:
-                    with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                    with open(path, encoding="utf-8", errors="ignore") as f:
                         source = f.read()
                 except Exception:
                     continue
@@ -378,15 +425,18 @@ class CodeSearchSkill(BaseSkill):
         self._persist_chunks(new_chunks, new_symbols, new_file_meta)
         viki_logger.info(
             "code_search: visited %d files, reindexed %d in %.2fs (incremental=%s)",
-            n_files_visited, n_files_reindexed, time.perf_counter() - t0, incremental,
+            n_files_visited,
+            n_files_reindexed,
+            time.perf_counter() - t0,
+            incremental,
         )
         return n_files_visited, len(self._chunks), len(self._symbols)
 
     def _persist_chunks(
         self,
-        chunks: List[CodeChunk],
-        symbols: List[SymbolEntry],
-        file_meta: List[Tuple[str, float, int, str, str]],
+        chunks: list[CodeChunk],
+        symbols: list[SymbolEntry],
+        file_meta: list[tuple[str, float, int, str, str]],
     ) -> None:
         if self._index_db is None:
             return
@@ -397,7 +447,12 @@ class CodeSearchSkill(BaseSkill):
                     "INSERT INTO chunks (path, start_line, end_line, language, symbol, text, embedding) "
                     "VALUES (?, ?, ?, ?, ?, ?, ?)",
                     (
-                        c.path, c.start_line, c.end_line, c.language, c.symbol, c.text,
+                        c.path,
+                        c.start_line,
+                        c.end_line,
+                        c.language,
+                        c.symbol,
+                        c.text,
                         json.dumps(c.embedding) if c.embedding else None,
                     ),
                 )
@@ -416,23 +471,27 @@ class CodeSearchSkill(BaseSkill):
         except Exception as e:
             viki_logger.debug("code_search: persist failed: %s", e)
 
-    def _chunk_file(self, path: str, source: str, lang: str) -> Tuple[List[CodeChunk], List[SymbolEntry]]:
+    def _chunk_file(
+        self, path: str, source: str, lang: str
+    ) -> tuple[list[CodeChunk], list[SymbolEntry]]:
         # Try tree-sitter first for high-quality symbols.
         res_ts = self._chunk_with_treesitter(path, source, lang)
-        
-        # Always generate sliding-window chunks via the regex path to ensure 
+
+        # Always generate sliding-window chunks via the regex path to ensure
         # that top-level logic, global variables, and comments are searchable.
         chunks_regex, symbols_regex = self._chunk_with_regex(path, source, lang)
-        
+
         if res_ts is not None:
             chunks_ts, symbols_ts = res_ts
-            # Merge them: tree-sitter gives us precise symbol chunks, 
+            # Merge them: tree-sitter gives us precise symbol chunks,
             # regex gives us full-file coverage. Overlap is acceptable for search.
             return chunks_ts + chunks_regex, symbols_ts
-            
+
         return chunks_regex, symbols_regex
 
-    def _chunk_with_treesitter(self, path: str, source: str, lang: str) -> Optional[Tuple[List[CodeChunk], List[SymbolEntry]]]:
+    def _chunk_with_treesitter(
+        self, path: str, source: str, lang: str
+    ) -> tuple[list[CodeChunk], list[SymbolEntry]] | None:
         try:
             import tree_sitter_languages  # type: ignore
 
@@ -441,12 +500,18 @@ class CodeSearchSkill(BaseSkill):
         except Exception:
             return None
 
-        chunks: List[CodeChunk] = []
-        symbols: List[SymbolEntry] = []
+        chunks: list[CodeChunk] = []
+        symbols: list[SymbolEntry] = []
 
         def walk(node):
             kind = node.type
-            if kind in ("function_definition", "class_definition", "method_definition", "function_declaration", "class_declaration"):
+            if kind in (
+                "function_definition",
+                "class_definition",
+                "method_definition",
+                "function_declaration",
+                "class_declaration",
+            ):
                 start = node.start_point[0] + 1
                 end = node.end_point[0] + 1
                 # Pull symbol name from first identifier child.
@@ -483,26 +548,44 @@ class CodeSearchSkill(BaseSkill):
         walk(tree.root_node)
         return chunks, symbols
 
-    def _chunk_with_regex(self, path: str, source: str, lang: str) -> Tuple[List[CodeChunk], List[SymbolEntry]]:
-        symbols: List[SymbolEntry] = []
+    def _chunk_with_regex(
+        self, path: str, source: str, lang: str
+    ) -> tuple[list[CodeChunk], list[SymbolEntry]]:
+        symbols: list[SymbolEntry] = []
         if lang == "python":
             for m in _PY_DEF_RE.finditer(source):
                 line = source.count("\n", 0, m.start()) + 1
-                symbols.append(SymbolEntry(name=m.group("name"), path=path, line=line, language=lang, kind="function"))
+                symbols.append(
+                    SymbolEntry(
+                        name=m.group("name"), path=path, line=line, language=lang, kind="function"
+                    )
+                )
             for m in _PY_CLASS_RE.finditer(source):
                 line = source.count("\n", 0, m.start()) + 1
-                symbols.append(SymbolEntry(name=m.group("name"), path=path, line=line, language=lang, kind="class"))
+                symbols.append(
+                    SymbolEntry(
+                        name=m.group("name"), path=path, line=line, language=lang, kind="class"
+                    )
+                )
         elif lang in ("javascript", "typescript"):
             for m in _TS_FN_RE.finditer(source):
                 line = source.count("\n", 0, m.start()) + 1
-                symbols.append(SymbolEntry(name=m.group("name"), path=path, line=line, language=lang, kind="function"))
+                symbols.append(
+                    SymbolEntry(
+                        name=m.group("name"), path=path, line=line, language=lang, kind="function"
+                    )
+                )
             for m in _TS_CLASS_RE.finditer(source):
                 line = source.count("\n", 0, m.start()) + 1
-                symbols.append(SymbolEntry(name=m.group("name"), path=path, line=line, language=lang, kind="class"))
+                symbols.append(
+                    SymbolEntry(
+                        name=m.group("name"), path=path, line=line, language=lang, kind="class"
+                    )
+                )
 
         # Sliding-window chunks for ranking.
         lines = source.splitlines()
-        chunks: List[CodeChunk] = []
+        chunks: list[CodeChunk] = []
         i = 0
         while i < len(lines):
             j = min(i + self.MAX_CHUNK_LINES, len(lines))
@@ -520,13 +603,13 @@ class CodeSearchSkill(BaseSkill):
             i = j
         return chunks, symbols
 
-    def _embed_chunks(self, chunks: List[CodeChunk]) -> None:
+    def _embed_chunks(self, chunks: list[CodeChunk]) -> None:
         if not chunks or self._encoder is None:
             return
         try:
             texts = [c.text for c in chunks]
             embs = self._encoder.encode(texts, convert_to_tensor=False)
-            for c, e in zip(chunks, embs):
+            for c, e in zip(chunks, embs, strict=False):
                 if hasattr(e, "tolist"):
                     c.embedding = e.tolist()
                 else:
@@ -535,7 +618,7 @@ class CodeSearchSkill(BaseSkill):
             viki_logger.debug("code_search: embedding pass failed: %s", exc)
 
     # --- queries ---
-    def search(self, query: str, top_k: int = 5) -> List[CodeChunk]:
+    def search(self, query: str, top_k: int = 5) -> list[CodeChunk]:
         if not self._chunks:
             self.scan(self._workspace_dir())
         if not self._chunks:
@@ -544,14 +627,14 @@ class CodeSearchSkill(BaseSkill):
             return self._semantic_rank(query, top_k)
         return self._lexical_rank(query, top_k)
 
-    def _semantic_rank(self, query: str, top_k: int) -> List[CodeChunk]:
+    def _semantic_rank(self, query: str, top_k: int) -> list[CodeChunk]:
         try:
             import numpy as np
 
             q_emb = self._encoder.encode(query, convert_to_tensor=False)
             q_vec = np.asarray(q_emb, dtype=float)
             q_norm = q_vec / (np.linalg.norm(q_vec) + 1e-9)
-            scored: List[Tuple[float, CodeChunk]] = []
+            scored: list[tuple[float, CodeChunk]] = []
             for chunk in self._chunks:
                 if not chunk.embedding:
                     continue
@@ -565,9 +648,9 @@ class CodeSearchSkill(BaseSkill):
             viki_logger.debug("code_search semantic rank failed: %s", e)
             return self._lexical_rank(query, top_k)
 
-    def _lexical_rank(self, query: str, top_k: int) -> List[CodeChunk]:
+    def _lexical_rank(self, query: str, top_k: int) -> list[CodeChunk]:
         q_tokens = {w for w in re.findall(r"\w+", query.lower()) if len(w) > 2}
-        scored: List[Tuple[float, CodeChunk]] = []
+        scored: list[tuple[float, CodeChunk]] = []
         for chunk in self._chunks:
             tokens = {w for w in re.findall(r"\w+", chunk.text.lower()) if len(w) > 2}
             if not tokens or not q_tokens:
@@ -579,7 +662,7 @@ class CodeSearchSkill(BaseSkill):
         scored.sort(key=lambda x: -x[0])
         return [c for _, c in scored[:top_k]]
 
-    def find_symbol(self, name: str, language: Optional[str] = None) -> List[SymbolEntry]:
+    def find_symbol(self, name: str, language: str | None = None) -> list[SymbolEntry]:
         if not self._symbols:
             self.scan(self._workspace_dir())
         results = [s for s in self._symbols if s.name == name]

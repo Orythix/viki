@@ -22,9 +22,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import textwrap
 from dataclasses import dataclass
-from typing import Dict, List, Optional
 
 from viki.config.logger import viki_logger
 
@@ -51,7 +49,7 @@ class _BaseSandbox:
 class SubprocessSandbox(_BaseSandbox):
     backend = "subprocess"
 
-    def __init__(self, workspace_dir: Optional[str] = None):
+    def __init__(self, workspace_dir: str | None = None):
         self.workspace_dir = workspace_dir
 
     async def run_python(self, code: str, timeout: int) -> SandboxResult:
@@ -64,9 +62,15 @@ class SubprocessSandbox(_BaseSandbox):
     async def run_shell(self, command: str, timeout: int) -> SandboxResult:
         return await self._run(["bash", "-lc", command], timeout, cwd=self.workspace_dir)
 
-    async def _run(self, argv: List[str], timeout: int, cwd: Optional[str]) -> SandboxResult:
+    async def _run(self, argv: list[str], timeout: int, cwd: str | None) -> SandboxResult:
         clean_env = os.environ.copy()
-        for key in ("OPENAI_API_KEY", "HF_TOKEN", "AWS_SECRET_ACCESS_KEY", "SECRET_KEY", "VIKI_API_KEY"):
+        for key in (
+            "OPENAI_API_KEY",
+            "HF_TOKEN",
+            "AWS_SECRET_ACCESS_KEY",
+            "SECRET_KEY",
+            "VIKI_API_KEY",
+        ):
             clean_env.pop(key, None)
 
         def _run_sync() -> SandboxResult:
@@ -101,8 +105,8 @@ class DockerSandbox(_BaseSandbox):
 
     def __init__(
         self,
-        workspace_dir: Optional[str] = None,
-        image: Optional[str] = None,
+        workspace_dir: str | None = None,
+        image: str | None = None,
         cpu_limit: float = 1.0,
         memory_limit: str = "512m",
         allow_network: bool = False,
@@ -117,11 +121,15 @@ class DockerSandbox(_BaseSandbox):
     def is_available() -> bool:
         return shutil.which("docker") is not None
 
-    def _docker_args(self, mount_target: str) -> List[str]:
+    def _docker_args(self, mount_target: str) -> list[str]:
         args = [
-            "docker", "run", "--rm",
-            "--cpus", str(self.cpu_limit),
-            "--memory", self.memory_limit,
+            "docker",
+            "run",
+            "--rm",
+            "--cpus",
+            str(self.cpu_limit),
+            "--memory",
+            self.memory_limit,
             "--read-only",  # protect host fs; /workspace is rw mount
         ]
         if not self.allow_network:
@@ -149,7 +157,7 @@ class DockerSandbox(_BaseSandbox):
         argv = self._docker_args(mount) + [self.image, "bash", "-lc", command]
         return await self._run(argv, timeout)
 
-    async def _run(self, argv: List[str], timeout: int) -> SandboxResult:
+    async def _run(self, argv: list[str], timeout: int) -> SandboxResult:
         def _run_sync() -> SandboxResult:
             try:
                 proc = subprocess.run(
@@ -167,7 +175,7 @@ class DockerSandbox(_BaseSandbox):
         return await asyncio.to_thread(_run_sync)
 
 
-def get_sandbox(controller=None, workspace_dir: Optional[str] = None) -> _BaseSandbox:
+def get_sandbox(controller=None, workspace_dir: str | None = None) -> _BaseSandbox:
     """
     Pick the active sandbox backend.
 

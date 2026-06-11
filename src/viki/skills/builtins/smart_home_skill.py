@@ -2,10 +2,9 @@
 Smart home: Philips Hue, Eight Sleep (optional). Config: hue bridge IP, API keys in env.
 """
 import os
-import asyncio
-from typing import Dict, Any
+from typing import Any
+
 from viki.skills.base import BaseSkill
-from viki.config.logger import viki_logger
 
 
 class SmartHomeSkill(BaseSkill):
@@ -22,13 +21,17 @@ class SmartHomeSkill(BaseSkill):
         return {
             "type": "object",
             "properties": {
-                "action": {"type": "string", "enum": ["lights_on", "lights_off", "brightness", "bed_temp"], "description": "Action."},
+                "action": {
+                    "type": "string",
+                    "enum": ["lights_on", "lights_off", "brightness", "bed_temp"],
+                    "description": "Action.",
+                },
                 "value": {"type": "number", "description": "Brightness 0-254 or temperature."},
             },
             "required": ["action"],
         }
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         action = (params.get("action") or "").lower()
         bridge_ip = os.environ.get("VIKI_HUE_BRIDGE_IP")
         if not bridge_ip and action.startswith("lights"):
@@ -36,6 +39,7 @@ class SmartHomeSkill(BaseSkill):
         if action == "lights_on":
             try:
                 import aiohttp
+
                 # Hue API: put /api/<user>/lights/1/state {"on": true}
                 user = os.environ.get("VIKI_HUE_USER") or ""
                 if not user:
@@ -53,6 +57,7 @@ class SmartHomeSkill(BaseSkill):
         if action == "lights_off":
             try:
                 import aiohttp
+
                 user = os.environ.get("VIKI_HUE_USER") or ""
                 if not user:
                     return "Set VIKI_HUE_USER."
@@ -71,6 +76,7 @@ class SmartHomeSkill(BaseSkill):
             val = max(0, min(254, val))
             try:
                 import aiohttp
+
                 user = os.environ.get("VIKI_HUE_USER") or ""
                 if not user:
                     return "Set VIKI_HUE_USER."

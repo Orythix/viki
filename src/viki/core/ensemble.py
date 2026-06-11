@@ -10,7 +10,7 @@ agents' outputs and returns it under the `synthesizer` key in the trace.
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from viki.config.logger import viki_logger
 
@@ -21,8 +21,8 @@ class EnsembleAgent:
         name: str,
         role: str,
         instruction: str,
-        preferred_capabilities: Optional[List[str]] = None,
-        provider_hint: Optional[str] = None,
+        preferred_capabilities: list[str] | None = None,
+        provider_hint: str | None = None,
     ):
         self.name = name
         self.role = role
@@ -46,7 +46,7 @@ class EnsembleEngine:
 
     def __init__(self, model_router):
         self.model_router = model_router
-        self.agents: Dict[str, EnsembleAgent] = {
+        self.agents: dict[str, EnsembleAgent] = {
             "critic": EnsembleAgent(
                 name="Critic",
                 role="Flaw Detection",
@@ -87,9 +87,9 @@ class EnsembleEngine:
     async def run_ensemble(
         self,
         user_input: str,
-        context: Dict[str, Any],
-        selected_agents: Optional[List[str]] = None,
-    ) -> Dict[str, str]:
+        context: dict[str, Any],
+        selected_agents: list[str] | None = None,
+    ) -> dict[str, str]:
         if not selected_agents:
             selected_agents = ["critic", "explorer", "aligner"]
 
@@ -97,11 +97,13 @@ class EnsembleEngine:
         if not selected_agents:
             return {}
 
-        viki_logger.info("Ensemble: Running cross-provider perspectives: %s", ", ".join(selected_agents))
+        viki_logger.info(
+            "Ensemble: Running cross-provider perspectives: %s", ", ".join(selected_agents)
+        )
 
-        used_providers: List[str] = []
-        debate_trace: Dict[str, str] = {}
-        meta_trace: Dict[str, Dict[str, str]] = {}
+        used_providers: list[str] = []
+        debate_trace: dict[str, str] = {}
+        meta_trace: dict[str, dict[str, str]] = {}
 
         async def _run_one(agent_id: str) -> None:
             agent = self.agents[agent_id]
@@ -135,7 +137,7 @@ class EnsembleEngine:
 
     # ---------- internals ----------
 
-    def _pick_model_for_agent(self, agent: EnsembleAgent, used_providers: List[str]):
+    def _pick_model_for_agent(self, agent: EnsembleAgent, used_providers: list[str]):
         """Pick the highest-scoring allowed model the agent's provider hint matches; else next in failover chain."""
         try:
             chain = self.model_router.get_failover_chain(agent.preferred_capabilities, max_models=8)
@@ -147,7 +149,10 @@ class EnsembleEngine:
         # Prefer hinted provider when not already used.
         if agent.provider_hint:
             for m in chain:
-                if getattr(m, "provider_name", "") == agent.provider_hint and getattr(m, "provider_name", "") not in used_providers:
+                if (
+                    getattr(m, "provider_name", "") == agent.provider_hint
+                    and getattr(m, "provider_name", "") not in used_providers
+                ):
                     return m
 
         # Otherwise pick the first model whose provider hasn't been used yet.
@@ -158,7 +163,9 @@ class EnsembleEngine:
         # Fall back to the top-scoring model.
         return chain[0]
 
-    async def _invoke(self, agent: EnsembleAgent, user_input: str, context: Dict[str, Any], model) -> str:
+    async def _invoke(
+        self, agent: EnsembleAgent, user_input: str, context: dict[str, Any], model
+    ) -> str:
         identity = context.get("narrative_identity", "A helpful AI assistant.")
         history = str(context.get("conversation_history", []))[-1000:]
         prompt = (
@@ -183,8 +190,8 @@ class EnsembleEngine:
         self,
         agent: EnsembleAgent,
         user_input: str,
-        context: Dict[str, Any],
-        perspectives: Dict[str, str],
+        context: dict[str, Any],
+        perspectives: dict[str, str],
         model,
     ) -> str:
         identity = context.get("narrative_identity", "A helpful AI assistant.")

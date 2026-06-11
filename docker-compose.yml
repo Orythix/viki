@@ -20,7 +20,7 @@ services:
       VIKI_WORKSPACE_DIR: /app/workspace
       VIKI_TRUST_WORKSPACE: "true"
       VIKI_OLLAMA_THINK: "false"
-      VIKI_LOG_LEVEL: "DEBUG"
+      VIKI_LOG_LEVEL: "INFO"
       # Reach Ollama on the host (Windows/Mac). On Linux use network_mode: host or set to host IP.
       OLLAMA_HOST: http://host.docker.internal:11434
     volumes:

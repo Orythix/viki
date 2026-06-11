@@ -9,18 +9,18 @@ crashing the controller.
 """
 from __future__ import annotations
 
-import re  # noqa: F401  (kept for backward compatibility)
 import asyncio  # noqa: F401  (kept for backward compatibility)
+import re  # noqa: F401  (kept for backward compatibility)
 import sys
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Any
 
-from viki.skills.base import BaseSkill
 from viki.config.logger import viki_logger
+from viki.skills.base import BaseSkill
 
 _WIN32_AVAILABLE = sys.platform == "win32"
 _win32gui = None
 _win32con = None
-_win32_import_error: Optional[Exception] = None
+_win32_import_error: Exception | None = None
 
 
 def _ensure_win32() -> bool:
@@ -31,8 +31,9 @@ def _ensure_win32() -> bool:
     if not _WIN32_AVAILABLE:
         return False
     try:
-        import win32gui  # type: ignore
         import win32con  # type: ignore
+        import win32gui  # type: ignore
+
         _win32gui = win32gui
         _win32con = win32con
         return True
@@ -40,7 +41,7 @@ def _ensure_win32() -> bool:
         _win32_import_error = e
         viki_logger.warning(
             "WindowManagerSkill: pywin32 not installed (%s). "
-            "Install with `pip install -e \".[windows]\"` to enable.",
+            'Install with `pip install -e ".[windows]"` to enable.',
             e,
         )
         return False
@@ -72,19 +73,19 @@ class WindowManagerSkill(BaseSkill):
                 "action": {
                     "type": "string",
                     "enum": ["list", "focus", "minimize", "maximize", "close", "restore"],
-                    "description": "Window management action"
+                    "description": "Window management action",
                 },
                 "title": {
                     "type": "string",
-                    "description": "Partial title of the window to target (e.g., 'Notepad')"
-                }
+                    "description": "Partial title of the window to target (e.g., 'Notepad')",
+                },
             },
-            "required": ["action"]
+            "required": ["action"],
         }
 
-    def _get_windows(self) -> List[Tuple[int, str]]:
+    def _get_windows(self) -> list[tuple[int, str]]:
         """Return list of (hwnd, title) for visible windows."""
-        windows: List[Tuple[int, str]] = []
+        windows: list[tuple[int, str]] = []
 
         def callback(hwnd, _):
             if _win32gui.IsWindowVisible(hwnd):
@@ -106,7 +107,7 @@ class WindowManagerSkill(BaseSkill):
                 return hwnd
         return 0
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         if not _ensure_win32():
             if not _WIN32_AVAILABLE:
                 return (
@@ -115,14 +116,14 @@ class WindowManagerSkill(BaseSkill):
                 )
             return (
                 "WindowManagerSkill requires pywin32. "
-                "Install with `pip install -e \".[windows]\"`."
+                'Install with `pip install -e ".[windows]"`.'
             )
 
-        action = params.get('action')
-        title_query = params.get('title')
+        action = params.get("action")
+        title_query = params.get("title")
 
         try:
-            if action == 'list':
+            if action == "list":
                 windows = self._get_windows()
                 titles = [t for _, t in windows]
                 return (
@@ -140,7 +141,7 @@ class WindowManagerSkill(BaseSkill):
 
             full_title = _win32gui.GetWindowText(hwnd)
 
-            if action == 'focus':
+            if action == "focus":
                 try:
                     _win32gui.ShowWindow(hwnd, _win32con.SW_RESTORE)
                     _win32gui.SetForegroundWindow(hwnd)
@@ -148,19 +149,19 @@ class WindowManagerSkill(BaseSkill):
                 except Exception as e:
                     return f"Failed to focus '{full_title}': {e}"
 
-            elif action == 'minimize':
+            elif action == "minimize":
                 _win32gui.ShowWindow(hwnd, _win32con.SW_MINIMIZE)
                 return f"Minimized '{full_title}'"
 
-            elif action == 'maximize':
+            elif action == "maximize":
                 _win32gui.ShowWindow(hwnd, _win32con.SW_MAXIMIZE)
                 return f"Maximized '{full_title}'"
 
-            elif action == 'restore':
+            elif action == "restore":
                 _win32gui.ShowWindow(hwnd, _win32con.SW_RESTORE)
                 return f"Restored '{full_title}'"
 
-            elif action == 'close':
+            elif action == "close":
                 _win32gui.PostMessage(hwnd, _win32con.WM_CLOSE, 0, 0)
                 return f"Sent close signal to '{full_title}'"
 

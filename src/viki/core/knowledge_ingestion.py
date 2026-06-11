@@ -1,23 +1,27 @@
-import asyncio
+import hashlib
 import json
 import os
-import time
-import hashlib
 import re
 import sqlite3
-from typing import List, Dict, Any, Optional
+import time
+from typing import Any
+
 from viki.config.logger import viki_logger
 
 try:
     import numpy as np
 except Exception as e:
     np = None
-    viki_logger.warning(f"NumPy unavailable during LearningModule import ({e}). Semantic features will use list fallback.")
+    viki_logger.warning(
+        f"NumPy unavailable during LearningModule import ({e}). Semantic features will use list fallback."
+    )
 
 HAS_SEMANTIC = False
 
 
-def _lesson_content_trigger_fact(content: Optional[str], text_representation: str) -> tuple[Optional[str], str]:
+def _lesson_content_trigger_fact(
+    content: str | None, text_representation: str
+) -> tuple[str | None, str]:
     """
     Normalize stored lesson `content` for export. JSON may decode to a dict
     ({trigger, fact}), a legacy plain string from save_lesson(lesson=str), or
@@ -43,6 +47,7 @@ class LearningModule:
     Semantic Memory 3.0: High-performance SQLite backend with automatic JSON migration.
     Supports structured knowledge, narrative experiences, and automated failure tracking.
     """
+
     def __init__(self, data_dir: str):
         self.data_dir = data_dir
         os.makedirs(self.data_dir, exist_ok=True)
@@ -71,7 +76,8 @@ class LearningModule:
             self._encoder_loaded = True
             try:
                 global HAS_SEMANTIC
-                from core.embeddings import get_encoder
+                from viki.core.embeddings import get_encoder
+
                 self._encoder = get_encoder()
                 if self._encoder is not None:
                     HAS_SEMANTIC = True
@@ -86,9 +92,10 @@ class LearningModule:
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.row_factory = sqlite3.Row
         cur = self.conn.cursor()
-        
+
         # Lessons & Facts
-        cur.execute('''CREATE TABLE IF NOT EXISTS lessons (
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS lessons (
             id TEXT PRIMARY KEY,
             content TEXT,
             text_representation TEXT,
@@ -99,55 +106,67 @@ class LearningModule:
             author TEXT,
             source_task TEXT,
             reliability REAL
-        )''')
-        
+        )"""
+        )
+
         # Relationships (Knowledge Graph)
-        cur.execute('''CREATE TABLE IF NOT EXISTS relationships (
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS relationships (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             lesson_id TEXT,
             subj TEXT,
             pred TEXT,
             obj TEXT,
             FOREIGN KEY(lesson_id) REFERENCES lessons(id)
-        )''')
-        
+        )"""
+        )
+
         # Narratives (Episodic Experience)
-        cur.execute('''CREATE TABLE IF NOT EXISTS narratives (
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS narratives (
             id TEXT PRIMARY KEY,
             event TEXT,
             significance REAL,
             mood TEXT,
             timestamp REAL
-        )''')
-        
+        )"""
+        )
+
         # Failures (Negative Knowledge)
-        cur.execute('''CREATE TABLE IF NOT EXISTS failures (
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS failures (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             action TEXT,
             error TEXT,
             context TEXT,
             timestamp REAL
-        )''')
-        
+        )"""
+        )
+
         # Macros (Procedural Workflows)
-        cur.execute('''CREATE TABLE IF NOT EXISTS macros (
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS macros (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             trigger_condition TEXT,
             steps TEXT,
             success_count INTEGER DEFAULT 1,
             created_at REAL
-        )''')
-        
+        )"""
+        )
+
         # Indices for speed
         cur.execute("CREATE INDEX IF NOT EXISTS idx_lessons_accessed ON lessons(last_accessed)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_narratives_time ON narratives(timestamp)")
-        
+
         self.conn.commit()
 
-    def save_macro(self, trigger_condition: str, action_sequence: List[Dict[str, Any]]):
+    def save_macro(self, trigger_condition: str, action_sequence: list[dict[str, Any]]):
         """Saves a procedural workflow/macro."""
-        self.conn.execute('''INSERT INTO macros (trigger_condition, steps, created_at)
-            VALUES (?, ?, ?)''', (trigger_condition, json.dumps(action_sequence), time.time()))
+        self.conn.execute(
+            """INSERT INTO macros (trigger_condition, steps, created_at)
+            VALUES (?, ?, ?)""",
+            (trigger_condition, json.dumps(action_sequence), time.time()),
+        )
         self.conn.commit()
         viki_logger.info(f"Macro Learned: {trigger_condition}")
 
@@ -155,53 +174,67 @@ class LearningModule:
         """One-way migration from legacy JSON memory to SQLite."""
         if not os.path.exists(self.legacy_file):
             return
-            
+
         try:
             viki_logger.info("MIGRATION: Moving legacy JSON memory to SQLite...")
-            with open(self.legacy_file, 'r') as f:
+            with open(self.legacy_file) as f:
                 data = json.load(f)
-            
-            lessons = data.get('lessons', [])
-            embeddings = data.get('embeddings', [])
-            metadata = data.get('metadata', [])
-            narratives = data.get('narratives', [])
-            failures = data.get('failures', [])
-            
+
+            lessons = data.get("lessons", [])
+            embeddings = data.get("embeddings", [])
+            metadata = data.get("metadata", [])
+            narratives = data.get("narratives", [])
+            failures = data.get("failures", [])
+
             # Migrate lessons
             for i, lesson in enumerate(lessons):
                 meta = metadata[i] if i < len(metadata) else {}
                 emb = embeddings[i] if i < len(embeddings) else []
-                
+
                 text_rep = str(lesson)
                 if isinstance(lesson, dict):
                     text_rep = f"{lesson.get('trigger', '')}: {lesson.get('fact', '')}"
-                
+
                 lid = hashlib.md5(text_rep.encode()).hexdigest()[:12]
-                
-                self.conn.execute('''INSERT OR IGNORE INTO lessons 
+
+                self.conn.execute(
+                    """INSERT OR IGNORE INTO lessons
                     (id, content, text_representation, embedding, created_at, last_accessed, access_count, author, source_task, reliability)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                    (lid, json.dumps(lesson), text_rep, json.dumps(emb), 
-                     meta.get('created_at', time.time()), meta.get('last_accessed', time.time()),
-                     meta.get('count', 1), meta.get('author', 'Legacy'), 
-                     meta.get('source_task', 'Migration'), meta.get('reliability', 1.0))
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        lid,
+                        json.dumps(lesson),
+                        text_rep,
+                        json.dumps(emb),
+                        meta.get("created_at", time.time()),
+                        meta.get("last_accessed", time.time()),
+                        meta.get("count", 1),
+                        meta.get("author", "Legacy"),
+                        meta.get("source_task", "Migration"),
+                        meta.get("reliability", 1.0),
+                    ),
                 )
-            
+
             # Migrate Narratives
             for n in narratives:
-                nid = n.get('id', hashlib.md5(n['event'].encode()).hexdigest()[:8])
-                self.conn.execute('''INSERT OR IGNORE INTO narratives 
+                nid = n.get("id", hashlib.md5(n["event"].encode()).hexdigest()[:8])
+                self.conn.execute(
+                    """INSERT OR IGNORE INTO narratives
                     (id, event, significance, mood, timestamp)
-                    VALUES (?, ?, ?, ?, ?)''',
-                    (nid, n['event'], n['significance'], n.get('mood', 'neutral'), n['timestamp']))
-            
+                    VALUES (?, ?, ?, ?, ?)""",
+                    (nid, n["event"], n["significance"], n.get("mood", "neutral"), n["timestamp"]),
+                )
+
             # Migrate Failures
             for f in failures:
-                self.conn.execute('''INSERT INTO failures (action, error, context, timestamp)
-                    VALUES (?, ?, ?, ?)''', (f['action'], f['error'], f['context'], f['timestamp']))
+                self.conn.execute(
+                    """INSERT INTO failures (action, error, context, timestamp)
+                    VALUES (?, ?, ?, ?)""",
+                    (f["action"], f["error"], f["context"], f["timestamp"]),
+                )
 
             self.conn.commit()
-            
+
             # Rename legacy file to avoid re-migration
             os.rename(self.legacy_file, self.legacy_file + ".bak")
             viki_logger.info("MIGRATION COMPLETE. JSON memory archived.")
@@ -221,11 +254,18 @@ class LearningModule:
             viki_logger.debug("Lesson embedding encode: %s", e)
             return []
 
-    def save_lesson(self, lesson: str = None, relationship: Optional[Dict[str, str]] = None, author: str = "Self", source_task: str = "Unknown", **kwargs):
+    def save_lesson(
+        self,
+        lesson: str = None,
+        relationship: dict[str, str] | None = None,
+        author: str = "Self",
+        source_task: str = "Unknown",
+        **kwargs,
+    ):
         """Saves a lesson, generates embeddings, and creates a unique knowledge trace."""
-        if not lesson and 'fact' in kwargs:
-            trigger = kwargs.get('trigger', 'Knowledge Acquisition')
-            fact = kwargs['fact']
+        if not lesson and "fact" in kwargs:
+            trigger = kwargs.get("trigger", "Knowledge Acquisition")
+            fact = kwargs["fact"]
             lesson_obj = {"trigger": trigger, "fact": fact}
             lesson_str = f"{trigger}: {fact}"
         else:
@@ -236,18 +276,20 @@ class LearningModule:
             return
 
         # Allow callers to pass source= or source_task= (e.g. "user_correction", "web")
-        effective_source = kwargs.get('source', kwargs.get('source_task', source_task))
+        effective_source = kwargs.get("source", kwargs.get("source_task", source_task))
 
         lid = hashlib.md5(lesson_str.encode()).hexdigest()[:12]
-        
+
         # Update if exists
         cur = self.conn.cursor()
         cur.execute("SELECT id, access_count FROM lessons WHERE id = ?", (lid,))
         row = cur.fetchone()
-        
+
         if row:
-            cur.execute("UPDATE lessons SET last_accessed = ?, access_count = access_count + 1 WHERE id = ?", 
-                       (time.time(), lid))
+            cur.execute(
+                "UPDATE lessons SET last_accessed = ?, access_count = access_count + 1 WHERE id = ?",
+                (time.time(), lid),
+            )
             self.conn.commit()
             return
 
@@ -256,42 +298,63 @@ class LearningModule:
         if self.encoder:
             embedding = self._encode_lesson_embedding(lesson_str)
 
-        cur.execute('''INSERT INTO lessons 
+        cur.execute(
+            """INSERT INTO lessons
             (id, content, text_representation, embedding, created_at, last_accessed, access_count, author, source_task, reliability)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-            (lid, json.dumps(lesson_obj), lesson_str, json.dumps(embedding), 
-             time.time(), time.time(), 1, author, effective_source, kwargs.get('reliability', 0.8)))
-        
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                lid,
+                json.dumps(lesson_obj),
+                lesson_str,
+                json.dumps(embedding),
+                time.time(),
+                time.time(),
+                1,
+                author,
+                effective_source,
+                kwargs.get("reliability", 0.8),
+            ),
+        )
+
         if relationship:
             if isinstance(relationship, list) and len(relationship) >= 3:
                 subj, pred, obj = relationship[0], relationship[1], relationship[2]
             elif isinstance(relationship, dict):
-                subj = relationship.get('subject') or relationship.get('subj')
-                pred = relationship.get('predicate') or relationship.get('pred')
-                obj = relationship.get('object') or relationship.get('obj')
+                subj = relationship.get("subject") or relationship.get("subj")
+                pred = relationship.get("predicate") or relationship.get("pred")
+                obj = relationship.get("object") or relationship.get("obj")
             else:
                 subj, pred, obj = None, None, None
 
             if subj and pred and obj:
-                cur.execute("INSERT INTO relationships (lesson_id, subj, pred, obj) VALUES (?, ?, ?, ?)",
-                           (lid, str(subj), str(pred), str(obj)))
-        
+                cur.execute(
+                    "INSERT INTO relationships (lesson_id, subj, pred, obj) VALUES (?, ?, ?, ?)",
+                    (lid, str(subj), str(pred), str(obj)),
+                )
+
         self.conn.commit()
         self.mark_vector_dirty()
 
-    def get_frequent_lessons(self, min_count: int = 3) -> List[str]:
+    def get_frequent_lessons(self, min_count: int = 3) -> list[str]:
         """Returns lessons that have been reinforced (access_count >= min_count)."""
         cur = self.conn.cursor()
         cur.execute("SELECT text_representation FROM lessons WHERE access_count >= ?", (min_count,))
-        return [r['text_representation'] for r in cur.fetchall()]
+        return [r["text_representation"] for r in cur.fetchall()]
 
-    def get_all_lessons(self) -> List[Dict[str, Any]]:
+    def get_all_lessons(self) -> list[dict[str, Any]]:
         """Returns all lessons as a list of dicts for the Forge/Training."""
         cur = self.conn.cursor()
         cur.execute("SELECT content FROM lessons")
-        return [json.loads(r['content']) for r in cur.fetchall()]
+        return [json.loads(r["content"]) for r in cur.fetchall()]
 
-    def get_lessons(self, query: str = None, source: str = None, author: str = None, limit: int = 10, offset: int = 0) -> List[Dict[str, Any]]:
+    def get_lessons(
+        self,
+        query: str = None,
+        source: str = None,
+        author: str = None,
+        limit: int = 10,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
         """Returns detailed lesson records with optional filtering."""
         cur = self.conn.cursor()
         sql = "SELECT id, text_representation, content, author, source_task, reliability, access_count, created_at FROM lessons WHERE 1=1"
@@ -305,10 +368,10 @@ class LearningModule:
         if author:
             sql += " AND author = ?"
             params.append(author)
-        
+
         sql += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
-        
+
         cur.execute(sql, params)
         return [dict(r) for r in cur.fetchall()]
 
@@ -332,10 +395,10 @@ class LearningModule:
         if reliability is not None:
             updates.append("reliability = ?")
             params.append(reliability)
-        
+
         if not updates:
             return False
-            
+
         sql = f"UPDATE lessons SET {', '.join(updates)} WHERE id = ?"
         params.append(lesson_id)
         cur.execute(sql, params)
@@ -349,7 +412,7 @@ class LearningModule:
         cur.execute("SELECT COUNT(*) FROM lessons")
         return cur.fetchone()[0]
 
-    def get_relevant_lessons(self, context: str, limit: int = 5) -> List[str]:
+    def get_relevant_lessons(self, context: str, limit: int = 5) -> list[str]:
         """Performs semantic or lexical search over the knowledge base.
 
         Phase 6: backed by a persistent vector index (sqlite-vss when available,
@@ -360,7 +423,8 @@ class LearningModule:
         # never benefit from a lesson lookup; skip the SQL query AND the
         # embedding encode entirely.
         try:
-            from core.utils.trivial_input import is_trivial_input
+            from viki.core.utils.trivial_input import is_trivial_input
+
             if is_trivial_input(context):
                 return []
         except Exception:
@@ -369,8 +433,10 @@ class LearningModule:
         cur = self.conn.cursor()
         cur.execute("SELECT id, content, text_representation, embedding FROM lessons")
         rows = cur.fetchall()
-        contents = [r['text_representation'] for r in rows]
-        viki_logger.info("LearningModule: get_relevant_lessons scanning %s lesson row(s)", len(rows))
+        contents = [r["text_representation"] for r in rows]
+        viki_logger.info(
+            "LearningModule: get_relevant_lessons scanning %s lesson row(s)", len(rows)
+        )
         viki_logger.debug(
             "LearningModule: lesson text preview (first 3, truncated): %s",
             [(c or "")[:120] for c in contents[:3]],
@@ -385,8 +451,8 @@ class LearningModule:
                     query_emb = self.encoder.encode(context).tolist()
                     hits = backend.search(query_emb, top_k=limit, query_text=context)
                     if hits:
-                        text_to_id = {r['text_representation']: r['id'] for r in rows}
-                        out: List[str] = []
+                        text_to_id = {r["text_representation"]: r["id"] for r in rows}
+                        out: list[str] = []
                         seen = set()
                         for h in hits:
                             if h.text in seen:
@@ -400,7 +466,7 @@ class LearningModule:
                                     (time.time(), lid),
                                 )
                         self.conn.commit()
-                        return out or contents[-min(limit, 3):]
+                        return out or contents[-min(limit, 3) :]
             except Exception as e:
                 viki_logger.debug("get_relevant_lessons vector path failed: %s", e)
 
@@ -413,16 +479,16 @@ class LearningModule:
         valid_rows = []
         for r in rows:
             try:
-                emb = json.loads(r['embedding']) if r['embedding'] else None
+                emb = json.loads(r["embedding"]) if r["embedding"] else None
             except Exception:
                 emb = None
             if emb:
-                valid_rows.append((r['id'], emb, r['text_representation'] or ''))
+                valid_rows.append((r["id"], emb, r["text_representation"] or ""))
         if not valid_rows:
             return None
 
         if self._vector_backend is None or self._vector_backend_dirty:
-            from core.vector_memory import build_vector_backend
+            from viki.core.vector_memory import build_vector_backend
 
             dim = len(valid_rows[0][1])
             try:
@@ -455,7 +521,7 @@ class LearningModule:
         """Invalidate the vector index after a write so the next query rebuilds."""
         self._vector_backend_dirty = True
 
-    def _lexical_rank_lessons(self, rows, context: str, limit: int) -> List[str]:
+    def _lexical_rank_lessons(self, rows, context: str, limit: int) -> list[str]:
         """
         Lexical overlap ranking for when embeddings are unavailable.
         Keeps the original recency behavior if no lexical signal exists.
@@ -494,12 +560,15 @@ class LearningModule:
     def save_narrative(self, event: str, significance: float = 0.5, mood: str = "neutral"):
         """Saves a shared experience moment."""
         nid = hashlib.md5(event.encode()).hexdigest()[:8]
-        self.conn.execute('''INSERT OR REPLACE INTO narratives (id, event, significance, mood, timestamp)
-            VALUES (?, ?, ?, ?, ?)''', (nid, event, significance, mood, time.time()))
+        self.conn.execute(
+            """INSERT OR REPLACE INTO narratives (id, event, significance, mood, timestamp)
+            VALUES (?, ?, ?, ?, ?)""",
+            (nid, event, significance, mood, time.time()),
+        )
         self.conn.commit()
         viki_logger.info(f"Narrative Logged: {event[:40]}...")
 
-    def get_relevant_narratives(self, query: str = None, limit: int = 2) -> List[str]:
+    def get_relevant_narratives(self, query: str = None, limit: int = 2) -> list[str]:
         """Recalls past experiences based on keyword matching (fast)."""
         cur = self.conn.cursor()
         if not query:
@@ -508,30 +577,40 @@ class LearningModule:
             # Simple keyword match for narratives
             words = [w.lower() for w in query.split() if len(w) > 3]
             if not words:
-                cur.execute("SELECT event FROM narratives ORDER BY timestamp DESC LIMIT ?", (limit,))
+                cur.execute(
+                    "SELECT event FROM narratives ORDER BY timestamp DESC LIMIT ?", (limit,)
+                )
             else:
                 clauses = " OR ".join(["event LIKE ?" for _ in words])
                 params = [f"%{w}%" for w in words] + [limit]
-                cur.execute(f"SELECT event FROM narratives WHERE {clauses} ORDER BY significance DESC, timestamp DESC LIMIT ?", params)
-        
-        return [r['event'] for r in cur.fetchall()]
+                cur.execute(
+                    f"SELECT event FROM narratives WHERE {clauses} ORDER BY significance DESC, timestamp DESC LIMIT ?",
+                    params,
+                )
+
+        return [r["event"] for r in cur.fetchall()]
 
     def save_failure(self, action: str, error: str, context: str):
-        self.conn.execute("INSERT INTO failures (action, error, context, timestamp) VALUES (?, ?, ?, ?)",
-                         (action, error, context, time.time()))
+        self.conn.execute(
+            "INSERT INTO failures (action, error, context, timestamp) VALUES (?, ?, ?, ?)",
+            (action, error, context, time.time()),
+        )
         self.conn.commit()
 
-    def get_relevant_failures(self, context: str, limit: int = 3) -> List[str]:
+    def get_relevant_failures(self, context: str, limit: int = 3) -> list[str]:
         cur = self.conn.cursor()
         now = time.time()
         max_age = 7 * 24 * 60 * 60
-        cur.execute("SELECT action, error FROM failures WHERE timestamp > ? ORDER BY timestamp DESC LIMIT 50", (now - max_age,))
+        cur.execute(
+            "SELECT action, error FROM failures WHERE timestamp > ? ORDER BY timestamp DESC LIMIT 50",
+            (now - max_age,),
+        )
         rows = cur.fetchall()
-        
+
         relevant = []
         context_lower = context.lower()
         for r in rows:
-            if any(word in context_lower for word in r['action'].lower().split() if len(word) > 3):
+            if any(word in context_lower for word in r["action"].lower().split() if len(word) > 3):
                 relevant.append(f"PAST FAILURE: Tried '{r['action']}' but got '{r['error']}'")
         return relevant[-limit:]
 
@@ -542,8 +621,8 @@ class LearningModule:
 
     @staticmethod
     def resolve_export_min_access_count(
-        explicit: Optional[int] = None,
-        settings: Optional[Dict[str, Any]] = None,
+        explicit: int | None = None,
+        settings: dict[str, Any] | None = None,
     ) -> int:
         """Threshold for export_training_dataset: YAML system.lesson_export_min_access_count, then env, then default 2."""
         if explicit is not None:
@@ -570,8 +649,8 @@ class LearningModule:
         self,
         output_path: str,
         format: str = "jsonl",
-        min_access_count: Optional[int] = None,
-        settings: Optional[Dict[str, Any]] = None,
+        min_access_count: int | None = None,
+        settings: dict[str, Any] | None = None,
         include_failures: bool = False,
     ) -> str:
         """
@@ -594,11 +673,13 @@ class LearningModule:
         parent = os.path.dirname(os.path.abspath(output_path))
         if parent:
             os.makedirs(parent, exist_ok=True)
-        lines: List[str] = []
+        lines: list[str] = []
 
         if format == "jsonl":
             for r in rows:
-                trig_raw, fact = _lesson_content_trigger_fact(r["content"], r["text_representation"])
+                trig_raw, fact = _lesson_content_trigger_fact(
+                    r["content"], r["text_representation"]
+                )
                 trig = trig_raw or "context"
                 block = (
                     f"### Instruction:\nRemember this for future VIKI interactions.\n"
@@ -608,7 +689,9 @@ class LearningModule:
 
         elif format == "alpaca":
             for r in rows:
-                trig_raw, fact = _lesson_content_trigger_fact(r["content"], r["text_representation"])
+                trig_raw, fact = _lesson_content_trigger_fact(
+                    r["content"], r["text_representation"]
+                )
                 lines.append(
                     json.dumps(
                         {
@@ -622,13 +705,18 @@ class LearningModule:
 
         elif format == "openai":
             for r in rows:
-                trig_raw, fact = _lesson_content_trigger_fact(r["content"], r["text_representation"])
+                trig_raw, fact = _lesson_content_trigger_fact(
+                    r["content"], r["text_representation"]
+                )
                 trig = trig_raw or "user context"
                 lines.append(
                     json.dumps(
                         {
                             "messages": [
-                                {"role": "system", "content": "You are VIKI's knowledge consolidation trainer."},
+                                {
+                                    "role": "system",
+                                    "content": "You are VIKI's knowledge consolidation trainer.",
+                                },
                                 {"role": "user", "content": str(trig)},
                                 {"role": "assistant", "content": str(fact)},
                             ]
@@ -640,7 +728,9 @@ class LearningModule:
             raise ValueError(f"Unknown export format: {format}")
 
         if include_failures:
-            cur.execute("SELECT action, error, context FROM failures ORDER BY timestamp DESC LIMIT 100")
+            cur.execute(
+                "SELECT action, error, context FROM failures ORDER BY timestamp DESC LIMIT 100"
+            )
             fail_rows = cur.fetchall()
             for f in fail_rows:
                 action, error, context = f["action"], f["error"], f["context"]
@@ -652,24 +742,45 @@ class LearningModule:
                     )
                     lines.append(json.dumps({"text": block}, ensure_ascii=False))
                 elif format == "alpaca":
-                    lines.append(json.dumps({
-                        "instruction": "Failure Avoidance: Do not repeat this past mistake.",
-                        "input": f"Context: {context}\nAction: {action}",
-                        "output": f"Avoid this. Result: {error}"
-                    }, ensure_ascii=False))
+                    lines.append(
+                        json.dumps(
+                            {
+                                "instruction": "Failure Avoidance: Do not repeat this past mistake.",
+                                "input": f"Context: {context}\nAction: {action}",
+                                "output": f"Avoid this. Result: {error}",
+                            },
+                            ensure_ascii=False,
+                        )
+                    )
                 elif format == "openai":
-                    lines.append(json.dumps({
-                        "messages": [
-                            {"role": "system", "content": "You are VIKI's failure avoidance trainer."},
-                            {"role": "user", "content": f"Context: {context}\nAction: {action}"},
-                            {"role": "assistant", "content": f"This action failed with: {error}. Do not repeat."}
-                        ]
-                    }, ensure_ascii=False))
+                    lines.append(
+                        json.dumps(
+                            {
+                                "messages": [
+                                    {
+                                        "role": "system",
+                                        "content": "You are VIKI's failure avoidance trainer.",
+                                    },
+                                    {
+                                        "role": "user",
+                                        "content": f"Context: {context}\nAction: {action}",
+                                    },
+                                    {
+                                        "role": "assistant",
+                                        "content": f"This action failed with: {error}. Do not repeat.",
+                                    },
+                                ]
+                            },
+                            ensure_ascii=False,
+                        )
+                    )
 
         with open(output_path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
-        
-        status_msg = f"Exported {len(lines)} rows to {output_path} ({format}, min_access_count={min_ac})"
+
+        status_msg = (
+            f"Exported {len(lines)} rows to {output_path} ({format}, min_access_count={min_ac})"
+        )
         if include_failures:
             status_msg += " (including failure cases)"
         return status_msg
@@ -702,8 +813,8 @@ class LearningModule:
                     continue
                 if not isinstance(obj, dict):
                     continue
-                trigger: Optional[str] = None
-                fact: Optional[str] = None
+                trigger: str | None = None
+                fact: str | None = None
                 if "text" in obj and isinstance(obj["text"], str):
                     trigger = "imported_block"
                     fact = obj["text"].strip()
@@ -734,8 +845,8 @@ class LearningModule:
                 row_source = str(obj.get("source_task") or source_task).strip() or source_task
                 row_author = str(obj.get("author") or "Self").strip() or "Self"
                 row_rel = obj.get("reliability")
-                rel_kw: Dict[str, Any] = {}
-                if isinstance(row_rel, (int, float)):
+                rel_kw: dict[str, Any] = {}
+                if isinstance(row_rel, int | float):
                     rel_kw["reliability"] = float(row_rel)
                 self.save_lesson(
                     trigger=trigger or "imported",
@@ -755,60 +866,66 @@ class LearningModule:
                 n += 1
         return f"Imported {n} lesson row(s) from {path}."
 
-    async def analyze_session(self, model, trace: List[Dict[str, str]], outcome: str):
+    async def analyze_session(self, model, trace: list[dict[str, str]], outcome: str):
         """
         Extracts both flat facts and structured relationships.
         """
         prompt = [
-            {"role": "system", "content": (
-                "You are an Advanced Semantic Extraction Module.\n"
-                "Extract PERMANENT USER FACTS and RELATIONSHIPS.\n"
-                "Format: A JSON object with 'fact' (string), 'rel' (triple), and 'confidence' (0.0-1.0).\n"
-                "MINIMUM CONFIDENCE: Only include facts with confidence > 0.8.\n"
-                "Example: {'fact': 'User prefers Python', 'rel': ['User', 'prefers', 'Python'], 'confidence': 0.95}\n"
-                "If nothing high-confidence is found, output 'NO_LESSON'."
-            )},
-            {"role": "user", "content": f"Trace: {json.dumps(trace)}\nOutcome: {outcome}"}
+            {
+                "role": "system",
+                "content": (
+                    "You are an Advanced Semantic Extraction Module.\n"
+                    "Extract PERMANENT USER FACTS and RELATIONSHIPS.\n"
+                    "Format: A JSON object with 'fact' (string), 'rel' (triple), and 'confidence' (0.0-1.0).\n"
+                    "MINIMUM CONFIDENCE: Only include facts with confidence > 0.8.\n"
+                    "Example: {'fact': 'User prefers Python', 'rel': ['User', 'prefers', 'Python'], 'confidence': 0.95}\n"
+                    "If nothing high-confidence is found, output 'NO_LESSON'."
+                ),
+            },
+            {"role": "user", "content": f"Trace: {json.dumps(trace)}\nOutcome: {outcome}"},
         ]
-        
+
         try:
-            # We use chat_structured if the model supports it, but for learning analysis 
+            # We use chat_structured if the model supports it, but for learning analysis
             # we might just use chat and parse manually to be safe with smaller models.
             response = await model.chat(prompt)
-            if "NO_LESSON" in response: return
-            
+            if "NO_LESSON" in response:
+                return
+
             # Robust JSON extraction
             content = response.strip()
-            
+
             # Find first { and last }
-            start = content.find('{')
-            end = content.rfind('}')
-            
+            start = content.find("{")
+            end = content.rfind("}")
+
             if start != -1 and end != -1:
-                content = content[start:end+1]
+                content = content[start : end + 1]
                 try:
                     data = json.loads(content)
                     if isinstance(data, list) and len(data) > 0:
                         data = data[0]
-                    
-                    if not isinstance(data, dict):
-                         viki_logger.debug(f"Learning: Expected dict from JSON, got {type(data)}")
-                         return
 
-                    fact = data.get('fact')
-                    rel = data.get('rel')
-                    conf = data.get('confidence', 0.0)
-                    
+                    if not isinstance(data, dict):
+                        viki_logger.debug(f"Learning: Expected dict from JSON, got {type(data)}")
+                        return
+
+                    fact = data.get("fact")
+                    rel = data.get("rel")
+                    conf = data.get("confidence", 0.0)
+
                     if fact and conf > 0.8:
                         self.save_lesson(fact, relationship=rel)
                         viki_logger.info(f"Memory Integrated: {fact} (Conf: {conf})")
                     else:
-                        viki_logger.info(f"Lesson Rejected: Low confidence ({conf}) or missing fact.")
+                        viki_logger.info(
+                            f"Lesson Rejected: Low confidence ({conf}) or missing fact."
+                        )
                 except json.JSONDecodeError:
-                    pass # Fallback to text
+                    pass  # Fallback to text
             else:
-                 # Fallback to simple extraction
-                clean_response = response.strip().split('\n')[0]
+                # Fallback to simple extraction
+                clean_response = response.strip().split("\n")[0]
                 if len(clean_response) > 5 and "NO_LESSON" not in clean_response:
                     self.save_lesson(clean_response)
         except Exception as e:
@@ -818,14 +935,15 @@ class LearningModule:
         """Removes lessons that haven't been accessed in X days."""
         now = time.time()
         max_age = days * 24 * 60 * 60
-        
+
         cur = self.conn.cursor()
         cur.execute("DELETE FROM lessons WHERE last_accessed < ?", (now - max_age,))
         self.conn.commit()
         viki_logger.info(f"Pruned old memories (older than {days} days).")
+
     def close(self):
         """Properly close the SQLite connection."""
-        if hasattr(self, 'conn') and self.conn:
+        if hasattr(self, "conn") and self.conn:
             try:
                 self.conn.close()
                 self.conn = None

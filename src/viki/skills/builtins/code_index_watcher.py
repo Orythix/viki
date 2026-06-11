@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import os
 import threading
-from typing import Any, Optional
+from typing import Any
 
 from viki.config.logger import viki_logger
 
@@ -34,8 +34,8 @@ def start_watcher(controller, debounce_ms: int = 500) -> Any:
     Returns a handle with a `.stop()` method.
     """
     try:
-        from watchdog.observers import Observer  # type: ignore
         from watchdog.events import FileSystemEventHandler  # type: ignore
+        from watchdog.observers import Observer  # type: ignore
     except Exception as e:
         viki_logger.debug("code_index_watcher: watchdog not installed (%s); watcher disabled.", e)
         return _NoopHandle()
@@ -50,7 +50,8 @@ def start_watcher(controller, debounce_ms: int = 500) -> Any:
 
     workspace = (
         controller.settings.get("system", {}).get("workspace_dir", "./workspace")
-        if hasattr(controller, "settings") else "./workspace"
+        if hasattr(controller, "settings")
+        else "./workspace"
     )
     if not os.path.isdir(workspace):
         viki_logger.debug("code_index_watcher: workspace dir %s missing; not starting.", workspace)

@@ -22,9 +22,10 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import Any
 
 from viki.config.logger import viki_logger
 
@@ -33,12 +34,12 @@ from viki.config.logger import viki_logger
 class GoldRow:
     id: str
     query: str
-    must_contain_any: List[str] = field(default_factory=list)
-    must_contain_all: List[str] = field(default_factory=list)
-    must_not_contain: List[str] = field(default_factory=list)
+    must_contain_any: list[str] = field(default_factory=list)
+    must_contain_all: list[str] = field(default_factory=list)
+    must_not_contain: list[str] = field(default_factory=list)
 
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> GoldRow:
+    def from_dict(cls, d: dict[str, Any]) -> GoldRow:
         return cls(
             id=str(d.get("id") or ""),
             query=str(d.get("query") or "").strip(),
@@ -53,18 +54,18 @@ class QueryResult:
     gold_id: str
     query: str
     latency_ms: float
-    retrieved: List[str]
+    retrieved: list[str]
     success_any_at_k: bool
     success_all_at_k: bool
     must_not_contain_violation: bool
     reciprocal_rank_any: float
     reciprocal_rank_all: float
     # Populated when optional Ollama judge runs (see viki.eval.rag_judge).
-    judge_relevance: Optional[float] = None
-    judge_covers_expected: Optional[bool] = None
-    judge_rationale: Optional[str] = None
-    judge_latency_ms: Optional[float] = None
-    judge_error: Optional[str] = None
+    judge_relevance: float | None = None
+    judge_covers_expected: bool | None = None
+    judge_rationale: str | None = None
+    judge_latency_ms: float | None = None
+    judge_error: str | None = None
 
 
 @dataclass
@@ -76,14 +77,14 @@ class RagEvalReport:
     mrr_any: float
     mrr_all: float
     must_not_contain_violation_rate: float
-    per_query: List[QueryResult]
-    meta: Dict[str, Any] = field(default_factory=dict)
-    judge_mean_relevance: Optional[float] = None
-    judge_covers_expected_rate: Optional[float] = None
+    per_query: list[QueryResult]
+    meta: dict[str, Any] = field(default_factory=dict)
+    judge_mean_relevance: float | None = None
+    judge_covers_expected_rate: float | None = None
 
     def to_json(self) -> str:
-        def ser(q: QueryResult) -> Dict[str, Any]:
-            d: Dict[str, Any] = {
+        def ser(q: QueryResult) -> dict[str, Any]:
+            d: dict[str, Any] = {
                 "gold_id": q.gold_id,
                 "query": q.query,
                 "latency_ms": round(q.latency_ms, 3),
@@ -106,7 +107,7 @@ class RagEvalReport:
                 d["judge_error"] = q.judge_error
             return d
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "k": self.k,
             "total": self.total,
             "success_any_at_k": round(self.success_any_at_k, 4),
@@ -124,11 +125,11 @@ class RagEvalReport:
         return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
-def load_gold_jsonl(path: Union[str, Path]) -> List[GoldRow]:
+def load_gold_jsonl(path: str | Path) -> list[GoldRow]:
     p = Path(path)
     if not p.is_file():
         raise FileNotFoundError(f"gold file not found: {p}")
-    rows: List[GoldRow] = []
+    rows: list[GoldRow] = []
     with open(p, encoding="utf-8") as f:
         for line in f:
             line = line.strip()
@@ -149,7 +150,7 @@ def _union_text(chunks: Sequence[str]) -> str:
     return " ".join(chunks).lower()
 
 
-def _first_rr_any(retrieved: List[str], phrases: List[str]) -> float:
+def _first_rr_any(retrieved: list[str], phrases: list[str]) -> float:
     if not phrases:
         return 1.0
     pl = [p.lower() for p in phrases]
@@ -160,7 +161,7 @@ def _first_rr_any(retrieved: List[str], phrases: List[str]) -> float:
     return 0.0
 
 
-def _first_rr_all(retrieved: List[str], phrases: List[str]) -> float:
+def _first_rr_all(retrieved: list[str], phrases: list[str]) -> float:
     if not phrases:
         return 1.0
     pl = [p.lower() for p in phrases]
@@ -171,21 +172,21 @@ def _first_rr_all(retrieved: List[str], phrases: List[str]) -> float:
     return 0.0
 
 
-def _success_any_at_k(retrieved: List[str], phrases: List[str]) -> bool:
+def _success_any_at_k(retrieved: list[str], phrases: list[str]) -> bool:
     if not phrases:
         return True
     u = _union_text(retrieved)
     return any(p.lower() in u for p in phrases)
 
 
-def _success_all_at_k(retrieved: List[str], phrases: List[str]) -> bool:
+def _success_all_at_k(retrieved: list[str], phrases: list[str]) -> bool:
     if not phrases:
         return True
     u = _union_text(retrieved)
     return all(p.lower() in u for p in phrases)
 
 
-def _must_not_violation(retrieved: List[str], phrases: List[str]) -> bool:
+def _must_not_violation(retrieved: list[str], phrases: list[str]) -> bool:
     if not phrases:
         return False
     u = _union_text(retrieved)
@@ -197,7 +198,7 @@ def evaluate_rag_retrieval(
     gold_rows: Sequence[GoldRow],
     k: int = 5,
     *,
-    meta: Optional[Dict[str, Any]] = None,
+    meta: dict[str, Any] | None = None,
 ) -> RagEvalReport:
     """
     Run retrieval via `learning_module.get_relevant_lessons(query, limit=k)` for each gold row.
@@ -205,7 +206,7 @@ def evaluate_rag_retrieval(
     `learning_module` must be a VIKI `LearningModule` instance (or compatible duck type).
     """
     k = max(1, int(k))
-    per_query: List[QueryResult] = []
+    per_query: list[QueryResult] = []
     for row in gold_rows:
         t0 = time.perf_counter()
         try:

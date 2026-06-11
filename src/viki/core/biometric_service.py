@@ -1,9 +1,11 @@
 import asyncio
 import sys
 import time
+
 from viki.config.logger import viki_logger
 
 _cv2 = None
+
 
 def _opencv_silence_msmf():
     """Reduce OpenCV stderr spam when no camera is available (common on Windows MSMF)."""
@@ -20,6 +22,7 @@ def _get_cv2():
     if _cv2 is None:
         try:
             import cv2
+
             _cv2 = cv2
             _opencv_silence_msmf()
         except Exception as e:
@@ -126,7 +129,7 @@ class BioModule:
             except Exception as e:
                 viki_logger.error(f"BioModule Error: {e}")
                 break
-        
+
         if self.cap:
             try:
                 self.cap.release()
@@ -144,10 +147,13 @@ class BioModule:
         if self._deepface is None:
             try:
                 from deepface import DeepFace  # type: ignore
+
                 self._deepface = DeepFace
             except Exception as e:
                 self._deepface_load_failed = True
-                viki_logger.warning("BioModule: DeepFace unavailable (%s); reverting to 'neutral'.", e)
+                viki_logger.warning(
+                    "BioModule: DeepFace unavailable (%s); reverting to 'neutral'.", e
+                )
                 return "neutral"
         try:
             result = self._deepface.analyze(
@@ -170,40 +176,50 @@ class BioModule:
         """
         # 1. Base Mood from Sensors
         bio_mood = self.current_emotion
-        
+
         # 2. Stress Detection (Heuristics)
         is_shouting = user_input.isupper() and len(user_input) > 5
         urgency_keywords = ["urgent", "asap", "fast", "emergency", "immediately", "quick"]
         is_hurrying = any(k in user_input.lower() for k in urgency_keywords)
-        
+
         # 3. Time of Day Context
         current_hour = time.localtime().tm_hour
         is_late_night = current_hour < 6 or current_hour > 22
-        
+
         # --- LOGIC ENGINE ---
-        
+
         # Priority 1: Direct Tone (Shouting or Urgency)
         if is_shouting or is_hurrying:
-            return ("TONE: DIRECT. User is in a hurry or stressed. "
-                    "Be extremely brief. No chitchat. Action results only.")
-        
+            return (
+                "TONE: DIRECT. User is in a hurry or stressed. "
+                "Be extremely brief. No chitchat. Action results only."
+            )
+
         # Priority 2: Technical Tone (Coding/System)
         if task_type in ["coding", "researching", "technical"]:
-            return ("TONE: TECHNICAL. Be precise, use correct terminology, "
-                    "provide structured data and clear steps. Avoid fluff.")
+            return (
+                "TONE: TECHNICAL. Be precise, use correct terminology, "
+                "provide structured data and clear steps. Avoid fluff."
+            )
 
         # Priority 3: Supportive Tone (Late night or Sadness)
         if is_late_night or bio_mood == "sad":
-            return ("TONE: SUPPORTIVE & CALM. Use lower energy language. "
-                    "Be warm and reassuring. Offer assistance for fatigue.")
+            return (
+                "TONE: SUPPORTIVE & CALM. Use lower energy language. "
+                "Be warm and reassuring. Offer assistance for fatigue."
+            )
 
         # Priority 4: Neutral/Balanced (Default)
         if bio_mood == "happy":
-            return ("TONE: ENTHUSIASTIC. User is in a good mood. "
-                    "Feel free to share insights and be slightly more chatty.")
-            
-        return ("TONE: NEUTRAL. Professional, warm, and efficient. "
-                "Maintain a standard supportive partner persona.")
+            return (
+                "TONE: ENTHUSIASTIC. User is in a good mood. "
+                "Feel free to share insights and be slightly more chatty."
+            )
+
+        return (
+            "TONE: NEUTRAL. Professional, warm, and efficient. "
+            "Maintain a standard supportive partner persona."
+        )
 
     def _update_wallpaper(self, state: str):
         """Programmatically adjust wallpaper or system color based on mood."""

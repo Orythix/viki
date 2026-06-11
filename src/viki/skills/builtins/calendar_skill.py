@@ -1,13 +1,16 @@
 import asyncio
 import os
-from typing import Dict, Any
+from typing import Any
+
 from viki.config.logger import viki_logger
+
 
 class CalendarSkill:
     """
     Skill for managing calendar events. Uses Google Calendar API when
     integrations.google_calendar.enabled; otherwise fallback mock.
     """
+
     def __init__(self, controller=None):
         self._controller = controller
         self.name = "calendar"
@@ -21,28 +24,41 @@ class CalendarSkill:
         integ = settings.get("integrations", {}).get("google_calendar", {})
         if not integ.get("enabled"):
             return None
-        path = integ.get("credentials_path") or os.environ.get("VIKI_GOOGLE_CALENDAR_CREDENTIALS_PATH")
+        path = integ.get("credentials_path") or os.environ.get(
+            "VIKI_GOOGLE_CALENDAR_CREDENTIALS_PATH"
+        )
         if not path or not os.path.isfile(path):
             return None
         data_dir = settings.get("system", {}).get("data_dir", "./data")
         token_path = os.path.join(data_dir, "google_calendar_token.json")
         try:
             from integrations.google_calendar_client import get_calendar_service
+
             return get_calendar_service(path, token_path)
         except Exception as e:
             viki_logger.debug(f"Calendar client: {e}")
             return None
 
-    async def execute(self, params: Dict[str, Any]) -> str:
-        action = params.get('action', 'list')
-        title = params.get('title')
-        time_str = params.get('time')
+    async def execute(self, params: dict[str, Any]) -> str:
+        action = params.get("action", "list")
+        title = params.get("title")
+        time_str = params.get("time")
         viki_logger.info(f"Calendar: Executing {action} for '{title}' at {time_str}")
 
         service = await asyncio.to_thread(self._calendar_service)
-        cal_id = (self._controller.settings.get("integrations", {}).get("google_calendar", {}).get("default_calendar_id") or "primary") if self._controller else "primary"
+        cal_id = (
+            (
+                self._controller.settings.get("integrations", {})
+                .get("google_calendar", {})
+                .get("default_calendar_id")
+                or "primary"
+            )
+            if self._controller
+            else "primary"
+        )
         if service:
             from integrations import google_calendar_client as gcal
+
             if action == "add":
                 if not title or not time_str:
                     return "ERROR: title and time required for add."
@@ -59,12 +75,14 @@ class CalendarSkill:
         if action == "add":
             return f"SUCCEEDED: Appointment '{title}' scheduled for {time_str}."
         if action == "list":
-            return "SCHEDULE: 10:00 AM - Strategy Meeting with Team, 2:00 PM - Research Paper Review."
+            return (
+                "SCHEDULE: 10:00 AM - Strategy Meeting with Team, 2:00 PM - Research Paper Review."
+            )
         if action == "remove":
             return f"SUCCEEDED: '{title}' removed from calendar."
         return "ERROR: Unknown calendar action."
 
-    def get_tool_definition(self) -> Dict[str, Any]:
+    def get_tool_definition(self) -> dict[str, Any]:
         return {
             "type": "function",
             "function": {
@@ -73,11 +91,18 @@ class CalendarSkill:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "action": {"type": "string", "enum": ["add", "list", "remove"], "description": "The action to perform."},
+                        "action": {
+                            "type": "string",
+                            "enum": ["add", "list", "remove"],
+                            "description": "The action to perform.",
+                        },
                         "title": {"type": "string", "description": "Title of the event."},
-                        "time": {"type": "string", "description": "ISO format or human readable time."}
+                        "time": {
+                            "type": "string",
+                            "description": "ISO format or human readable time.",
+                        },
                     },
-                    "required": ["action"]
-                }
-            }
+                    "required": ["action"],
+                },
+            },
         }

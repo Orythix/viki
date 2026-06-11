@@ -2,12 +2,11 @@
 Presentation skill: create PowerPoint (PPTX) from outline or natural language.
 Manus-style "delivers PowerPoint presentations (PPTX)".
 """
-import os
-from typing import Dict, Any, List
+from typing import Any
 
-from viki.skills.base import BaseSkill
 from viki.config.logger import viki_logger
 from viki.core.utils.path_sandbox import validate_output_path
+from viki.skills.base import BaseSkill
 
 
 class PresentationSkill(BaseSkill):
@@ -25,9 +24,8 @@ class PresentationSkill(BaseSkill):
             "or create_from_text(prompt_or_outline=..., output_path=...) to generate from natural language."
         )
 
-    def _create_pptx(self, outline: List[Dict[str, Any]], output_path: str) -> str:
+    def _create_pptx(self, outline: list[dict[str, Any]], output_path: str) -> str:
         from pptx import Presentation
-        from pptx.util import Inches, Pt
 
         prs = Presentation()
         for i, slide_spec in enumerate(outline):
@@ -46,7 +44,7 @@ class PresentationSkill(BaseSkill):
         prs.save(output_path)
         return output_path
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         output_path = params.get("output_path") or params.get("output")
         if not output_path:
             return "Provide output_path= where to save the .pptx file."
@@ -76,12 +74,13 @@ class PresentationSkill(BaseSkill):
                 prompt = (
                     "Convert this into a short PowerPoint outline. Reply with a JSON array of objects, each with "
                     "'title' (string) and 'bullets' (array of strings). No other text. Example: "
-                    "[{\"title\": \"Intro\", \"bullets\": [\"Point 1\", \"Point 2\"]}]\n\n"
+                    '[{"title": "Intro", "bullets": ["Point 1", "Point 2"]}]\n\n'
                     f"User request: {prompt_or_outline}"
                 )
                 messages = [{"role": "user", "content": prompt}]
                 reply = await model.chat(messages, temperature=0.3)
                 import json
+
                 # Try to parse JSON from reply (may be wrapped in markdown code block)
                 text = reply.strip()
                 if "```" in text:

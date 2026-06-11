@@ -1,4 +1,4 @@
-# VIKI Architecture (v8.2.0 Sovereign)
+# VIKI Architecture (v8.3.0 The Code Eternal)
 
 ## Core Philosophy
 Following the **Industrial Restructuring**, VIKI follows a **Clean Architecture (Hexagonal)** and **Domain-Driven Design (DDD)** pattern:
@@ -50,24 +50,24 @@ See [viki/skills/creation/forge.py](viki/skills/creation/forge.py) (Neural Forge
     Nexus -->|P10: Urgent| Reflex[Reflex Brain]
     Reflex -->|Match| ReflexExec[Reflex Execution]
     Reflex -->|Miss| Controller[Main Controller]
-    
+
     Nexus -->|P30: Proactive| Controller
-    
+
     Controller --> SafetyCheck{Safety Envelope}
     SafetyCheck -->|Safe| Executor[Skill Executor]
     SafetyCheck -->|Risky| Confirm[Awaiting /confirm]
-    
+
     Controller --> Memory[Hybrid Search: BM25 + Vector]
     Controller --> Router{Model Router}
-    
+
     Router -->|Reflex| Phi3(Local)
     Router -->|Chat| Llama3(Local)
     Router -->|Plan| DeepSeek(Cloud/Local)
-    
+
     Executor -->|Success| UI[CLI / Messaging Bridge]
     Executor -->|Fail| Record[Record Failure]
     Record --> Memory
-    
+
     ReflexExec --> UI
 ```
 
@@ -117,4 +117,4 @@ They do not change runtime imports for `python -m viki`; see each folder’s REA
 
 ---
 
-*Runbook version: aligned with VIKI v8.2.0 (Sovereign). Update this file when default ports, flags, or critical architecture patterns change.*
+*Runbook version: aligned with VIKI v8.3.0 (The Code Eternal). Update this file when default ports, flags, or critical architecture patterns change.*

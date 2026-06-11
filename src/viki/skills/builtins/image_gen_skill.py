@@ -2,10 +2,9 @@
 Image generation (DALL-E or Gemini). Set OPENAI_API_KEY or GEMINI API key. Actions: generate(prompt, size).
 """
 import os
-import asyncio
-from typing import Dict, Any
+from typing import Any
+
 from viki.skills.base import BaseSkill
-from viki.config.logger import viki_logger
 
 
 class ImageGenSkill(BaseSkill):
@@ -23,7 +22,11 @@ class ImageGenSkill(BaseSkill):
             "type": "object",
             "properties": {
                 "prompt": {"type": "string", "description": "Image description."},
-                "size": {"type": "string", "enum": ["1024x1024", "1792x1024", "1024x1792"], "default": "1024x1024"},
+                "size": {
+                    "type": "string",
+                    "enum": ["1024x1024", "1792x1024", "1024x1792"],
+                    "default": "1024x1024",
+                },
             },
             "required": ["prompt"],
         }
@@ -32,7 +35,7 @@ class ImageGenSkill(BaseSkill):
     def safety_tier(self) -> str:
         return "medium"
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         prompt = params.get("prompt")
         if not prompt:
             return "Error: prompt required."
@@ -42,6 +45,7 @@ class ImageGenSkill(BaseSkill):
             return "Set OPENAI_API_KEY for DALL-E image generation."
         try:
             import aiohttp
+
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     "https://api.openai.com/v1/images/generations",

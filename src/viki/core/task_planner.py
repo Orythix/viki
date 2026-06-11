@@ -23,15 +23,14 @@ from __future__ import annotations
 
 import json
 import time
-import uuid
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Dict, List, Optional
+from enum import StrEnum
+from typing import Any
 
 from viki.config.logger import viki_logger
 
 
-class TaskType(str, Enum):
+class TaskType(StrEnum):
     SEARCH_REPO = "search_repo"
     READ_FILE = "read_file"
     WRITE = "write"
@@ -44,7 +43,7 @@ class TaskType(str, Enum):
     CREATE = "create"
 
 
-class TaskStatus(str, Enum):
+class TaskStatus(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     DONE = "done"
@@ -57,8 +56,8 @@ class PlanTask:
     id: str
     type: TaskType
     description: str
-    parameters: Dict[str, Any] = field(default_factory=dict)
-    depends_on: List[str] = field(default_factory=list)
+    parameters: dict[str, Any] = field(default_factory=dict)
+    depends_on: list[str] = field(default_factory=list)
     status: TaskStatus = TaskStatus.PENDING
     observation: str = ""
     started_ts: float = 0.0
@@ -66,7 +65,7 @@ class PlanTask:
     attempts: int = 0
     max_attempts: int = 2
 
-    def as_dict(self) -> Dict[str, Any]:
+    def as_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "type": self.type.value,
@@ -84,17 +83,17 @@ class PlanTask:
 @dataclass
 class TaskGraph:
     goal: str
-    tasks: List[PlanTask] = field(default_factory=list)
+    tasks: list[PlanTask] = field(default_factory=list)
     created_ts: float = field(default_factory=time.time)
 
-    def by_id(self, tid: str) -> Optional[PlanTask]:
+    def by_id(self, tid: str) -> PlanTask | None:
         for t in self.tasks:
             if t.id == tid:
                 return t
         return None
 
-    def ready_tasks(self) -> List[PlanTask]:
-        out: List[PlanTask] = []
+    def ready_tasks(self) -> list[PlanTask]:
+        out: list[PlanTask] = []
         for t in self.tasks:
             if t.status != TaskStatus.PENDING:
                 continue
@@ -105,7 +104,7 @@ class TaskGraph:
     def is_done(self) -> bool:
         return all(t.status in (TaskStatus.DONE, TaskStatus.FAILED) for t in self.tasks)
 
-    def summary(self) -> Dict[str, Any]:
+    def summary(self) -> dict[str, Any]:
         return {
             "goal": self.goal,
             "task_count": len(self.tasks),
@@ -132,10 +131,10 @@ class PlannerExecutor:
         "Example: For npx, use 'npx -y create-vite@latest ...'. For npm, use 'npm init -y'.\n"
         "Keep the plan minimal (<=12 tasks). Each task should be small and verifiable.\n"
         "Tasks must reference other task ids in depends_on for ordering.\n"
-        "Example: [{\"id\":\"t1\",\"type\":\"shell\",\"description\":\"init project\",\"parameters\":{\"command\":\"npx -y create-vite@latest . --template react\"},\"depends_on\":[]}]"
+        'Example: [{"id":"t1","type":"shell","description":"init project","parameters":{"command":"npx -y create-vite@latest . --template react"},"depends_on":[]}]'
     )
 
-    def __init__(self, model_router, executor_callbacks: Optional[Dict[str, Any]] = None):
+    def __init__(self, model_router, executor_callbacks: dict[str, Any] | None = None):
         self.model_router = model_router
         self.callbacks = executor_callbacks or {}
 
@@ -175,7 +174,7 @@ class PlannerExecutor:
         return graph
 
     @staticmethod
-    def _parse_plan(raw: Any) -> List[PlanTask]:
+    def _parse_plan(raw: Any) -> list[PlanTask]:
         text = raw if isinstance(raw, str) else str(raw or "")
         text = text.strip()
         # Find first JSON array.
@@ -189,7 +188,7 @@ class PlannerExecutor:
             return []
         if not isinstance(data, list):
             return []
-        tasks: List[PlanTask] = []
+        tasks: list[PlanTask] = []
         for entry in data:
             if not isinstance(entry, dict):
                 continue
@@ -209,34 +208,39 @@ class PlannerExecutor:
         return tasks
 
     @staticmethod
-    def _fallback_plan(goal: str) -> List[PlanTask]:
+    def _fallback_plan(goal: str) -> list[PlanTask]:
         """Conservative plan when the planner model is unavailable."""
         lower_goal = goal.lower()
         if any(w in lower_goal for w in ["create", "build", "make", "generate", "scaffold"]):
-             return [
-                 PlanTask(
-                     id="t1",
-                     type=TaskType.ANALYZE,
-                     description=f"Plan the project structure for: {goal[:100]}",
-                     parameters={"goal": goal},
-                     depends_on=[]
-                 ),
-                 PlanTask(
-                     id="t2",
-                     type=TaskType.SHELL,
-                     description="Initialize project directory",
-                     parameters={"command": "powershell -NoProfile -Command \"New-Item -ItemType Directory -Path project -Force\""},
-                     depends_on=["t1"]
-                 ),
-                 PlanTask(
-                     id="t3",
-                     type=TaskType.WRITE,
-                     description="Create initial entry point",
-                     parameters={"path": "project/README.md", "content": f"# Project\nGenerated for: {goal}"},
-                     depends_on=["t2"]
-                 )
-             ]
-             
+            return [
+                PlanTask(
+                    id="t1",
+                    type=TaskType.ANALYZE,
+                    description=f"Plan the project structure for: {goal[:100]}",
+                    parameters={"goal": goal},
+                    depends_on=[],
+                ),
+                PlanTask(
+                    id="t2",
+                    type=TaskType.SHELL,
+                    description="Initialize project directory",
+                    parameters={
+                        "command": 'powershell -NoProfile -Command "New-Item -ItemType Directory -Path project -Force"'
+                    },
+                    depends_on=["t1"],
+                ),
+                PlanTask(
+                    id="t3",
+                    type=TaskType.WRITE,
+                    description="Create initial entry point",
+                    parameters={
+                        "path": "project/README.md",
+                        "content": f"# Project\nGenerated for: {goal}",
+                    },
+                    depends_on=["t2"],
+                ),
+            ]
+
         return [
             PlanTask(
                 id="t1",
@@ -275,9 +279,13 @@ class PlannerExecutor:
                         t.status = TaskStatus.BLOCKED
                 break
             for task in ready:
-                viki_logger.info(f"PlannerExecutor: Running task {task.id} ({task.type.value}): {task.description}")
+                viki_logger.info(
+                    f"PlannerExecutor: Running task {task.id} ({task.type.value}): {task.description}"
+                )
                 await self._run_task(task)
-                viki_logger.info(f"PlannerExecutor: Task {task.id} finished with status {task.status.value}")
+                viki_logger.info(
+                    f"PlannerExecutor: Task {task.id} finished with status {task.status.value}"
+                )
         return graph
 
     async def _run_task(self, task: PlanTask) -> None:

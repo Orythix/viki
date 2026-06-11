@@ -1,18 +1,20 @@
 import os
 import re
-from typing import List, Dict, Any, Optional
+
 from viki.config.logger import viki_logger
+
 
 class ContextRetriever:
     """
     Tier 4 Optimization: Selective Context Injection (RAG).
     Pulls relevant code snippets from the workspace when full context is pruned.
     """
+
     def __init__(self, workspace_dir: str):
         self.workspace_dir = workspace_dir
         self.max_snippet_len = 1500
         self.max_snippets = 5
-        self.pinned_paths: List[str] = [] # Pinned files or directories
+        self.pinned_paths: list[str] = []  # Pinned files or directories
 
     async def get_relevant_context(self, query: str) -> str:
         """
@@ -20,39 +22,45 @@ class ContextRetriever:
         Includes pinned files/directories regardless of keyword match.
         """
         viki_logger.info(f"ContextRetriever: Finding relevant snippets for '{query[:30]}...'")
-        
+
         # 1. Pinned context (highest priority)
         pinned_snippets = []
         for path in self.pinned_paths:
             if os.path.isfile(path):
-                snippet = self._get_file_snippet(path, []) # Keywords empty = full or top of file
+                snippet = self._get_file_snippet(path, [])  # Keywords empty = full or top of file
                 if snippet:
                     rel_path = os.path.relpath(path, self.workspace_dir)
                     pinned_snippets.append(f"--- PINNED FILE: {rel_path} ---\n{snippet}")
             elif os.path.isdir(path):
                 # Sample a few files from the pinned directory
                 for root, _, files in os.walk(path):
-                    for file in files[:3]: # Limit per dir
+                    for file in files[:3]:  # Limit per dir
                         f_path = os.path.join(root, file)
                         snippet = self._get_file_snippet(f_path, [])
                         if snippet:
                             rel_path = os.path.relpath(f_path, self.workspace_dir)
-                            pinned_snippets.append(f"--- PINNED DIR FILE: {rel_path} ---\n{snippet}")
+                            pinned_snippets.append(
+                                f"--- PINNED DIR FILE: {rel_path} ---\n{snippet}"
+                            )
 
         # 2. Extract keywords from query for dynamic search
         keywords = self._extract_keywords(query)
         dynamic_snippets = []
-        
+
         if keywords:
             # Search for relevant files
             relevant_files = self._search_files(keywords)
-            
+
             # Extract snippets from top files
-            for file_path in relevant_files[:self.max_snippets]:
+            for file_path in relevant_files[: self.max_snippets]:
                 # Skip if already pinned
-                if any(os.path.samefile(file_path, p) for p in self.pinned_paths if os.path.exists(p) and os.path.exists(file_path)):
+                if any(
+                    os.path.samefile(file_path, p)
+                    for p in self.pinned_paths
+                    if os.path.exists(p) and os.path.exists(file_path)
+                ):
                     continue
-                    
+
                 snippet = self._get_file_snippet(file_path, keywords)
                 if snippet:
                     rel_path = os.path.relpath(file_path, self.workspace_dir)
@@ -62,25 +70,55 @@ class ContextRetriever:
         if not all_snippets:
             return ""
 
-        return "\n\nRELEVANT CODE SNIPPETS (Retrieved via RAG/Pinning):\n" + "\n\n".join(all_snippets)
+        return "\n\nRELEVANT CODE SNIPPETS (Retrieved via RAG/Pinning):\n" + "\n\n".join(
+            all_snippets
+        )
 
-    def _extract_keywords(self, query: str) -> List[str]:
+    def _extract_keywords(self, query: str) -> list[str]:
         # Simple tokenization, remove common words
-        words = re.findall(r'\w+', query.lower())
-        stopwords = {'the', 'a', 'in', 'to', 'for', 'with', 'is', 'on', 'that', 'of', 'and', 'or', 'an', 'viki'}
+        words = re.findall(r"\w+", query.lower())
+        stopwords = {
+            "the",
+            "a",
+            "in",
+            "to",
+            "for",
+            "with",
+            "is",
+            "on",
+            "that",
+            "of",
+            "and",
+            "or",
+            "an",
+            "viki",
+        }
         keywords = [w for w in words if len(w) > 3 and w not in stopwords]
         return list(set(keywords))
 
-    def _search_files(self, keywords: List[str]) -> List[str]:
+    def _search_files(self, keywords: list[str]) -> list[str]:
         scored_files = []
         try:
-            for root, dirs, files in os.walk(self.workspace_dir):
+            for root, _dirs, files in os.walk(self.workspace_dir):
                 # Prune common noise dirs
-                if any(d in root for d in ('.git', '__pycache__', '.venv', 'node_modules', 'dist', 'build', '.gemini')):
+                if any(
+                    d in root
+                    for d in (
+                        ".git",
+                        "__pycache__",
+                        ".venv",
+                        "node_modules",
+                        "dist",
+                        "build",
+                        ".gemini",
+                    )
+                ):
                     continue
-                
+
                 for file in files:
-                    if file.endswith(('.py', '.js', '.ts', '.html', '.css', '.md', '.yaml', '.yml', '.json')):
+                    if file.endswith(
+                        (".py", ".js", ".ts", ".html", ".css", ".md", ".yaml", ".yml", ".json")
+                    ):
                         path = os.path.join(root, file)
                         score = 0
                         # Score by filename first
@@ -88,23 +126,23 @@ class ContextRetriever:
                         for kw in keywords:
                             if kw in file_lower:
                                 score += 10
-                        
+
                         # Only check content if filename matches or it's a small number of files
                         # For now, let's keep it simple and just return a few candidates
                         if score > 0:
                             scored_files.append((score, path))
-            
+
             scored_files.sort(key=lambda x: x[0], reverse=True)
             return [f[1] for f in scored_files]
         except Exception as e:
             viki_logger.debug(f"ContextRetriever search failed: {e}")
             return []
 
-    def _get_file_snippet(self, file_path: str, keywords: List[str]) -> Optional[str]:
+    def _get_file_snippet(self, file_path: str, keywords: list[str]) -> str | None:
         try:
-            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            with open(file_path, encoding="utf-8", errors="ignore") as f:
                 content = f.read()
-                
+
             if len(content) <= self.max_snippet_len:
                 return content
 
@@ -112,19 +150,19 @@ class ContextRetriever:
             lines = content.splitlines()
             best_start = 0
             max_matches = -1
-            
+
             # Simple sliding window over lines
             window_size = 30
             for i in range(len(lines) - window_size):
-                window_text = "\n".join(lines[i:i+window_size]).lower()
+                window_text = "\n".join(lines[i : i + window_size]).lower()
                 matches = sum(1 for kw in keywords if kw in window_text)
                 if matches > max_matches:
                     max_matches = matches
                     best_start = i
-            
-            snippet = "\n".join(lines[best_start:best_start+window_size])
+
+            snippet = "\n".join(lines[best_start : best_start + window_size])
             if len(snippet) > self.max_snippet_len:
-                snippet = snippet[:self.max_snippet_len] + "..."
+                snippet = snippet[: self.max_snippet_len] + "..."
             return snippet
         except Exception:
             return None

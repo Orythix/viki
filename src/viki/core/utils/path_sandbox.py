@@ -3,16 +3,24 @@ Path sandbox for content-creation and file-writing skills.
 Ensures output paths stay under allowed roots and not under blocked system paths.
 """
 import os
-from typing import List, Optional, Tuple, Any
+from typing import Any
 
 # System directories that must not be written to
 BLOCKED_PATHS = [
-    "C:\\Windows", "C:\\Program Files", "C:\\Program Files (x86)",
-    "/etc", "/usr", "/bin", "/sbin", "/boot", "/sys", "/proc",
+    "C:\\Windows",
+    "C:\\Program Files",
+    "C:\\Program Files (x86)",
+    "/etc",
+    "/usr",
+    "/bin",
+    "/sbin",
+    "/boot",
+    "/sys",
+    "/proc",
 ]
 
 
-def get_allowed_roots(controller: Any = None) -> List[str]:
+def get_allowed_roots(controller: Any = None) -> list[str]:
     """Return list of allowed root directories for output files."""
     roots = []
     # Always include CWD so the user can access files in the directory
@@ -35,10 +43,10 @@ def get_allowed_roots(controller: Any = None) -> List[str]:
 
 def validate_output_path(
     path: str,
-    allowed_roots: Optional[List[str]] = None,
-    blocked_paths: Optional[List[str]] = None,
+    allowed_roots: list[str] | None = None,
+    blocked_paths: list[str] | None = None,
     controller: Any = None,
-) -> Tuple[bool, str]:
+) -> tuple[bool, str]:
     """
     Validate that path resolves under an allowed root and not under a blocked path.
     Returns (True, real_path) or (False, error_message).
@@ -54,7 +62,7 @@ def validate_output_path(
     for bp in blocked:
         try:
             if real_path.startswith(os.path.realpath(bp)):
-                return False, f"Access denied: path is in a protected system directory."
+                return False, "Access denied: path is in a protected system directory."
         except Exception:
             continue
     for root in roots:

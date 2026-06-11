@@ -13,10 +13,10 @@ import json
 import os
 import threading
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 _lock = threading.Lock()
-_data_dir: Optional[str] = None
+_data_dir: str | None = None
 _enabled: bool = False
 
 USAGE_FILENAME = "usage_session.jsonl"
@@ -39,7 +39,7 @@ def configure_session_usage_log(data_dir: str, enabled: bool) -> None:
     _data_dir = root
 
 
-def _append(entry: Dict[str, Any]) -> None:
+def _append(entry: dict[str, Any]) -> None:
     if not _enabled or not _data_dir:
         return
     entry = dict(entry)
@@ -59,12 +59,12 @@ def emit_llm_inference(
     latency_s: float,
     success: bool,
     method: str,
-    extra: Optional[Dict[str, Any]] = None,
+    extra: dict[str, Any] | None = None,
 ) -> None:
     """One logical inference call (HTTP/API round-trip where applicable)."""
     model_name = getattr(provider, "model_name", "") or ""
     provider_cls = type(provider).__name__
-    row: Dict[str, Any] = {
+    row: dict[str, Any] = {
         "event": "llm_inference",
         "model_name": model_name,
         "provider_class": provider_cls,
@@ -99,9 +99,9 @@ def emit_skill_execution(
     skill_name: str,
     latency_s: float,
     success: bool,
-    error: Optional[str] = None,
+    error: str | None = None,
 ) -> None:
-    row: Dict[str, Any] = {
+    row: dict[str, Any] = {
         "event": "skill_execution",
         "skill_name": skill_name,
         "latency_ms": round(float(latency_s) * 1000.0, 3),
@@ -121,7 +121,7 @@ def emit_security_event(
     severity: str = "medium",
 ) -> None:
     """Log a security-relevant event (e.g. action blocked, air-gap violation)."""
-    row: Dict[str, Any] = {
+    row: dict[str, Any] = {
         "event": "security_boundary",
         "type": event_type,
         "details": details,

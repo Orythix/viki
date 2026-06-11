@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Protocol
+from typing import Any, Protocol
 
 
 @dataclass(frozen=True)
@@ -19,7 +19,7 @@ class MessageDraft:
 
     channel: str  # e.g. "email", "whatsapp", "discord", "telegram"
     text: str
-    recipient: Optional[str] = None  # Optional routing info for connectors
+    recipient: str | None = None  # Optional routing info for connectors
 
 
 @dataclass
@@ -27,8 +27,10 @@ class ApprovalRequirement:
     """Describes what must be approved before execution."""
 
     required: bool = True
-    reasons: List[str] = field(default_factory=list)
-    what_to_approve: List[str] = field(default_factory=list)  # e.g. ["send_messages", "apply_event_change"]
+    reasons: list[str] = field(default_factory=list)
+    what_to_approve: list[str] = field(
+        default_factory=list
+    )  # e.g. ["send_messages", "apply_event_change"]
 
 
 @dataclass
@@ -40,19 +42,19 @@ class OpsPlan:
 
     tenant_id: str
     update_type: str  # e.g. "schedule_change", "cancellation", "reminder"
-    facts_used: List[OpsFact] = field(default_factory=list)
+    facts_used: list[OpsFact] = field(default_factory=list)
 
     # Proposed event/system changes (tenant-specific connector schema).
-    proposed_changes: Dict[str, Any] = field(default_factory=dict)
+    proposed_changes: dict[str, Any] = field(default_factory=dict)
 
     # Draft communications per channel.
-    message_drafts: List[MessageDraft] = field(default_factory=list)
+    message_drafts: list[MessageDraft] = field(default_factory=list)
 
     # Approval gate.
     approval: ApprovalRequirement = field(default_factory=ApprovalRequirement)
 
     # Additional constraints or refusal notes.
-    safety_constraints: List[str] = field(default_factory=list)
+    safety_constraints: list[str] = field(default_factory=list)
 
 
 class TenantConnector(Protocol):
@@ -63,13 +65,13 @@ class TenantConnector(Protocol):
 
     tenant_id: str
 
-    async def fetch_state(self, event_id: Optional[str] = None) -> Dict[str, Any]:
+    async def fetch_state(self, event_id: str | None = None) -> dict[str, Any]:
         """Fetch tenant state required to plan an operation."""
 
-    async def apply_changes(self, changes: Dict[str, Any]) -> Dict[str, Any]:
+    async def apply_changes(self, changes: dict[str, Any]) -> dict[str, Any]:
         """Apply approved changes to the tenant systems."""
 
-    async def send_messages(self, drafts: List[MessageDraft]) -> Dict[str, Any]:
+    async def send_messages(self, drafts: list[MessageDraft]) -> dict[str, Any]:
         """Send approved messages via tenant outbound channels."""
 
 
@@ -122,7 +124,7 @@ class SimpleOpsPlanner(OpsPlanner):
 
     FOR_CLAUSE_TOKEN = " for "
 
-    async def plan(self, tenant_id: str, request: str) -> OpsPlan:  #NOSONAR
+    async def plan(self, tenant_id: str, request: str) -> OpsPlan:  # NOSONAR
         await asyncio.sleep(0)
         text = (request or "").strip()
         req_lower = text.lower()
@@ -136,6 +138,7 @@ class SimpleOpsPlanner(OpsPlanner):
             update_type = "cancellation"
 
         import re as _re
+
         # Prefer extracting title before the time window:
         # "Schedule a <title> tomorrow at 2pm"
         mt_title = _re.search(
@@ -151,7 +154,7 @@ class SimpleOpsPlanner(OpsPlanner):
             if self.FOR_CLAUSE_TOKEN in f" {req_lower} ":
                 idx = req_lower.find(self.FOR_CLAUSE_TOKEN)
                 if idx != -1:
-                    title_guess = text[idx + len(self.FOR_CLAUSE_TOKEN):].strip()
+                    title_guess = text[idx + len(self.FOR_CLAUSE_TOKEN) :].strip()
             if title_guess:
                 for cut in (" tomorrow", " today", " tonight", " at ", " on "):
                     if cut in title_guess.lower():
@@ -167,7 +170,9 @@ class SimpleOpsPlanner(OpsPlanner):
             h = mt.group(2)
             minutes = mt.group(3)
             ampm = mt.group(4) or ""
-            time_str = f"{day} at {h}" + (f":{minutes}" if minutes else "") + (f"{ampm}" if ampm else "")
+            time_str = (
+                f"{day} at {h}" + (f":{minutes}" if minutes else "") + (f"{ampm}" if ampm else "")
+            )
         else:
             mt2 = _re.search(r"(\d{1,2})(?::(\d{2}))?\s*(am|pm)", req_lower)
             if mt2:
@@ -180,7 +185,7 @@ class SimpleOpsPlanner(OpsPlanner):
         if "team" in req_lower:
             recipient = "team"
 
-        facts_used: List[OpsFact] = []
+        facts_used: list[OpsFact] = []
         if self.controller is not None and getattr(self.controller, "learning", None) is not None:
             try:
                 lessons = self.controller.learning.get_relevant_lessons(text, limit=3)
@@ -237,16 +242,18 @@ class ControllerTenantConnector:
         self.tenant_id = tenant_id
         self._budget = controller.budgets.get("general", {"time": 5})
 
-    async def fetch_state(self, event_id: Optional[str] = None) -> Dict[str, Any]:
+    async def fetch_state(self, event_id: str | None = None) -> dict[str, Any]:
         await asyncio.sleep(0)
         return {"event_id": event_id}
 
-    async def _run_skill_checked(self, skill_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def _run_skill_checked(self, skill_name: str, params: dict[str, Any]) -> dict[str, Any]:
         contract_err = self.controller._validate_tool_contract_params(skill_name, params)
         if contract_err:
             return {"ok": False, "error": contract_err}
 
-        result, err, latency = await self.controller._execute_skill(skill_name, params, self._budget)
+        result, err, latency = await self.controller._execute_skill(
+            skill_name, params, self._budget
+        )
         if err:
             return {"ok": False, "error": err}
 
@@ -256,7 +263,7 @@ class ControllerTenantConnector:
 
         return {"ok": True, "result": result, "latency": latency}
 
-    async def apply_changes(self, changes: Dict[str, Any]) -> Dict[str, Any]:
+    async def apply_changes(self, changes: dict[str, Any]) -> dict[str, Any]:
         update_type = changes.get("update_type")
         title = changes.get("title")
 
@@ -282,7 +289,7 @@ class ControllerTenantConnector:
 
         return {"ok": False, "error": f"Unknown update_type: {update_type}"}
 
-    async def send_messages(self, drafts: List[MessageDraft]) -> Dict[str, Any]:
+    async def send_messages(self, drafts: list[MessageDraft]) -> dict[str, Any]:
         messaging = self.controller.skill_registry.get_skill("messaging")
         if messaging is None:
             return {"ok": False, "error": "messaging skill not available"}
@@ -295,12 +302,18 @@ class ControllerTenantConnector:
             results.append(
                 {
                     "channel": d.channel,
-                    **(await self._run_skill_checked(
-                        "messaging",
-                        {"action": "send", "channel": d.channel, "recipient": d.recipient or "", "text": d.text},
-                    )),
+                    **(
+                        await self._run_skill_checked(
+                            "messaging",
+                            {
+                                "action": "send",
+                                "channel": d.channel,
+                                "recipient": d.recipient or "",
+                                "text": d.text,
+                            },
+                        )
+                    ),
                 }
             )
 
         return {"ok": True, "results": results}
-

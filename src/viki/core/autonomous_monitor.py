@@ -1,9 +1,12 @@
+import asyncio
 import os
 import time
-import asyncio
-from watchdog.observers import Observer
+
 from watchdog.events import FileSystemEventHandler
+from watchdog.observers import Observer
+
 from viki.config.logger import viki_logger
+
 
 class ProactiveHandler(FileSystemEventHandler):
     def __init__(self, controller, loop):
@@ -14,12 +17,11 @@ class ProactiveHandler(FileSystemEventHandler):
         if not event.is_directory:
             filename = os.path.basename(event.src_path)
             viki_logger.info(f"Proactive: Detected new file '{filename}'")
-            
+
             # Trigger self-healing analysis
             if hasattr(self.controller, "self_healing"):
                 asyncio.run_coroutine_threadsafe(
-                    self.controller.self_healing.analyze_file(event.src_path),
-                    self.loop
+                    self.controller.self_healing.analyze_file(event.src_path), self.loop
                 )
 
     def on_modified(self, event):
@@ -27,9 +29,9 @@ class ProactiveHandler(FileSystemEventHandler):
             # Trigger self-healing on modification as well
             if hasattr(self.controller, "self_healing"):
                 asyncio.run_coroutine_threadsafe(
-                    self.controller.self_healing.analyze_file(event.src_path),
-                    self.loop
+                    self.controller.self_healing.analyze_file(event.src_path), self.loop
                 )
+
 
 class WellnessPulse:
     """
@@ -40,13 +42,16 @@ class WellnessPulse:
         proactive.wellness_interval_s: 1800   (default 30 min)
         proactive.wellness_idle_threshold_s: 7200  (default 2 h)
     """
+
     def __init__(self, controller):
         self.controller = controller
         self.is_running = False
         self.disabled = False
         self.snoozed_until = 0
         self.dismissed_patterns = set()
-        proactive_cfg = (controller.settings.get("proactive", {}) if hasattr(controller, "settings") else {}) or {}
+        proactive_cfg = (
+            controller.settings.get("proactive", {}) if hasattr(controller, "settings") else {}
+        ) or {}
         self.interval_s = max(60, int(proactive_cfg.get("wellness_interval_s", 1800)))
         self.idle_threshold_s = max(60, int(proactive_cfg.get("wellness_idle_threshold_s", 7200)))
 
@@ -90,7 +95,7 @@ class WellnessPulse:
     async def start(self):
         self.is_running = True
         viki_logger.info("WellnessPulse: Awareness layer active.")
-        
+
         while self.is_running:
             await asyncio.sleep(self.interval_s)
             if not self._should_trigger():
@@ -120,11 +125,12 @@ class WellnessPulse:
     def stop(self):
         self.is_running = False
 
+
 class WatchdogModule:
     def __init__(self, controller):
         self.controller = controller
         self.observer = Observer()
-        self.watch_dir = controller.settings.get('system', {}).get('workspace_dir', './workspace')
+        self.watch_dir = controller.settings.get("system", {}).get("workspace_dir", "./workspace")
         os.makedirs(self.watch_dir, exist_ok=True)
 
     def start(self, loop):

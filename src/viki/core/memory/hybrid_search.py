@@ -2,19 +2,20 @@
 QMD-style hybrid memory search: BM25 (keyword) + vector (episodic) + optional LLM rerank.
 Used by recall_skill and can be wired into get_full_context for richer retrieval.
 """
-import re
 import hashlib
-from typing import List, Dict, Any, Optional
+import re
 from collections import OrderedDict
+from typing import Any
 
 try:
     from rank_bm25 import BM25Okapi
+
     HAS_BM25 = True
 except ImportError:
     HAS_BM25 = False
 
 
-def _tokenize(text: str) -> List[str]:
+def _tokenize(text: str) -> list[str]:
     return re.findall(r"\w+", (text or "").lower())
 
 
@@ -22,14 +23,14 @@ class _BM25Cache:
     """Reusable BM25 index to avoid rebuilding on every query."""
 
     def __init__(self, max_docs: int = 500):
-        self._docs: List[str] = []
+        self._docs: list[str] = []
         self._bm25: Any = None
         self._max_docs = max_docs
 
-    def build(self, docs: List[str]):
+    def build(self, docs: list[str]):
         if docs == self._docs:
             return self._bm25
-        self._docs = docs[:self._max_docs]
+        self._docs = docs[: self._max_docs]
         tokenized = [_tokenize(d) for d in self._docs]
         self._bm25 = BM25Okapi(tokenized)
         return self._bm25
@@ -37,7 +38,7 @@ class _BM25Cache:
 
 _bm25_cache = _BM25Cache()
 
-_LRU_CACHE: "OrderedDict[str, List[str]]" = OrderedDict()
+_LRU_CACHE: "OrderedDict[str, list[str]]" = OrderedDict()
 _LRU_MAX = 128
 
 
@@ -51,7 +52,7 @@ async def search_memory(
     limit: int = 10,
     rerank: bool = False,
     alpha: float = 0.5,
-) -> List[str]:
+) -> list[str]:
     """
     Hybrid search over lessons (learning) and episodic memory.
     Combines keyword (BM25) and existing semantic retrieval, optionally reranks with LLM.
@@ -67,7 +68,7 @@ async def search_memory(
         _LRU_CACHE.move_to_end(ck)
         return list(_LRU_CACHE[ck])
 
-    query_lower = (query or "").lower()
+    (query or "").lower()
     # 1) Lessons (keyword/semantic from learning)
     lessons = controller.learning.get_relevant_lessons(query, limit=limit * 2)
     if not isinstance(lessons, list):
@@ -103,7 +104,10 @@ async def search_memory(
         if max_sem == 0:
             max_sem = 1.0
         fused = [
-            (alpha * (bm25_scores[i] / max_bm25) + (1 - alpha) * (semantic_scores[i] / max_sem), combined[i])
+            (
+                alpha * (bm25_scores[i] / max_bm25) + (1 - alpha) * (semantic_scores[i] / max_sem),
+                combined[i],
+            )
             for i in range(len(combined))
         ]
         fused.sort(key=lambda x: -x[0])
@@ -111,9 +115,11 @@ async def search_memory(
     else:
         # Simple keyword overlap score
         q_tokens = set(_tokenize(query))
+
         def score(d: str):
             t = set(_tokenize(d))
             return len(q_tokens & t) / (len(q_tokens) + 1e-6)
+
         combined = sorted(combined, key=score, reverse=True)[: limit * 2]
 
     results = [c.strip() for c in combined if c.strip()][:limit]
@@ -149,6 +155,7 @@ async def search_memory(
             # else keep original order on parse failure
         except Exception as e:
             from config.logger import viki_logger
+
             viki_logger.debug("Hybrid search rerank: %s", e)
 
     return results[:limit]

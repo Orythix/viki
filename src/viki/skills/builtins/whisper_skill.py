@@ -3,11 +3,10 @@ Whisper transcription: audio file or URL to text. OPENAI_API_KEY for API; or loc
 File paths are restricted to allowed roots (workspace, data).
 """
 import os
-import asyncio
-from typing import Dict, Any
-from viki.skills.base import BaseSkill
-from viki.config.logger import viki_logger
+from typing import Any
+
 from viki.core.utils.path_sandbox import validate_output_path
+from viki.skills.base import BaseSkill
 
 
 class WhisperSkill(BaseSkill):
@@ -32,7 +31,7 @@ class WhisperSkill(BaseSkill):
             "required": ["file"],
         }
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         path = params.get("file")
         if not path:
             return "Provide file= path to an existing audio file."
@@ -49,6 +48,7 @@ class WhisperSkill(BaseSkill):
                 with open(path, "rb") as f:
                     data = f.read()
                 import aiohttp
+
                 async with aiohttp.ClientSession() as session:
                     form = aiohttp.FormData()
                     form.add_field("file", data, filename=os.path.basename(path))

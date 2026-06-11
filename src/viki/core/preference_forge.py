@@ -23,8 +23,9 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any
 
 from viki.config.logger import viki_logger
 
@@ -37,9 +38,9 @@ class PreferencePair:
     chosen: str
     rejected: str
     source: str = "memory"  # "memory" | "failure" | "teacher"
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "prompt": self.prompt,
             "chosen": self.chosen,
@@ -62,9 +63,9 @@ class PreferenceDatasetBuilder:
         self,
         output_path: str,
         max_pairs: int = 500,
-        teacher_pairs: Optional[Iterable[PreferencePair]] = None,
-    ) -> Tuple[str, int]:
-        pairs: List[PreferencePair] = []
+        teacher_pairs: Iterable[PreferencePair] | None = None,
+    ) -> tuple[str, int]:
+        pairs: list[PreferencePair] = []
         pairs.extend(self._mine_failure_pairs(limit=max_pairs))
         pairs.extend(self._mine_lesson_pairs(limit=max_pairs))
         if teacher_pairs:
@@ -86,7 +87,7 @@ class PreferenceDatasetBuilder:
         )
         return f"Wrote {len(pairs)} preference pairs to {output_path}.", len(pairs)
 
-    def _mine_failure_pairs(self, limit: int) -> List[PreferencePair]:
+    def _mine_failure_pairs(self, limit: int) -> list[PreferencePair]:
         """
         For every failure in the failures table, treat the failed action as the
         rejected response and (if available) the relevant lesson as the chosen.
@@ -104,7 +105,7 @@ class PreferenceDatasetBuilder:
             viki_logger.debug("PreferenceDatasetBuilder: failure mining failed: %s", e)
             return []
 
-        out: List[PreferencePair] = []
+        out: list[PreferencePair] = []
         for r in rows:
             ctx = r["context"] if "context" in r.keys() else r[2]
             action = r["action"] if "action" in r.keys() else r[0]
@@ -112,7 +113,9 @@ class PreferenceDatasetBuilder:
             prompt = (ctx or "").strip()
             if not prompt:
                 continue
-            chosen = self._best_lesson_for(prompt) or "Decline politely and request the missing info."
+            chosen = (
+                self._best_lesson_for(prompt) or "Decline politely and request the missing info."
+            )
             rejected = (
                 f"{action}\n# error: {error}" if action else f"# error: {error}"
             ).strip() or "(failed action with no detail)"
@@ -126,7 +129,7 @@ class PreferenceDatasetBuilder:
             )
         return out
 
-    def _mine_lesson_pairs(self, limit: int) -> List[PreferencePair]:
+    def _mine_lesson_pairs(self, limit: int) -> list[PreferencePair]:
         """
         Synthetic positives only: turn each high-confidence lesson into a
         (lesson trigger -> lesson fact) pair where the rejected sample is a
@@ -147,7 +150,7 @@ class PreferenceDatasetBuilder:
             viki_logger.debug("PreferenceDatasetBuilder: lesson mining failed: %s", e)
             return []
 
-        out: List[PreferencePair] = []
+        out: list[PreferencePair] = []
         for r in rows:
             try:
                 obj = json.loads(r["content"]) if r["content"] else {}
@@ -167,7 +170,7 @@ class PreferenceDatasetBuilder:
             )
         return out
 
-    def _best_lesson_for(self, query: str) -> Optional[str]:
+    def _best_lesson_for(self, query: str) -> str | None:
         if self.learning is None or not hasattr(self.learning, "get_relevant_lessons"):
             return None
         try:
@@ -190,15 +193,15 @@ class TeacherDistillation:
         - the caller passing per-prompt consent in the prompt list
     """
 
-    def __init__(self, model_router: Any, teacher_capabilities: Optional[List[str]] = None):
+    def __init__(self, model_router: Any, teacher_capabilities: list[str] | None = None):
         self.router = model_router
         self.teacher_capabilities = teacher_capabilities or ["reasoning", "frontier"]
 
     async def generate(
         self,
-        prompts: Iterable[Dict[str, Any]],
+        prompts: Iterable[dict[str, Any]],
         local_responder: Any,
-    ) -> List[PreferencePair]:
+    ) -> list[PreferencePair]:
         """
         prompts: iterable of {"prompt": str, "consent": bool}.
         local_responder: object with `async def chat(messages, ...)`.
@@ -212,7 +215,7 @@ class TeacherDistillation:
         if teacher is None or local_responder is None:
             return []
 
-        out: List[PreferencePair] = []
+        out: list[PreferencePair] = []
         for entry in prompts:
             if not entry.get("consent"):
                 continue
@@ -283,10 +286,10 @@ def run_dpo_training(
     try:
         import torch  # type: ignore
         from datasets import load_dataset  # type: ignore
-        from transformers import AutoTokenizer  # type: ignore
-        from trl import DPOTrainer, DPOConfig  # type: ignore
+        from trl import DPOConfig, DPOTrainer  # type: ignore
+
         try:
-            from trl import ORPOTrainer, ORPOConfig  # type: ignore
+            from trl import ORPOConfig, ORPOTrainer  # type: ignore
         except Exception:
             ORPOTrainer = None
             ORPOConfig = None
@@ -337,7 +340,9 @@ def run_dpo_training(
             logging_steps=1,
             report_to="none",
         )
-        trainer = DPOTrainer(model=model, ref_model=None, args=cfg, tokenizer=tokenizer, train_dataset=ds)
+        trainer = DPOTrainer(
+            model=model, ref_model=None, args=cfg, tokenizer=tokenizer, train_dataset=ds
+        )
     else:
         if ORPOTrainer is None or ORPOConfig is None:
             return "PreferenceForge: ORPO trainer unavailable; upgrade trl >= 0.9.0."

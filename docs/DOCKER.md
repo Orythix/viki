@@ -53,7 +53,7 @@ The `docker-compose.yml` sets these:
 | `VIKI_WORKSPACE_DIR` | `/app/workspace` | Agent workspace |
 | `VIKI_CONFIG_DIR` | `/app/config` | Config directory |
 | `VIKI_TRUST_WORKSPACE` | `true` | Auto-trust the workspace (skip prompt) |
-| `VIKI_LOG_LEVEL` | `DEBUG` | Logging level |
+| `VIKI_LOG_LEVEL` | `INFO` | Logging level |
 | `VIKI_OLLAMA_THINK` | `false` | Disable thinking/chain-of-thought in models |
 | `OLLAMA_HOST` | `http://host.docker.internal:11434` | Ollama endpoint from inside container |
 
@@ -94,4 +94,4 @@ Then the agent can run `docker ps`, `docker images`, `docker run ...`, etc. thro
 
 ---
 
-*Runbook version: aligned with VIKI v8.2.0 (Sovereign). Update this file when default ports, flags, or critical architecture patterns change.*
+*Runbook version: aligned with VIKI v8.3.0 (The Code Eternal). Update this file when default ports, flags, or critical architecture patterns change.*

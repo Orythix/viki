@@ -2,13 +2,13 @@
 Data analysis skill: load CSV/Excel, describe stats, visualize (charts), optional LLM summary.
 Manus-style "process datasets, identify patterns, generate reports, create visualizations."
 """
-import os
 import io
-from typing import Dict, Any, Optional
+import os
+from typing import Any
 
-from viki.skills.base import BaseSkill
 from viki.config.logger import viki_logger
 from viki.core.utils.path_sandbox import validate_output_path
+from viki.skills.base import BaseSkill
 
 
 class DataAnalysisSkill(BaseSkill):
@@ -27,18 +27,19 @@ class DataAnalysisSkill(BaseSkill):
             "Optional: csv_content= inline CSV string instead of file_path."
         )
 
-    def _load_data(self, file_path: Optional[str], csv_content: Optional[str]):
+    def _load_data(self, file_path: str | None, csv_content: str | None):
         import pandas as pd
+
         if csv_content:
             return pd.read_csv(io.StringIO(csv_content))
         if not file_path or not os.path.isfile(file_path):
             return None
         low = (file_path or "").lower()
-        if low.endswith(".xlsx") or low.endswith(".xls"):
+        if low.endswith((".xlsx", ".xls")):
             return pd.read_excel(file_path, engine="openpyxl")
         return pd.read_csv(file_path)
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         action = params.get("action", "analyze")
         file_path = params.get("file_path") or params.get("file")
         csv_content = params.get("csv_content")
@@ -52,7 +53,7 @@ class DataAnalysisSkill(BaseSkill):
             file_path = path_or_err
 
         try:
-            import pandas as pd
+            import pandas as pd  # noqa: F401
         except ImportError:
             return "Install pandas: pip install pandas openpyxl"
 
@@ -75,6 +76,7 @@ class DataAnalysisSkill(BaseSkill):
             output_path = resolved
             try:
                 import matplotlib
+
                 matplotlib.use("Agg")
                 import matplotlib.pyplot as plt
             except ImportError:
@@ -109,7 +111,12 @@ class DataAnalysisSkill(BaseSkill):
         if question and self._controller and hasattr(self._controller, "model_router"):
             try:
                 model = self._controller.model_router.get_model(capabilities=["general"])
-                messages = [{"role": "user", "content": f"Given this data summary:\n{summary[:4000]}\n\nUser question: {question}\nAnswer briefly."}]
+                messages = [
+                    {
+                        "role": "user",
+                        "content": f"Given this data summary:\n{summary[:4000]}\n\nUser question: {question}\nAnswer briefly.",
+                    }
+                ]
                 reply = await model.chat(messages, temperature=0.3)
                 if reply and isinstance(reply, str):
                     summary += f"\n\nAnswer to '{question}': {reply}"

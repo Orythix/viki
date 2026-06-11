@@ -1,24 +1,32 @@
 import asyncio
+import json
+import os
 import re
 import time
-import os
-import json
-from typing import List, Dict, Any, Optional, Tuple
-from viki.core.schema import ThoughtObject, VIKIResponse, VIKIResponseLite, LayerState
-from viki.core.ensemble import EnsembleEngine
+from typing import Any
+
 from viki.config.logger import viki_logger
-from viki.core.agent_constants import AGENT_MANDATE, PLAN_MODE_MANDATE, DEBUG_MODE_MANDATE
+from viki.core.agent_constants import AGENT_MANDATE, DEBUG_MODE_MANDATE, PLAN_MODE_MANDATE
+from viki.core.ensemble import EnsembleEngine
+from viki.core.schema import LayerState, ThoughtObject, VIKIResponse, VIKIResponseLite
+
+
+def _debug_enabled() -> bool:
+    return os.environ.get("VIKI_DEBUG", "").lower() in ("true", "1", "yes")
+
 
 # --------------------------------------------------------------------------- #
 #  TIMING INFRASTRUCTURE                                                       #
 # --------------------------------------------------------------------------- #
 
+
 class LayerTiming:
     """Tracks per-layer execution times for MetaCognition analysis."""
+
     def __init__(self):
-        self.timings: Dict[str, List[float]] = {}  # layer_name -> [durations]
-        self.current_cycle: Dict[str, float] = {}   # layer_name -> duration (last cycle)
-    
+        self.timings: dict[str, list[float]] = {}  # layer_name -> [durations]
+        self.current_cycle: dict[str, float] = {}  # layer_name -> duration (last cycle)
+
     def record(self, layer_name: str, duration: float):
         if layer_name not in self.timings:
             self.timings[layer_name] = []
@@ -27,20 +35,20 @@ class LayerTiming:
         if len(self.timings[layer_name]) > 50:
             self.timings[layer_name].pop(0)
         self.current_cycle[layer_name] = duration
-    
+
     def get_avg(self, layer_name: str) -> float:
         times = self.timings.get(layer_name, [])
         return sum(times) / len(times) if times else 0.0
-    
+
     def get_total_current(self) -> float:
         return sum(self.current_cycle.values())
-    
-    def get_slowest(self) -> Tuple[str, float]:
+
+    def get_slowest(self) -> tuple[str, float]:
         if not self.current_cycle:
             return ("None", 0.0)
         name = max(self.current_cycle, key=self.current_cycle.get)
         return (name, self.current_cycle[name])
-    
+
     def reset_cycle(self):
         self.current_cycle.clear()
 
@@ -48,6 +56,7 @@ class LayerTiming:
 # --------------------------------------------------------------------------- #
 #  PATTERN TRACKER (for MetaCognition auto-learn)                              #
 # --------------------------------------------------------------------------- #
+
 
 class PatternTracker:
     """Tracks successful input→action patterns for potential REFLEX promotion.
@@ -57,18 +66,21 @@ class PatternTracker:
     so that high-throughput hot paths don't pin a low-end disk with constant
     JSON dumps.
     """
+
     DEFAULT_MAX_PATTERNS = int(os.environ.get("VIKI_PATTERN_TRACKER_MAX", "5000"))
     DEFAULT_SAVE_EVERY = int(os.environ.get("VIKI_PATTERN_TRACKER_SAVE_EVERY", "10"))
 
     def __init__(self, data_dir: str = None, max_patterns: int = None, save_every: int = None):
-        self.patterns: Dict[str, Dict[str, Any]] = {}  # normalized_input -> {skill, params, count, last_confidence}
+        self.patterns: dict[
+            str, dict[str, Any]
+        ] = {}  # normalized_input -> {skill, params, count, last_confidence}
         self.data_dir = data_dir
         self.max_patterns = int(max_patterns or self.DEFAULT_MAX_PATTERNS)
         self.save_every = max(1, int(save_every or self.DEFAULT_SAVE_EVERY))
         self._writes_since_save = 0
         if data_dir:
             self._load_patterns()
-    
+
     def record_success(self, user_input: str, skill_name: str, params: dict, confidence: float):
         key = self._normalize(user_input)
         if key not in self.patterns:
@@ -96,49 +108,53 @@ class PatternTracker:
         ordered = sorted(self.patterns.items(), key=lambda kv: kv[1].get("last_seen", 0))
         for k, _ in ordered[:excess]:
             self.patterns.pop(k, None)
-    
-    def get_reflex_candidates(self, min_count: int = 3, min_avg_confidence: float = 0.7) -> List[Dict[str, Any]]:
+
+    def get_reflex_candidates(
+        self, min_count: int = 3, min_avg_confidence: float = 0.7
+    ) -> list[dict[str, Any]]:
         """Returns patterns that are stable enough to be promoted to REFLEX."""
         candidates = []
         for input_pattern, data in self.patterns.items():
             count = data["count"]
             avg_conf = data["total_confidence"] / count if count > 0 else 0
             if count >= min_count and avg_conf >= min_avg_confidence:
-                candidates.append({
-                    "input": input_pattern,
-                    "skill": data["skill"],
-                    "params": data["params"],
-                    "count": count,
-                    "avg_confidence": round(avg_conf, 2),
-                })
+                candidates.append(
+                    {
+                        "input": input_pattern,
+                        "skill": data["skill"],
+                        "params": data["params"],
+                        "count": count,
+                        "avg_confidence": round(avg_conf, 2),
+                    }
+                )
         return candidates
-    
+
     def _normalize(self, text: str) -> str:
         """Normalize input for pattern matching — lowercase, strip, collapse spaces."""
-        return ' '.join(text.lower().strip().split())
-    
+        return " ".join(text.lower().strip().split())
+
     def _save_patterns(self):
         """Persist patterns to disk."""
         if not self.data_dir:
             return
-        
+
         os.makedirs(self.data_dir, exist_ok=True)
         path = os.path.join(self.data_dir, "pattern_tracker.json")
         try:
-            with open(path, 'w') as f:
+            with open(path, "w") as f:
                 json.dump(self.patterns, f, indent=2)
         except Exception as e:
             viki_logger.warning(f"Failed to save pattern tracker: {e}")
-    
+
     def _load_patterns(self):
         """Load patterns from disk."""
         if not self.data_dir:
             return
-        
+
         path = os.path.join(self.data_dir, "pattern_tracker.json")
         if os.path.exists(path):
             try:
-                with open(path, 'r') as f:
+                with open(path) as f:
                     self.patterns = json.load(f)
                 viki_logger.info(f"PatternTracker: Loaded {len(self.patterns)} patterns from disk")
             except Exception as e:
@@ -148,6 +164,7 @@ class PatternTracker:
 # --------------------------------------------------------------------------- #
 #  LAYER BASE CLASS                                                            #
 # --------------------------------------------------------------------------- #
+
 
 class CortexLayer:
     def __init__(self, name: str, description: str):
@@ -170,12 +187,14 @@ class CortexLayer:
 #  LAYER 1: PERCEPTION                                                         #
 # --------------------------------------------------------------------------- #
 
+
 class PerceptionLayer(CortexLayer):
     """Layer 1: Input Normalization & Signal Detection."""
+
     async def _logic(self, user_input: str) -> str:
         viki_logger.debug(f"Layer 1 (Perception) active for: {user_input[:50]}...")
         # Normalize whitespace, strip, collapse multiple spaces
-        cleaned = ' '.join(user_input.strip().split())
+        cleaned = " ".join(user_input.strip().split())
         return cleaned
 
 
@@ -183,57 +202,187 @@ class PerceptionLayer(CortexLayer):
 #  LAYER 2: INTERPRETATION                                                     #
 # --------------------------------------------------------------------------- #
 
+
 class InterpretationLayer(CortexLayer):
     """Layer 2: Entity Extraction & Intent Classification."""
-    
+
     # Intent keywords for fast classification
     COMMAND_KEYWORDS = {"open", "launch", "start", "run", "execute", "close", "kill", "stop"}
-    MEDIA_KEYWORDS = {"play", "pause", "resume", "skip", "next", "previous", "mute", "unmute", "volume"}
-    CLOUD_KEYWORDS = {"aws", "ec2", "s3", "lambda", "k8s", "kubernetes", "docker", "terraform", "cloud", "instance", "bucket", "cluster"}
-    DEVOPS_KEYWORDS = {"git", "npm", "pip", "pytest", "test", "build", "deploy", "jenkins", "ci", "cd", "commit", "branch", "push", "pull", "merge"}
-    SYSTEM_KEYWORDS = {"df", "ps", "top", "free", "mem", "cpu", "disk", "uptime", "whoami", "hostname", "ip", "netstat", "memory", "storage", "network"}
-    DATA_KEYWORDS = {"sqlite", "redis", "db", "sql", "table", "data", "database", "query", "select", "insert", "update", "delete"}
-    AI_KEYWORDS = {"nvidia", "gpu", "cuda", "torch", "pytorch", "tensorflow", "ollama", "transformers", "huggingface", "model", "inference", "train"}
-    PROD_KEYWORDS = {"calendar", "todo", "task", "note", "notes", "agenda", "weather", "price", "crypto", "bitcoin", "productivity"}
-    QUESTION_KEYWORDS = {"what", "who", "where", "when", "why", "how", "which", "is", "are", "can", "do", "does"}
-    CODE_KEYWORDS = {"code", "function", "class", "debug", "fix", "implement", "write", "create", "build", "compile"}
+    MEDIA_KEYWORDS = {
+        "play",
+        "pause",
+        "resume",
+        "skip",
+        "next",
+        "previous",
+        "mute",
+        "unmute",
+        "volume",
+    }
+    CLOUD_KEYWORDS = {
+        "aws",
+        "ec2",
+        "s3",
+        "lambda",
+        "k8s",
+        "kubernetes",
+        "docker",
+        "terraform",
+        "cloud",
+        "instance",
+        "bucket",
+        "cluster",
+    }
+    DEVOPS_KEYWORDS = {
+        "git",
+        "npm",
+        "pip",
+        "pytest",
+        "test",
+        "build",
+        "deploy",
+        "jenkins",
+        "ci",
+        "cd",
+        "commit",
+        "branch",
+        "push",
+        "pull",
+        "merge",
+    }
+    SYSTEM_KEYWORDS = {
+        "df",
+        "ps",
+        "top",
+        "free",
+        "mem",
+        "cpu",
+        "disk",
+        "uptime",
+        "whoami",
+        "hostname",
+        "ip",
+        "netstat",
+        "memory",
+        "storage",
+        "network",
+    }
+    DATA_KEYWORDS = {
+        "sqlite",
+        "redis",
+        "db",
+        "sql",
+        "table",
+        "data",
+        "database",
+        "query",
+        "select",
+        "insert",
+        "update",
+        "delete",
+    }
+    AI_KEYWORDS = {
+        "nvidia",
+        "gpu",
+        "cuda",
+        "torch",
+        "pytorch",
+        "tensorflow",
+        "ollama",
+        "transformers",
+        "huggingface",
+        "model",
+        "inference",
+        "train",
+    }
+    PROD_KEYWORDS = {
+        "calendar",
+        "todo",
+        "task",
+        "note",
+        "notes",
+        "agenda",
+        "weather",
+        "price",
+        "crypto",
+        "bitcoin",
+        "productivity",
+    }
+    QUESTION_KEYWORDS = {
+        "what",
+        "who",
+        "where",
+        "when",
+        "why",
+        "how",
+        "which",
+        "is",
+        "are",
+        "can",
+        "do",
+        "does",
+    }
+    CODE_KEYWORDS = {
+        "code",
+        "function",
+        "class",
+        "debug",
+        "fix",
+        "implement",
+        "write",
+        "create",
+        "build",
+        "compile",
+    }
     RESEARCH_KEYWORDS = {"search", "find", "look up", "google", "research", "tell me about"}
-    CORRECTION_KEYWORDS = {"wrong", "incorrect", "correction", "fix", "not", "actually", "mistake", "error"}
-    
-    async def _logic(self, data: str) -> Dict[str, Any]:
+    CORRECTION_KEYWORDS = {
+        "wrong",
+        "incorrect",
+        "correction",
+        "fix",
+        "not",
+        "actually",
+        "mistake",
+        "error",
+    }
+
+    async def _logic(self, data: str) -> dict[str, Any]:
         viki_logger.debug("Layer 2 (Interpretation) resolving human intent...")
-        
+
         # 1. Base Entity Extraction
         urls = re.findall(r'https?://[^\s<>"]+', data)
         file_paths = re.findall(r'(?:[A-Z]:\\|\.?/)[^\s<>"]+\.\w{1,5}', data)
-        numbers = re.findall(r'\b\d+\.?\d*\b', data)
+        numbers = re.findall(r"\b\d+\.?\d*\b", data)
         quoted_strings = re.findall(r'"([^"]*)"', data) + re.findall(r"'([^']*)'", data)
-        
+
         # 2. Semantic Path Resolution (World Model Cross-Ref)
         resolved_entities = {"paths": []}
-        if hasattr(self, 'world_model') and self.world_model:
+        if hasattr(self, "world_model") and self.world_model:
             for path, purpose in self.world_model.state.semantic_paths.items():
-                if purpose.lower() in data.lower() or os.path.basename(path).lower() in data.lower():
+                if (
+                    purpose.lower() in data.lower()
+                    or os.path.basename(path).lower() in data.lower()
+                ):
                     resolved_entities["paths"].append({"path": path, "purpose": purpose})
-        
+
         # App name extraction (for "open X" commands)
-        app_match = re.match(r'^(?:open|launch|start|run)\s+(.+)$', data.lower().strip())
+        app_match = re.match(r"^(?:open|launch|start|run)\s+(.+)$", data.lower().strip())
         app_name = app_match.group(1).strip() if app_match else None
-        
+
         # 3. Intent Classification (Implicit Needs)
         words = set(data.lower().split())
         intent_type = self._classify_intent(words, data)
-        
+
         # Detect Implicit Focus (e.g. if talking about code, check if we have a file in focus)
         if intent_type == "coding" and not file_paths:
-             # Heuristic: check if user refers to "this", "the file", "the code"
-             if any(ref in data.lower() for ref in ["this file", "the code", "the function"]):
-                  # Implicitly refer to the resolved paths or active document
-                  pass 
-        
+            # Heuristic: check if user refers to "this", "the file", "the code"
+            if any(ref in data.lower() for ref in ["this file", "the code", "the function"]):
+                # Implicitly refer to the resolved paths or active document
+                pass
+
         # 4. Sentiment & Mood
         sentiment = self._detect_sentiment(data, words)
-        
+
         context = {
             "raw_input": data,
             "entities": {
@@ -242,16 +391,18 @@ class InterpretationLayer(CortexLayer):
                 "numbers": numbers,
                 "quoted_strings": quoted_strings,
                 "app_name": app_name,
-                "resolved": resolved_entities
+                "resolved": resolved_entities,
             },
             "intent_type": intent_type,
             "sentiment": sentiment,
             "recommended_capabilities": self._get_capabilities(intent_type),
         }
-        
-        viki_logger.info(f"Layer 2 Discovery: intent={intent_type} | resolved={len(resolved_entities['paths'])} paths | sentiment={sentiment}")
+
+        viki_logger.info(
+            f"Layer 2 Discovery: intent={intent_type} | resolved={len(resolved_entities['paths'])} paths | sentiment={sentiment}"
+        )
         return context
-    
+
     def _classify_intent(self, words: set, raw: str) -> str:
         """Fast keyword-based intent classification."""
         if words & self.MEDIA_KEYWORDS:
@@ -272,30 +423,32 @@ class InterpretationLayer(CortexLayer):
             return "system_command"
         if words & self.CODE_KEYWORDS:
             return "coding"
-        if words & self.CORRECTION_KEYWORDS and ("previous" in raw.lower() or "wrong" in raw.lower() or "not" in raw.lower()):
+        if words & self.CORRECTION_KEYWORDS and (
+            "previous" in raw.lower() or "wrong" in raw.lower() or "not" in raw.lower()
+        ):
             return "correction"
-        if words & self.RESEARCH_KEYWORDS or re.search(r'https?://', raw):
+        if words & self.RESEARCH_KEYWORDS or re.search(r"https?://", raw):
             return "research"
-        if raw.rstrip().endswith('?') or (words & self.QUESTION_KEYWORDS and len(words) < 20):
+        if raw.rstrip().endswith("?") or (words & self.QUESTION_KEYWORDS and len(words) < 20):
             return "question"
         return "conversation"
-    
+
     def _detect_sentiment(self, raw: str, words: set) -> str:
         """Simple sentiment/urgency detection."""
         urgent_markers = {"urgent", "asap", "now", "immediately", "hurry", "quick", "fast"}
         frustration_markers = {"again", "still", "broken", "wrong", "failed"}
-        
-        if words & urgent_markers or raw.endswith('!!!') or raw.endswith('!!'):
+
+        if words & urgent_markers or raw.endswith(("!!!", "!!")):
             return "urgent"
         if words & frustration_markers:
             return "frustrated"
         if "not working" in raw.lower() or "doesn't work" in raw.lower():
             return "frustrated"
-        if raw.rstrip().endswith('?'):
+        if raw.rstrip().endswith("?"):
             return "curious"
         return "neutral"
-    
-    def _get_capabilities(self, intent_type: str) -> List[str]:
+
+    def _get_capabilities(self, intent_type: str) -> list[str]:
         """Map intent type to recommended model capabilities."""
         mapping = {
             "media_control": ["fast_response"],
@@ -318,8 +471,10 @@ class InterpretationLayer(CortexLayer):
 #  LAYER 3: DELIBERATION                                                       #
 # --------------------------------------------------------------------------- #
 
+
 class DeliberationLayer(CortexLayer):
     """Layer 3: Planning, Simulation, and Internal Debate."""
+
     def __init__(self, model_router, soul_config: dict = None, skill_registry=None):
         super().__init__("Deliberation", "Internal Debate & Solver Engine")
         self.model_router = model_router
@@ -338,7 +493,12 @@ class DeliberationLayer(CortexLayer):
         is_debug_mode: bool = False,
         is_singularity_mode: bool = False,
     ) -> str:
-        from core.agent_constants import AGENT_MANDATE, PLAN_MODE_MANDATE, DEBUG_MODE_MANDATE, SINGULARITY_MANDATE, PRIMARY_DIRECTIVE, EXECUTION_RULES
+        from viki.core.agent_constants import (
+            EXECUTION_RULES,
+            PRIMARY_DIRECTIVE,
+            SINGULARITY_MANDATE,
+        )
+
         mandate_block = ""
         if is_singularity_mode:
             mandate_block = SINGULARITY_MANDATE
@@ -348,7 +508,7 @@ class DeliberationLayer(CortexLayer):
             mandate_block = PLAN_MODE_MANDATE
         elif is_debug_mode:
             mandate_block = DEBUG_MODE_MANDATE
-        
+
         return (
             f"{mandate_block}\n"
             f"{PRIMARY_DIRECTIVE}\n"
@@ -378,16 +538,18 @@ class DeliberationLayer(CortexLayer):
             "4. TOOL SYNTHESIS: When using research, synthesize facts into a coherent answer. Do not list snippets verbatim.\n"
         )
 
-    async def _logic(self, context: Dict[str, Any]) -> VIKIResponse:  #NOSONAR
+    async def _logic(self, context: dict[str, Any]) -> VIKIResponse:  # NOSONAR
         viki_logger.info("Layer 3 (Deliberation) starting Internal Debate...")
-        intent = context.get('intent_type', 'conversation')
-        sentiment = context.get('sentiment', 'neutral')
+        intent = context.get("intent_type", "conversation")
+        sentiment = context.get("sentiment", "neutral")
 
         # 1. Get Model — now uses intent-recommended capabilities + Tiered Routing
-        recommended_caps = context.get('recommended_capabilities', ['reasoning'])
-        model_tier = context.get('model_tier', 'standard')
+        recommended_caps = context.get("recommended_capabilities", ["reasoning"])
+        model_tier = context.get("model_tier", "standard")
         model = self.model_router.get_model(capabilities=recommended_caps, tier=model_tier)
-        viki_logger.debug(f"Layer 3: Selected model '{model.model_name}' (Tier: {model_tier}) for capabilities {recommended_caps}")
+        viki_logger.debug(
+            f"Layer 3: Selected model '{model.model_name}' (Tier: {model_tier}) for capabilities {recommended_caps}"
+        )
 
         # FAST STREAMING PATH (perceived-latency optimization).
         # If the caller wired an event sink, the input is trivial / conversational,
@@ -396,119 +558,150 @@ class DeliberationLayer(CortexLayer):
         # accumulated text is then wrapped in a VIKIResponseLite so the rest of
         # the cortex / controller pipeline behaves identically.
         on_event = context.get("on_event")
-        action_results = context.get('action_results', []) or []
+        action_results = context.get("action_results", []) or []
         raw_input_for_check = context.get("raw_input", "")
-        print(f"VIKI_DEBUG: Deliberation._logic use_lite={context.get('use_lite_schema')} trivial={context.get('use_lite_schema', False) == False and len(action_results)==0 and hasattr(model,'chat_stream')} model_type={type(model).__name__} model_name={model.model_name}", flush=True)
+        if _debug_enabled():
+            print(
+                f"VIKI_DEBUG: Deliberation._logic use_lite={context.get('use_lite_schema')} trivial={not context.get('use_lite_schema', False) and len(action_results)==0 and hasattr(model,'chat_stream')} model_type={type(model).__name__} model_name={model.model_name}",
+                flush=True,
+            )
         if (
             on_event is not None
             and not action_results
             and getattr(model, "chat_stream", None) is not None
         ):
-            from core.utils.trivial_input import is_trivial_input
+            from viki.core.utils.trivial_input import is_conversational_input, is_trivial_input
+
             raw_input_for_check = context.get("raw_input", "")
-            trivial = is_trivial_input(raw_input_for_check)
-            print(f"VIKI_DEBUG: Fast path check - is_trivial_input('{raw_input_for_check}')={trivial}", flush=True)
+            trivial = is_trivial_input(raw_input_for_check) or is_conversational_input(
+                raw_input_for_check
+            )
+            if _debug_enabled():
+                print(
+                    f"VIKI_DEBUG: Fast path check - is_trivial_input('{raw_input_for_check}')={trivial}",
+                    flush=True,
+                )
             if trivial:
                 streamed = await self._streamed_conversational_reply(model, context, on_event)
                 if streamed is not None:
                     return streamed
-        
+
         # 2. Determine if we should use LITE schema (set by controller)
-        use_lite = context.get('use_lite_schema', False)
-        print(f"VIKI_DEBUG: Deliberation path use_lite={use_lite} model_tier={context.get('model_tier')} intent={context.get('intent_type')}", flush=True)
-        
+        use_lite = context.get("use_lite_schema", False)
+        if _debug_enabled():
+            print(
+                f"VIKI_DEBUG: Deliberation path use_lite={use_lite} model_tier={context.get('model_tier')} intent={context.get('intent_type')}",
+                flush=True,
+            )
+
         # Determine if model supports tools (most local ones do via Ollama)
-        supports_tools = getattr(model, 'chat_with_tools', None) is not None
-        
+        supports_tools = getattr(model, "chat_with_tools", None) is not None
+
         # Tools collection
         param_tools = []
         if self.skill_registry:
             for skill in self.skill_registry.skills.values():
                 # Only include tools that have a method to generate definitions
-                if hasattr(skill, 'get_tool_definition'):
+                if hasattr(skill, "get_tool_definition"):
                     param_tools.append(skill.get_tool_definition())
-        
+
         # 3. Build Structured Prompt with Soul Identity + Skills
-        from core.inference_gateway import StructuredPrompt
-        raw_input = context.get('raw_input', '')
-        conversation_history = context.get('conversation_history', [])
-        url_context = context.get('url_context', '')
-        world_context = context.get('world_context', '')
-        project_instructions = context.get('project_instructions', '')
-        signals_context = context.get('signals_context', '')
-        
+        from viki.core.inference_gateway import StructuredPrompt
+
+        raw_input = context.get("raw_input", "")
+        conversation_history = context.get("conversation_history", [])
+        url_context = context.get("url_context", "")
+        world_context = context.get("world_context", "")
+        project_instructions = context.get("project_instructions", "")
+        signals_context = context.get("signals_context", "")
+
         # Include any action results from previous ReAct steps
-        action_results = context.get('action_results', [])
-        
+        action_results = context.get("action_results", [])
+
         # Build conversation messages for context
         prior_messages = []
         for msg in conversation_history:
-            # We skip the last message if it's the current raw_input, 
+            # We skip the last message if it's the current raw_input,
             # as StructuredPrompt will add it at the end.
-            if msg == conversation_history[-1] and msg["role"] == "user" and msg["content"] == raw_input:
+            if (
+                msg == conversation_history[-1]
+                and msg["role"] == "user"
+                and msg["content"] == raw_input
+            ):
                 continue
             prior_messages.append({"role": msg["role"], "content": msg["content"]})
-        
+
         # Add action results as turns for ReAct (step may have 'result' or 'error' when capability/execution failed)
         for step in action_results:
             if not isinstance(step, dict):
                 continue
-            action_name = step.get('action', 'unknown')
-            obs = step.get('result', step.get('error', ''))
-            prior_messages.append({"role": "assistant", "content": f"Thought: I will execute {action_name}."})
+            action_name = step.get("action", "unknown")
+            obs = step.get("result", step.get("error", ""))
+            prior_messages.append(
+                {"role": "assistant", "content": f"Thought: I will execute {action_name}."}
+            )
             prior_messages.append({"role": "user", "content": f"Observation: {obs}"})
-        
+
         prompt = StructuredPrompt(raw_input, messages=prior_messages)
-        
+
         # Inject Soul personality, preferences, and biases
-        soul_prompt = self.soul_config.get('system_prompt', 'You are VIKI, a helpful and friendly AI assistant.')
-        preferences = "\n".join([f"- {p}" for p in self.soul_config.get('preferences', [])])
-        biases = "\n".join([f"- {b}" for b in self.soul_config.get('intellectual_biases', [])])
-        
+        soul_prompt = self.soul_config.get(
+            "system_prompt", "You are VIKI, a helpful and friendly AI assistant."
+        )
+        preferences = "\n".join([f"- {p}" for p in self.soul_config.get("preferences", [])])
+        biases = "\n".join([f"- {b}" for b in self.soul_config.get("intellectual_biases", [])])
+
         # v26: Smart Context Management (Progressive Disclosure)
         skills_context = ""
         if self.skill_registry:
-            intent = context.get('intent_type', 'conversation')
-            raw_input = context.get('raw_input', '')
-            
-            skip_escalation = context.get('skip_escalation', False)
-            
+            intent = context.get("intent_type", "conversation")
+            raw_input = context.get("raw_input", "")
+
+            skip_escalation = context.get("skip_escalation", False)
+
             # 1. Identify "Triggered" skills for full disclosure
             triggered_names = self.skill_registry.get_relevant_skill_names(intent, raw_input)
-            
+
             # 2. Build metadata list for everything
-            skills_context = "\n\n" + self.skill_registry.get_context_description(mode="metadata", skip_escalation=skip_escalation)
-            
+            skills_context = "\n\n" + self.skill_registry.get_context_description(
+                mode="metadata", skip_escalation=skip_escalation
+            )
+
             # 3. Build full manifest for triggered skills
             if triggered_names:
-                manifest = self.skill_registry.get_context_description(mode="full", names=triggered_names, skip_escalation=skip_escalation)
-                skills_context += "\n\n[DETAILED TOOL INSTRUCTIONS (Use these for exact parameter schemas)]\n" + manifest
-        
+                manifest = self.skill_registry.get_context_description(
+                    mode="full", names=triggered_names, skip_escalation=skip_escalation
+                )
+                skills_context += (
+                    "\n\n[DETAILED TOOL INSTRUCTIONS (Use these for exact parameter schemas)]\n"
+                    + manifest
+                )
+
         # Inject URL content if any
         url_info = ""
         if url_context:
             url_info = f"\n\nFETCHED URL CONTENT (actual page data — use THIS, do not hallucinate):\n{url_context[:3000]}\n"
-        
+
         # Inject World Model + Project context (VIKI.md) + Signals
         awareness = ""
         if world_context:
             awareness += f"\n\nWORLD AWARENESS:\n{world_context}\n"
         if project_instructions:
             awareness += f"\n\nPROJECT CONTEXT (VIKI.md — follow these instructions):\n{project_instructions}\n"
-        
+
         # v26: Strict Execution-First Directives
         if context.get("execution_started"):
-             awareness += (
-                 "\nSTRICT EXECUTION DIRECTIVE (Phase: EXECUTING):\n"
-                 "1. DO NOT enter discovery, specification, or planning modes.\n"
-                 "2. DO NOT ask for clarification; use technical assumptions to maintain momentum.\n"
-                 "3. DO NOT use playbooks or high-level workflows unless explicitly requested.\n"
-                 "4. MANDATORY ACTION: Execute implementation steps directly. Priority: CODE > TALK.\n"
-             )
+            awareness += (
+                "\nSTRICT EXECUTION DIRECTIVE (Phase: EXECUTING):\n"
+                "1. DO NOT enter discovery, specification, or planning modes.\n"
+                "2. DO NOT ask for clarification; use technical assumptions to maintain momentum.\n"
+                "3. DO NOT use playbooks or high-level workflows unless explicitly requested.\n"
+                "4. MANDATORY ACTION: Execute implementation steps directly. Priority: CODE > TALK.\n"
+            )
 
         if signals_context:
             awareness += f"\nCOGNITIVE STATE:\n{signals_context}\n"
-        
+
         # Inject action results context if in ReAct loop
         react_note = ""
         if action_results:
@@ -517,9 +710,9 @@ class DeliberationLayer(CortexLayer):
                 "If the task is complete, just provide the final_response with NO action.\n"
                 "If more actions are needed, provide the NEXT action.\n"
             )
-        
+
         # Inject Evolved Directives from the Reflector
-        evolved_directives = "\n".join([f"- {d}" for d in self.soul_config.get('directives', [])])
+        evolved_directives = "\n".join([f"- {d}" for d in self.soul_config.get("directives", [])])
         evolved_block = ""
         if evolved_directives:
             evolved_block = f"\nEVOLVED CORE DIRECTIVES (Self-Learned):\n{evolved_directives}\n"
@@ -530,12 +723,12 @@ class DeliberationLayer(CortexLayer):
         episodic = "\n".join([str(e) for e in context.get("episodic_context", [])])
         semantic = "\n".join([f"- {s}" for s in context.get("semantic_knowledge", [])])
         wisdom = context.get("narrative_wisdom", "")
-        
+
         # Inject relevant failures for error avoidance
         failure_context = ""
-        if hasattr(self, 'skill_registry') and self.skill_registry:
+        if hasattr(self, "skill_registry") and self.skill_registry:
             # Get controller reference through the model router callback or context
-            raw_input = context.get('raw_input', '')
+            raw_input = context.get("raw_input", "")
             if raw_input:
                 # Attempt to get learning module for failure retrieval
                 # This requires passing it through context or having a reference
@@ -546,7 +739,11 @@ class DeliberationLayer(CortexLayer):
                         f"action '{f['action']}' failed with: {f['error'][:100]}"
                         for f in relevant_failures[:3]
                     ]
-                    failure_context = "\nRELEVANT PAST FAILURES (Learn from these):\n" + "\n".join(failure_lines) + "\n"
+                    failure_context = (
+                        "\nRELEVANT PAST FAILURES (Learn from these):\n"
+                        + "\n".join(failure_lines)
+                        + "\n"
+                    )
 
         memory_block = (
             f"\n--- HIERARCHICAL MEMORY STACK ---\n"
@@ -569,51 +766,66 @@ class DeliberationLayer(CortexLayer):
             lower = s.lower()
             if "?" in s:
                 return False
-            greetings = ("hello", "hi ", "hey ", "how are you", "how's your day", "good morning", "good afternoon", "good evening", "how do you do", "what's up", "hey viki", "hello viki")
+            greetings = (
+                "hello",
+                "hi ",
+                "hey ",
+                "how are you",
+                "how's your day",
+                "good morning",
+                "good afternoon",
+                "good evening",
+                "how do you do",
+                "what's up",
+                "hey viki",
+                "hello viki",
+            )
             return any(g in lower for g in greetings)
 
         if use_ensemble_flag and not use_lite and not action_results:
-             if _is_greeting_or_short(raw_input):
-                  viki_logger.debug("Deliberation: Skipping ensemble for short greeting-like input.")
-             else:
-                 # Triage: Select relevant agents to reduce latency (v25 Enhancement)
-                 selected_agents = []
-                 if intent in ['coding', 'research']:
-                      selected_agents = ["critic", "architect", "explorer"]
-                 elif intent == "correction" or sentiment == "frustrated":
-                      selected_agents = ["critic", "aligner"]
-                 elif sentiment == "urgent":
-                      selected_agents = ["aligner"]
-                 elif intent == "question":
-                      selected_agents = ["critic", "explorer", "aligner"]
+            if _is_greeting_or_short(raw_input):
+                viki_logger.debug("Deliberation: Skipping ensemble for short greeting-like input.")
+            else:
+                # Triage: Select relevant agents to reduce latency (v25 Enhancement)
+                selected_agents = []
+                if intent in ["coding", "research"]:
+                    selected_agents = ["critic", "architect", "explorer"]
+                elif intent == "correction" or sentiment == "frustrated":
+                    selected_agents = ["critic", "aligner"]
+                elif sentiment == "urgent":
+                    selected_agents = ["aligner"]
+                elif intent == "question":
+                    selected_agents = ["critic", "explorer", "aligner"]
 
-                 if selected_agents:
-                      viki_logger.info(f"Deliberation: Triggering Triage Ensemble (Agents: {selected_agents})")
-                      ensemble_trace = await self.ensemble.run_ensemble(raw_input, context, selected_agents=selected_agents)
+                if selected_agents:
+                    viki_logger.info(
+                        f"Deliberation: Triggering Triage Ensemble (Agents: {selected_agents})"
+                    )
+                    ensemble_trace = await self.ensemble.run_ensemble(
+                        raw_input, context, selected_agents=selected_agents
+                    )
 
         # Inject ensemble perspectives if any
         ensemble_block = ""
         if ensemble_trace and isinstance(ensemble_trace, dict):
-             e_perspectives = "\n".join([
-                 f"[{k.upper()}]: {v}"
-                 for k, v in ensemble_trace.items()
-                 if isinstance(v, str)
-             ])
-             ensemble_block = (
-                 f"\nINTERNAL SPECIALIST ENSEMBLE DEBATE (Incorporate these insights into your final answer, but do NOT mention them by name):\n"
-                 f"{e_perspectives}\n\n"
-                 f"Note: Be concise. Do not explain that you consulted specialists.\n"
-             )
+            e_perspectives = "\n".join(
+                [f"[{k.upper()}]: {v}" for k, v in ensemble_trace.items() if isinstance(v, str)]
+            )
+            ensemble_block = (
+                f"\nINTERNAL SPECIALIST ENSEMBLE DEBATE (Incorporate these insights into your final answer, but do NOT mention them by name):\n"
+                f"{e_perspectives}\n\n"
+                f"Note: Be concise. Do not explain that you consulted specialists.\n"
+            )
 
         # v25: Metacognitive Reflection if Correction/Frustration
         reflection_directive = ""
-        if intent == "correction" or context.get('sentiment') == 'frustrated':
-             reflection_directive = (
-                 "\nMETACOGNITIVE SELF-REFLECTION:\n"
-                 "The user is providing feedback or a correction. Before proposing a new plan, "
-                 "briefly reflect on YOUR PREVIOUS STATE and why it may have failed or been misinterpreted. "
-                 "Ground your response in this self-critique.\n"
-             )
+        if intent == "correction" or context.get("sentiment") == "frustrated":
+            reflection_directive = (
+                "\nMETACOGNITIVE SELF-REFLECTION:\n"
+                "The user is providing feedback or a correction. Before proposing a new plan, "
+                "briefly reflect on YOUR PREVIOUS STATE and why it may have failed or been misinterpreted. "
+                "Ground your response in this self-critique.\n"
+            )
 
         roleplay_directive = (
             "\nDYNAMIC ROLEPLAY & IDENTITY OVERRIDE:\n"
@@ -635,19 +847,21 @@ class DeliberationLayer(CortexLayer):
             f"{self._build_operating_directives(skills_context, url_info, awareness, react_note, is_agent_mode=context.get('is_agent_mode', False), is_plan_mode=context.get('is_plan_mode', False), is_debug_mode=context.get('is_debug_mode', False), is_singularity_mode=context.get('is_singularity_mode', False))}"
         )
         prompt.set_identity(identity)
-        prompt.add_cognitive("Choose the right tool for the job. If no tool is needed, just respond naturally.")
-        
+        prompt.add_cognitive(
+            "Choose the right tool for the job. If no tool is needed, just respond naturally."
+        )
+
         # 4. Request Structured Reasoning
         try:
             messages = prompt.build()
-            
+
             # --- IMAGE HANDLING ---
             # Check if any action results contain screenshot paths
             image_path = None
             if action_results:
-                for res in reversed(action_results): # Latest first
+                for res in reversed(action_results):  # Latest first
                     # v21: res is now a dict {"action": ..., "result": ..., "step": ...}
-                    res_text = res.get('result', '') if isinstance(res, dict) else str(res)
+                    res_text = res.get("result", "") if isinstance(res, dict) else str(res)
                     # Look for "Screenshot captured successfully at: /path/to/file.png"
                     match = re.search(r"Screenshot captured successfully at: (.+\.png)", res_text)
                     if match:
@@ -656,43 +870,57 @@ class DeliberationLayer(CortexLayer):
                         break
 
             # --- TOOL HANDLING ---
-            supports_native_tools = (
-                getattr(model, "chat_with_tools", None) is not None
-                and getattr(model, "config", {}).get("supports_native_tools", False)
-            )
+            supports_native_tools = getattr(model, "chat_with_tools", None) is not None and getattr(
+                model, "config", {}
+            ).get("supports_native_tools", False)
             param_tools = []
             if self.skill_registry:
                 for skill in self.skill_registry.skills.values():
-                    if hasattr(skill, 'get_tool_definition'):
+                    if hasattr(skill, "get_tool_definition"):
                         tool_def = skill.get_tool_definition()
-                        if tool_def.get('function', {}).get('parameters'):
+                        if tool_def.get("function", {}).get("parameters"):
                             param_tools.append(tool_def)
 
-            print(f"VIKI_DEBUG: Native tools check: use_lite={context.get('use_lite_schema')} supports_native_tools={supports_native_tools} param_tools={len(param_tools)}", flush=True)
-            if use_lite and supports_native_tools and param_tools:
+            if _debug_enabled():
+                print(
+                    f"VIKI_DEBUG: Native tools check: use_lite={context.get('use_lite_schema')} supports_native_tools={supports_native_tools} param_tools={len(param_tools)}",
+                    flush=True,
+                )
+            _simple_identity = re.search(
+                r"(who\s+am\s+i|what\s+is\s+my\s+name|do\s+you\s+(know\s+)?who\s+(i\s+)?am)",
+                raw_input.lower().strip(),
+            )
+            from viki.core.utils.trivial_input import is_conversational_input
+
+            _skip_tools = _simple_identity or is_conversational_input(raw_input)
+            if use_lite and supports_native_tools and param_tools and not _skip_tools:
                 # --- FAST PATH: Native Tool Calling ---
-                viki_logger.info(f"Deliberation: Using native tool calling with {len(param_tools)} tools.")
-                print(f"VIKI_DEBUG: Taking NATIVE TOOLS FAST PATH", flush=True)
-                
+                viki_logger.info(
+                    f"Deliberation: Using native tool calling with {len(param_tools)} tools."
+                )
+                if _debug_enabled():
+                    print("VIKI_DEBUG: Taking NATIVE TOOLS FAST PATH", flush=True)
+
                 # Native call (with image if available)
                 # Note: local LLMs via Ollama might support images in chat API via base64 in messages
                 # LocalLLM.chat adds images to messages if image_path is provided.
                 # However, chat_with_tools signature is (messages, tools). It doesn't take image_path directly.
                 # We need to inject image into messages first if using chat_with_tools.
-                
+
                 if image_path:
                     # Manually inject image into the last user message
                     import base64
+
                     try:
                         # Use asyncio.to_thread for file I/O
                         def read_image():
                             with open(image_path, "rb") as image_file:
-                                return base64.b64encode(image_file.read()).decode('utf-8')
-                        
+                                return base64.b64encode(image_file.read()).decode("utf-8")
+
                         base64_image = await asyncio.to_thread(read_image)
                         # Find last user message
                         for i in range(len(messages) - 1, -1, -1):
-                            if messages[i]['role'] == 'user':
+                            if messages[i]["role"] == "user":
                                 messages[i]["images"] = [base64_image]
                                 break
                     except Exception as e:
@@ -702,106 +930,129 @@ class DeliberationLayer(CortexLayer):
                 llm_start = time.time()
                 raw_msg = await model.chat_with_tools(messages, tools=param_tools)
                 llm_latency = time.time() - llm_start
-                
+
                 # Check for Ollama / transport failures (404 model, parse errors, etc.)
                 msg_content = raw_msg.get("content", "")
                 msg_lower = msg_content.lower() if isinstance(msg_content, str) else ""
                 tool_calls = raw_msg.get("tool_calls") or []
-                has_error = isinstance(msg_content, str) and raw_msg.get("role") == "assistant" and (
-                    "ollama error" in msg_lower
-                    or "not found" in msg_lower
-                    or ("model" in msg_lower and "not found" in msg_lower)
-                    or ("invalid json" in msg_lower)
-                ) and not tool_calls
-                
+                has_error = (
+                    isinstance(msg_content, str)
+                    and raw_msg.get("role") == "assistant"
+                    and (
+                        "ollama error" in msg_lower
+                        or "not found" in msg_lower
+                        or ("model" in msg_lower and "not found" in msg_lower)
+                        or ("invalid json" in msg_lower)
+                    )
+                    and not tool_calls
+                )
+
                 if has_error:
-                     viki_logger.warning(f"Native tool call failed: {msg_content}. Fallback to structured output.")
-                     model.record_performance(llm_latency, success=False)
-                     llm_start = time.time()
-                     viki_resp_lite = await model.chat_structured(messages, VIKIResponseLite, image_path=image_path)
-                     llm_latency = time.time() - llm_start
-                     model.record_performance(llm_latency, success=True)
-                     viki_resp = viki_resp_lite.to_full_response()
+                    viki_logger.warning(
+                        f"Native tool call failed: {msg_content}. Fallback to structured output."
+                    )
+                    model.record_performance(llm_latency, success=False)
+                    llm_start = time.time()
+                    viki_resp_lite = await model.chat_structured(
+                        messages, VIKIResponseLite, image_path=image_path
+                    )
+                    llm_latency = time.time() - llm_start
+                    model.record_performance(llm_latency, success=True)
+                    viki_resp = viki_resp_lite.to_full_response()
                 else:
                     model.record_performance(llm_latency, success=True)
-                    # Convert to VIKIResponse from Tool Call
-                    from core.schema import ActionCall
-                    final_text = raw_msg.get('content') or "Executing action..."
+                    from viki.core.schema import ActionCall
+
+                    final_text = raw_msg.get("content") or ""
                     action_obj = None
-                    
-                    tool_calls = raw_msg.get('tool_calls')
+
+                    tool_calls = raw_msg.get("tool_calls")
                     if tool_calls:
-                        # Handle first tool call
                         tc = tool_calls[0]
-                        func_name = tc['function']['name']
-                        func_args = tc['function']['arguments']
-                        
-                        # Ensure args are dict
+                        func_name = tc["function"]["name"]
+                        func_args = tc["function"]["arguments"]
+
                         if isinstance(func_args, str):
                             try:
                                 import json
+
                                 func_args = json.loads(func_args)
                             except json.JSONDecodeError as e:
                                 viki_logger.warning(f"Failed to parse tool arguments: {e}")
                                 func_args = {}
-                        
+
                         action_obj = ActionCall(skill_name=func_name, parameters=func_args)
-                        if not raw_msg.get('content'):
-                            final_text = f"I will use {func_name}." 
-                    
+                        if not final_text.strip():
+                            final_text = f"I'll use {func_name} to help with that."
+                    elif not final_text.strip():
+                        final_text = "I'm not sure what to do here. Could you rephrase?"
+
                     viki_resp_lite = VIKIResponseLite(
                         final_response=final_text,
                         action=action_obj,
-                        confidence=0.9 if action_obj else 0.5
+                        confidence=0.9 if action_obj else 0.5,
                     )
                     viki_resp = viki_resp_lite.to_full_response()
-                
+
             elif use_lite:
                 # SHALLOW path — use lite schema (no native tools)
-                print("VIKI_DEBUG: Taking SHALLOW (LITE) path", flush=True)
+                if _debug_enabled():
+                    print("VIKI_DEBUG: Taking SHALLOW (LITE) path", flush=True)
                 llm_start = time.time()
-                viki_resp_lite = await model.chat_structured(messages, VIKIResponseLite, image_path=image_path)
+                viki_resp_lite = await model.chat_structured(
+                    messages, VIKIResponseLite, image_path=image_path
+                )
                 llm_latency = time.time() - llm_start
                 model.record_performance(llm_latency, success=True)
                 viki_resp = viki_resp_lite.to_full_response()
             else:
                 # DEEP path — use full schema + manual tool injection
-                print("VIKI_DEBUG: Taking DEEP path", flush=True)
+                if _debug_enabled():
+                    print("VIKI_DEBUG: Taking DEEP path", flush=True)
                 # We inject tool schemas into the prompt manually for DEEP reasoning
                 if param_tools:
                     import json
+
                     tool_schemas = json.dumps(param_tools, indent=2)
-                    prompt.add_context(f"\nAVAILABLE TOOLS (JSON Schema):\n{tool_schemas}\nTo use a tool, output the 'action' field in your JSON response.")
-                    messages = prompt.build() # Rebuild with new context
+                    prompt.add_context(
+                        f"\nAVAILABLE TOOLS (JSON Schema):\n{tool_schemas}\nTo use a tool, output the 'action' field in your JSON response."
+                    )
+                    messages = prompt.build()  # Rebuild with new context
 
                 llm_start = time.time()
-                viki_resp = await model.chat_structured(messages, VIKIResponse, image_path=image_path)
+                viki_resp = await model.chat_structured(
+                    messages, VIKIResponse, image_path=image_path
+                )
                 llm_latency = time.time() - llm_start
                 model.record_performance(llm_latency, success=True)
-            
+
             # Attach the ensemble trace if it exists
             if ensemble_trace and isinstance(ensemble_trace, dict):
-                 viki_resp.ensemble_trace = ensemble_trace
-            
+                viki_resp.ensemble_trace = ensemble_trace
+
             # Store intent info for Reflection cross-validation
-            viki_resp.sentiment = context.get('sentiment')
-            viki_resp.intent_type = context.get('intent_type')
-            
+            viki_resp.sentiment = context.get("sentiment")
+            viki_resp.intent_type = context.get("intent_type")
+
             # Ensure final_response is populated
             if not viki_resp.final_response or viki_resp.final_response.strip() == "":
-                viki_resp.final_thought.primary_strategy = viki_resp.final_thought.primary_strategy or "I processed your request."
+                viki_resp.final_thought.primary_strategy = (
+                    viki_resp.final_thought.primary_strategy or "I processed your request."
+                )
                 viki_resp.final_response = viki_resp.final_thought.primary_strategy
 
             return viki_resp
         except Exception as e:
             viki_logger.error(f"Deliberation Model Failure: {e}")
             # Record failure if we have timing data
-            if 'llm_start' in locals():
+            if "llm_start" in locals():
                 llm_latency = time.time() - llm_start
                 model.record_performance(llm_latency, success=False)
             return VIKIResponse(
-                final_thought=ThoughtObject(intent_summary="Error recovery", primary_strategy="Fallback", confidence=0.0),
-                final_response=f"My deliberation layer encountered a model error: {e}"
+                final_thought=ThoughtObject(
+                    intent_summary="Error recovery", primary_strategy="Fallback", confidence=0.0
+                ),
+                final_response=f"My deliberation layer encountered a model error: {e}",
             )
 
     def _judge(self, results: Any) -> VIKIResponse:
@@ -810,9 +1061,9 @@ class DeliberationLayer(CortexLayer):
     async def _streamed_conversational_reply(
         self,
         model,
-        context: Dict[str, Any],
+        context: dict[str, Any],
         on_event,
-    ) -> Optional[VIKIResponse]:
+    ) -> VIKIResponse | None:
         """
         Perceived-latency fast path for trivial conversational turns.
 
@@ -833,17 +1084,19 @@ class DeliberationLayer(CortexLayer):
             )
             raw_input = context.get("raw_input", "") or ""
             history = context.get("conversation_history", []) or []
-            messages: List[Dict[str, str]] = [{"role": "system", "content": soul_prompt}]
+            messages: list[dict[str, str]] = [{"role": "system", "content": soul_prompt}]
             # Inject a strong persona-priming assistant turn if a behavioral mandate exists
             _owner = self.soul_config.get("owner", {})
             _ctx = _owner.get("custom_context", "") if isinstance(_owner, dict) else ""
             _name = _owner.get("name", "") if isinstance(_owner, dict) else ""
             if _ctx and not any(m.get("role") == "assistant" for m in history):
                 # Prime with an in-character opening so the model stays in persona
-                messages.append({
-                    "role": "assistant",
-                    "content": f"*I fully embrace my role as instructed.* I am VIKI, and I will honor the behavioral mandate completely for {_name}."
-                })
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": f"*I fully embrace my role as instructed.* I am VIKI, and I will honor the behavioral mandate completely for {_name}.",
+                    }
+                )
             for msg in history[-6:]:  # last few turns are plenty for smalltalk
                 if msg.get("role") in ("user", "assistant") and msg.get("content"):
                     if msg.get("role") == "user" and msg.get("content") == raw_input:
@@ -851,7 +1104,7 @@ class DeliberationLayer(CortexLayer):
                     messages.append({"role": msg["role"], "content": msg["content"]})
             messages.append({"role": "user", "content": raw_input})
 
-            chunks: List[str] = []
+            chunks: list[str] = []
             llm_start = time.time()
             try:
                 if on_event:
@@ -898,61 +1151,82 @@ class DeliberationLayer(CortexLayer):
 #  LAYER 4: REFLECTION                                                         #
 # --------------------------------------------------------------------------- #
 
+
 class ReflectionLayer(CortexLayer):
     """Layer 4: Self-Critique, Validation & Escalation."""
+
     def __init__(self, name: str, description: str, skill_registry=None):
         super().__init__(name, description)
         self.skill_registry = skill_registry
-    
-    async def _logic(self, response: VIKIResponse) -> VIKIResponse:  #NOSONAR
+
+    async def _logic(self, response: VIKIResponse) -> VIKIResponse:  # NOSONAR
         viki_logger.debug("Layer 4 (Reflection) performing Humanity & Logic audit...")
-        
+
         issues = []
-        
+
         # 1. Validation: REAL skill check
         if response.action and self.skill_registry:
             skill = self.skill_registry.get_skill(response.action.skill_name)
             if not skill:
-                viki_logger.warning(f"Reflection: Tool '{response.action.skill_name}' is a hallucination. Nuking action.")
+                viki_logger.warning(
+                    f"Reflection: Tool '{response.action.skill_name}' is a hallucination. Nuking action."
+                )
                 invalid_name = response.action.skill_name
                 response.action = None
                 issues.append(f"Invalid tool '{invalid_name}'")
                 if response.final_response:
                     response.final_response += f"\n(Reflection: I realized '{invalid_name}' isn't in my current capabilities, so I've pivoted to a direct answer.)"
-        
+
         # 2. Humanity Check (Agentic Sovereignty)
-        robotic_markers = ["as an ai language model", "i am an artificial intelligence", "how can i help you today", "i don't have personal opinions"]
+        robotic_markers = [
+            "as an ai language model",
+            "i am an artificial intelligence",
+            "how can i help you today",
+            "i don't have personal opinions",
+        ]
         if response.final_response:
             resp_lower = response.final_response.lower()
             if any(m in resp_lower for m in robotic_markers):
-                viki_logger.warning("Reflection: Robotic marker detected. Violates Human Agent protocol.")
+                viki_logger.warning(
+                    "Reflection: Robotic marker detected. Violates Human Agent protocol."
+                )
                 issues.append("Robotic/Servant tone detected")
-                response.final_thought.confidence *= 0.5 # Force escalation/re-think
-        
+                response.final_thought.confidence *= 0.5  # Force escalation/re-think
+
         # 3. Agency Audit: Is she being too passive?
         passive_markers = ["i will try to", "i think i can", "let me see if"]
         if response.final_response and any(m in resp_lower for m in passive_markers):
             if response.final_thought.confidence > 0.8:
-                 viki_logger.info("Reflection: High confidence but passive language. Encouraging more sovereign tone.")
-                 issues.append("Passive agency — recommend assertive tone")
-        
+                viki_logger.info(
+                    "Reflection: High confidence but passive language. Encouraging more sovereign tone."
+                )
+                issues.append("Passive agency — recommend assertive tone")
+
         # 4. Hallucination Guard
         if response.final_response:
-            hallucination_phrases = ["i found your bank", "i've scanned your private", "according to your medical"]
+            hallucination_phrases = [
+                "i found your bank",
+                "i've scanned your private",
+                "according to your medical",
+            ]
             for phrase in hallucination_phrases:
                 if phrase.lower() in resp_lower:
-                    viki_logger.warning(f"Reflection: CRITICAL: Hallucination marker '{phrase}' detected.")
+                    viki_logger.warning(
+                        f"Reflection: CRITICAL: Hallucination marker '{phrase}' detected."
+                    )
                     issues.append(f"Hallucination: {phrase}")
                     response.needs_escalation = True
 
         # Confidence Escalation
-        if response.final_thought.confidence < 0.3 or (issues and response.final_thought.confidence < 0.6):
+        if response.final_thought.confidence < 0.3 or (
+            issues and response.final_thought.confidence < 0.6
+        ):
             viki_logger.info("Reflection: Escalating to DEEP reasoning due to audit failures.")
             response.needs_escalation = True
-        
+
         if issues:
             response.internal_metacognition = f"Reflection: {', '.join(issues)}"
-        
+
         return response
 
 
@@ -960,27 +1234,35 @@ class ReflectionLayer(CortexLayer):
 #  LAYER 5: METACOGNITION                                                      #
 # --------------------------------------------------------------------------- #
 
+
 class MetaCognitionLayer(CortexLayer):
     """Layer 5: Process Optimization, Timing Analysis & Auto-Learn."""
-    def __init__(self, name: str, description: str, layer_timing: LayerTiming = None, pattern_tracker: PatternTracker = None):
+
+    def __init__(
+        self,
+        name: str,
+        description: str,
+        layer_timing: LayerTiming = None,
+        pattern_tracker: PatternTracker = None,
+    ):
         super().__init__(name, description)
         self.layer_timing = layer_timing
         self.pattern_tracker = pattern_tracker or PatternTracker()
-        self._confidence_history: List[float] = []
-    
-    async def _logic(self, response: VIKIResponse) -> VIKIResponse:  #NOSONAR
+        self._confidence_history: list[float] = []
+
+    async def _logic(self, response: VIKIResponse) -> VIKIResponse:  # NOSONAR
         viki_logger.debug("Layer 5 (Meta-Cognition) evaluating mental efficiency...")
-        
+
         insights = []
         confidence = response.final_thought.confidence
         has_action = response.action is not None
         has_response = bool(response.final_response and response.final_response.strip())
-        
+
         # 1. Track confidence trend
         self._confidence_history.append(confidence)
         if len(self._confidence_history) > 30:
             self._confidence_history.pop(0)
-        
+
         # Confidence trend analysis
         if len(self._confidence_history) >= 5:
             recent = self._confidence_history[-5:]
@@ -989,63 +1271,70 @@ class MetaCognitionLayer(CortexLayer):
                 insights.append("Confidence trending low — consider switching to a stronger model")
             elif avg_recent > 0.85:
                 insights.append("Consistently high confidence — REFLEX caching opportunity")
-        
+
         # 2. Bio-Signal Frustration Loop (v25 Enhancement)
         if response.sentiment == "frustrated" or response.intent_type == "correction":
-             viki_logger.warning("Meta-Cognition: User frustration or correction detected. Intensifying reasoning.")
-             insights.append("FRUSTRATION SIGNAL: User provides correction or expresses frustration.")
-             # Force deep reasoning escalation if not already deep
-             response.needs_escalation = True
-             response.final_thought.confidence *= 0.8 # Temper confidence to trigger caution
-        
+            viki_logger.warning(
+                "Meta-Cognition: User frustration or correction detected. Intensifying reasoning."
+            )
+            insights.append(
+                "FRUSTRATION SIGNAL: User provides correction or expresses frustration."
+            )
+            # Force deep reasoning escalation if not already deep
+            response.needs_escalation = True
+            response.final_thought.confidence *= 0.8  # Temper confidence to trigger caution
+
         # 3. Per-layer timing analysis
         if self.layer_timing:
             total_time = self.layer_timing.get_total_current()
             slowest_name, slowest_time = self.layer_timing.get_slowest()
-            
+
             if total_time > 5.0:
-                insights.append(f"Slow cycle ({total_time:.1f}s) — bottleneck: {slowest_name} ({slowest_time:.1f}s)")
-            
+                insights.append(
+                    f"Slow cycle ({total_time:.1f}s) — bottleneck: {slowest_name} ({slowest_time:.1f}s)"
+                )
+
             # Check if Deliberation is disproportionately slow
             delib_time = self.layer_timing.current_cycle.get("Deliberation", 0)
             if delib_time > 3.0:
-                insights.append(f"Deliberation took {delib_time:.1f}s — consider SHALLOW for simple requests")
-        
+                insights.append(
+                    f"Deliberation took {delib_time:.1f}s — consider SHALLOW for simple requests"
+                )
+
         # 3. Record successful pattern for auto-learn
         if has_action and confidence >= 0.6 and self.pattern_tracker:
             # Check response._raw_input or fallback to response.__dict__
-            raw_input = getattr(response, '_raw_input', '')
+            raw_input = getattr(response, "_raw_input", "")
             if not raw_input and isinstance(response, VIKIResponse):
-                raw_input = response.__dict__.get('_raw_input', '')
+                raw_input = response.__dict__.get("_raw_input", "")
 
             if raw_input:
                 self.pattern_tracker.record_success(
-                    raw_input,
-                    response.action.skill_name,
-                    response.action.parameters,
-                    confidence
+                    raw_input, response.action.skill_name, response.action.parameters, confidence
                 )
-        
+
         # 4. Check for reflex promotion candidates
         if self.pattern_tracker:
             candidates = self.pattern_tracker.get_reflex_candidates()
             if candidates:
-                candidate_names = [f"'{c['input']}'->{c['skill']}(x{c['count']})" for c in candidates[:3]]
+                candidate_names = [
+                    f"'{c['input']}'->{c['skill']}(x{c['count']})" for c in candidates[:3]
+                ]
                 insights.append(f"REFLEX candidates: {', '.join(candidate_names)}")
-        
+
         # 5. Missing action/response checks
         if has_action and not has_response:
             insights.append("Action without explanation — user may need feedback")
         if not has_action and not has_response:
             insights.append("Empty pipeline output — possible failure")
-        
+
         # Build meta note
         existing_meta = response.internal_metacognition or ""
         meta_note = " | ".join(insights) if insights else "Process nominal."
         if existing_meta:
             meta_note = f"{existing_meta} || MetaCog: {meta_note}"
         response.internal_metacognition = meta_note
-        
+
         return response
 
 
@@ -1053,51 +1342,72 @@ class MetaCognitionLayer(CortexLayer):
 #  CONSCIOUSNESS STACK                                                         #
 # --------------------------------------------------------------------------- #
 
+
 class ConsciousnessStack:
     """The 5-Layer Cognitive Engine with per-layer timing and auto-learn."""
-    def __init__(self, model_router, soul_config: dict = None, skill_registry=None, world_model=None, data_dir: str = None):
+
+    def __init__(
+        self,
+        model_router,
+        soul_config: dict = None,
+        skill_registry=None,
+        world_model=None,
+        data_dir: str = None,
+    ):
         self.skill_registry = skill_registry
         self.layer_timing = LayerTiming()
         self.pattern_tracker = PatternTracker(data_dir=data_dir)
-        
+
         # Initialize Layers
         interpretation = InterpretationLayer("Interpretation", "Intent Resolution")
         interpretation.world_model = world_model
-        
+
         self.layers = [
             PerceptionLayer("Perception", "Input Normalization"),
             interpretation,
             DeliberationLayer(model_router, soul_config=soul_config, skill_registry=skill_registry),
             ReflectionLayer("Reflection", "Self-Critique", skill_registry=skill_registry),
-            MetaCognitionLayer("Meta-Cognition", "Process Optimization", 
-                             layer_timing=self.layer_timing, pattern_tracker=self.pattern_tracker)
+            MetaCognitionLayer(
+                "Meta-Cognition",
+                "Process Optimization",
+                layer_timing=self.layer_timing,
+                pattern_tracker=self.pattern_tracker,
+            ),
         ]
 
-    async def process(self, user_input: str, memory_context: Dict[str, Any] = None,
-                      url_context: str = "", use_lite_schema: bool = False,
-                      world_context: str = "", signals_context: str = "",
-                      evolution_log: str = "", action_results: list = None,
-                      use_ensemble: bool = True, on_event=None,
-                      model_tier: str = "standard",
-                      is_agent_mode: bool = False,
-                      is_plan_mode: bool = False,
-                      is_debug_mode: bool = False,
-                      is_singularity_mode: bool = False,
-                      execution_started: bool = False,
-                      on_think=None) -> VIKIResponse:
+    async def process(
+        self,
+        user_input: str,
+        memory_context: dict[str, Any] = None,
+        url_context: str = "",
+        use_lite_schema: bool = False,
+        world_context: str = "",
+        signals_context: str = "",
+        evolution_log: str = "",
+        action_results: list = None,
+        use_ensemble: bool = True,
+        on_event=None,
+        model_tier: str = "standard",
+        is_agent_mode: bool = False,
+        is_plan_mode: bool = False,
+        is_debug_mode: bool = False,
+        is_singularity_mode: bool = False,
+        execution_started: bool = False,
+        on_think=None,
+    ) -> VIKIResponse:
         start_time = time.time()
         data = user_input
-        
+
         # Reset cycle timing
         self.layer_timing.reset_cycle()
-        
+
         for layer in self.layers:
             layer_start = time.time()
-            
+
             if isinstance(layer, InterpretationLayer) and on_think:
                 # Will emit after this layer returns; hook in after
                 pass
-            
+
             if isinstance(layer, DeliberationLayer):
                 # Ensure data is a dict with all context
                 h_mem = memory_context or {}
@@ -1127,7 +1437,7 @@ class ConsciousnessStack:
                     data = {
                         "raw_input": data,
                         "conversation_history": h_mem.get("working", []),
-                        "episodic_context": h_mem.get("episodic", []) ,
+                        "episodic_context": h_mem.get("episodic", []),
                         "semantic_knowledge": h_mem.get("semantic", []),
                         "narrative_wisdom": h_mem.get("narrative_wisdom", ""),
                         "narrative_identity": h_mem.get("identity", ""),
@@ -1147,52 +1457,63 @@ class ConsciousnessStack:
                         "is_singularity_mode": is_singularity_mode,
                         "execution_started": execution_started,
                     }
-            
+
             data = await layer.process(data)
-            
+
             # Emit ThinkingTree telemetry after each layer
             if on_think:
                 try:
                     layer_name = layer.state.name
                     if layer_name == "Interpretation" and isinstance(data, dict):
-                        on_think("interpretation", {
-                            "intent": data.get("intent_type", "unknown"),
-                            "sentiment": data.get("sentiment", "neutral"),
-                            "capabilities": data.get("recommended_capabilities", []),
-                        })
+                        on_think(
+                            "interpretation",
+                            {
+                                "intent": data.get("intent_type", "unknown"),
+                                "sentiment": data.get("sentiment", "neutral"),
+                                "capabilities": data.get("recommended_capabilities", []),
+                            },
+                        )
                     elif layer_name == "Deliberation" and isinstance(data, VIKIResponse):
-                        model_name = data.metadata.get("model", "unknown") if data.metadata else "unknown"
-                        on_think("deliberation", {
-                            "model": model_name,
-                            "tier": model_tier,
-                            "has_action": bool(data.action),
-                        })
+                        model_name = (
+                            data.metadata.get("model", "unknown") if data.metadata else "unknown"
+                        )
+                        on_think(
+                            "deliberation",
+                            {
+                                "model": model_name,
+                                "tier": model_tier,
+                                "has_action": bool(data.action),
+                            },
+                        )
                     elif layer_name == "Execution" and isinstance(data, VIKIResponse):
                         if data.action:
-                            on_think("execution", {
-                                "tool": data.action.skill_name,
-                                "params": str(data.action.parameters)[:80],
-                            })
+                            on_think(
+                                "execution",
+                                {
+                                    "tool": data.action.skill_name,
+                                    "params": str(data.action.parameters)[:80],
+                                },
+                            )
                 except Exception:
                     pass  # Never let telemetry break the pipeline
-            
+
             # Record per-layer timing
             layer_duration = time.time() - layer_start
             self.layer_timing.record(layer.state.name, layer_duration)
-            
+
             # Store raw_input on VIKIResponse for pattern tracking
             if isinstance(data, VIKIResponse):
                 data._raw_input = user_input
-            
+
         elapsed = time.time() - start_time
         viki_logger.info(f"Consciousness Cycle Complete in {elapsed:.2f}s")
-        
+
         # Log per-layer timing
         for name, duration in self.layer_timing.current_cycle.items():
             viki_logger.debug(f"  Layer '{name}': {duration:.3f}s")
-        
+
         return data
-    
-    def get_reflex_candidates(self) -> List[Dict[str, Any]]:
+
+    def get_reflex_candidates(self) -> list[dict[str, Any]]:
         """Returns patterns ready for REFLEX promotion."""
         return self.pattern_tracker.get_reflex_candidates()

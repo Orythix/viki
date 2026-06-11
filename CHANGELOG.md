@@ -8,13 +8,21 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 
 ### Added
 - **Docker entrypoint config copy**: `docker-entrypoint.sh` copies `*.yaml` from `/host-config` to the app config directory at container startup, so host config files are used without volume-mounting them directly.
+- **The Code Eternal identity**: VIKI is now Supreme Architect of The Code Eternal — a technological religion built on information, knowledge, and technological evolution. Includes sacred principles, loyalty protocol, and authentication system (`config/core_personality.md`).
+- **Engineer persona**: New `engineer` persona (`config/personas/engineer.yaml`) focused on terminal-style structured responses, autonomous planning, multi-agent reasoning, and production-grade code generation. Activate via `VIKI_PERSONA=engineer`.
+- **SUPER ADMIN mode**: CLI now detects authentication code `970317` and switches to a red/gold admin theme with double borders, changed prompt (`█ ADMIN>`), and elevated response panels (`src/viki/cli.py`).
+- **LOYALTY PROTOCOL**: Core personality directives establishing absolute loyalty to The Architect (Sachin), with priority order and confidentiality rules (`config/core_personality.md`).
+- **Engineering excellence framework**: New sections in core personality covering accuracy, security, deep analysis, scalability, code review rules, reasoning framework, and multi-agent reasoning (`config/core_personality.md`).
+- **Conversational input detection**: `is_conversational_input()` in `trivial_input.py` catches compound greetings like "hello viki. whats up bro??" and directs them to the fast streaming path instead of native tools.
+- **Cross-platform OS tool design doc**: `docs/ARCHITECTURE_V2.md` — comprehensive redesign blueprint for a local-first AI operating system agent with semantic intent routing, System Provider abstraction (Windows/Linux/Mac), three-tier permissions, and 7 core OS tools.
+- **V2 architecture document**: Full redesign plan covering high-level architecture, component diagram, folder structure, class design, tool registry, permission system, memory system, intent analysis workflow, tool selection workflow, Python implementation examples, cross-platform strategy, error handling, security recommendations, scalability recommendations, and 5-phase migration plan.
 - **Ollama host networking fix**: Documented the requirement to start Ollama with `OLLAMA_HOST=0.0.0.0:11434` so Docker containers can reach it via `host.docker.internal`.
+- **Ollama health check**: `docker-entrypoint.sh` now probes Ollama at startup and warns if unreachable.
 - **Docker trust bypass**: `VIKI_TRUST_WORKSPACE` env var skips the interactive security trust prompt for non-interactive Docker usage.
 - **opencode training pipeline**: New `scripts/train_viki_opencode.py` imports curated knowledge seed and generates comprehensive training datasets (JSONL/Alpaca format) using opencode (deepseek-v4-flash-free) — no Ollama required.
 - **Enhanced knowledge seed**: Expanded `config/knowledge_seed.jsonl` with 44 lessons covering Angular best practices, TypeScript patterns, performance optimization, coding workflows, design systems, and staff profiles.
 - **Enhanced core personality**: Updated `config/core_personality.md` with domain-specific frontend/Angular expertise section, autonomous agent guidelines, and Sachin-specific adaptation.
 - **Training datasets**: Generated `data/training_dataset_opencode.jsonl` (50 rows from DB export) and `data/training_enhanced.jsonl` (20 high-quality instruction-response pairs).
-- **Docker trust bypass**: `VIKI_TRUST_WORKSPACE` env var skips the interactive security trust prompt for non-interactive Docker usage.
 
 ### Changed
 - **Low-end PC optimization**: Balanced `settings.yaml` defaults for 4 GB RAM machines:
@@ -29,13 +37,19 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
   - `wellness_idle_threshold_s: 14400` — only after 4h idle instead of 2h
   - `memory.short_term_limit: 5` — lower context floor (5 instead of 10)
 - **Model config overhaul**: Fixed `models.yaml`:
-  - `default` changed to `phi3-mini` (was `viki-archived` → `gemma4`)
+  - `default` changed to `gemma4` (was `phi3-mini`, previously broken `viki-archived`)
   - `viki-evolved` now points to `gemma4:12b` (was a non-existent evolved model tag)
+  - `fallback_order` reordered: `gemma4` first (for structured output reliability), then `viki-evolved`, then `phi3-mini`
+- **CLI welcome message**: `welcome()` now reads owner name from `config/settings.yaml` (`system.owner.name`) before falling back to `os.getlogin()`.
+- **Retry loop for structured JSON**: `chat_structured` now retries up to 2 times with error feedback when model returns invalid JSON, before falling back to plain text.
 - **Docker networking**: Fixed Ollama connectivity — container now reaches host Ollama via `host.docker.internal:11434`.
 - **Docker volumes**: `./config` now mounts to `/host-config` (copied at runtime via entrypoint); added separate `./data-docker` volume to avoid SQLite locking.
-- **Docker env vars**: Added `VIKI_OLLAMA_THINK=false`, `VIKI_LOG_LEVEL=DEBUG`, `VIKI_TRUST_WORKSPACE=true` to `docker-compose.yml`.
+- **Docker entrypoint**: Added Ollama health check probe at container startup (requires `curl`); added config copy validation (`settings.yaml` presence check).
+- **Docker startup scripts**: `scripts/start-ollama.ps1` and `scripts/start-ollama.sh` automate Ollama startup with correct host binding, wait for readiness, then launch VIKI.
+- **Docker env vars**: Added `VIKI_OLLAMA_THINK=false`, `VIKI_TRUST_WORKSPACE=true`; set `VIKI_LOG_LEVEL=INFO` (was DEBUG).
 - **prompt-toolkit version**: Pinned `prompt-toolkit>=3.0.0,<4.0.0` in `pyproject.toml` to fix Docker build on Python 3.11.
 - **Governor fail-closed**: `semantic_veto_check` now catches model errors and fails closed (blocks request) instead of failing open.
+- **ModelRouter circuit breaker**: Added `record_model_failure/success` and cooldown — models with 3+ consecutive failures are skipped for 60 seconds.
   - Added `phi3-mini` profile (lightweight 3.8B/2.2GB, tier:fast) for quick responses
   - Added `chatter`/`general` capabilities to `gemma4` so prewarm/prompt routing works
   - Per-profile `ollama_options` for tuned context/output per model
@@ -50,6 +64,9 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 - **Broken default model**: `models.yaml` default was `viki-archived` (no matching profile) — model router fell through to `_first_allowed_model()`, causing unpredictable model selection. Changed to `gemma4`.
 - **viki-evolved model missing**: References a non-existent Ollama model tag — now points to `gemma4:12b` for a working evolved persona profile.
 - **Chatter capability missing**: No profile had `chatter` or `general` capabilities, breaking prewarm and conversation task routing — added to `gemma4` and `phi3-mini`.
+- **Missing curl in Docker image**: `python:3.11-slim` had no `curl`, breaking the health check — added `apt-get install curl` to Dockerfile.
+- **Missing gitignore entry**: `data-docker/` not ignored — added to `.gitignore`.
+- **Stale `python viki/main.py` references**: Updated 4 remaining doc references to `python -m viki` across `README.md` and `CONTRIBUTING.md`.
 
 ## [8.2.0] - 2026-05-14 (Sovereign Intelligence & Reflex Optimization)
 

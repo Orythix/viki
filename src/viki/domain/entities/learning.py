@@ -1,12 +1,13 @@
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any
+from typing import Any
+
 
 @dataclass
 class Lesson:
     id: str
     content: str
     text_representation: str
-    embedding: Optional[List[float]] = None
+    embedding: list[float] | None = None
     created_at: float = 0.0
     last_accessed: float = 0.0
     access_count: int = 1
@@ -14,13 +15,15 @@ class Lesson:
     source_task: str = "Unknown"
     reliability: float = 1.0
 
+
 @dataclass
 class FailureRecord:
-    id: Optional[int]
+    id: int | None
     action: str
     error: str
     context: str
     timestamp: float
+
 
 @dataclass
 class Relationship:
@@ -28,4 +31,4 @@ class Relationship:
     target_id: str
     type: str  # depends_on, extends, implements, related_to
     weight: float = 1.0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)

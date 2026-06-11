@@ -1,13 +1,28 @@
 import os
 import sqlite3
 import threading
-from typing import Dict, Optional
+import time
 
-_connections: Dict[str, sqlite3.Connection] = {}
-_refcount: Dict[str, int] = {}
+_connections: dict[str, sqlite3.Connection] = {}
+_refcount: dict[str, int] = {}
 _lock = threading.Lock()
+_last_checkpoint: dict[str, float] = {}
 
 MERGED_DB_NAME = "viki_memory.db"
+
+_CHECKPOINT_INTERVAL = 300.0  # 5 minutes between WAL checkpoints
+
+
+def _maybe_checkpoint(real_path: str, conn: sqlite3.Connection) -> None:
+    """Periodically checkpoint WAL to prevent unbounded growth."""
+    now = time.time()
+    last = _last_checkpoint.get(real_path, 0.0)
+    if now - last >= _CHECKPOINT_INTERVAL:
+        try:
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            _last_checkpoint[real_path] = now
+        except Exception:
+            pass
 
 
 def get_connection(db_path: str) -> sqlite3.Connection:
@@ -23,19 +38,24 @@ def get_connection(db_path: str) -> sqlite3.Connection:
         if conn is not None:
             try:
                 conn.execute("SELECT 1")
-            except (sqlite3.ProgrammingError, sqlite3.OperationalError):
+            except (sqlite3.ProgrammingError, sqlite3.OperationalError) as e:
+                _log_warning(f"Reconnecting stale SQLite connection: {e}")
                 conn = None
                 _connections.pop(real_path, None)
                 _refcount.pop(real_path, None)
+                _last_checkpoint.pop(real_path, None)
         if conn is None:
             conn = sqlite3.connect(real_path, check_same_thread=False, timeout=30.0)
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA synchronous=NORMAL")
+            conn.execute("PRAGMA busy_timeout=15000")
             conn.row_factory = sqlite3.Row
             _connections[real_path] = conn
             _refcount[real_path] = 1
         else:
             _refcount[real_path] = _refcount.get(real_path, 0) + 1
+
+        _maybe_checkpoint(real_path, conn)
         return conn
 
 
@@ -50,8 +70,10 @@ def release_connection(db_path: str) -> None:
         if current <= 1:
             _refcount.pop(real_path, None)
             conn = _connections.pop(real_path, None)
+            _last_checkpoint.pop(real_path, None)
             if conn is not None:
                 try:
+                    conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
                     conn.close()
                 except Exception:
                     pass
@@ -66,13 +88,28 @@ def close_all():
     and the reference counter.
     """
     with _lock:
-        for path, conn in list(_connections.items()):
+        for _path, conn in list(_connections.items()):
             try:
+                conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
                 conn.close()
             except Exception:
                 pass
         _connections.clear()
         _refcount.clear()
+        _last_checkpoint.clear()
+
+
+def connection_count() -> int:
+    """Return the number of currently open database connections."""
+    with _lock:
+        return len(_connections)
+
+
+def _log_warning(msg: str) -> None:
+    """Log a warning without importing logger at module level."""
+    import logging
+
+    logging.getLogger(__name__).warning(msg)
 
 
 def migrate_to_merged(data_dir: str, merged_path: str) -> bool:
@@ -103,17 +140,26 @@ def migrate_to_merged(data_dir: str, merged_path: str) -> bool:
             try:
                 cur = src_conn.cursor()
                 cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='messages'")
-                if cur.fetchone() and merged.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table' AND name='messages'"
-                ).fetchone():
+                if (
+                    cur.fetchone()
+                    and merged.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table' AND name='messages'"
+                    ).fetchone()
+                ):
                     rows = src_conn.execute("SELECT * FROM messages").fetchall()
                     for row in rows:
                         merged.execute(
                             "INSERT OR IGNORE INTO messages "
                             "(id, role, content, timestamp, session_id, metadata) "
                             "VALUES (?, ?, ?, ?, ?, ?)",
-                            (row["id"], row["role"], row["content"],
-                             row["timestamp"], row["session_id"], row["metadata"]),
+                            (
+                                row["id"],
+                                row["role"],
+                                row["content"],
+                                row["timestamp"],
+                                row["session_id"],
+                                row["metadata"],
+                            ),
                         )
                     merged.commit()
                     migrated = True
@@ -121,6 +167,7 @@ def migrate_to_merged(data_dir: str, merged_path: str) -> bool:
                 src_conn.close()
         except Exception as e:
             import logging
+
             logging.getLogger(__name__).warning("Migration from %s failed: %s", src, e)
 
     # Narrative Memory → episodes, semantic_knowledge, meta_reflections
@@ -134,10 +181,15 @@ def migrate_to_merged(data_dir: str, merged_path: str) -> bool:
                 cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
                 tables = {r[0] for r in cur.fetchall()}
                 for table in ("episodes", "semantic_knowledge", "meta_reflections"):
-                    if table in tables and merged.execute(
-                        f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table}'"
-                    ).fetchone():
-                        src_cols = [d[1] for d in src_conn.execute(f"PRAGMA table_info({table})").fetchall()]
+                    if (
+                        table in tables
+                        and merged.execute(
+                            f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table}'"
+                        ).fetchone()
+                    ):
+                        src_cols = [
+                            d[1] for d in src_conn.execute(f"PRAGMA table_info({table})").fetchall()
+                        ]
                         placeholders = ", ".join("?" for _ in src_cols)
                         col_names = ", ".join(src_cols)
                         rows = src_conn.execute(f"SELECT * FROM {table}").fetchall()
@@ -152,6 +204,7 @@ def migrate_to_merged(data_dir: str, merged_path: str) -> bool:
                 src_conn.close()
         except Exception as e:
             import logging
+
             logging.getLogger(__name__).warning("Migration from %s failed: %s", src, e)
 
     # Identity → identity_anchors
@@ -162,18 +215,28 @@ def migrate_to_merged(data_dir: str, merged_path: str) -> bool:
             src_conn.row_factory = sqlite3.Row
             try:
                 cur = src_conn.cursor()
-                cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='identity_anchors'")
-                if cur.fetchone() and merged.execute(
+                cur.execute(
                     "SELECT name FROM sqlite_master WHERE type='table' AND name='identity_anchors'"
-                ).fetchone():
+                )
+                if (
+                    cur.fetchone()
+                    and merged.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table' AND name='identity_anchors'"
+                    ).fetchone()
+                ):
                     rows = src_conn.execute("SELECT * FROM identity_anchors").fetchall()
                     for row in rows:
                         merged.execute(
                             "INSERT OR IGNORE INTO identity_anchors "
                             "(key, value, category, last_updated, significance) "
                             "VALUES (?, ?, ?, ?, ?)",
-                            (row["key"], row["value"], row["category"],
-                             row["last_updated"], row["significance"]),
+                            (
+                                row["key"],
+                                row["value"],
+                                row["category"],
+                                row["last_updated"],
+                                row["significance"],
+                            ),
                         )
                     merged.commit()
                     migrated = True
@@ -181,6 +244,7 @@ def migrate_to_merged(data_dir: str, merged_path: str) -> bool:
                 src_conn.close()
         except Exception as e:
             import logging
+
             logging.getLogger(__name__).warning("Migration from %s failed: %s", src, e)
 
     return migrated

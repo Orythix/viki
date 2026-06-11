@@ -21,7 +21,7 @@ import asyncio
 import json
 import os
 import time
-from typing import Any, Dict, List, Optional, Type, TypeVar
+from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
@@ -31,30 +31,54 @@ from viki.core.inference_gateway import LLMProvider
 T = TypeVar("T", bound=BaseModel)
 
 
-def _looks_like_gemini_secret(key: Optional[str]) -> bool:
+def _looks_like_gemini_secret(key: str | None) -> bool:
     if not key or not str(key).strip():
         return False
     s = str(key).strip()
-    if s.lower() in ("ollama", "none", "dummy", "placeholder", "test", "your-api-key-here", "changeme"):
+    if s.lower() in (
+        "ollama",
+        "none",
+        "dummy",
+        "placeholder",
+        "test",
+        "your-api-key-here",
+        "changeme",
+    ):
         return False
     # Google AI Studio keys typically begin with "AI" and are ~39 chars.
     return len(s) >= 20
 
 
-def _looks_like_groq_secret(key: Optional[str]) -> bool:
+def _looks_like_groq_secret(key: str | None) -> bool:
     if not key or not str(key).strip():
         return False
     s = str(key).strip()
-    if s.lower() in ("ollama", "none", "dummy", "placeholder", "test", "your-api-key-here", "changeme"):
+    if s.lower() in (
+        "ollama",
+        "none",
+        "dummy",
+        "placeholder",
+        "test",
+        "your-api-key-here",
+        "changeme",
+    ):
         return False
     return s.startswith("gsk_")
 
 
-def _looks_like_mistral_secret(key: Optional[str]) -> bool:
+def _looks_like_mistral_secret(key: str | None) -> bool:
     if not key or not str(key).strip():
         return False
     s = str(key).strip()
-    if s.lower() in ("ollama", "none", "dummy", "placeholder", "test", "your-api-key-here", "changeme"):
+    if s.lower() in (
+        "ollama",
+        "none",
+        "dummy",
+        "placeholder",
+        "test",
+        "your-api-key-here",
+        "changeme",
+    ):
         return False
     return len(s) >= 16
 
@@ -65,16 +89,14 @@ def _looks_like_mistral_secret(key: Optional[str]) -> bool:
 class GeminiLLM(LLMProvider):
     """Google Gemini (gemini-2.5-pro / flash) via `google-genai`."""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         super().__init__(config)
         self.provider_name = "gemini"
         self._client = None
         api_key = os.getenv(self.config.get("api_key_env", "GOOGLE_API_KEY"))
         if not _looks_like_gemini_secret(api_key):
             self.available = False
-            self.unavailable_reason = (
-                "Gemini API key missing or invalid; expected GOOGLE_API_KEY."
-            )
+            self.unavailable_reason = "Gemini API key missing or invalid; expected GOOGLE_API_KEY."
             return
         try:
             from google import genai  # type: ignore
@@ -92,7 +114,7 @@ class GeminiLLM(LLMProvider):
         return True
 
     @staticmethod
-    def _to_contents(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _to_contents(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         contents = []
         for m in messages:
             role = m.get("role", "user")
@@ -108,7 +130,7 @@ class GeminiLLM(LLMProvider):
             contents.append({"role": mapped_role, "parts": [{"text": text}]})
         return contents
 
-    async def chat(self, messages: List[Dict[str, str]], temperature: float = 0.7) -> str:
+    async def chat(self, messages: list[dict[str, str]], temperature: float = 0.7) -> str:
         if not self.available or self._client is None:
             return f"Error: Model '{self.model_name}' is unavailable."
         t0 = time.perf_counter()
@@ -143,15 +165,16 @@ class GeminiLLM(LLMProvider):
             return f"Error calling Gemini Model: {e}"
         finally:
             try:
-                from core.usage_log import emit_llm_inference
+                from viki.core.usage_log import emit_llm_inference
+
                 emit_llm_inference(self, time.perf_counter() - t0, success, "chat")
             except Exception:
                 pass
 
     async def chat_structured(
         self,
-        messages: List[Dict[str, str]],
-        response_model: Type[T],
+        messages: list[dict[str, str]],
+        response_model: type[T],
         temperature: float = 0.0,
         image_path: str = None,
     ) -> T:
@@ -175,9 +198,13 @@ class GeminiLLM(LLMProvider):
         except Exception as e:
             viki_logger.debug("Gemini structured via instructor failed: %s", e)
 
-        text = await self.chat(messages + [
-            {"role": "system", "content": "Return only a single JSON object."},
-        ], temperature=temperature)
+        text = await self.chat(
+            messages
+            + [
+                {"role": "system", "content": "Return only a single JSON object."},
+            ],
+            temperature=temperature,
+        )
         try:
             return response_model.model_validate_json(text)
         except Exception:
@@ -188,7 +215,7 @@ class GeminiLLM(LLMProvider):
                 return response_model.model_validate_json(text[start : end + 1])
             raise
 
-    async def chat_stream(self, messages: List[Dict[str, str]], temperature: float = 0.7):
+    async def chat_stream(self, messages: list[dict[str, str]], temperature: float = 0.7):
         if not self.available or self._client is None:
             yield f"Error: Model '{self.model_name}' is unavailable."
             return
@@ -224,7 +251,7 @@ class GeminiLLM(LLMProvider):
 class GroqLLM(LLMProvider):
     """Groq Cloud — OpenAI-compatible API, low-latency Llama/Mixtral inference."""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         super().__init__(config)
         self.provider_name = "groq"
         api_key = os.getenv(self.config.get("api_key_env", "GROQ_API_KEY"))
@@ -250,7 +277,7 @@ class GroqLLM(LLMProvider):
     def is_cloud(self) -> bool:
         return True
 
-    async def chat(self, messages: List[Dict[str, str]], temperature: float = 0.7) -> str:
+    async def chat(self, messages: list[dict[str, str]], temperature: float = 0.7) -> str:
         if not self.available or self._client is None:
             return f"Error: Model '{self.model_name}' is unavailable."
         try:
@@ -272,8 +299,8 @@ class GroqLLM(LLMProvider):
 
     async def chat_structured(
         self,
-        messages: List[Dict[str, str]],
-        response_model: Type[T],
+        messages: list[dict[str, str]],
+        response_model: type[T],
         temperature: float = 0.0,
         image_path: str = None,
     ) -> T:
@@ -292,7 +319,7 @@ class GroqLLM(LLMProvider):
             text = await self.chat(messages, temperature=temperature)
             return response_model.model_validate_json(text)
 
-    async def chat_stream(self, messages: List[Dict[str, str]], temperature: float = 0.7):
+    async def chat_stream(self, messages: list[dict[str, str]], temperature: float = 0.7):
         if not self.available or self._client is None:
             yield f"Error: Model '{self.model_name}' is unavailable."
             return
@@ -321,7 +348,7 @@ class GroqLLM(LLMProvider):
 class MistralLLM(LLMProvider):
     """Mistral AI cloud (mistral-large, mistral-small)."""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         super().__init__(config)
         self.provider_name = "mistral"
         api_key = os.getenv(self.config.get("api_key_env", "MISTRAL_API_KEY"))
@@ -345,7 +372,7 @@ class MistralLLM(LLMProvider):
     def is_cloud(self) -> bool:
         return True
 
-    async def chat(self, messages: List[Dict[str, str]], temperature: float = 0.7) -> str:
+    async def chat(self, messages: list[dict[str, str]], temperature: float = 0.7) -> str:
         if not self.available or self._client is None:
             return f"Error: Model '{self.model_name}' is unavailable."
         try:
@@ -367,8 +394,8 @@ class MistralLLM(LLMProvider):
 
     async def chat_structured(
         self,
-        messages: List[Dict[str, str]],
-        response_model: Type[T],
+        messages: list[dict[str, str]],
+        response_model: type[T],
         temperature: float = 0.0,
         image_path: str = None,
     ) -> T:
@@ -387,7 +414,7 @@ class MistralLLM(LLMProvider):
             text = await self.chat(messages, temperature=temperature)
             return response_model.model_validate_json(text)
 
-    async def chat_stream(self, messages: List[Dict[str, str]], temperature: float = 0.7):
+    async def chat_stream(self, messages: list[dict[str, str]], temperature: float = 0.7):
         if not self.available or self._client is None:
             yield f"Error: Model '{self.model_name}' is unavailable."
             return
@@ -415,7 +442,7 @@ class MistralLLM(LLMProvider):
 class BedrockLLM(LLMProvider):
     """AWS Bedrock invocation via `boto3`."""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         super().__init__(config)
         self.provider_name = "bedrock"
         self.region = config.get("region", os.getenv("AWS_REGION", "us-east-1"))
@@ -437,9 +464,7 @@ class BedrockLLM(LLMProvider):
         return True
 
     @staticmethod
-    def _to_anthropic_payload(
-        messages: List[Dict[str, Any]], temperature: float
-    ) -> Dict[str, Any]:
+    def _to_anthropic_payload(messages: list[dict[str, Any]], temperature: float) -> dict[str, Any]:
         system = None
         msgs = []
         for m in messages:
@@ -454,7 +479,7 @@ class BedrockLLM(LLMProvider):
                     "content": [{"type": "text", "text": str(content)}],
                 }
             )
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "anthropic_version": "bedrock-2023-05-31",
             "max_tokens": 1024,
             "messages": msgs,
@@ -464,7 +489,7 @@ class BedrockLLM(LLMProvider):
             payload["system"] = system
         return payload
 
-    async def chat(self, messages: List[Dict[str, str]], temperature: float = 0.7) -> str:
+    async def chat(self, messages: list[dict[str, str]], temperature: float = 0.7) -> str:
         if not self.available or self._client is None:
             return f"Error: Model '{self.model_name}' is unavailable."
         try:
@@ -499,15 +524,15 @@ class BedrockLLM(LLMProvider):
 
     async def chat_structured(
         self,
-        messages: List[Dict[str, str]],
-        response_model: Type[T],
+        messages: list[dict[str, str]],
+        response_model: type[T],
         temperature: float = 0.0,
         image_path: str = None,
     ) -> T:
         text = await self.chat(messages, temperature=temperature)
         return response_model.model_validate_json(text)
 
-    async def chat_stream(self, messages: List[Dict[str, str]], temperature: float = 0.7):
+    async def chat_stream(self, messages: list[dict[str, str]], temperature: float = 0.7):
         # Bedrock streaming via invoke_model_with_response_stream — defer to chat for now.
         result = await self.chat(messages, temperature=temperature)
         if result:

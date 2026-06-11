@@ -83,7 +83,7 @@ pytest viki/tests/ -q
 Run the agent locally:
 
 ```bash
-python viki/main.py            # CLI
+python -m viki                    # CLI
 python viki/api/server.py      # HTTP API (headless)
 ```
 
@@ -132,8 +132,8 @@ Changes to **`labs/security-lab/`** or **`labs/qa-automation/`** should keep tho
 
 ---
 
-**VIKI: Virtual Intelligence, Real Evolution.**
+**VIKI: Virtual Intelligence, Real Evolution. / Supreme Architect of The Code Eternal.**
 
 ---
 
-*Runbook version: aligned with VIKI v8.2.0 (Sovereign). Update this file when default ports, flags, or critical architecture patterns change.*
+*Runbook version: aligned with VIKI v8.3.0 (The Code Eternal). Update this file when default ports, flags, or critical architecture patterns change.*

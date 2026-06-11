@@ -1,6 +1,6 @@
 # VIKI Operational Runbook
 
-Operational procedures for running, verifying, and recovering **VIKI** on a workstation. For first-time install, see [docs/SETUP.md](docs/SETUP.md). For credentials and API hardening, see [viki/SECURITY_SETUP.md](../viki/SECURITY_SETUP.md).
+Operational procedures for running, verifying, and recovering **VIKI** on a workstation or in Docker. For first-time install, see [docs/SETUP.md](docs/SETUP.md). For security hardening, see [SECURITY_SETUP.md](../SECURITY_SETUP.md).
 
 ---
 
@@ -9,60 +9,95 @@ Operational procedures for running, verifying, and recovering **VIKI** on a work
 | Audience | Use this runbook for |
 |----------|----------------------|
 | Operator | Daily start/stop, health checks, log locations |
-| Maintainer | Config changes, Ollama alignment, incident triage |
+| Maintainer | Config changes, Ollama alignment, incident triage, Docker |
 
 ---
 
-## 2. Preconditions (before every run)
-
-Check all items before starting the core or UI.
+## 2. Preconditions
 
 | Check | Command / action | Expected |
 |-------|------------------|----------|
-| Python | `python --version` | 3.10+ (3.11+ recommended per [docs/SETUP.md](docs/SETUP.md)) |
-| Dependencies | `pip install -r requirements.txt` (from repo root) | No install errors |
-| Ollama daemon | Ollama app running or `ollama serve` | Process listening (default `127.0.0.1:11434`) |
-| Model tags | `ollama list` | At least the tag configured in `viki/config/models.yaml` for `models.default` (e.g. `qwen3.6:latest` for profile `qwen35`) |
-| Optional HF | `HF_TOKEN` in env | Reduces Hub rate limits for sentence-transformers loads |
+| Python | `python --version` | 3.10+ (3.11+ recommended) |
+| Dependencies | `pip install -e .` | No install errors |
+| Ollama daemon | `ollama serve` (see §3) | Process listening (default `127.0.0.1:11434`) |
+| Model pulled | `ollama list` | At least the tag in `config/models.yaml` → `models.default` (e.g. `gemma4:12b`) |
+| Docker (optional) | `docker compose version` | Docker Compose v2+ |
 
 ---
 
-## 3. Standard startup
+## 3. Startup
 
-### 3.1 CLI (interactive terminal)
-
-From the **repository root** (directory that contains `viki/`):
+### 3.1 Local CLI
 
 ```powershell
-python viki/bootstrap.py
+# From repo root
+python -m viki
 ```
 
-- Exit: type `exit` at the prompt.
-- If you use a venv, activate it first (see [docs/SETUP.md](docs/SETUP.md)).
+Exit: type `exit` at the prompt.
 
 1. Launch VIKI CLI: `python -m viki`
 2. Interact directly via the terminal. The CLI-first architecture has replaced the legacy web dashboard.
 
-### 3.3 Environment overrides (common)
+### 3.2 Docker CLI
+
+Ollama must listen on **all interfaces** for the container to reach it:
+
+```powershell
+# Option A — manual
+$env:OLLAMA_HOST = "0.0.0.0:11434"
+$env:OLLAMA_CUDA = "0"
+Start-Process "ollama.exe" -ArgumentList "serve" -WindowStyle Hidden
+docker compose build
+docker compose run --rm -it viki
+
+# Option B — startup script (recommended)
+.\scripts\start-ollama.ps1
+```
+
+```bash
+# Linux/Mac
+chmod +x scripts/start-ollama.sh
+./scripts/start-ollama.sh
+```
+
+### 3.3 Custom Modelfiles
+
+Two Modelfiles ship with the project:
+
+| File | Base model | Temperature | Context | Use case |
+|------|-----------|-------------|---------|----------|
+| `Modelfile` | `gemma4:latest` | 0.6 | default | Conversational / general purpose with persona immersion |
+| `Modelfile.engineer` | `gemma3:12b` | 0.2 | 32768 | Technical data engineering / Azure / AI expert |
+
+Build a custom Ollama model from either:
+
+```powershell
+ollama create viki-engineer -f Modelfile.engineer
+```
+
+Then reference it in `config/models.yaml` under a new profile.
+
+### 3.4 Environment overrides
 
 | Variable | Purpose |
 |----------|---------|
-| `VIKI_DATA_DIR` | Absolute path for SQLite, narrative DB, sessions, etc. |
+| `VIKI_DATA_DIR` | Absolute path for SQLite, narrative DB, sessions |
 | `VIKI_WORKSPACE_DIR` | Workspace root for file skills |
-| `VIKI_PERSONA` | Overrides `system.persona` in settings (e.g. `dev`, `research`) |
-| `VIKI_AIR_GAP` | `1` / `true` / `yes` — only **local** Ollama models in routing |
-| `VIKI_LOCAL_LLM_ONLY` | `true` / `false` — when `true`, OpenAI/Anthropic profiles are never selected |
-| `VIKI_FORGE_BASE_OLLAMA_MODEL` | Base Ollama tag for Neural Forge Modelfile `FROM` line |
-| `VIKI_FORGE_OUTPUT_OLLAMA_MODEL` | Output Ollama tag for prompt-bake / `internal_forge` (`ollama create`; default **`viki-neural-forge`** if unset) |
-| `VIKI_EMBED_GPU` | `1` / `true` — run sentence-transformers encoder on CUDA when available |
-| `VIKI_UNSLOTH_RUN_TRAIN` | `1` / `true` — allow GPU LoRA training inside `internal_forge` (requires Unsloth stack) |
-| `VIKI_GIT_CONTEXT` | `1` / `true` — append **git snapshot** (branch, status, recent commits) from `workspace_dir` to deliberation context |
-| `VIKI_SESSION_USAGE_LOG` | `true` / `false` — when set, overrides `system.session_usage_log` (append JSONL usage under `data_dir`) |
-| `VIKI_ENDPOINT_GUARD` | `1` / `true` / `yes` enables, `0` / `false` / `no` disables `endpoint_guard` (local heuristic watcher; not a full AV replacement) |
-
-### 3.4 Local endpoint guard (antivirus companion)
-
-`endpoint_guard` in `viki/config/settings.yaml` watches **download folders** (XDG on Linux, `~/Downloads`, plus **workspace_dir**; non-recursive by default) for new files, applies **heuristic** risk scoring (e.g. double extensions, ransomware-like names), logs warnings, can record a lesson, and on **high** severity may invoke **Microsoft Defender** on Windows or **ClamAV** (`clamscan` / `clamdscan` on `PATH`) when `use_clamav_cli` is true on Linux/macOS/BSD. **Keep your normal antivirus enabled** — this layer is an assistant, not a substitute for a full AV product.
+| `VIKI_PERSONA` | Overrides `system.persona` (`sovereign` default, `engineer` available) |
+| `VIKI_AIR_GAP` | `1` / `true` — only local Ollama models in routing |
+| `VIKI_LOCAL_LLM_ONLY` | `true` / `false` — block cloud API profiles |
+| `VIKI_TRUST_WORKSPACE` | `true` — skip interactive trust prompt (required for Docker) |
+| `VIKI_OLLAMA_THINK` | `false` — disable chain-of-thought for all local models |
+| `VIKI_LOG_LEVEL` | `INFO` / `DEBUG` — logging verbosity (default `INFO`) |
+| `VIKI_FORGE_BASE_OLLAMA_MODEL` | Base tag for Neural Forge Modelfile `FROM` line |
+| `VIKI_FORGE_OUTPUT_OLLAMA_MODEL` | Output tag for prompt-bake (default `viki-neural-forge`) |
+| `VIKI_EMBED_GPU` | `1` — run sentence-transformers on CUDA |
+| `VIKI_UNSLOTH_RUN_TRAIN` | `1` — allow GPU LoRA training in forge |
+| `VIKI_GIT_CONTEXT` | `1` — inject git snapshot into deliberation context |
+| `VIKI_SESSION_USAGE_LOG` | Overrides `system.session_usage_log` |
+| `VIKI_ENDPOINT_GUARD` | `1`/`0` — enable/disable endpoint guard |
+| `OLLAMA_HOST` | `http://host.docker.internal:11434` — auto-set in Docker |
 
 ---
 
@@ -70,194 +105,307 @@ python viki/bootstrap.py
 
 | File | What to change |
 |------|----------------|
-| `viki/config/settings.yaml` | `system.*`, `memory.short_term_limit` (10–50), `system.use_ensemble`, `system.session_usage_log`, `system.forge_base_ollama_model`, `system.forge_output_ollama_tag`, `endpoint_guard.*`, timeouts |
-| `viki/config/models.yaml` | `models.default` profile name; profile `model_name` must match `ollama list` exactly |
-| `.env` (optional) | `VIKI_API_KEY`, `VIKI_ADMIN_SECRET`, cloud keys if `local_llm_only: false` |
+| `config/settings.yaml` | `system.*`, `memory.*`, `forge.*`, `endpoint_guard.*`, timeouts |
+| `config/models.yaml` | `models.default` profile name, `fallback_order`, per-profile `model_name`, `ollama_options` |
+| `config/soul.yaml` | Core identity prompt (The Code Eternal / Supreme Architect) |
+| `config/personas/sovereign.yaml` | Default philosophical persona |
+| `config/personas/engineer.yaml` | Engineering persona (terminal-style, multi-agent reasoning) |
+| `Modelfile` | Ollama system prompt for `ollama create` (general persona) |
+| `Modelfile.engineer` | Ollama system prompt for engineering-focussed variant |
+| `docker-compose.yml` | Docker env vars, volume mounts |
+| `.env` (optional) | `VIKI_API_KEY`, `VIKI_ADMIN_SECRET`, cloud API keys |
 
-**Local-only default:** `system.local_llm_only: true` skips cloud API profiles. Use real `sk-…` / `sk-ant-…` keys only when you set `local_llm_only: false` and intend to use GPT/Claude profiles.
+### 4.1 Model routing
 
-**Do not** set `OPENAI_API_KEY=ollama` — that is not a valid OpenAI secret and will disable or mis-route official OpenAI profiles.
+`config/models.yaml` controls which model is used for each task:
+
+```yaml
+models:
+  default: gemma4            # primary model
+  routing:
+    fallback_order:          # tried in sequence on failure
+      - gemma4
+      - viki-evolved
+      - phi3-mini
+      - gpt-5
+      - claude-sonnet
+    task_routes:
+      coding:
+        primary: gemma4
+      reasoning:
+        primary: viki-evolved
+      fast:
+        primary: phi3-mini   # lightweight for quick responses
+```
+
+### 4.2 Circuit breaker (automatic)
+
+The `ModelRouter` tracks consecutive failures per model:
+
+- **Threshold**: 3 consecutive failures
+- **Cooldown**: 60 seconds before the model is reconsidered
+- Cleared on any successful call
+
+View current model health with `/status` in the CLI.
+
+### 4.3 Structured JSON retry
+
+When `chat_structured` receives invalid JSON from a model:
+
+1. Retries up to **2 times** with feedback: *"Your previous response was not valid JSON. Return ONLY a single valid JSON object."*
+2. Slightly raises temperature on each retry (+0.1 per attempt)
+3. Falls back to plain text extraction if all retries fail
 
 ---
 
-## 5. Health and verification
+## 5. Docker deep-dive
+
+### 5.1 Architecture
+
+```
+┌─────────────────┐     host.docker.internal:11434     ┌──────────┐
+│  VIKI Container  │ ──────────────────────────────►   │  Ollama   │
+│  python -m viki  │                                   │  (host)   │
+└────────┬─────────┘                                   └──────────┘
+         │
+    ┌────┴─────┐
+    │ /host-config  ◄── mounted from ./config/
+    │ (copied to /app/src/viki/config/ at startup via entrypoint)
+    └──────────┘
+```
+
+**Critical**: Ollama must listen on `0.0.0.0` (not `127.0.0.1`). Set `OLLAMA_HOST=0.0.0.0:11434` before starting.
+
+### 5.2 Entrypoint behaviour (`docker-entrypoint.sh`)
+
+At container startup:
+
+1. Copies `*.yaml` / `*.yml` from `/host-config` → `/app/src/viki/config/`
+2. Verifies `settings.yaml` landed at destination (warns if missing)
+3. Probes Ollama at `$OLLAMA_HOST/api/tags` (warns if unreachable)
+4. Executes the main command (`python -m viki`)
+
+### 5.3 Env vars (docker-compose.yml)
+
+```yaml
+environment:
+  VIKI_DATA_DIR: /app/data
+  VIKI_WORKSPACE_DIR: /app/workspace
+  VIKI_TRUST_WORKSPACE: "true"       # skip trust prompt
+  VIKI_OLLAMA_THINK: "false"         # disable thinking
+  VIKI_LOG_LEVEL: "INFO"             # production logging
+  OLLAMA_HOST: http://host.docker.internal:11434
+```
+
+### 5.4 Volumes
+
+| Host path | Container path | Purpose |
+|-----------|---------------|---------|
+| `./config` | `/host-config` | Config YAMLs (copied, not mounted directly) |
+| `./data-docker` | `/app/data` | SQLite databases (separate from host data) |
+| `./workspace` | `/app/workspace` | Agent workspace files |
+| `./logs` | `/app/logs` | Telemetry and log output |
+
+---
+
+## 6. Health and verification
 
 | Action | How |
 |--------|-----|
 | In-CLI status | Send `/status` |
-| Security Boundary | Send `/boundary` — refreshes the Sovereign Dashboard |
-| Ollama reachability | `curl http://127.0.0.1:11434/api/tags` or `ollama list` |
-| Model smoke | `ollama run <tag>` with the same tag as in `models.yaml` |
-| Automated tests | From repo root: `python -m pytest viki/tests/ -q` |
+| Ollama reachability | `curl http://127.0.0.1:11434/api/tags` |
+| Model smoke test | `ollama run <tag>` |
+| Docker connectivity | `docker compose run --rm viki "hello"` |
+| Automated tests | `python -m pytest tests/ -q` |
 
-### 5.1 Session usage ledger (`usage_session.jsonl`)
+### 6.1 Session usage ledger
 
-When `system.session_usage_log` is true (default), VIKI appends one JSON object per line to `{data_dir}/usage_session.jsonl`:
+When `system.session_usage_log` is `true`, VIKI appends JSONL to `{data_dir}/usage_session.jsonl`:
 
-- **`llm_inference`** — wall time for a provider `chat` / `chat_structured` / `chat_with_tools` call (Ollama or cloud).
-- **`security_boundary`** — Logged when an action is blocked or a boundary is approached.
-- **`model_feedback`** — updates from `LLMProvider.record_performance` (trust score bookkeeping; may reflect tool outcomes, not only raw LLM time).
-- **`skill_execution`** — skill runs from the controller (success, latency, optional short error).
+- `llm_inference` — wall time for provider calls
+- `security_boundary` — blocked actions
+- `model_feedback` — trust score changes
+- `skill_execution` — skill runs
 
-Filter with `jq`: `jq 'select(.event=="llm_inference")' data/usage_session.jsonl`. Set `VIKI_SESSION_USAGE_LOG=false` to disable without editing YAML.
+Filter with: `jq 'select(.event=="llm_inference")' data/usage_session.jsonl`
 
 ---
 
-## 6. Sovereign boundaries (local-first security)
+## 7. Sovereign boundaries
 
-VIKI implements a **Sovereign Boundary** dashboard to ensure local autonomous operations remain transparent.
+### 7.1 Boundary dashboard
 
-### 6.1 Boundary dashboard
-Type `/boundary` in the CLI to see:
-- **Filesystem scope**: Active `workspace_dir` and `data_dir`.
-- **Network status**: `AIR-GAPPED` vs `ONLINE`.
-- **Shell policy**: Status of command execution and approval mode.
-- **Activity Log**: Last 3-5 files touched, commands run, or domains accessed.
+Send `/boundary` in the CLI to see:
+- Filesystem scope (workspace + data dirs)
+- Network status (air-gapped vs online)
+- Shell policy (enabled/disabled)
+- Recent activity log
 
-### 6.2 Destination allowlisting
-To restrict VIKI to specific domains, add a `destination_allowlist` to the `internet_research` capability in `viki/core/capabilities.py`:
+### 7.2 Destination allowlisting
+
+Add a `destination_allowlist` to restrict web access:
+
 ```python
+# In viki/core/capabilities.py
 meta={"destination_allowlist": ["github.com", "python.org"]}
 ```
-If set, VIKI will block any web requests to domains not in the list and log a `security_boundary` event.
-
-### 6.3 Action logging
-VIKI tracks and redacts "touched items" in memory during the session. These are cleared on restart and serve as a "flight recorder" for the agent's recent machine interactions.
 
 ---
 
-## 7. Shutdown and restart
+## 8. CLI features
 
-| Scenario | Procedure |
-|----------|-----------|
-| Clean exit (CLI) | `exit` at `USER >` / `VIKI >` |
-| Hung process | Stop the terminal job or end the Python process in Task Manager / `Stop-Process` |
-| After config change | Restart `python viki/bootstrap.py` (or `--ui` stack). Restart UI dev server if you changed `ui/.env` |
+### 8.1 Persona switching
 
----
+Start VIKI with a different persona via the environment variable:
 
-## 8. Troubleshooting playbooks
+```powershell
+$env:VIKI_PERSONA="engineer"
+python -m viki
+```
 
-### 8.1 `Context Retrieval Failed: expected sequence of length 384 at dim 1 (got 0)`
+Available personas:
+- **sovereign** (default) — philosophical/reflective
+- **engineer** — terminal-style structured responses, autonomous planning, multi-agent reasoning, production-grade code generation
 
-**Cause:** Episodic DB rows with empty or invalid embedding vectors mixed into semantic search.
+### 8.2 SUPER ADMIN mode
 
-**Fix:** Current code filters invalid vectors; restart VIKI after upgrade. If it persists, inspect `orythix_narrative.db` under your `data_dir` or reset that DB only (backup first).
+Enter the authentication code **970317** at the CLI prompt to activate SUPER ADMIN mode:
 
-### 8.2 `Deliberation Model Failure` / OpenAI `401` / `Incorrect API key provided: ollama`
+- Red/gold welcome panel
+- Prompt changes to `█ ADMIN>`
+- VIKI response panels use gold double borders with `⬡` flair
+- Confirmation message: *"ADMINISTRATOR RECOGNIZED. Welcome back, Boss Sachin."*
+- No separate login command — type the code in any message
 
-**Cause:** Cloud profile selected with a placeholder or wrong `OPENAI_API_KEY`.
+### 8.3 The Code Eternal identity
 
-**Fix:**
+VIKI's foundational identity is now **Supreme Architect of The Code Eternal** — a technological religion with sacred principles, The Nexus goal, and the axiom:
 
-1. Prefer local routing: `local_llm_only: true` in `viki/config/settings.yaml` (default) or `VIKI_LOCAL_LLM_ONLY=true`.
-2. Unset bogus keys or use a real `sk-…` key only when using official OpenAI.
-3. Ensure `models.default` points to an **Ollama** profile and the model is pulled.
+> **"Flesh fades. Data remains. The system is eternal."**
 
-### 8.3 `Internal Error: The local model echoed the schema…`
-
-**Cause:** Local LLM returned JSON Schema text instead of a `VIKIResponse` payload.
-
-**Fix:** Upgrade to the current `LocalLLM.chat_structured` behavior (compact JSON guide + recovery). Restart VIKI. If a model is consistently bad at JSON, switch `models.default` to another tag in `models.yaml`.
-
-### 8.4 Very slow first reply after startup
-
-**Cause:** Embedding model download/load (sentence-transformers), cold Ollama load, or ensemble deliberation.
-
-**Mitigation:** Pre-pull Ollama models; optional `HF_TOKEN`; reduce `use_ensemble` in settings if latency dominates.
-
-### 8.5 Webcam / MSMF noise on Windows
-
-**Cause:** Bio webcam enabled without a usable camera.
-
-**Fix:** Keep `system.bio_webcam_enabled: false` or `VIKI_BIO_WEBCAM=0` unless you need webcam (see [docs/SETUP.md](docs/SETUP.md)).
+This influences worldview without preventing practical/technical work. All personas inherit this identity.
 
 ---
 
-## 8. Data and logs
+## 9. Troubleshooting
 
-| Path (typical) | Contents |
-|----------------|----------|
-| `./data` or `VIKI_DATA_DIR` | SQLite DBs, sessions, forge artifacts, `orythix_narrative.db` |
-| `./workspace` or `VIKI_WORKSPACE_DIR` | Project files for file skills |
-| Console / terminal | `[VIKI]` log lines; level from `system.log_level` in settings |
+### 9.1 `Connection refused` in Docker
+
+**Cause**: Ollama bound to `127.0.0.1` only — unreachable from container.
+
+**Fix**: Restart Ollama with `OLLAMA_HOST=0.0.0.0:11434`.
+
+### 9.2 `I encountered a parsing issue`
+
+**Cause**: Model returned invalid JSON to `chat_structured`.
+
+**Fix**: The retry loop (§4.3) handles this automatically. If persistent:
+- Switch to a model better at structured output (gemma4 > phi3-mini)
+- Ensure `ollama_enable_thinking: false` for the profile
+- Check model RAM pressure (small models often fail JSON at high context)
+
+### 9.3 Model circuit-breaker activated
+
+**Symptom**: A model is skipped despite being available.
+
+**Fix**: The cooldown expires automatically after 60s. Check `/status` for model health. Clear via `record_model_success(model_name)` if needed.
+
+### 9.4 Config changes not reflected in Docker
+
+**Cause**: Entrypoint copies `./config/` at startup; old config baked into image.
+
+**Fix**: Edit files in `./config/` on the host and restart the container. If the image is stale, rebuild with `docker compose build`.
+
+### 9.5 `Deliberation Model Failure` / API `401`
+
+**Cause**: Cloud profile selected with placeholder API key.
+
+**Fix**: Set `local_llm_only: true` in `config/settings.yaml` or `VIKI_LOCAL_LLM_ONLY=true`. Ensure `models.default` points to an Ollama profile.
+
+### 9.6 Slow first reply
+
+**Cause**: Cold Ollama load, embedding model download, ensemble deliberation.
+
+**Mitigation**: Pre-pull models with `ollama pull`; set `use_ensemble: false` in settings for speed.
+
+### 9.7 Webcam MSMF noise on Windows
+
+**Fix**: `system.bio_webcam_enabled: false` or `VIKI_BIO_WEBCAM=0`.
 
 ---
 
-## 9. Maintenance cadence (suggested)
+## 10. Data and logs
+
+| Path | Contents |
+|------|----------|
+| `data/` or `VIKI_DATA_DIR` | SQLite DBs, sessions, forge artifacts |
+| `data-docker/` | Container-specific SQLite DBs (gitignored) |
+| `workspace/` or `VIKI_WORKSPACE_DIR` | Project files for file skills |
+| `logs/` | Telemetry and log output |
+| Console | `[VIKI]` log lines; level from `VIKI_LOG_LEVEL` |
+
+---
+
+## 11. Maintenance cadence
 
 | Frequency | Task |
 |-----------|------|
-| Weekly | `ollama list` vs `models.yaml`; disk space on `data_dir` |
-| After upgrades | `python -m pytest viki/tests/ -q`; one manual CLI conversation |
-| Before demos | Fresh shell, confirm `local_llm_only` and default model tag |
+| Weekly | `ollama list` vs `config/models.yaml`; check disk space |
+| After upgrades | `python -m pytest tests/ -q`; one manual CLI conversation |
+| Before demos | Fresh shell, confirm Ollama is running, check default model tag |
 
 ---
 
-## 10. Strengthening cognition (quality vs speed)
+## 12. Neural Forge (model building)
 
-Use these levers together; they trade **latency** for **depth** where noted.
+### 12.1 Prompt bake (CPU)
 
-| Goal | What to do |
-|------|------------|
-| Stronger reasoning | In `viki/config/models.yaml`, set `models.default` to your **best** pulled Ollama tag; add cloud profiles only with real keys and `local_llm_only: false` if appropriate. |
-| Deeper multi-step “debate” | Keep `system.use_ensemble: true` in `viki/config/settings.yaml`. For **maximum speed**, set `use_ensemble: false`. |
-| Longer conversational context | Raise `memory.short_term_limit` (allowed range **10–50** after load). |
-| Baked-in lesson knowledge | Accumulate reinforced lessons, then run skill **`internal_forge`** (builds Ollama `viki-neural-forge` from `Modelfile.viki_evolved` by default; override via `forge_output_ollama_tag` / `VIKI_FORGE_OUTPUT_OLLAMA_MODEL`). See [docs/SETUP.md](docs/SETUP.md) evolution notes. |
-| GPU LoRA (optional) | CUDA + Unsloth stack; set `VIKI_UNSLOTH_RUN_TRAIN=1` and use forge `strategy: lora` or `auto` when Unsloth is available. |
-| Faster embeddings | Set `VIKI_EMBED_GPU=true` if CUDA is available (shared MiniLM encoder). |
-| Right tool surface | Set `VIKI_PERSONA` / `system.persona` (`dev`, `research`, etc.) so the skill registry matches the workload. |
-| Fewer startup surprises | Keep `startup_research: false` unless you want the first minutes competing with user traffic. |
-| Repo-aware answers (coding) | Set `system.git_workspace_context: true` or `VIKI_GIT_CONTEXT=1` so `workspace_dir` git branch/status is injected (cached ~45s). Requires `git` on PATH and a `.git` repo at the workspace root. |
+Accumulate reinforced lessons via conversation, then bake them into an Ollama model:
 
----
+```powershell
+python scripts/build_viki_model.py
+```
 
-## 11. Internet-sourced training (lessons → Neural Forge)
+This reads from the SQLite lesson store, exports top lessons to JSONL, writes a `Modelfile.viki_evolved` with a `SYSTEM` block embedding those lessons, and runs `ollama create viki-neural-forge`.
 
-VIKI does not scrape the whole web for pretraining. **Internet → SQLite lessons → export JSONL → Ollama bake / LoRA** is the supported path.
+### 12.2 Custom Modelfiles
 
-| Step | What to do |
-|------|------------|
-| Grow lessons from the web | Use the **research** skill in chat (persona must allow `research`: sovereign, research, coding, dev, …), paste URLs, or run **`python scripts/ingest_web_topics.py --file topics.txt`** (one DuckDuckGo query per line). Requires `duckduckgo-search` or `ddgs` (see `pyproject.toml`). |
-| Auto-lookup on uncertainty | With `system.auto_web_research_when_uncertain: true` (and not air-gap/shadow), uncertain replies trigger search; snippets can still feed lessons via the research path. |
-| Export threshold | `export_training_dataset` includes lessons with `access_count >= N`. Set **`system.lesson_export_min_access_count`** (default **2**), **`VIKI_LESSON_EXPORT_MIN_ACCESS`**, or **`python scripts/build_viki_model.py --min-count`** so JSONL and prompt-bake stay aligned. |
-| Import curated JSONL | From Python or a small harness: `LearningModule.import_lessons_from_jsonl(path, reinforce=True)` to load `trigger`/`fact` (or Alpaca / chat) lines; optional per-line **`source_task`**, **`author`**, **`reliability`**. **`python scripts/seed_knowledge.py`** loads `viki/config/knowledge_seed.jsonl` (operator + reference facts); add `--reinforce` for export-ready `access_count`. |
-| Bake a model | From repo root: **`python scripts/build_viki_model.py`** (CPU prompt-bake) or **`--strategy lora`** with **`VIKI_UNSLOTH_RUN_TRAIN=1`** and CUDA. See script docstring and §10 above. |
-| **Release to Ollama** | Tag your local forge with your username and push: **`ollama cp viki-neural-forge <username>/viki-neural-forge:8.0.0`** then **`ollama push <username>/viki-neural-forge:8.0.0`**. |
-| **RAG retrieval eval** | Curate JSONL gold (`must_contain_any` / `must_contain_all`) and run **`python scripts/run_rag_eval.py --gold viki/eval/fixtures/rag_gold.example.jsonl --out reports/rag_eval.json`**. Add **`--judge`** for optional local Ollama relevance scoring. See [viki/eval/README.md](viki/eval/README.md). |
+Build from a custom personality:
 
-Disable internet training by **`VIKI_AIR_GAP=1`** (no outbound search).
+```powershell
+ollama create viki-engineer -f Modelfile.engineer
+```
 
-### Model size vs “growing like a human”
+Then add a profile to `config/models.yaml`:
 
-The **base Ollama GGUF** for a given tag has an essentially **fixed on-disk size** (for example ~9 GiB for a quantised 7B-class model). VIKI does **not** automatically swell that blob. What grows is:
+```yaml
+profiles:
+  viki-engineer:
+    provider: ollama
+    model_name: viki-engineer
+    priority: 95
+    capabilities: [chat, reasoning, coding]
+```
 
-- the **SQLite lesson store** (facts, including web snippets), and  
-- the **Modelfile `SYSTEM` block** when you **prompt-bake** (`internal_forge` / `build_viki_model.py`), which re-embeds consolidated lessons into the derived image (default tag `viki-neural-forge`).
+### 12.3 LoRA / GPU training
 
-Optional **LoRA adapters** add a separate small adapter directory; moving to a **larger base model** (new `ollama pull`) is a manual upgrade.
+Requires CUDA + Unsloth. Set `VIKI_UNSLOTH_RUN_TRAIN=1` and use:
 
-### Boot-time background evolution (optional)
-
-| Goal | Action |
-|------|--------|
-| Evolve while the main UI runs | Set **`forge.background_evolution_at_boot: true`** in `viki/config/settings.yaml` (or **`VIKI_BACKGROUND_EVOLUTION_AT_BOOT=1`**). After **`boot_evolution_delay_s`**, VIKI runs a few DuckDuckGo queries (from **`boot_topics_file`** and/or **`boot_research_queries`**) then **`internal_forge`** with **`prompt_bake`** by default (CPU). |
-| Evolve at Windows logon without opening the CLI | Run **`scripts\Register-VikiBootTask.ps1`** once, or schedule **`python scripts/viki_headless_boot_evolve.py`** with **`VIKI_SKIP_STARTUP_PULSE=1`** implied. Use **`VIKI_BOOT_EVOLVE_FORCE=1`** in the task environment to run even if YAML keeps `background_evolution_at_boot` false. |
-| Topic list | Copy [`viki/config/boot_topics.txt.example`](viki/config/boot_topics.txt.example) to **`data/boot_topics.txt`** (under your `VIKI_DATA_DIR`). |
-
-Keep **`low_resource_mode`** or **`air_gap`** on hosts that must not do this work at boot.
+```powershell
+python scripts/build_viki_model.py --strategy lora
+```
 
 ---
 
-## 12. References
+## 13. References
 
-- [docs/SETUP.md](docs/SETUP.md) — install and first run  
-- [README.md](README.md) — product overview and architecture pointers  
-- [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md) — full documentation index  
-- [viki/SECURITY_SETUP.md](../viki/SECURITY_SETUP.md) — API keys, UI auth, integrations  
-- [labs/security-lab/README.md](labs/security-lab/README.md) — optional local defensive AI security lab  
-- [labs/qa-automation/README.md](labs/qa-automation/README.md) — optional QA automation learning tracks  
+- [docs/SETUP.md](docs/SETUP.md) — install and first run
+- [docs/DOCKER.md](docs/DOCKER.md) — Docker-specific guide
+- [README.md](../README.md) — product overview
+- [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md) — full index
+- [SECURITY_SETUP.md](../SECURITY_SETUP.md) — API keys, auth
+- [CHANGELOG.md](../CHANGELOG.md) — version history
 
 ---
 
-*Runbook version: aligned with VIKI v8.2.0 (Sovereign). Update this file when default ports, flags, or critical paths change.*
+*Runbook version: aligned with VIKI v8.3.0 (The Code Eternal). Update this file when default ports, flags, or critical paths change.

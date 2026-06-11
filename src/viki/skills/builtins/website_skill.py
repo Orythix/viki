@@ -4,11 +4,10 @@ Manus-style "delivers websites".
 """
 import os
 import re
-from typing import Dict, Any, List
+from typing import Any
 
-from viki.skills.base import BaseSkill
-from viki.config.logger import viki_logger
 from viki.core.utils.path_sandbox import validate_output_path
+from viki.skills.base import BaseSkill
 
 
 def _md_to_html_simple(md: str) -> str:
@@ -43,7 +42,9 @@ class WebsiteSkill(BaseSkill):
             "or scaffold(template=minimal|landing|doc, output_dir=..., title=...)."
         )
 
-    def _write_page(self, output_dir: str, site_title: str, path: str, title: str, content_md: str) -> str:
+    def _write_page(
+        self, output_dir: str, site_title: str, path: str, title: str, content_md: str
+    ) -> str:
         content_html = _md_to_html_simple(content_md or "")
         full_path = os.path.join(output_dir, path.lstrip("/"))
         os.makedirs(os.path.dirname(full_path) or ".", exist_ok=True)
@@ -67,7 +68,7 @@ class WebsiteSkill(BaseSkill):
             f.write(html)
         return full_path
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         output_dir = params.get("output_dir") or params.get("path") or params.get("output")
         if not output_dir:
             return "Provide output_dir= where to create the site."
@@ -84,22 +85,40 @@ class WebsiteSkill(BaseSkill):
             os.makedirs(output_dir, exist_ok=True)
             if template == "landing":
                 pages = [
-                    {"path": "index.html", "title": "Home", "content_md": f"# Welcome to {title}\n\nA simple landing page."},
+                    {
+                        "path": "index.html",
+                        "title": "Home",
+                        "content_md": f"# Welcome to {title}\n\nA simple landing page.",
+                    },
                 ]
             elif template == "doc":
                 pages = [
-                    {"path": "index.html", "title": "Home", "content_md": f"# {title}\n\nDocumentation home."},
-                    {"path": "about.html", "title": "About", "content_md": "## About\n\nAbout this site."},
+                    {
+                        "path": "index.html",
+                        "title": "Home",
+                        "content_md": f"# {title}\n\nDocumentation home.",
+                    },
+                    {
+                        "path": "about.html",
+                        "title": "About",
+                        "content_md": "## About\n\nAbout this site.",
+                    },
                 ]
             else:
                 pages = [
-                    {"path": "index.html", "title": "Home", "content_md": f"# {title}\n\nMinimal static site."},
+                    {
+                        "path": "index.html",
+                        "title": "Home",
+                        "content_md": f"# {title}\n\nMinimal static site.",
+                    },
                 ]
             for p in pages:
                 self._write_page(output_dir, title, p["path"], p["title"], p.get("content_md", ""))
             css_path = os.path.join(output_dir, "style.css")
             with open(css_path, "w", encoding="utf-8") as f:
-                f.write("body { font-family: system-ui, sans-serif; max-width: 720px; margin: 0 auto; padding: 1rem; }\nheader { border-bottom: 1px solid #eee; }\na { color: #06c; }\n")
+                f.write(
+                    "body { font-family: system-ui, sans-serif; max-width: 720px; margin: 0 auto; padding: 1rem; }\nheader { border-bottom: 1px solid #eee; }\na { color: #06c; }\n"
+                )
             return f"Scaffold '{template}' created in {output_dir} (index, style.css)."
 
         # create_site
@@ -116,5 +135,7 @@ class WebsiteSkill(BaseSkill):
         css_path = os.path.join(output_dir, "style.css")
         if not os.path.isfile(css_path):
             with open(css_path, "w", encoding="utf-8") as f:
-                f.write("body { font-family: system-ui, sans-serif; max-width: 720px; margin: 0 auto; padding: 1rem; }\nheader { border-bottom: 1px solid #eee; }\na { color: #06c; }\n")
+                f.write(
+                    "body { font-family: system-ui, sans-serif; max-width: 720px; margin: 0 auto; padding: 1rem; }\nheader { border-bottom: 1px solid #eee; }\na { color: #06c; }\n"
+                )
         return f"Site created in {output_dir}: {len(written)} page(s)."

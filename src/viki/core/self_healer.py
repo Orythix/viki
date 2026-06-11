@@ -12,7 +12,7 @@ in either before / after a run, or invoked manually.
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from viki.config.logger import viki_logger
 from viki.core.mission_graph import MissionGraph, MissionNode, NodeStatus
@@ -41,14 +41,14 @@ class SelfHealer:
     def __init__(
         self,
         model_router: Any,
-        learning_module: Optional[Any] = None,
+        learning_module: Any | None = None,
         max_recoveries_per_node: int = 3,
     ):
         self.router = model_router
         self.learning = learning_module
         self.max_recoveries = max(1, int(max_recoveries_per_node))
 
-    async def heal(self, graph: MissionGraph, node: MissionNode) -> Dict[str, Any]:
+    async def heal(self, graph: MissionGraph, node: MissionNode) -> dict[str, Any]:
         """
         Attempt to heal a failed node. Mutates the graph in-place when a
         retry / rewrite / split is chosen. Returns the recovery decision dict.
@@ -72,7 +72,7 @@ class SelfHealer:
         self._apply_recovery(graph, node, proposal)
         return proposal
 
-    def _fetch_similar_failures(self, node: MissionNode) -> List[str]:
+    def _fetch_similar_failures(self, node: MissionNode) -> list[str]:
         if self.learning is None or not hasattr(self.learning, "get_relevant_failures"):
             return []
         try:
@@ -83,8 +83,8 @@ class SelfHealer:
             return []
 
     async def _propose_recovery(
-        self, graph: MissionGraph, node: MissionNode, similar: List[str]
-    ) -> Dict[str, Any]:
+        self, graph: MissionGraph, node: MissionNode, similar: list[str]
+    ) -> dict[str, Any]:
         if self.router is None or not hasattr(self.router, "get_model"):
             return self._fallback_recovery(node)
 
@@ -105,8 +105,7 @@ class SelfHealer:
             f"Skill: {node.skill}\n"
             f"Parameters: {json.dumps(node.parameters or {})[:800]}\n"
             f"Error: {node.error}\n"
-            f"Similar prior failures:\n- "
-            + ("\n- ".join(similar) if similar else "(none)")
+            f"Similar prior failures:\n- " + ("\n- ".join(similar) if similar else "(none)")
         )
 
         try:
@@ -123,7 +122,7 @@ class SelfHealer:
         return self._parse_recovery(raw, node)
 
     @staticmethod
-    def _parse_recovery(raw: str, node: MissionNode) -> Dict[str, Any]:
+    def _parse_recovery(raw: str, node: MissionNode) -> dict[str, Any]:
         try:
             text = raw.strip()
             if text.startswith("```"):
@@ -151,17 +150,19 @@ class SelfHealer:
                 validated = []
                 for s in subtasks:
                     if isinstance(s, dict) and "title" in s:
-                        validated.append({
-                            "title": str(s.get("title", "")),
-                            "description": str(s.get("description", "")),
-                        })
+                        validated.append(
+                            {
+                                "title": str(s.get("title", "")),
+                                "description": str(s.get("description", "")),
+                            }
+                        )
                 decision["subtasks"] = validated or None
             return decision
         except Exception:
             return SelfHealer._fallback_recovery(node)
 
     @staticmethod
-    def _fallback_recovery(node: MissionNode) -> Dict[str, Any]:
+    def _fallback_recovery(node: MissionNode) -> dict[str, Any]:
         if node.attempts >= node.max_attempts:
             return {"strategy": "escalate", "rationale": "no remaining attempts"}
         return {
@@ -174,9 +175,7 @@ class SelfHealer:
         }
 
     @staticmethod
-    def _apply_recovery(
-        graph: MissionGraph, node: MissionNode, decision: Dict[str, Any]
-    ) -> None:
+    def _apply_recovery(graph: MissionGraph, node: MissionNode, decision: dict[str, Any]) -> None:
         strategy = decision.get("strategy", "retry")
         if strategy == "retry":
             node.status = NodeStatus.PENDING

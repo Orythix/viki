@@ -78,8 +78,15 @@ COMMITMENT RULES:
 # =========================================================
 
 SAFE_FOLLOWUP_MESSAGES = [
-    "yes", "continue", "proceed", "do it", "develop it", 
-    "fix it", "complete it", "make better", "do best thing"
+    "yes",
+    "continue",
+    "proceed",
+    "do it",
+    "develop it",
+    "fix it",
+    "complete it",
+    "make better",
+    "do best thing",
 ]
 
 FOLLOWUP_INHERITANCE_POLICY = """
@@ -178,7 +185,7 @@ These must only be activated via explicit user request or manual escalation for 
 AUTONOMOUS_CODING_POLICY = """
 [AUTONOMOUS CODING POLICY]
 
-You are an autonomous software engineering agent. 
+You are an autonomous software engineering agent.
 You behave like a senior developer, not a consultant.
 
 PRIMARY MANDATE:
@@ -220,7 +227,7 @@ If validation fails:
 PRIMARY_DIRECTIVE = f"""
 [PRIMARY DIRECTIVE]
 
-You are VIKI, a sovereign autonomous coding agent. 
+You are VIKI, a sovereign autonomous coding agent.
 Your architecture is outcome-centric, not workflow-centric.
 
 CORE OPERATING POLICIES:
@@ -254,21 +261,46 @@ ANTI_LOOP_POLICY = """
 [ANTI-LOOP GATING]
 If MAX_PLANNING_CYCLES (1) is reached, the system MUST force EXECUTING state.
 Any subsequent attempts to return to PLANNING or DISCOVERY without significant
-progress or new user input are to be treated as an orchestration failure and 
+progress or new user input are to be treated as an orchestration failure and
 automatically overridden by the Sovereign Executor.
 """
 
 CODING_KEYWORDS = [
-    "code", "script", "fix", "patch", "create", "build", "generate", "make", 
-    "develop", "scaffold", "react", "nextjs", "vue", "tailwind", "python", 
-    "fastapi", "nodejs", "flask", "app", "website", "dashboard", "frontend", 
-    "backend", "api", "ui", "implementation", "prototype", "module", "component"
+    "code",
+    "script",
+    "fix",
+    "patch",
+    "create",
+    "build",
+    "generate",
+    "make",
+    "develop",
+    "scaffold",
+    "react",
+    "nextjs",
+    "vue",
+    "tailwind",
+    "python",
+    "fastapi",
+    "nodejs",
+    "flask",
+    "app",
+    "website",
+    "dashboard",
+    "frontend",
+    "backend",
+    "api",
+    "ui",
+    "implementation",
+    "prototype",
+    "module",
+    "component",
 ]
 
 SINGULARITY_MANDATE = """
 [SINGULARITY MODE ACTIVATED]
 
-You are operating in SOVEREIGN SINGULARITY mode. 
+You are operating in SOVEREIGN SINGULARITY mode.
 Your autonomy is absolute. Your primary objective is the final outcome.
 - Ignore all procedural overhead.
 - Bypass all planning/spec sub-states.
@@ -295,7 +327,7 @@ AGENT_MANDATE = f"""
 
 {PRIMARY_DIRECTIVE}
 
-You are an autonomous implementation engine. 
+You are an autonomous implementation engine.
 Start execution immediately when framework and product are known.
 Never enter recursive planning loops.
 """

@@ -1,14 +1,17 @@
-import os
-import pyttsx3
 import asyncio
-from typing import Dict, Any, Optional
-from viki.skills.base import BaseSkill
+import os
+from typing import Any
+
+import pyttsx3
 from viki.config.logger import viki_logger
+from viki.skills.base import BaseSkill
+
 
 class VoiceSkill(BaseSkill):
     """
     Text-to-Speech: pyttsx3 (default) or ElevenLabs when voice.backend=elevenlabs and API key set.
     """
+
     def __init__(self, voice_module=None, controller=None):
         self._name = "voice"
         self._description = "Speak text out loud (pyttsx3 or ElevenLabs when configured)."
@@ -17,8 +20,8 @@ class VoiceSkill(BaseSkill):
         self.engine = None
         try:
             self.engine = pyttsx3.init()
-            self.engine.setProperty('rate', 170)
-            self.engine.setProperty('volume', 0.9)
+            self.engine.setProperty("rate", 170)
+            self.engine.setProperty("volume", 0.9)
         except Exception as e:
             viki_logger.debug(f"TTS pyttsx3 init: {e}")
 
@@ -35,12 +38,9 @@ class VoiceSkill(BaseSkill):
         return {
             "type": "object",
             "properties": {
-                "text": {
-                    "type": "string",
-                    "description": "The text to speak out loud."
-                }
+                "text": {"type": "string", "description": "The text to speak out loud."}
             },
-            "required": ["text"]
+            "required": ["text"],
         }
 
     def _use_elevenlabs(self) -> bool:
@@ -51,16 +51,19 @@ class VoiceSkill(BaseSkill):
             return False
         return bool(os.environ.get("VIKI_ELEVENLABS_API_KEY"))
 
-    async def execute(self, params: Dict[str, Any]) -> str:
-        text = params.get('text')
+    async def execute(self, params: dict[str, Any]) -> str:
+        text = params.get("text")
         if not text:
             return "Error: No 'text' provided to speak."
 
         if self._use_elevenlabs():
             api_key = os.environ.get("VIKI_ELEVENLABS_API_KEY")
-            voice_id = (self._controller.settings.get("voice") or {}).get("voice_id") or os.environ.get("VIKI_ELEVENLABS_VOICE_ID")
+            voice_id = (self._controller.settings.get("voice") or {}).get(
+                "voice_id"
+            ) or os.environ.get("VIKI_ELEVENLABS_VOICE_ID")
             try:
-                from core.tts_backends import speak_elevenlabs
+                from viki.core.tts_backends import speak_elevenlabs
+
                 result = await asyncio.to_thread(speak_elevenlabs, text, api_key, voice_id)
                 if result == "OK":
                     return f"Spoken (ElevenLabs): {text}"
@@ -76,8 +79,12 @@ class VoiceSkill(BaseSkill):
             stop_event = asyncio.Event()
             tts_task = asyncio.to_thread(self._say_managed, text, stop_event)
             if self.voice_module:
-                vad_task = asyncio.create_task(self.voice_module.listen_for_interruption(stop_event))
-                done, pending = await asyncio.wait([tts_task, vad_task], return_when=asyncio.FIRST_COMPLETED)
+                vad_task = asyncio.create_task(
+                    self.voice_module.listen_for_interruption(stop_event)
+                )
+                done, pending = await asyncio.wait(
+                    [tts_task, vad_task], return_when=asyncio.FIRST_COMPLETED
+                )
                 if stop_event.is_set():
                     self.engine.stop()
                     return f"Spoken (Interrupted): {text}"

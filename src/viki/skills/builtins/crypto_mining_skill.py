@@ -1,16 +1,18 @@
-import os
 import asyncio
+import os
 import shutil
-import subprocess
+from typing import Any
+
 import requests
-from typing import Dict, Any, List, Optional
-from viki.skills.base import BaseSkill
 from viki.config.logger import viki_logger
+from viki.skills.base import BaseSkill
+
 
 class CryptoMiningSkill(BaseSkill):
     """
     Tools for cryptocurrency mining, wallet management, and farm monitoring.
     """
+
     def __init__(self, controller=None):
         super().__init__()
         self._controller = controller
@@ -38,25 +40,41 @@ class CryptoMiningSkill(BaseSkill):
                 "action": {
                     "type": "string",
                     "enum": ["check_balance", "monitor_farm", "get_mining_stats", "manage_miner"],
-                    "description": "Mining action to perform"
+                    "description": "Mining action to perform",
                 },
                 "address": {"type": "string", "description": "Wallet address"},
-                "coin": {"type": "string", "default": "bitcoin", "description": "Cryptocurrency name"},
-                "ips": {"type": "array", "items": {"type": "string"}, "description": "List of node IPs for monitor_farm"},
-                "miner_action": {"type": "string", "enum": ["start", "stop", "status"], "description": "Action for manage_miner"},
-                "config": {"type": "object", "description": "Mining configuration (pool, wallet, etc.)"}
+                "coin": {
+                    "type": "string",
+                    "default": "bitcoin",
+                    "description": "Cryptocurrency name",
+                },
+                "ips": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of node IPs for monitor_farm",
+                },
+                "miner_action": {
+                    "type": "string",
+                    "enum": ["start", "stop", "status"],
+                    "description": "Action for manage_miner",
+                },
+                "config": {
+                    "type": "object",
+                    "description": "Mining configuration (pool, wallet, etc.)",
+                },
             },
-            "required": ["action"]
+            "required": ["action"],
         }
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         action = params.get("action")
-        
+
         try:
             if action == "check_balance":
                 address = params.get("address")
                 coin = params.get("coin", "bitcoin").lower()
-                if not address: return "Error: address is required."
+                if not address:
+                    return "Error: address is required."
                 return await self._check_balance(address, coin)
 
             elif action == "get_mining_stats":
@@ -64,7 +82,8 @@ class CryptoMiningSkill(BaseSkill):
 
             elif action == "monitor_farm":
                 ips = params.get("ips", [])
-                if not ips: return "Error: ips list is required."
+                if not ips:
+                    return "Error: ips list is required."
                 return await self._monitor_farm(ips)
 
             elif action == "manage_miner":
@@ -85,10 +104,10 @@ class CryptoMiningSkill(BaseSkill):
             resp = await asyncio.to_thread(requests.get, url, timeout=10)
             if resp.status_code == 200:
                 data = resp.json()
-                final_bal = data.get("final_balance", 0) / 100000000 # Convert Satoshi to BTC
+                final_bal = data.get("final_balance", 0) / 100000000  # Convert Satoshi to BTC
                 return f"BTC Balance for {address}: {final_bal} BTC\nTotal Received: {data.get('total_received', 0)/100000000} BTC"
             return f"Error: Failed to fetch BTC balance ({resp.status_code})"
-        
+
         return f"Error: Coin '{coin}' is not supported for balance checks yet."
 
     async def _get_mining_stats(self) -> str:
@@ -109,26 +128,29 @@ class CryptoMiningSkill(BaseSkill):
         except Exception as e:
             return f"Stats Error: {e}"
 
-    async def _monitor_farm(self, ips: List[str]) -> str:
+    async def _monitor_farm(self, ips: list[str]) -> str:
         """Ping nodes and check if they are responding."""
         results = []
         for ip in ips:
             # Simple ping check
             try:
                 proc = await asyncio.create_subprocess_exec(
-                    "ping", "-n" if os.name == 'nt' else "-c", "1", ip,
+                    "ping",
+                    "-n" if os.name == "nt" else "-c",
+                    "1",
+                    ip,
                     stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
+                    stderr=asyncio.subprocess.PIPE,
                 )
                 await asyncio.wait_for(proc.wait(), timeout=2)
                 status = "ONLINE" if proc.returncode == 0 else "OFFLINE"
                 results.append(f"Node {ip}: {status}")
             except Exception:
                 results.append(f"Node {ip}: UNREACHABLE")
-        
+
         return "BITCOIN FARM MONITOR:\n" + "\n".join(results)
 
-    async def _manage_miner(self, action: str, config: Dict[str, Any]) -> str:
+    async def _manage_miner(self, action: str, config: dict[str, Any]) -> str:
         """Manage local mining processes."""
         miners = ["xmrig", "bfgminer", "cgminer", "nicehash"]
         found = [m for m in miners if shutil.which(m)]
@@ -137,7 +159,7 @@ class CryptoMiningSkill(BaseSkill):
             if not found:
                 return "Local Miner Status: NOT INSTALLED. (Common binaries like xmrig not found in PATH)."
             return f"Local Miner Status: INACTIVE (Found {', '.join(found)}, but no process is running)."
-        
+
         if action == "start":
             if not found:
                 return f"Error: Cannot start miner. No mining binaries found ({', '.join(miners)}). Please install xmrig or bfgminer."

@@ -24,7 +24,7 @@ import shutil
 import subprocess
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from viki.config.logger import viki_logger
 
@@ -39,9 +39,9 @@ class PatchResult:
     verify_exit: int = -1
     duration_seconds: float = 0.0
     rolled_back: bool = False
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def as_dict(self) -> Dict[str, Any]:
+    def as_dict(self) -> dict[str, Any]:
         return {
             "path": self.path,
             "passed": self.passed,
@@ -61,7 +61,7 @@ class PatchVerify:
     def __init__(
         self,
         workspace_dir: str,
-        verify_cmd: Optional[List[str]] = None,
+        verify_cmd: list[str] | None = None,
         timeout_seconds: int = 180,
     ):
         self.workspace_dir = os.path.abspath(workspace_dir)
@@ -69,7 +69,9 @@ class PatchVerify:
         self.timeout_seconds = int(timeout_seconds)
 
     def _safe_path(self, path: str) -> str:
-        target = os.path.abspath(path if os.path.isabs(path) else os.path.join(self.workspace_dir, path))
+        target = os.path.abspath(
+            path if os.path.isabs(path) else os.path.join(self.workspace_dir, path)
+        )
         rel = os.path.relpath(target, self.workspace_dir)
         if rel.startswith(".."):
             raise PermissionError(f"Path '{path}' escapes workspace.")
@@ -79,7 +81,7 @@ class PatchVerify:
     def _read_text(path: str) -> str:
         if not os.path.isfile(path):
             return ""
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             return f.read()
 
     @staticmethod
@@ -100,7 +102,9 @@ class PatchVerify:
             )
         )
 
-    def apply_and_verify(self, path: str, new_content: str, verify_cmd: Optional[List[str]] = None) -> PatchResult:
+    def apply_and_verify(
+        self, path: str, new_content: str, verify_cmd: list[str] | None = None
+    ) -> PatchResult:
         t0 = time.perf_counter()
         target = self._safe_path(path)
         old_content = self._read_text(target)
@@ -152,7 +156,7 @@ class PatchVerify:
                 except OSError:
                     pass
 
-    def _run_verify(self, cmd: List[str]) -> Dict[str, Any]:
+    def _run_verify(self, cmd: list[str]) -> dict[str, Any]:
         cmd_str = " ".join(shlex.quote(c) for c in cmd)
         viki_logger.info("PatchVerify: running `%s` in %s", cmd_str, self.workspace_dir)
         try:
@@ -169,7 +173,11 @@ class PatchVerify:
                 "stderr": proc.stderr or "",
             }
         except subprocess.TimeoutExpired:
-            return {"exit": -1, "stdout": "", "stderr": f"verify timeout after {self.timeout_seconds}s"}
+            return {
+                "exit": -1,
+                "stdout": "",
+                "stderr": f"verify timeout after {self.timeout_seconds}s",
+            }
         except FileNotFoundError as e:
             return {"exit": -1, "stdout": "", "stderr": f"verify command not found: {e}"}
 

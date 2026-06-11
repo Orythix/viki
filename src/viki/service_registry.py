@@ -15,7 +15,8 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Callable, Dict, Optional, Type, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 import yaml
 
@@ -31,13 +32,13 @@ class _ConfigProxy:
     """Holds flat/nested config and allows attribute-style access."""
 
     def __init__(self) -> None:
-        self._data: Dict[str, Any] = {}
+        self._data: dict[str, Any] = {}
 
     def from_yaml(self, path: str) -> None:
         if not os.path.exists(path):
             return
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 data = yaml.safe_load(f) or {}
             if isinstance(data, dict):
                 self._data.update(data)
@@ -65,7 +66,7 @@ class _Singleton:
 
     def __init__(self, factory: Callable[[], Any]) -> None:
         self._factory = factory
-        self._instance: Optional[Any] = None
+        self._instance: Any | None = None
 
     def __call__(self) -> Any:
         if self._instance is None:
@@ -94,8 +95,8 @@ class Container:
 
     def __init__(self) -> None:
         self.config = _ConfigProxy()
-        self._singletons: Dict[str, _Singleton] = {}
-        self._factories: Dict[str, _Factory] = {}
+        self._singletons: dict[str, _Singleton] = {}
+        self._factories: dict[str, _Factory] = {}
         self._build()
 
     # ------------------------------------------------------------------
@@ -103,14 +104,17 @@ class Container:
     # ------------------------------------------------------------------
     def _build(self) -> None:
         """Register all providers lazily so imports only happen on first use."""
-        self._init_errors: Dict[str, str] = {}
+        self._init_errors: dict[str, str] = {}
 
         def _make_learning_repository():
             try:
                 from infrastructure.database.sqlalchemy_learning_repository import (
                     SqlAlchemyLearningRepository,
                 )
-                return SqlAlchemyLearningRepository(db_url="sqlite:///data/viki_knowledge.db?timeout=30.0")
+
+                return SqlAlchemyLearningRepository(
+                    db_url="sqlite:///data/viki_knowledge.db?timeout=30.0"
+                )
             except Exception as exc:
                 msg = f"learning_repository init failed: {exc}"
                 _log.warning(msg)
@@ -120,6 +124,7 @@ class Container:
         def _make_agent_pool():
             try:
                 from infrastructure.swarm.local_agent_pool import LocalAgentPool
+
                 return LocalAgentPool()
             except Exception as exc:
                 msg = f"agent_pool init failed: {exc}"
@@ -130,6 +135,7 @@ class Container:
         def _make_safety_service():
             try:
                 from application.services.safety_service import SafetyService
+
                 return SafetyService(config=self.config.get("safety", {}))
             except Exception as exc:
                 msg = f"safety_service init failed: {exc}"
@@ -140,6 +146,7 @@ class Container:
         def _make_swarm_orchestrator():
             try:
                 from application.services.swarm_orchestrator import SwarmOrchestrator
+
                 pool = self.agent_pool()
                 return SwarmOrchestrator(agent_pool=pool)
             except Exception as exc:
@@ -151,6 +158,7 @@ class Container:
         def _make_forge_orchestrator():
             try:
                 from application.services.forge_orchestrator import ForgeOrchestrator
+
                 return ForgeOrchestrator(controller=None)
             except Exception as exc:
                 msg = f"forge_orchestrator init failed: {exc}"
@@ -161,6 +169,7 @@ class Container:
         def _make_self_healing():
             try:
                 from application.services.fault_tolerance_service import SelfHealingService
+
                 return SelfHealingService(controller=None)
             except Exception as exc:
                 msg = f"self_healing_service init failed: {exc}"
@@ -171,6 +180,7 @@ class Container:
         def _make_recall_use_case():
             try:
                 from application.use_cases.recall_memory import MemoryRecallUseCase
+
                 return MemoryRecallUseCase(
                     learning_repo=self.learning_repository(),
                     safety_service=self.safety_service(),

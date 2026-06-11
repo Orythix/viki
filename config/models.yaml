@@ -11,7 +11,7 @@ models:
       api_key: ${ANTHROPIC_API_KEY}
     mock:
       type: mock
-  default: phi3-mini
+  default: gemma4
   profiles:
     gemma4:
       provider: ollama
@@ -120,9 +120,9 @@ models:
   routing:
     prefer_local_models: true
     fallback_order:
-    - phi3-mini
-    - viki-evolved
     - gemma4
+    - viki-evolved
+    - phi3-mini
     - gpt-5
     - claude-sonnet
     task_routes:

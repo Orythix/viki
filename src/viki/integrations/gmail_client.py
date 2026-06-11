@@ -4,18 +4,22 @@ Requires: google-auth, google-auth-oauthlib, google-api-python-client.
 Credentials: VIKI_GMAIL_CREDENTIALS_PATH or settings integrations.gmail.credentials_path.
 """
 import os
-from typing import Any, Dict, List, Optional
+
 
 def get_gmail_service(credentials_path: str, token_path: str):
     """Build Gmail API service from credentials JSON and token cache."""
     try:
+        from google.auth.transport.requests import Request
         from google.oauth2.credentials import Credentials
         from google_auth_oauthlib.flow import InstalledAppFlow
-        from google.auth.transport.requests import Request
         from googleapiclient.discovery import build
     except ImportError:
         return None
-    SCOPES = ["https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/gmail.send", "https://www.googleapis.com/auth/gmail.modify"]
+    SCOPES = [
+        "https://www.googleapis.com/auth/gmail.readonly",
+        "https://www.googleapis.com/auth/gmail.send",
+        "https://www.googleapis.com/auth/gmail.modify",
+    ]
     creds = None
     if os.path.exists(token_path):
         creds = Credentials.from_authorized_user_file(token_path, SCOPES)
@@ -59,8 +63,9 @@ def gmail_send(service, to: str, subject: str, body: str) -> str:
     if not service:
         return "Gmail not configured."
     try:
-        from email.mime.text import MIMEText
         import base64
+        from email.mime.text import MIMEText
+
         message = MIMEText(body)
         message["to"] = to
         message["subject"] = subject or "(no subject)"

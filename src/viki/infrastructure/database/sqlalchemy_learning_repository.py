@@ -1,23 +1,21 @@
+import json
 import logging
 import time
-from typing import List, Optional
 
-import json
-
-from sqlalchemy import Column, String, Float, Integer, Text, create_engine, ForeignKey, event
+from sqlalchemy import Column, Float, ForeignKey, Integer, String, Text, create_engine, event
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
-
-from viki.domain.entities.learning import Lesson, FailureRecord, Relationship
+from viki.domain.entities.learning import FailureRecord, Lesson, Relationship
 from viki.domain.interfaces.learning_repository import ILearningRepository
 
 _log = logging.getLogger("viki.repository")
 
 Base = declarative_base()
 
+
 class LessonModel(Base):
-    __tablename__ = 'lessons'
+    __tablename__ = "lessons"
     id = Column(String, primary_key=True)
     content = Column(Text)
     text_representation = Column(Text)
@@ -29,19 +27,21 @@ class LessonModel(Base):
     source_task = Column(String)
     reliability = Column(Float)
 
+
 class FailureModel(Base):
-    __tablename__ = 'failures'
+    __tablename__ = "failures"
     id = Column(Integer, primary_key=True, autoincrement=True)
     action = Column(Text)
     error = Column(Text)
     context = Column(Text)
     timestamp = Column(Float)
 
+
 class RelationshipModel(Base):
-    __tablename__ = 'relationships'
+    __tablename__ = "relationships"
     id = Column(Integer, primary_key=True, autoincrement=True)
-    source_id = Column(String, ForeignKey('lessons.id'))
-    target_id = Column(String, ForeignKey('lessons.id'))
+    source_id = Column(String, ForeignKey("lessons.id"))
+    target_id = Column(String, ForeignKey("lessons.id"))
     type = Column(String)
     weight = Column(Float, default=1.0)
     metadata_json = Column(Text)
@@ -96,13 +96,14 @@ class SqlAlchemyLearningRepository(ILearningRepository):
                     access_count=lesson.access_count,
                     author=lesson.author,
                     source_task=lesson.source_task,
-                    reliability=lesson.reliability
+                    reliability=lesson.reliability,
                 )
                 session.merge(model)
                 session.commit()
+
         self._execute(_op)
 
-    def get_lesson(self, lesson_id: str) -> Optional[Lesson]:
+    def get_lesson(self, lesson_id: str) -> Lesson | None:
         def _op():
             with self.Session() as session:
                 model = session.query(LessonModel).filter_by(id=lesson_id).first()
@@ -118,16 +119,22 @@ class SqlAlchemyLearningRepository(ILearningRepository):
                     access_count=model.access_count,
                     author=model.author,
                     source_task=model.source_task,
-                    reliability=model.reliability
+                    reliability=model.reliability,
                 )
+
         return self._execute(_op)
 
-    def get_relevant_lessons(self, query: str, limit: int = 5) -> List[Lesson]:
+    def get_relevant_lessons(self, query: str, limit: int = 5) -> list[Lesson]:
         # Note: True semantic search would require an encoder service.
         # This implementation provides a basic recency/lexical fallback for now.
         def _op():
             with self.Session() as session:
-                models = session.query(LessonModel).order_by(LessonModel.last_accessed.desc()).limit(limit).all()
+                models = (
+                    session.query(LessonModel)
+                    .order_by(LessonModel.last_accessed.desc())
+                    .limit(limit)
+                    .all()
+                )
                 return [
                     Lesson(
                         id=m.id,
@@ -139,9 +146,11 @@ class SqlAlchemyLearningRepository(ILearningRepository):
                         access_count=m.access_count,
                         author=m.author,
                         source_task=m.source_task,
-                        reliability=m.reliability
-                    ) for m in models
+                        reliability=m.reliability,
+                    )
+                    for m in models
                 ]
+
         return self._execute(_op)
 
     def save_failure(self, failure: FailureRecord) -> None:
@@ -151,25 +160,33 @@ class SqlAlchemyLearningRepository(ILearningRepository):
                     action=failure.action,
                     error=failure.error,
                     context=failure.context,
-                    timestamp=failure.timestamp or time.time()
+                    timestamp=failure.timestamp or time.time(),
                 )
                 session.add(model)
                 session.commit()
+
         self._execute(_op)
 
-    def get_relevant_failures(self, query: str, limit: int = 5) -> List[FailureRecord]:
+    def get_relevant_failures(self, query: str, limit: int = 5) -> list[FailureRecord]:
         def _op():
             with self.Session() as session:
-                models = session.query(FailureModel).order_by(FailureModel.timestamp.desc()).limit(limit).all()
+                models = (
+                    session.query(FailureModel)
+                    .order_by(FailureModel.timestamp.desc())
+                    .limit(limit)
+                    .all()
+                )
                 return [
                     FailureRecord(
                         id=m.id,
                         action=m.action,
                         error=m.error,
                         context=m.context,
-                        timestamp=m.timestamp
-                    ) for m in models
+                        timestamp=m.timestamp,
+                    )
+                    for m in models
                 ]
+
         return self._execute(_op)
 
     def save_relationship(self, relationship: Relationship) -> None:
@@ -180,16 +197,19 @@ class SqlAlchemyLearningRepository(ILearningRepository):
                     target_id=relationship.target_id,
                     type=relationship.type,
                     weight=relationship.weight,
-                    metadata_json=json.dumps(relationship.metadata)
+                    metadata_json=json.dumps(relationship.metadata),
                 )
                 session.add(model)
                 session.commit()
+
         self._execute(_op)
 
-    def get_related_concepts(self, lesson_id: str) -> List[Lesson]:
+    def get_related_concepts(self, lesson_id: str) -> list[Lesson]:
         def _op():
             with self.Session() as session:
-                target_ids = session.query(RelationshipModel.target_id).filter_by(source_id=lesson_id).all()
+                target_ids = (
+                    session.query(RelationshipModel.target_id).filter_by(source_id=lesson_id).all()
+                )
                 target_ids = [t[0] for t in target_ids]
 
                 models = session.query(LessonModel).filter(LessonModel.id.in_(target_ids)).all()
@@ -204,7 +224,9 @@ class SqlAlchemyLearningRepository(ILearningRepository):
                         access_count=m.access_count,
                         author=m.author,
                         source_task=m.source_task,
-                        reliability=m.reliability
-                    ) for m in models
+                        reliability=m.reliability,
+                    )
+                    for m in models
                 ]
+
         return self._execute(_op)

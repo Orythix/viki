@@ -2,13 +2,13 @@
 Task management: file-based tasks (JSON in data_dir) or Things 3 on macOS via URL scheme.
 Config: tasks.provider = file | things3
 """
-import os
-import json
 import asyncio
+import json
+import os
 import subprocess
-from typing import Dict, Any
+from typing import Any
+
 from viki.skills.base import BaseSkill
-from viki.config.logger import viki_logger
 
 
 class TasksSkill(BaseSkill):
@@ -28,7 +28,11 @@ class TasksSkill(BaseSkill):
         return {
             "type": "object",
             "properties": {
-                "action": {"type": "string", "enum": ["add", "list", "complete"], "description": "Action."},
+                "action": {
+                    "type": "string",
+                    "enum": ["add", "list", "complete"],
+                    "description": "Action.",
+                },
                 "title": {"type": "string", "description": "Task title."},
                 "id": {"type": "string", "description": "Task id for complete."},
             },
@@ -47,7 +51,7 @@ class TasksSkill(BaseSkill):
         if not os.path.isfile(path):
             return []
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
             return []
@@ -58,7 +62,7 @@ class TasksSkill(BaseSkill):
         with open(path, "w", encoding="utf-8") as f:
             json.dump(tasks, f, indent=2)
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         action = (params.get("action") or "list").lower()
         provider = "file"
         if self._controller:
@@ -69,25 +73,28 @@ class TasksSkill(BaseSkill):
 
         return await self._execute_file(action, params)
 
-    async def _execute_things3(self, action: str, params: Dict[str, Any]) -> str:
+    async def _execute_things3(self, action: str, params: dict[str, Any]) -> str:
         if action == "add":
             title = params.get("title") or ""
             if not title:
                 return "Provide title for add."
             try:
                 import urllib.parse
+
                 url = "things:///add?title=" + urllib.parse.quote(title)
                 await asyncio.to_thread(subprocess.run, ["open", url], check=False)
                 return f"Added to Things 3: {title}"
             except Exception as e:
                 return f"Things 3 error: {e}"
         if action == "list":
-            return "Things 3 list: open Things app for full list (URL scheme does not support list)."
+            return (
+                "Things 3 list: open Things app for full list (URL scheme does not support list)."
+            )
         if action == "complete":
             return "Things 3 complete: use Things app or provide task id if supported."
         return "Unknown action."
 
-    async def _execute_file(self, action: str, params: Dict[str, Any]) -> str:
+    async def _execute_file(self, action: str, params: dict[str, Any]) -> str:
         tasks = await asyncio.to_thread(self._read_tasks)
         if action == "add":
             title = params.get("title") or ""

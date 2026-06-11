@@ -1,16 +1,16 @@
+import logging
 import os
 import time
-import logging
-from typing import Callable, Optional, Set
+from collections.abc import Callable
 
+from watchdog.events import FileModifiedEvent, FileSystemEventHandler
 from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler, FileModifiedEvent
 
 _log = logging.getLogger("config_watcher")
 
 
 class _ConfigReloadHandler(FileSystemEventHandler):
-    def __init__(self, callback: Callable[[str], None], watched: Set[str]) -> None:
+    def __init__(self, callback: Callable[[str], None], watched: set[str]) -> None:
         super().__init__()
         self._callback = callback
         self._watched = watched
@@ -45,10 +45,10 @@ class ConfigWatcher:
 
     def __init__(self, callback: Callable[[str], None]) -> None:
         self._callback = callback
-        self._observer: Optional[Observer] = None
+        self._observer: Observer | None = None
 
     def start(self, *paths: str) -> None:
-        watched: Set[str] = set()
+        watched: set[str] = set()
         for p in paths:
             norm = os.path.normpath(os.path.abspath(p))
             if os.path.isfile(norm):

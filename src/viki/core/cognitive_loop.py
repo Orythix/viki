@@ -19,10 +19,10 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from viki.config.logger import viki_logger
-from viki.core.output_verifier import JudgmentEngine, JudgmentOutcome, JudgmentResult
+from viki.core.output_verifier import JudgmentOutcome, JudgmentResult
 from viki.core.schema import ActionCall
 
 
@@ -34,15 +34,15 @@ class CognitiveRoute:
 
     outcome: JudgmentOutcome
     judgment: JudgmentResult
-    action_override: Optional[ActionCall] = None
-    cached_response: Optional[str] = None
-    refusal_reason: Optional[str] = None
+    action_override: ActionCall | None = None
+    cached_response: str | None = None
+    refusal_reason: str | None = None
     use_lite_schema: bool = False
     use_ensemble: bool = True
-    model_tier: str = "standard" # "fast" | "standard" | "heavy"
+    model_tier: str = "standard"  # "fast" | "standard" | "heavy"
     source: str = "judgment"  # "reflex" | "judgment" | "fallback"
     elapsed_ms: float = 0.0
-    metrics: Dict[str, Any] = field(default_factory=dict)
+    metrics: dict[str, Any] = field(default_factory=dict)
 
     @property
     def is_short_circuit(self) -> bool:
@@ -53,7 +53,7 @@ class CognitiveRoute:
             or self.refusal_reason is not None
         )
 
-    def as_dict(self) -> Dict[str, Any]:
+    def as_dict(self) -> dict[str, Any]:
         return {
             "outcome": self.outcome.value,
             "source": self.source,
@@ -87,19 +87,20 @@ class CognitiveRouter:
         self.reflex = reflex_brain
         self.judgment = judgment_engine
         self.telemetry = telemetry or RouterTelemetry()
-        
+
         # v26: Semantic Cache
-        from core.utils.semantic_cache import SemanticCache
+        from viki.core.utils.semantic_cache import SemanticCache
+
         self.cache = SemanticCache(data_dir=data_dir) if data_dir else None
 
     async def classify(
         self,
         user_input: str,
-        context: Optional[Dict[str, Any]] = None,
-        skill_registry: Optional[Any] = None,
-        history: Optional[List[Dict[str, str]]] = None,
+        context: dict[str, Any] | None = None,
+        skill_registry: Any | None = None,
+        history: list[dict[str, str]] | None = None,
     ) -> CognitiveRoute:
-        from core.telemetry_service import start_span
+        from viki.core.telemetry_service import start_span
 
         t0 = time.perf_counter()
         context = context or {}
@@ -113,9 +114,10 @@ class CognitiveRouter:
                 cached_data = self.cache.lookup(user_input)
                 if cached_data:
                     # Reconstruct VIKIResponse from cache
-                    from core.schema import VIKIResponse
+                    from viki.core.schema import VIKIResponse
+
                     viki_resp = VIKIResponse(**cached_data)
-                    
+
                     # Mock a judgment for the cached route
                     cached_judgment = JudgmentResult(
                         outcome=JudgmentOutcome.SHALLOW,
@@ -124,15 +126,15 @@ class CognitiveRouter:
                         risk=0.0,
                         clarity=1.0,
                         novelty=0.0,
-                        complexity_score=0.1
+                        complexity_score=0.1,
                     )
-                    
+
                     route = CognitiveRoute(
                         outcome=JudgmentOutcome.SHALLOW,
                         judgment=cached_judgment,
                         cached_response=viki_resp.final_response,
                         source="cache",
-                        model_tier="fast"
+                        model_tier="fast",
                     )
                     self._finalize(route, t0)
                     return route
@@ -163,12 +165,14 @@ class CognitiveRouter:
 
     def _route_from_reflex(
         self,
-        reflex_action: Optional[ActionCall],
-        reflex_response: Optional[str],
+        reflex_action: ActionCall | None,
+        reflex_response: str | None,
         judgment: JudgmentResult,
-        skill_registry: Optional[Any],
-    ) -> Optional[CognitiveRoute]:
-        if reflex_action is not None and self._reflex_action_safe(reflex_action, judgment, skill_registry):
+        skill_registry: Any | None,
+    ) -> CognitiveRoute | None:
+        if reflex_action is not None and self._reflex_action_safe(
+            reflex_action, judgment, skill_registry
+        ):
             return CognitiveRoute(
                 outcome=JudgmentOutcome.REFLEX,
                 judgment=judgment,
@@ -194,7 +198,7 @@ class CognitiveRouter:
         self,
         action: ActionCall,
         judgment: JudgmentResult,
-        skill_registry: Optional[Any],
+        skill_registry: Any | None,
     ) -> bool:
         if judgment.outcome == JudgmentOutcome.REFUSE:
             return False
@@ -213,7 +217,7 @@ class CognitiveRouter:
                 refusal_reason=judgment.reason,
                 source="judgment",
             )
-        
+
         # v26: Tiered Routing Logic
         if complexity < 0.3:
             # Fast Lane: Minimal novelty/risk.
@@ -225,7 +229,7 @@ class CognitiveRouter:
                 model_tier="fast",
                 source="judgment",
             )
-        
+
         if complexity <= 0.8:
             # Standard Lane: Typical coding/reasoning.
             return CognitiveRoute(
@@ -275,7 +279,7 @@ class RouterTelemetry:
     """
 
     def __init__(self):
-        self.totals: Dict[str, int] = {o.value: 0 for o in JudgmentOutcome}
+        self.totals: dict[str, int] = {o.value: 0 for o in JudgmentOutcome}
         self.reflex_hits: int = 0
         self.fallback_count: int = 0
         self._total = 0
@@ -298,7 +302,7 @@ class RouterTelemetry:
             return 0.0
         return self.reflex_hits / self._reflex_attempts
 
-    def snapshot(self) -> Dict[str, Any]:
+    def snapshot(self) -> dict[str, Any]:
         return {
             "total": self._total,
             "reflex_hits": self.reflex_hits,

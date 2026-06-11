@@ -3,10 +3,9 @@ Twitter/X skill (Molty bird-style): read timeline, search, post tweet.
 Requires Twitter API v2 credentials: VIKI_TWITTER_BEARER_TOKEN (read), VIKI_TWITTER_API_KEY + SECRET (post).
 """
 import os
-import asyncio
-from typing import Dict, Any
+from typing import Any
+
 from viki.skills.base import BaseSkill
-from viki.config.logger import viki_logger
 
 
 class TwitterSkill(BaseSkill):
@@ -23,9 +22,17 @@ class TwitterSkill(BaseSkill):
         return {
             "type": "object",
             "properties": {
-                "action": {"type": "string", "enum": ["timeline", "search", "post"], "description": "Action."},
+                "action": {
+                    "type": "string",
+                    "enum": ["timeline", "search", "post"],
+                    "description": "Action.",
+                },
                 "query": {"type": "string", "description": "Search query or tweet text for post."},
-                "count": {"type": "integer", "description": "Max results (default 10).", "default": 10},
+                "count": {
+                    "type": "integer",
+                    "description": "Max results (default 10).",
+                    "default": 10,
+                },
             },
             "required": ["action"],
         }
@@ -34,7 +41,7 @@ class TwitterSkill(BaseSkill):
     def safety_tier(self) -> str:
         return "medium"
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         action = (params.get("action") or "timeline").lower()
         query = params.get("query") or ""
         count = min(int(params.get("count", 10)), 20)
@@ -45,6 +52,7 @@ class TwitterSkill(BaseSkill):
                 return "Twitter not configured: set VIKI_TWITTER_BEARER_TOKEN for timeline."
             try:
                 import aiohttp
+
                 async with aiohttp.ClientSession() as session:
                     async with session.get(
                         "https://api.twitter.com/2/users/me/tweets",
@@ -55,7 +63,11 @@ class TwitterSkill(BaseSkill):
                             return f"Twitter API error: {resp.status} {await resp.text()}"
                         data = await resp.json()
                         tweets = data.get("data", [])
-                        return "TIMELINE:\n" + "\n".join([t.get("text", "")[:200] for t in tweets]) if tweets else "No tweets."
+                        return (
+                            "TIMELINE:\n" + "\n".join([t.get("text", "")[:200] for t in tweets])
+                            if tweets
+                            else "No tweets."
+                        )
             except Exception as e:
                 return f"Twitter error: {e}"
 
@@ -65,7 +77,7 @@ class TwitterSkill(BaseSkill):
                 return "Set VIKI_TWITTER_BEARER_TOKEN and provide query for search."
             try:
                 import aiohttp
-                import urllib.parse
+
                 async with aiohttp.ClientSession() as session:
                     async with session.get(
                         "https://api.twitter.com/2/tweets/search/recent",
@@ -76,7 +88,11 @@ class TwitterSkill(BaseSkill):
                             return f"Twitter API error: {resp.status} {await resp.text()}"
                         data = await resp.json()
                         tweets = data.get("data", [])
-                        return "SEARCH:\n" + "\n".join([t.get("text", "")[:200] for t in tweets]) if tweets else "No results."
+                        return (
+                            "SEARCH:\n" + "\n".join([t.get("text", "")[:200] for t in tweets])
+                            if tweets
+                            else "No results."
+                        )
             except Exception as e:
                 return f"Twitter error: {e}"
 
@@ -88,6 +104,7 @@ class TwitterSkill(BaseSkill):
             try:
                 # Twitter OAuth 1.0a for post - simplified: use requests_oauthlib or tweepy if available
                 import aiohttp
+
                 # Minimal: would need OAuth 1.0a flow; return instruction
                 return "Post tweet: OAuth 1.0a required. Install tweepy and set VIKI_TWITTER_* keys, or use Twitter API v2 with OAuth 2.0 user context."
             except Exception as e:

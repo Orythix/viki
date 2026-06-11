@@ -1,13 +1,16 @@
 import asyncio
 import os
-from typing import Dict, Any
+from typing import Any
+
 from viki.config.logger import viki_logger
+
 
 class EmailSkill:
     """
     Skill for managing emails. Uses Gmail API when integrations.gmail.enabled
     and credentials are set; otherwise fallback mock.
     """
+
     def __init__(self, controller=None):
         self._controller = controller
         self.name = "email"
@@ -28,16 +31,17 @@ class EmailSkill:
         token_path = os.path.join(data_dir, "gmail_token.json")
         try:
             from integrations.gmail_client import get_gmail_service
+
             return get_gmail_service(path, token_path)
         except Exception as e:
             viki_logger.debug(f"Gmail client: {e}")
             return None
 
-    async def execute(self, params: Dict[str, Any]) -> str:
-        action = params.get('action', 'read')
-        recipient = params.get('to')
-        subject = params.get('subject')
-        body = params.get('body')
+    async def execute(self, params: dict[str, Any]) -> str:
+        action = params.get("action", "read")
+        recipient = params.get("to")
+        subject = params.get("subject")
+        body = params.get("body")
         viki_logger.info(f"Email: Executing {action} to {recipient}")
 
         service = await asyncio.to_thread(self._gmail_service)
@@ -47,17 +51,22 @@ class EmailSkill:
                     return "ERROR: Recipient and body required for sending email."
                 return await asyncio.to_thread(
                     __import__("integrations.gmail_client", fromlist=["gmail_send"]).gmail_send,
-                    service, recipient, subject or "", body
+                    service,
+                    recipient,
+                    subject or "",
+                    body,
                 )
             if action == "read":
                 return await asyncio.to_thread(
                     __import__("integrations.gmail_client", fromlist=["gmail_read"]).gmail_read,
-                    service, 10
+                    service,
+                    10,
                 )
             if action == "summarize":
                 raw = await asyncio.to_thread(
                     __import__("integrations.gmail_client", fromlist=["gmail_read"]).gmail_read,
-                    service, 20
+                    service,
+                    20,
                 )
                 return f"SUMMARY (from inbox): {raw[:800]}"
             return "ERROR: Unknown email action."
@@ -73,7 +82,7 @@ class EmailSkill:
             return "SUMMARY: Your inbox contains mostly automated reports and one personal query."
         return "ERROR: Unknown email action."
 
-    def get_tool_definition(self) -> Dict[str, Any]:
+    def get_tool_definition(self) -> dict[str, Any]:
         return {
             "type": "function",
             "function": {
@@ -82,12 +91,16 @@ class EmailSkill:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "action": {"type": "string", "enum": ["send", "read", "summarize"], "description": "The action to perform."},
+                        "action": {
+                            "type": "string",
+                            "enum": ["send", "read", "summarize"],
+                            "description": "The action to perform.",
+                        },
                         "to": {"type": "string", "description": "Email address of the recipient."},
                         "subject": {"type": "string", "description": "Subject line."},
-                        "body": {"type": "string", "description": "Body content."}
+                        "body": {"type": "string", "description": "Body content."},
                     },
-                    "required": ["action"]
-                }
-            }
+                    "required": ["action"],
+                },
+            },
         }

@@ -14,11 +14,11 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Dict
+from typing import Any
 
-from viki.skills.base import BaseSkill
-from viki.core.task_planner import PlannerExecutor, TaskType
 from viki.core.patch_verify import PatchVerify
+from viki.core.task_planner import PlannerExecutor, TaskType
+from viki.skills.base import BaseSkill
 
 
 class PlanEditSkill(BaseSkill):
@@ -37,7 +37,7 @@ class PlanEditSkill(BaseSkill):
         )
 
     @property
-    def schema(self) -> Dict[str, Any]:
+    def schema(self) -> dict[str, Any]:
         return {
             "type": "object",
             "properties": {
@@ -54,7 +54,7 @@ class PlanEditSkill(BaseSkill):
     def safety_tier(self) -> str:
         return "medium"
 
-    async def execute(self, params: Dict[str, Any]) -> str:
+    async def execute(self, params: dict[str, Any]) -> str:
         goal = (params.get("goal") or "").strip()
         if not goal:
             return "plan_edit: goal is required."
@@ -115,7 +115,9 @@ class PlanEditSkill(BaseSkill):
             TaskType.REFACTOR.value: _do_refactor,
         }
 
-        planner = PlannerExecutor(model_router=controller.model_router, executor_callbacks=callbacks)
+        planner = PlannerExecutor(
+            model_router=controller.model_router, executor_callbacks=callbacks
+        )
         repo_context = ""
         try:
             cs = registry.get_skill("code_search")
@@ -127,7 +129,7 @@ class PlanEditSkill(BaseSkill):
         graph = await planner.plan(goal, repo_context=repo_context)
         graph = await planner.execute(graph)
         summary = graph.summary()
-        ok = summary["done"] - summary["failed"]
+        summary["done"] - summary["failed"]
         return (
             f"plan_edit: {summary['done']} task(s) succeeded, "
             f"{summary['failed']} failed (graph={len(summary['tasks'])} nodes).\n\n"
