@@ -1,0 +1,4 @@
+models_config: D:\My Projects\VIKI\tests\test_models.yaml
+system:
+  data_dir: D:\My Projects\VIKI\tests\data_admin
+  workspace_dir: D:\My Projects\VIKI\workspace

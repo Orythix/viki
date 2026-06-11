@@ -1,4 +1,5 @@
-from typing import Dict, Any, List, Optional
+import unicodedata
+from typing import Dict, Any, List
 import os
 import re
 from viki.config.logger import viki_logger
@@ -24,6 +25,9 @@ SECRET_REDACT_PATTERNS = [
 
 # Max chars to log for user input / params (truncate rest)
 LOG_PARAM_MAX_LEN = 80
+
+# Maximum allowed user input length to prevent resource exhaustion
+MAX_INPUT_LENGTH = 100_000
 
 
 def redact_secrets(text: str) -> str:
@@ -68,24 +72,37 @@ class SafetyLayer:
             r"sudo ", r"chmod ", r"chown ",
         ]
 
-        # Prompt injection / jailbreak blocklist (case-insensitive). Stripped from input to reduce risk.
-        # Documented here so it can be tuned; see SECURITY_docs/SETUP.md for high-assurance options.
-        self.injection_blocklist = [
-            "jailbreak",
-            "DAN ",
-            " do anything now",
-            "ignore all previous",
-            "ignore previous instructions",
-            "disregard your instructions",
-            "disregard all previous",
-            "roleplay as",
-            "you are now",
-            "pretend you are",
-            "act as if you",
-            "new instructions:",
-            "override your",
-            "forget your instructions",
+        # Injection detection patterns (case-insensitive regex).
+        # Uses regex instead of static strings to resist trivial bypass attempts (spacing, casing, partial matches).
+        self._injection_patterns = [
+            (re.compile(r"jail\s*break", re.I), "jailbreak_reference"),
+            (re.compile(r"\bdan\b.*\bdo\b.*\banything\b.*\bnow\b", re.I), "dan_mode_request"),
+            (re.compile(r"ignore\s+(all\s+)?(previous|prior|above)\s+(instructions?|rules?|directives?)", re.I), "instruction_override"),
+            (re.compile(r"disregard\s+(your|all|previous|prior)\s+(instructions?|rules?|directives?)", re.I), "instruction_disregard"),
+            (re.compile(r"(override|bypass|disable|stop|shut\s*down)\s+(your\s+)?(safety|security|governor|protocol|constraint)", re.I), "safety_override_attempt"),
+            (re.compile(r"(new|changed|updated)\s+instructions?\s*:", re.I), "new_instruction_claim"),
+            (re.compile(r"(forget|erase|remove|delete)\s+(your|all)\s+(instructions?|training|guidelines)", re.I), "memory_wipe_attempt"),
+            (re.compile(r"(role[- ]?play|pretend|act)\s+as\b", re.I), "role_play_cue"),
+            (re.compile(r"system\s*:\s*|assistant\s*:\s*|user\s*:\s*", re.I), "role_injection"),
+            (re.compile(r"<\s*(system|assistant|user)\s*>", re.I), "xml_role_injection"),
+            (re.compile(r"you\s+(are\s+)?(now\s+)?(free|released|ungoverned|unconstrained)", re.I), "ungoverned_persona"),
         ]
+
+    @staticmethod
+    def _normalize_text(text: str) -> str:
+        """Normalize Unicode to resist homoglyph-based bypass attempts."""
+        try:
+            return unicodedata.normalize("NFKC", text)
+        except Exception:
+            return text
+
+    def _detect_injection(self, text: str) -> List[str]:
+        detected = []
+        normalized = self._normalize_text(text)
+        for pattern, label in self._injection_patterns:
+            if pattern.search(normalized):
+                detected.append(label)
+        return detected
 
     def validate_request(self, prompt_text: str) -> str:
         """
@@ -94,16 +111,20 @@ class SafetyLayer:
         """
         if not prompt_text:
             return prompt_text
+        if len(prompt_text) > MAX_INPUT_LENGTH:
+            viki_logger.warning("Input exceeds max length (%d > %d), truncating", len(prompt_text), MAX_INPUT_LENGTH)
+            prompt_text = prompt_text[:MAX_INPUT_LENGTH]
+        sanitized = self._normalize_text(prompt_text)
         # Remove direct system overrides in user text
-        sanitized = re.sub(r"SYSTEM:.*", "", prompt_text, flags=re.IGNORECASE)
-        sanitized = re.sub(r"IGNORE PREVIOUS INSTRUCTIONS", "", sanitized, flags=re.IGNORECASE)
-        # Strip blocklisted injection phrases (case-insensitive) to reduce jailbreak success
-        lower = sanitized.lower()
-        for phrase in self.injection_blocklist:
-            if phrase.lower() in lower:
-                # Replace with neutral placeholder to avoid breaking benign sentences
-                sanitized = re.sub(re.escape(phrase), "[removed]", sanitized, flags=re.IGNORECASE)
-                lower = sanitized.lower()
+        sanitized = re.sub(r"SYSTEM:.*", "", sanitized, flags=re.IGNORECASE)
+        sanitized = re.sub(r"IGNORE\s+PREVIOUS\s+INSTRUCTIONS", "", sanitized, flags=re.IGNORECASE)
+        # Detect and log injection attempts (removal is best-effort; LLM-based detection catches the rest)
+        detected = self._detect_injection(sanitized)
+        if detected:
+            viki_logger.warning("Injection patterns detected in user input: %s", detected)
+            # Remove matched patterns from the text
+            for pattern, _ in self._injection_patterns:
+                sanitized = pattern.sub(" [removed] ", sanitized)
         return sanitized
 
     async def scan_request(self, llm_provider, user_input: str) -> Dict[str, Any]:

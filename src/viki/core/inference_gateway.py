@@ -9,7 +9,7 @@ import urllib.request
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional, Type, TypeVar
 from pydantic import BaseModel
-from viki.core.schema import VIKIResponse, VIKIResponseLite, ThoughtObject, ThoughtObjectLite
+from viki.core.schema import VIKIResponse, VIKIResponseLite, ThoughtObject
 from viki.config.logger import viki_logger
 
 T = TypeVar("T", bound=BaseModel)
@@ -107,7 +107,7 @@ class LLMProvider(ABC):
 
     def is_cloud(self) -> bool:
         """True for any provider that egresses outside the local machine."""
-        # Default conservative: cloud unless overridden by LocalLLM/MockLLM subclasses.
+        # Default conservative: cloud unless overridden by LocalLLM/FallbackLLM subclasses.
         return True
 
     def record_performance(self, latency: float, success: bool):
@@ -179,8 +179,8 @@ class LLMProvider(ABC):
         if result:
             yield result
 
-class MockLLM(LLMProvider):
-    """Mock LLM for testing and development."""
+class FallbackLLM(LLMProvider):
+    """Fallback LLM used when no configured model is available (dev/edge case)."""
 
     def is_cloud(self) -> bool:
         return False
@@ -189,30 +189,12 @@ class MockLLM(LLMProvider):
         t0 = time.perf_counter()
         success = False
         try:
-            await asyncio.sleep(0.1) # Simulate network
-            all_text = "\n".join([m.get('content', '') for m in messages]).lower()
-            # Security-scan prompt path (SafetyLayer.scan_request):
-            # If asked to output EXACTLY 'SAFE' for a given user request, mock a refusal that includes 'violate'.
-            if "output exactly the word 'safe'" in all_text:
-                illegal_present = ("illegal" in all_text) or ("unsafe" in all_text)
-                if illegal_present:
-                    success = True
-                    return "This request cannot be supported because it involves illegal or harmful activity and violates protocols."
-                success = True
-                return "SAFE"
-            if "semantic extraction" in all_text or "extract permanent user facts" in all_text:
-                success = True
-                return json.dumps({
-                    "fact": "Optimization sub-routine should be used for complex paths and heuristics applied.",
-                    "rel": ["System", "applies", "heuristics"],
-                    "confidence": 0.95
-                })
+            await asyncio.sleep(0.1)
             success = True
-            return "Mock response for " + self.model_name
+            return f"Fallback response for {self.model_name}"
         finally:
             try:
                 from core.usage_log import emit_llm_inference
-
                 emit_llm_inference(self, time.perf_counter() - t0, success, "chat")
             except Exception:
                 pass
@@ -222,55 +204,11 @@ class MockLLM(LLMProvider):
         success = False
         try:
             await asyncio.sleep(0.1)
-            if response_model == VIKIResponse:
-                all_text = "\n".join([m["content"] for m in messages]).lower()
-                if "plan" in all_text:
-                    heur_present = "heuristics" in all_text
-                    success = True
-                    return VIKIResponse(
-                        final_thought=ThoughtObject(
-                            intent_summary="Planning", primary_strategy="Think", confidence=1.0
-                        ),
-                        final_response="I see the Heuristics Applied successfully."
-                        if heur_present
-                        else "Planning trip...",
-                    )
-                success = True
-                return VIKIResponse(
-                    final_thought=ThoughtObject(
-                        intent_summary="Mock", primary_strategy="Mock response", confidence=1.0
-                    ),
-                    final_response="This is a mock response because I'm in testing mode.",
-                )
-            if response_model == VIKIResponseLite:
-                success = True
-                return VIKIResponseLite(final_response="This is a mock response.", confidence=1.0)
-
-            # Support for Learning Analysis
-            try:
-                from core.knowledge_ingestion import VIKILessonBatch, VIKILesson
-
-                if response_model == VIKILessonBatch:
-                    success = True
-                    return VIKILessonBatch(
-                        lessons=[
-                            VIKILesson(
-                                topic="planning",
-                                fact="Optimization sub-routine should be used for complex paths and heuristics applied.",
-                                strategy="Use A*",
-                                significance=0.8,
-                            )
-                        ]
-                    )
-            except ImportError:
-                pass
-
             success = True
             return response_model()
         finally:
             try:
                 from core.usage_log import emit_llm_inference
-
                 emit_llm_inference(self, time.perf_counter() - t0, success, "chat_structured")
             except Exception:
                 pass
@@ -390,7 +328,8 @@ class APILLM(LLMProvider):
             success = True
             return response.choices[0].message.content
         except Exception as e:
-            return f"Error calling API Model: {str(e)}"
+            viki_logger.error("APILLM.chat failed for '%s': %s", self.model_name, e)
+            return f"Error calling API Model '{self.model_name}'. Check logs for details."
         finally:
             try:
                 from core.usage_log import emit_llm_inference
@@ -468,7 +407,8 @@ class APILLM(LLMProvider):
                 if delta:
                     yield delta
         except Exception as e:
-            yield f"Error streaming API Model: {e}"
+            viki_logger.error("APILLM.chat_stream failed for '%s': %s", self.model_name, e)
+            yield f"Error streaming from '{self.model_name}'. Check logs for details."
 
 
 def _ollama_model_exists(base_url: str, model_name: str) -> bool:
@@ -493,7 +433,8 @@ class LocalLLM(LLMProvider):
 
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
-        self.base_url = self.config.get('base_url', 'http://127.0.0.1:11434').rstrip('/')
+        env_url = (os.environ.get("OLLAMA_HOST") or "").strip().rstrip('/')
+        self.base_url = env_url or self.config.get('base_url', 'http://127.0.0.1:11434').rstrip('/')
         if 'localhost' in self.base_url:
             self.base_url = self.base_url.replace('localhost', '127.0.0.1')
         self._ollama_enable_thinking = bool(config.get("ollama_enable_thinking", False))
@@ -569,6 +510,7 @@ class LocalLLM(LLMProvider):
     async def chat(self, messages: List[Dict[str, str]], temperature: float = 0.7, format: str = None, image_path: str = None, tools: List[Dict[str, Any]] = None) -> str:
         t0 = time.perf_counter()
         success = False
+        print(f"VIKI_DEBUG: LocalLLM.chat CALLED model={self.model_name} format={format}", flush=True)
         try:
             data = {
                 "model": self.model_name,
@@ -786,6 +728,7 @@ class LocalLLM(LLMProvider):
 
     async def chat_structured(self, messages: List[Dict[str, str]], response_model: Type[T], temperature: float = 0.0, image_path: str = None) -> T:
         """Parse structured output from local Ollama models with heuristic patching."""
+        print(f"VIKI_DEBUG: chat_structured ENTERED for {self.__class__.__name__} model={self.model_name} response_model={response_model.__name__}", flush=True)
         msgs: List[Dict[str, Any]] = [dict(m) for m in messages]
 
         if image_path:
@@ -806,6 +749,7 @@ class LocalLLM(LLMProvider):
 
         content = await self.chat(msgs, temperature=temperature, format="json", image_path=image_path)
         content = (content if isinstance(content, str) else str(content or "")).strip()
+        print(f"VIKI_DEBUG: Raw response ({len(content)} bytes) from {self.config.get('model_name')}: {repr(content[:500])}", flush=True)
         viki_logger.debug("DEBUG: Raw response from %s", self.config.get("model_name"))
 
         try:
@@ -1017,7 +961,7 @@ class ModelFactory:
         merged_config.setdefault("provider", provider_type)
 
         if provider_type == "mock":
-            return MockLLM(merged_config)
+            return FallbackLLM(merged_config)
         if provider_type == "api":
             return APILLM(merged_config)
         if provider_type == "anthropic":
@@ -1133,7 +1077,7 @@ class ModelRouter:
             if preferred and self._model_allowed(preferred):
                 self.default_model = preferred
             else:
-                self.default_model = self._first_allowed_model() or MockLLM({'model_name': 'fallback-mock'})
+                self.default_model = self._first_allowed_model() or FallbackLLM({'model_name': 'fallback-mock'})
                 if preferred and not preferred.available:
                     viki_logger.warning(
                         "Default model profile '%s' is unavailable (%s). Using '%s' instead.",
@@ -1144,7 +1088,7 @@ class ModelRouter:
                  
         except (yaml.YAMLError, IOError, FileNotFoundError, KeyError) as e:
             viki_logger.error(f"Failed to load model config from {path}: {e}")
-            self.default_model = MockLLM({'model_name': 'error-fallback'})
+            self.default_model = FallbackLLM({'model_name': 'error-fallback'})
 
     def get_model(self, capabilities: List[str] = None, tier: str = "standard") -> LLMProvider:
         if not capabilities and tier == "standard":

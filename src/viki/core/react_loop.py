@@ -103,13 +103,11 @@ async def run_react_loop(
             viki_logger.info(f"{step_label} Continuing multi-step reasoning...")
             if on_event: on_event("status", f"THINKING {step_label}")
 
-        controller._reflex_recursion_depth += 1
-        if controller._reflex_recursion_depth > controller._max_reflex_recursion:
-            viki_logger.error(f"Reflex recursion depth exceeded ({controller._max_reflex_recursion})")
-            controller._reflex_recursion_depth = 0
-            return "Safety: Maximum reflex retry depth exceeded. Please rephrase your request."
-
         try:
+            controller._reflex_recursion_depth += 1
+            if controller._reflex_recursion_depth > controller._max_reflex_recursion:
+                viki_logger.error(f"Reflex recursion depth exceeded ({controller._max_reflex_recursion})")
+                return "Safety: Maximum reflex retry depth exceeded. Please rephrase your request."
             use_ensemble_setting = controller.settings.get("system", {}).get("use_ensemble", True)
             if cognitive_route is not None:
                 use_ensemble_setting = use_ensemble_setting and cognitive_route.use_ensemble
@@ -375,9 +373,6 @@ async def run_react_loop(
             all_results = "\n".join([f"Step {r['step']}: {r.get('result') or r.get('error')}" for r in action_results])
             final_output = controller._compress_output(f"{llm_response}\n\nExecution Logs:\n{all_results}")
             break
-
-            controller._reflex_recursion_depth = 0
-            continue
 
         controller.last_interaction_time = time.time()
         llm_response = viki_resp.final_response

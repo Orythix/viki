@@ -54,31 +54,36 @@ system:
   # Set false and configure real keys when you want cloud models. Env: VIKI_LOCAL_LLM_ONLY=true|false.
   local_llm_only: true
   
-  # Max reasoning steps per request
-  max_steps: 100
+  # Max reasoning steps per request. Lower = less LLM churn, fewer tokens per task.
+  max_steps: 15
   
   # Request timeout in seconds (0 = no limit). Prevents runaway requests.
   request_timeout_seconds: 300
 
   # When true, run LLM security scan (scan_request) before deliberation. Adds latency and an extra LLM call per request.
-  security_scan_requests: true
+  # Disabled by default on low-end PCs — every LLM call is expensive with small models.
+  security_scan_requests: false
 
-  # When true, run internal specialist ensemble (critic/explorer/aligner) for complex intents. Set false for lower latency.
-  use_ensemble: false
+  # When true, run internal specialist ensemble (critic/explorer/aligner) for complex intents. Set true for better quality.
+  use_ensemble: true
 
-  # Ollama (local): when false, API sends think=false — hides reasoning traces and usually responds faster on thinking models.
-  # Per-profile override: set ollama_enable_thinking on a models.yaml profile. Env: VIKI_OLLAMA_THINK=1 to force on.
-  ollama_enable_thinking: false
+  # Ollama (local): when true, API sends think=true — enables chain-of-thought reasoning traces for higher quality responses.
+  # Set false for max speed. Per-profile override: set ollama_enable_thinking on a models.yaml profile. Env: VIKI_OLLAMA_THINK.
+  ollama_enable_thinking: true
 
-  # Optional Ollama generate options merged into every local request (temperature is still set per call). Example: num_predict: 2048
-  ollama_options: {}
+  # Optional Ollama generate options merged into every local request (temperature is still set per call).
+  # Baseline for all profiles. Per-profile ollama_options in models.yaml override specific keys.
+  # Override with env VIKI_OLLAMA_OPTIONS_JSON.
+  # Low-end PCs: keep num_ctx moderate to avoid swapping; num_predict=2048 gives room for quality responses.
+  ollama_options: { num_predict: 2048, num_ctx: 8192 }
 
   # When true, run a quick web research pulse at startup. Set false to avoid competing with first user request.
   startup_research: false
 
-  # When true (default), if the reply looks uncertain or model confidence is low, run a web search and
+  # When true, if the reply looks uncertain or model confidence is low, run a web search and
   # rewrite the answer using snippets. Disabled when air_gap or shadow_mode is on, or when the research
   # skill is not registered. Override with env VIKI_AUTO_WEB_RESEARCH.
+  # Enabled for better answer quality — low_resource_mode will still gate it at runtime.
   auto_web_research_when_uncertain: true
 
   # Minimum access_count for export_training_dataset (LoRA JSONL). Lower to 1 to export single-hit lessons.
@@ -92,8 +97,8 @@ system:
   # At startup, log warnings if critical skills (email, calendar, research) are misconfigured.
   skill_health_check: true
 
-  # Ollama tag for Neural Forge Modelfile `FROM` line (e.g. qwen3.5:latest). Override with VIKI_FORGE_BASE_OLLAMA_MODEL.
-  forge_base_ollama_model: "qwen3.5:latest"
+  # Ollama tag for Neural Forge Modelfile `FROM` line (e.g. qwen3.6:latest). Override with VIKI_FORGE_BASE_OLLAMA_MODEL.
+  forge_base_ollama_model: "qwen3.6:latest"
 
   # Ollama image name created by prompt-bake / internal_forge (ollama create). Override with VIKI_FORGE_OUTPUT_OLLAMA_MODEL.
   forge_output_ollama_tag: "viki-neural-forge"
@@ -106,7 +111,8 @@ system:
 
   # When true, append per-call usage lines (LLM inference, model_feedback, skill_execution) to data_dir/usage_session.jsonl.
   # Disable with VIKI_SESSION_USAGE_LOG=false if you want zero extra disk I/O.
-  session_usage_log: true
+  # Disabled by default on low-end PCs — saves disk I/O and CPU per call.
+  session_usage_log: false
 
   # What makes VIKI specific (surfaced in API and CLI)
   differentiators:
@@ -119,14 +125,14 @@ models_config: "./config/models.yaml"
 security_layer_path: "./config/security_layer.md"
 
 memory:
-  # Working-memory turns kept for conversation context (clamped 10–50 in code). Raise for longer threads.
-  short_term_limit: 10
+  # Working-memory turns kept for conversation context (clamped 5–50 in code). Lower = less context = less tokens/request.
+  short_term_limit: 5
   long_term_enabled: false
 
 # Background poll cadences. Bigger numbers = lower idle CPU on low-end PCs.
 proactive:
-  wellness_interval_s: 1800        # how often to check for proactive prompts (default 30 min)
-  wellness_idle_threshold_s: 7200  # only prompt after this much user idle time (default 2 h)
+  wellness_interval_s: 3600        # how often to check for proactive prompts (default 30 min, increased to 60 min for low-end)
+  wellness_idle_threshold_s: 14400 # only prompt after this much user idle time (default 2 h, increased to 4 h for low-end)
 
 # Forge / continuous-learning timing. Disabled entirely when low_resource_mode is true.
 forge:

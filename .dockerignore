@@ -25,8 +25,8 @@ ui/dist
 .git
 .gitignore
 .cursor
-*.md
-!README.md
+/setup.md
+/docs/*.md
 
 # Docker
 Dockerfile

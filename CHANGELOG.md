@@ -6,6 +6,43 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 
 ## [Unreleased]
 
+### Added
+- **opencode training pipeline**: New `scripts/train_viki_opencode.py` imports curated knowledge seed and generates comprehensive training datasets (JSONL/Alpaca format) using opencode (deepseek-v4-flash-free) — no Ollama required.
+- **Enhanced knowledge seed**: Expanded `config/knowledge_seed.jsonl` with 44 lessons covering Angular best practices, TypeScript patterns, performance optimization, coding workflows, design systems, and staff profiles.
+- **Enhanced core personality**: Updated `config/core_personality.md` with domain-specific frontend/Angular expertise section, autonomous agent guidelines, and Sachin-specific adaptation.
+- **Training datasets**: Generated `data/training_dataset_opencode.jsonl` (50 rows from DB export) and `data/training_enhanced.jsonl` (20 high-quality instruction-response pairs).
+- **Docker trust bypass**: `VIKI_TRUST_WORKSPACE` env var skips the interactive security trust prompt for non-interactive Docker usage.
+
+### Changed
+- **Low-end PC optimization**: Balanced `settings.yaml` defaults for 4 GB RAM machines:
+  - `ollama_options: {num_predict: 2048, num_ctx: 8192}` — 4x output & 2x context vs prior (was 512/4096)
+  - `ollama_enable_thinking: true` — enables chain-of-thought reasoning for better quality
+  - `use_ensemble: true` — enables specialist ensemble for complex tasks
+  - `auto_web_research_when_uncertain: true` — web-backed answers when model is uncertain
+  - `security_scan_requests: false` — saves one LLM call per request
+  - `session_usage_log: false` — eliminates per-call disk I/O
+  - `max_steps: 15` — fewer but higher-quality reasoning steps
+  - `wellness_interval_s: 3600` — proactive checks every 1h instead of 30min
+  - `wellness_idle_threshold_s: 14400` — only after 4h idle instead of 2h
+  - `memory.short_term_limit: 5` — lower context floor (5 instead of 10)
+- **Model config overhaul**: Fixed `models.yaml`:
+  - `default` changed from broken `viki-archived` to `gemma4`
+  - `viki-evolved` now points to `gemma4:12b` (was a non-existent evolved model tag)
+  - Added `phi3-mini` profile (lightweight 3.8B/2.2GB, tier:fast) for quick responses
+  - Added `chatter`/`general` capabilities to `gemma4` so prewarm/prompt routing works
+  - Per-profile `ollama_options` for tuned context/output per model
+  - Task routing updated with `fast` route and `phi3-mini` in fallback chain
+- **Docker**: Fixed `Dockerfile` to copy `config/` directory and add `PIP_REQUIRE_VIRTUALENV=0`. Rewrote `docker-compose.yml` for CLI usage (no API). Fixed `.dockerignore` to preserve config `.md` files.
+- **Memory**: Lowered `WorkingMemory` short_term_limit floor from 10 to 5 in `src/viki/core/memory/__init__.py`.
+
+### Fixed
+- **Unused import**: Removed `import psutil` from `state_consolidation.py` (unused, saved ~10 MB RAM at boot).
+- **Docker trust prompt crash**: `Confirm.ask()` in CLI would crash non-interactive Docker usage — added `VIKI_TRUST_WORKSPACE` env var bypass (set to `"true"` in docker-compose.yml).
+- **Docker Ollama connectivity**: `LocalLLM` hardcoded `base_url` from config — now reads `OLLAMA_HOST` env var first, allowing Docker to reach host Ollama via `host.docker.internal:11434`.
+- **Broken default model**: `models.yaml` default was `viki-archived` (no matching profile) — model router fell through to `_first_allowed_model()`, causing unpredictable model selection. Changed to `gemma4`.
+- **viki-evolved model missing**: References a non-existent Ollama model tag — now points to `gemma4:12b` for a working evolved persona profile.
+- **Chatter capability missing**: No profile had `chatter` or `general` capabilities, breaking prewarm and conversation task routing — added to `gemma4` and `phi3-mini`.
+
 ## [8.2.0] - 2026-05-14 (Sovereign Intelligence & Reflex Optimization)
 
 ### Added

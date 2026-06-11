@@ -1,20 +1,30 @@
-# VIKI API — run the backend in Docker.
-# Run the UI on the host: cd ui && npm run dev (set VITE_VIKI_API_BASE=http://localhost:5000/api).
-# Ensure Ollama is running on the host; set OLLAMA_HOST below so the container can reach it.
+# VIKI CLI — run the sovereign agent engine in Docker with Ollama on host.
+# Usage:
+#   docker compose run --rm viki                    # One-shot CLI command
+#   docker compose run --rm -it viki                 # Interactive CLI session
+#   docker compose up -d                             # Detached (if running as service)
+#
+# Ensure Ollama is running on the host first. The container reaches it via
+# host.docker.internal (Windows/Mac). On Linux use network_mode: host instead.
 
 services:
-  viki-api:
+  viki:
     build: .
-    ports:
-      - "5000:5000"
+    image: viki-sdi:latest
+    stdin_open: true
+    tty: true
     env_file:
       - .env
     environment:
-      FLASK_HOST: "0.0.0.0"
       VIKI_DATA_DIR: /app/data
       VIKI_WORKSPACE_DIR: /app/workspace
-      # Reach Ollama on host (Windows/Mac). On Linux use network_mode: host or set to host IP.
+      VIKI_TRUST_WORKSPACE: "true"
+      VIKI_OLLAMA_THINK: "false"
+      VIKI_LOG_LEVEL: "DEBUG"
+      # Reach Ollama on the host (Windows/Mac). On Linux use network_mode: host or set to host IP.
       OLLAMA_HOST: http://host.docker.internal:11434
     volumes:
-      - ./data:/app/data
+      - ./data-docker:/app/data
       - ./workspace:/app/workspace
+      - ./logs:/app/logs
+      - ./config:/host-config

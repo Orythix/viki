@@ -130,11 +130,20 @@ class EthicalGovernor:
         try:
             import time
             model = model_router.get_model(capabilities=["fast_response"])
-            
+            if model is None:
+                viki_logger.warning("Governor: No model available for semantic veto check.")
+                return False, "Safety check unavailable — no model available (fail closed)"
+
             # Track performance
             start_time = time.time()
             resp = await model.chat(prompt)
             latency = time.time() - start_time
+
+            # Detect model/transport errors — fail-closed
+            if resp.startswith("Error:") or resp.startswith("Ollama Error:"):
+                viki_logger.warning("Governor: Model returned error during semantic check — failing closed: %s", resp[:120])
+                model.record_performance(latency, success=False)
+                return False, "Safety check unavailable — model error (fail closed)"
             
             if "VETOED" in resp.upper():
                 reason = resp.split(":", 1)[1].strip() if ":" in resp else "Semantic safety violation."
@@ -144,11 +153,11 @@ class EthicalGovernor:
             model.record_performance(latency, success=True)
             return True, "Approved"
         except Exception as e:
-            viki_logger.error(f"Governor: Semantic check failed: {e}")
+            viki_logger.error(f"Governor: Semantic check failed — vetoing intent to be safe: {e}")
             if 'start_time' in locals():
                 latency = time.time() - start_time
                 model.record_performance(latency, success=False)
-            return True, "Error in safety check (Fail Open)"
+            return False, "Safety check unavailable — action refused by default (fail closed)"
 
     def _log_veto(self, intent: str, reason: str):
         viki_logger.warning(f"ETHICAL GOVERNOR VETO: Intent='{intent}' | Reason='{reason}'")

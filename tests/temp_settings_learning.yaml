@@ -1,0 +1,11 @@
+memory:
+  long_term_enabled: false
+  short_term_limit: 5
+models_config: D:\My Projects\VIKI\tests\test_models.yaml
+skills:
+  auto_discover: false
+  registry_path: ''
+system:
+  data_dir: D:\My Projects\VIKI\tests\data_learning
+  log_level: INFO
+  workspace_dir: D:\My Projects\VIKI\workspace

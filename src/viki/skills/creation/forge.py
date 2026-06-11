@@ -211,7 +211,7 @@ class ModelForgeSkill(BaseSkill):
             return await self.controller.forge_orchestrator.switch_to_profile(profile)
 
         # Legacy Evolution path
-        from core.preference_forge import trl_dpo_available
+        from viki.core.preference_forge import trl_dpo_available
 
         uns = _unsloth_stack_available()
         dpo = trl_dpo_available()
@@ -245,7 +245,7 @@ class ModelForgeSkill(BaseSkill):
     async def _execute_preference_training(
         self, params: Dict[str, Any], method: str
     ) -> str:
-        from core.preference_forge import (
+        from viki.core.preference_forge import (
             PreferenceDatasetBuilder,
             run_dpo_training,
         )

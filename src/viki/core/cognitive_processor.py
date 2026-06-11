@@ -4,9 +4,9 @@ import time
 import os
 import json
 from typing import List, Dict, Any, Optional, Tuple
-from viki.core.schema import ThoughtObject, SolverOutput, VIKIResponse, VIKIResponseLite, LayerState
+from viki.core.schema import ThoughtObject, VIKIResponse, VIKIResponseLite, LayerState
 from viki.core.ensemble import EnsembleEngine
-from viki.config.logger import viki_logger, thought_logger
+from viki.config.logger import viki_logger
 from viki.core.agent_constants import AGENT_MANDATE, PLAN_MODE_MANDATE, DEBUG_MODE_MANDATE
 
 # --------------------------------------------------------------------------- #
@@ -397,6 +397,8 @@ class DeliberationLayer(CortexLayer):
         # the cortex / controller pipeline behaves identically.
         on_event = context.get("on_event")
         action_results = context.get('action_results', []) or []
+        raw_input_for_check = context.get("raw_input", "")
+        print(f"VIKI_DEBUG: Deliberation._logic use_lite={context.get('use_lite_schema')} trivial={context.get('use_lite_schema', False) == False and len(action_results)==0 and hasattr(model,'chat_stream')} model_type={type(model).__name__} model_name={model.model_name}", flush=True)
         if (
             on_event is not None
             and not action_results
@@ -404,13 +406,16 @@ class DeliberationLayer(CortexLayer):
         ):
             from core.utils.trivial_input import is_trivial_input
             raw_input_for_check = context.get("raw_input", "")
-            if is_trivial_input(raw_input_for_check):
+            trivial = is_trivial_input(raw_input_for_check)
+            print(f"VIKI_DEBUG: Fast path check - is_trivial_input('{raw_input_for_check}')={trivial}", flush=True)
+            if trivial:
                 streamed = await self._streamed_conversational_reply(model, context, on_event)
                 if streamed is not None:
                     return streamed
         
         # 2. Determine if we should use LITE schema (set by controller)
         use_lite = context.get('use_lite_schema', False)
+        print(f"VIKI_DEBUG: Deliberation path use_lite={use_lite} model_tier={context.get('model_tier')} intent={context.get('intent_type')}", flush=True)
         
         # Determine if model supports tools (most local ones do via Ollama)
         supports_tools = getattr(model, 'chat_with_tools', None) is not None
@@ -663,9 +668,11 @@ class DeliberationLayer(CortexLayer):
                         if tool_def.get('function', {}).get('parameters'):
                             param_tools.append(tool_def)
 
+            print(f"VIKI_DEBUG: Native tools check: use_lite={context.get('use_lite_schema')} supports_native_tools={supports_native_tools} param_tools={len(param_tools)}", flush=True)
             if use_lite and supports_native_tools and param_tools:
                 # --- FAST PATH: Native Tool Calling ---
                 viki_logger.info(f"Deliberation: Using native tool calling with {len(param_tools)} tools.")
+                print(f"VIKI_DEBUG: Taking NATIVE TOOLS FAST PATH", flush=True)
                 
                 # Native call (with image if available)
                 # Note: local LLMs via Ollama might support images in chat API via base64 in messages
@@ -751,6 +758,7 @@ class DeliberationLayer(CortexLayer):
                 
             elif use_lite:
                 # SHALLOW path — use lite schema (no native tools)
+                print("VIKI_DEBUG: Taking SHALLOW (LITE) path", flush=True)
                 llm_start = time.time()
                 viki_resp_lite = await model.chat_structured(messages, VIKIResponseLite, image_path=image_path)
                 llm_latency = time.time() - llm_start
@@ -758,6 +766,7 @@ class DeliberationLayer(CortexLayer):
                 viki_resp = viki_resp_lite.to_full_response()
             else:
                 # DEEP path — use full schema + manual tool injection
+                print("VIKI_DEBUG: Taking DEEP path", flush=True)
                 # We inject tool schemas into the prompt manually for DEEP reasoning
                 if param_tools:
                     import json

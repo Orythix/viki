@@ -146,41 +146,33 @@ VIKI operates on a **5-Layer Consciousness Stack**:
 
 ### Running on low-end PCs
 
-VIKI is designed to stay responsive on machines with 4 GB RAM and 2–4 cores. Two knobs do most of the work:
+VIKI is designed to stay responsive on machines with **4 GB RAM** and **2–4 cores**. The defaults are already optimized for this — `settings.yaml` ships with aggressive low-resource tuning:
 
-1. **Backend low-resource mode** — set `system.low_resource_mode: true` in `viki/config/settings.yaml` (or export `VIKI_LOW_RESOURCE=1`). This:
-   - lazy-loads all heavy skills (vision, browser, whisper, pdf, image-gen, computer-use, plan-edit, …) so they only import on first use,
-   - skips the autonomous startup pulse, wellness pulse, dream cycle, reflector, watchdog, and continuous-learning loop,
-   - keeps the Cortex `PatternTracker` capped (`VIKI_PATTERN_TRACKER_MAX`, default 5000) with debounced disk writes.
+| Optimization | Effect |
+|---|---|
+| `low_resource_mode: true` | Lazy-loads heavy skills, skips all background loops (wellness, dream, reflector, watchdog, continuous learning) |
+| `local_llm_only: true` | No cloud SDKs loaded, no DNS lookups |
+| `security_scan_requests: false` | **Saves 1 LLM call per request** |
+| `auto_web_research_when_uncertain: false` | No expensive web + rewrite pass |
+| `session_usage_log: false` | Eliminates per-call disk I/O |
+| `max_steps: 25` | **Cuts max reasoning churn 4×** vs previous default of 100 |
+| `ollama_options: {num_predict: 512, num_ctx: 4096}` | Caps generation to 512 tokens, context window to 4K — peak RAM savings |
+| `memory.short_term_limit: 5` | Less context per request = fewer tokens |
+| `wellness_interval_s: 3600` | Proactive checks every 1h instead of 30min |
+| `wellness_idle_threshold_s: 14400` | Only after 4h idle instead of 2h |
 
-2. **Low-resource Tuning** — Use individual cadences to optimize background processing for your specific hardware.
-
-You can also tune individual cadences:
-
-```yaml
-proactive:
-  wellness_interval_s: 3600        # 1 h instead of 30 min
-  wellness_idle_threshold_s: 14400 # 4 h idle before any prompt
-
-forge:
-  continuous_learning_warmup_s: 1800     # 30 min
-  continuous_learning_interval_s: 43200  # 12 h
-```
-
-Other small wins for cold boot: leave `system.local_llm_only: true` (skip cloud DNS lookups), keep `system.security_scan_requests: false`, and turn `system.use_ensemble` off if you want first-token latency over depth-of-deliberation.
+These are set in [`config/settings.yaml`](config/settings.yaml). Override any with env vars or edit directly.
 
 #### Why is the first response slow?
 
-The very first turn after boot pays a stack of one-time costs that subsequent turns do not. If you typed "hello viki" and waited 15+ seconds, the cause is almost certainly one of these:
+The very first turn after boot pays a stack of one-time costs that subsequent turns do not:
 
-1. **Ollama cold-loads the model on the first call.** A 4 GB Q4 model can take 5–15 s to read off disk. To shave this, leave the new flag `system.prewarm_default_model: true` on (default) — VIKI fires a 1-token ping at boot so the model is already resident when you hit Enter. Disabled automatically in `low_resource_mode` and `air_gap`.
-2. **`Runtime health: degraded`** in the welcome banner. If a configured model is missing, VIKI silently falls back to a slower one. The banner now prints the unavailable model name and a concrete `ollama pull <model>` hint — run it once and the warning goes away.
-3. **First sentence-transformer load**. The encoder weights (~150 MB) used by lessons / narrative recall are now lazy-loaded on first non-trivial query. Greetings, acks, and farewells skip them entirely thanks to the reflex layer.
-4. **Governor safety check**. The ethical governor still issues a semantic-veto LLM call on every input longer than ~5 chars; that is intentional and unchanged.
-5. **Token streaming**. For trivial conversational turns, deliberation now streams tokens through `chat_stream` so the first character lands in ~700 ms even though total wall-clock is unchanged. Set `system.use_ensemble: false` if you want the leanest possible deliberation prompt.
-6. **Long idle re-load**. Ollama unloads the model from RAM after `OLLAMA_KEEP_ALIVE` (default 5 min). The first request after a long idle pays the cold-load again. Either bump `OLLAMA_KEEP_ALIVE=24h` in your environment, or just send any cheap message (a greeting hits the reflex layer and is free) before the real question.
+1. **Ollama cold-loads the model on the first call.** A 4 GB Q4 model can take 5–15 s to read off disk. Use `phi3:mini` (~2.2 GB) for the fastest cold start.
+2. **`Runtime health: degraded`** in the welcome banner — run `ollama pull <model>` for the missing model.
+3. **First sentence-transformer load** (~150 MB) — lazy-loaded on first non-trivial query; greetings skip it.
+4. **Long idle re-load** — Ollama unloads after `OLLAMA_KEEP_ALIVE` (default 5 min). Set `OLLAMA_KEEP_ALIVE=24h` or send a greeting first.
 
-If you really want the absolute lowest latency, combine: `low_resource_mode: true`, `use_ensemble: false`, `prewarm_default_model: true`, and a small Ollama model (`qwen2.5:1.5b` or similar).
+For absolute lowest latency on 4 GB: use `phi3:mini` via Ollama and the defaults above.
 
 ### Frontier wiring (2026)
 
@@ -221,7 +213,7 @@ VIKI/
 ### Prerequisites
 *   **Python 3.10+** (3.10, 3.11, and 3.12 are supported; CI runs 3.10 and 3.11 on Ubuntu).
 *   **Ollama CLI**: Installed and running (the desktop app or service usually already listens on `127.0.0.1:11434`; a second `ollama serve` is only needed if nothing is bound to that port).
-*   **Recommended Models**: `phi3` (Reflex), `deepseek-r1` (Reasoning). For the **Neural Forge** bake step, pull whatever base you configure (commonly `qwen3.5:latest` or `gemma4:latest`); see [Build your VIKI model](#build-your-viki-model).
+*   **Recommended Models**: `phi3` (Reflex), `deepseek-r1` (Reasoning). For the **Neural Forge** bake step, pull whatever base you configure (commonly `qwen3.6:latest` or `gemma4:latest`); see [Build your VIKI model](#build-your-viki-model).
 
 ### Installation
 1.  **Clone & Initialize**:
@@ -294,9 +286,8 @@ Install the `viki` command so you can run it from any directory with the current
 4.  **Run with Docker**:
     Build and run the VIKI CLI in a container. Ollama should be running on the host (or in another container). See [docs/DOCKER.md](docs/DOCKER.md) for details.
     ```powershell
-    copy .env.example .env
-    # Edit .env and set VIKI_API_KEY (required)
-    docker compose up --build
+    docker compose build
+    docker compose run --rm -it viki
     ```
 
 ---
@@ -314,7 +305,7 @@ Optional **GPU** strategies (`--strategy lora`, `dpo`, `orpo`) are documented in
 ### Prerequisites
 
 1. **Ollama** reachable (`ollama list` works).
-2. **Base model** pulled, e.g. `ollama pull qwen3.5:latest` (or `gemma4:latest`, or any tag you pass with `--base`).
+2. **Base model** pulled, e.g. `ollama pull qwen3.6:latest` (or `gemma4:latest`, or any tag you pass with `--base`).
 3. **Some lessons** in the DB (the script will fail if there are zero). Use VIKI normally so reinforced lessons accumulate.
 
 ### Configure the base model
@@ -323,7 +314,7 @@ Set the bake base in **`viki/config/settings.yaml`**:
 
 ```yaml
 system:
-  forge_base_ollama_model: "qwen3.5:latest"   # or gemma4:latest, etc. (Modelfile FROM)
+  forge_base_ollama_model: "qwen3.6:latest"   # or gemma4:latest, etc. (Modelfile FROM)
   forge_output_ollama_tag: "viki-neural-forge"  # ollama create tag; override with VIKI_FORGE_OUTPUT_OLLAMA_MODEL
 ```
 

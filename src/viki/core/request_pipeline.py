@@ -255,16 +255,31 @@ class _FileReferenceStage:
         return re.findall(pattern, text, re.IGNORECASE)
 
     def _resolve_file(self, filename: str, search_dirs: List[str]) -> Optional[str]:
-        """Try to find the file in search directories."""
+        """Try to find the file in search directories with path traversal protection."""
         import os
-        # If it's already an absolute path
-        if os.path.isabs(filename) and os.path.isfile(filename):
-            return filename
-        # Search in each directory
+        # Resolve absolute path, stripping any traversal components
+        resolved = os.path.abspath(os.path.join(os.getcwd(), filename))
+        # Verify resolved path is within one of the allowed search directories
+        allowed = False
+        for directory in search_dirs:
+            abs_dir = os.path.abspath(directory)
+            if resolved.startswith(abs_dir + os.sep) or resolved == abs_dir:
+                allowed = True
+                break
+        if not allowed:
+            return None
+        if os.path.isfile(resolved):
+            return resolved
+        # Search in each search directory as fallback
         for directory in search_dirs:
             candidate = os.path.join(directory, filename)
-            if os.path.isfile(candidate):
-                return os.path.abspath(candidate)
+            abs_candidate = os.path.abspath(candidate)
+            # Re-check sandbox for relative path resolution
+            abs_dir = os.path.abspath(directory)
+            if not (abs_candidate.startswith(abs_dir + os.sep) or abs_candidate == abs_dir):
+                continue
+            if os.path.isfile(abs_candidate):
+                return abs_candidate
         return None
 
     async def run(self, ctrl: Any, ctx: RequestContext) -> Optional[str]:

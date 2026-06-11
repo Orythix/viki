@@ -103,6 +103,7 @@ class Container:
     # ------------------------------------------------------------------
     def _build(self) -> None:
         """Register all providers lazily so imports only happen on first use."""
+        self._init_errors: Dict[str, str] = {}
 
         def _make_learning_repository():
             try:
@@ -111,7 +112,9 @@ class Container:
                 )
                 return SqlAlchemyLearningRepository(db_url="sqlite:///data/viki_knowledge.db?timeout=30.0")
             except Exception as exc:
-                _log.warning("learning_repository init failed: %s", exc)
+                msg = f"learning_repository init failed: {exc}"
+                _log.warning(msg)
+                self._init_errors["learning_repository"] = str(exc)
                 return None
 
         def _make_agent_pool():
@@ -119,7 +122,9 @@ class Container:
                 from infrastructure.swarm.local_agent_pool import LocalAgentPool
                 return LocalAgentPool()
             except Exception as exc:
-                _log.warning("agent_pool init failed: %s", exc)
+                msg = f"agent_pool init failed: {exc}"
+                _log.warning(msg)
+                self._init_errors["agent_pool"] = str(exc)
                 return None
 
         def _make_safety_service():
@@ -127,7 +132,9 @@ class Container:
                 from application.services.safety_service import SafetyService
                 return SafetyService(config=self.config.get("safety", {}))
             except Exception as exc:
-                _log.warning("safety_service init failed: %s", exc)
+                msg = f"safety_service init failed: {exc}"
+                _log.warning(msg)
+                self._init_errors["safety_service"] = str(exc)
                 return None
 
         def _make_swarm_orchestrator():
@@ -136,25 +143,29 @@ class Container:
                 pool = self.agent_pool()
                 return SwarmOrchestrator(agent_pool=pool)
             except Exception as exc:
-                _log.warning("swarm_orchestrator init failed: %s", exc)
+                msg = f"swarm_orchestrator init failed: {exc}"
+                _log.warning(msg)
+                self._init_errors["swarm_orchestrator"] = str(exc)
                 return None
 
         def _make_forge_orchestrator():
             try:
                 from application.services.forge_orchestrator import ForgeOrchestrator
-                # controller is injected later by main.py
                 return ForgeOrchestrator(controller=None)
             except Exception as exc:
-                _log.warning("forge_orchestrator init failed: %s", exc)
+                msg = f"forge_orchestrator init failed: {exc}"
+                _log.warning(msg)
+                self._init_errors["forge_orchestrator"] = str(exc)
                 return None
 
         def _make_self_healing():
             try:
                 from application.services.fault_tolerance_service import SelfHealingService
-                # controller is injected later by main.py
                 return SelfHealingService(controller=None)
             except Exception as exc:
-                _log.warning("self_healing_service init failed: %s", exc)
+                msg = f"self_healing_service init failed: {exc}"
+                _log.warning(msg)
+                self._init_errors["self_healing_service"] = str(exc)
                 return None
 
         def _make_recall_use_case():
@@ -165,7 +176,9 @@ class Container:
                     safety_service=self.safety_service(),
                 )
             except Exception as exc:
-                _log.warning("recall_memory_use_case init failed: %s", exc)
+                msg = f"recall_memory_use_case init failed: {exc}"
+                _log.warning(msg)
+                self._init_errors["recall_memory_use_case"] = str(exc)
                 return None
 
         # Singletons

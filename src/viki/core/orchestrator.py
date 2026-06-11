@@ -5,15 +5,13 @@ import yaml
 import re
 import json
 import importlib
-import shutil
-import hashlib
-from typing import Dict, Any, List, Optional, Tuple, Union
+from typing import Dict, Any, List, Optional, Tuple
 
 from viki.core.telemetry import TelemetryStore
 from viki.core.test_healer import TestHealerPipeline
 from viki.core.identity_profile import Soul
 from viki.core.security_guard import SafetyLayer, safe_for_log
-from viki.core.inference_gateway import APILLM, ModelRouter, StructuredPrompt
+from viki.core.inference_gateway import ModelRouter
 from viki.core.schema import VIKIResponse
 from viki.skills.registry import SkillRegistry
 from viki.core.knowledge_ingestion import LearningModule
@@ -55,7 +53,7 @@ from viki.core.request_pipeline import RequestContext, build_default_preflight_p
 from viki.core.git_context import get_git_workspace_snapshot
 from viki.core.endpoint_guard import EndpointGuardService
 
-from viki.config.logger import viki_logger, thought_logger
+from viki.config.logger import viki_logger
 from viki.core.telemetry_service import close_persistent_traces
 from viki.core import command_handlers
 from viki.core.config_watcher import ConfigWatcher
@@ -283,6 +281,9 @@ class VIKIController:
         
         # Global Interrupt Token (Shared Presence)
         self.interrupt_signal = asyncio.Event()
+        
+        # Background loop shutdown signal (allows clean termination of infinite loops)
+        self._shutdown_event = asyncio.Event()
         
         # Task tracking for proper cleanup
         self._background_tasks = set()
@@ -583,48 +584,6 @@ class VIKIController:
                 viki_logger.info("Config hot-reload: models.yaml applied.")
         except Exception as e:
             viki_logger.warning("Config hot-reload failed for %s: %s", path, e)
-
-    def track_touched_item(self, category: str, item: str):
-        """Track a resource touched during the session for security audit."""
-        if category in self.session_history:
-            if item not in self.session_history[category]:
-                self.session_history[category].append(item)
-                # Keep history manageable
-                if len(self.session_history[category]) > 50:
-                    self.session_history[category].pop(0)
-
-    def get_sovereign_status(self) -> Dict[str, Any]:
-        """Collect current security and boundary status for the dashboard."""
-        from core.utils.path_sandbox import get_allowed_roots, BLOCKED_PATHS
-        
-        system = self.settings.get("system", {})
-        
-        # Resolve capabilities safely
-        net_cap = self.capabilities.get("internet_research")
-        shell_cap = self.capabilities.get("shell_exec")
-        
-        return {
-            "filesystem": {
-                "workspace": system.get("workspace_dir", "."),
-                "allowed_roots_count": len(get_allowed_roots(self)),
-                "blocked_paths_count": len(BLOCKED_PATHS),
-                "touched_files": self.session_history.get("touched_files", [])
-            },
-            "network": {
-                "air_gap": self.air_gap,
-                "allowlist_count": len(net_cap.meta.get("destination_allowlist", [])) if net_cap else 0,
-                "blocked_actions": self.session_history.get("blocked_actions", [])
-            },
-            "shell": {
-                "enabled": shell_cap.enabled if shell_cap else False,
-                "requires_confirmation": shell_cap.requires_confirmation if shell_cap else True,
-                "executed_commands": self.session_history.get("executed_commands", [])
-            },
-            "privacy": {
-                "redaction_active": True, # Hardcoded for now based on security_guard.py
-                "shadow_mode": self.shadow_mode
-            }
-        }
 
     async def _startup_pulse(self):
         """Autonomous startup sequence: Connect, Research, Evolve.
@@ -977,7 +936,7 @@ class VIKIController:
         unavailable = health.get("unavailable_models") or {}
         if unavailable:
             # Surface the actual model names so the user can act on it. For
-            # Ollama-style names (`qwen3.5:latest`) we suggest a concrete
+            # Ollama-style names (`qwen3.6:latest`) we suggest a concrete
             # `ollama pull` command. The list is capped at 3 to keep the
             # summary readable.
             names = list(unavailable.keys())
@@ -1009,13 +968,21 @@ class VIKIController:
         forge_settings = self.settings.get("forge", {}) or {}
         warmup_s = max(0, int(forge_settings.get("continuous_learning_warmup_s", 300)))
         interval_s = max(60, int(forge_settings.get("continuous_learning_interval_s", 21600)))
+        shutdown_ev = getattr(self, "_shutdown_event", None)
         await asyncio.sleep(warmup_s)
         while True:
+            if shutdown_ev is not None and shutdown_ev.is_set():
+                viki_logger.info("continuous_learning_loop: shutdown requested, exiting.")
+                break
             try:
                 await self.continuous_learner.check_and_train()
             except Exception as e:
                 viki_logger.error(f"Continuous learning check failed: {e}")
-            await asyncio.sleep(interval_s)
+            # Sleep in small increments so shutdown can be responsive
+            for _ in range(interval_s):
+                if shutdown_ev is not None and shutdown_ev.is_set():
+                    break
+                await asyncio.sleep(1)
 
     async def resume_mission(self, on_event=None) -> str:
         """Resumes an active mission found in the WorldModel."""
@@ -1175,12 +1142,12 @@ class VIKIController:
             "read_file": lambda t: _generic_exec(t, "dev_tools", {"action": "read_file"}),
             "write": lambda t: _generic_exec(t, "dev_tools", {"action": "write_file"}),
             "patch": lambda t: _generic_exec(t, "dev_tools", {"action": "patch_file"}),
-            "run_tests": lambda t: _generic_exec(t, "shell", {"skip_confirmation": True}),
+            "run_tests": lambda t: _generic_exec(t, "shell"),
             "refactor": lambda t: _generic_exec(t, "dev_tools", {"action": "patch_file"}),
             "analyze": _analyze,
             "reflect": _analyze,
-            "shell": lambda t: _generic_exec(t, "shell", {"skip_confirmation": True}),
-            "create": lambda t: _generic_exec(t, "shell", {"skip_confirmation": True}),
+            "shell": lambda t: _generic_exec(t, "shell"),
+            "create": lambda t: _generic_exec(t, "shell"),
         }
 
     def _json_type_matches(self, value: Any, expected_type: str) -> bool:
@@ -2422,7 +2389,11 @@ class VIKIController:
             self.evolution.flush()
         except Exception as e:
             viki_logger.debug(f"Evolution flush on shutdown: {e}")
-        
+
+        # Signal background loops to exit cleanly
+        if getattr(self, "_shutdown_event", None) is not None:
+            self._shutdown_event.set()
+
         # Cancel all background tasks
         if self._background_tasks:
             viki_logger.info(f"Cancelling {len(self._background_tasks)} background tasks...")

@@ -32,7 +32,7 @@ class WorkingMemory:
     """
     def __init__(self, config: Dict[str, Any], db_path: Optional[str] = None):
         self.config = config
-        self.max_turns = min(max(config.get('memory', {}).get('short_term_limit', 15), 10), 50)
+        self.max_turns = min(max(config.get('memory', {}).get('short_term_limit', 15), 5), 50)
 
         if db_path is None:
             data_dir = config.get('system', {}).get('data_dir', './data')

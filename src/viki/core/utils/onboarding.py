@@ -169,9 +169,9 @@ def _bake_model(settings_path: str, nickname: str, occupation: str, more_info: s
             data_dir = os.path.join(os.path.dirname(config_dir), "data")
             modelfile_path = os.path.join(data_dir, "Modelfile.onboarding")
             
-            # Use qwen3.5:latest as base (consistent with models.yaml)
+            # Use qwen3.6:latest as base
             modelfile_content = (
-                f"FROM qwen3.5:latest\n"
+                f"FROM qwen3.6:latest\n"
                 f"SYSTEM \"\"\"\n"
                 f"You are VIKI, a sovereign intelligence. Your owner is {nickname}.\n"
                 f"Owner Profile: {nickname} is a {occupation}. {more_info}\n"

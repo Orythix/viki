@@ -86,7 +86,11 @@ class SimpleInterface:
 
     def welcome(self, controller=None):
         import os
-        username = os.getlogin() if hasattr(os, "getlogin") else "User"
+        try:
+            username = os.getlogin()
+        except (FileNotFoundError, OSError):
+            import getpass
+            username = getpass.getuser()
         cwd = os.getcwd()
         
         from rich.table import Table
@@ -734,7 +738,8 @@ def run():
         title="[bold yellow]Security Guide[/]"
     ))
     
-    if not Confirm.ask("Do you trust this folder and wish to proceed?"):
+    trust_env = os.environ.get("VIKI_TRUST_WORKSPACE", "").lower() in ("true", "1", "yes")
+    if not trust_env and not Confirm.ask("Do you trust this folder and wish to proceed?"):
         console.print("[yellow]Access denied. Exiting.[/]")
         sys.exit(0)
 

@@ -23,16 +23,27 @@ from typing import Any, Dict, List, Tuple
 from viki.skills.base import BaseSkill
 
 _FORBIDDEN = re.compile(
-    r"\b(insert|update|delete|drop|alter|create|truncate|attach|detach|pragma|replace|grant|revoke)\b",
+    r"\b(insert|update|delete|drop|alter|create|truncate|attach|detach|pragma|replace|grant|revoke|load|import|vacuum)\b",
     re.IGNORECASE,
 )
 
+# Reject multi-statement queries (SQLite-specific risk)
+_MULTI_STMT = re.compile(r";\s*(select|insert|update|delete|drop|alter|create|truncate|attach|pragma)", re.IGNORECASE)
+
+# Maximum query length to prevent resource exhaustion
+_MAX_QUERY_LEN = 4096
+
 
 def _validate_select(query: str) -> str:
-    if not query.lower().lstrip().startswith("select"):
+    if len(query) > _MAX_QUERY_LEN:
+        return f"Error: query exceeds maximum length of {_MAX_QUERY_LEN} characters."
+    stripped = query.strip()
+    if not stripped.lower().lstrip().startswith("select"):
         return "Error: only SELECT queries are allowed."
-    if _FORBIDDEN.search(query):
+    if _FORBIDDEN.search(stripped):
         return "Error: query contains forbidden write/DDL keyword."
+    if _MULTI_STMT.search(stripped.rstrip(";")):
+        return "Error: multi-statement queries are not allowed."
     return ""
 
 
@@ -40,6 +51,8 @@ def _run_sqlite(db_path: str, query: str, limit: int, offset: int) -> Tuple[List
     if not db_path or not os.path.isfile(db_path):
         raise FileNotFoundError(f"sqlite db not found: {db_path}")
     with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=10.0) as conn:
+        conn.execute("PRAGMA query_only = ON")
+        conn.execute("PRAGMA cell_size_check = ON")
         conn.row_factory = sqlite3.Row
         cur = conn.execute(f"{query} LIMIT {limit} OFFSET {offset}")
         rows = [dict(r) for r in cur.fetchall()]

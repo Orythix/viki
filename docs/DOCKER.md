@@ -2,35 +2,63 @@
 
 Documentation index: [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md).
 
-This guide covers running the VIKI API in Docker and using Docker from the agent (e.g. listing containers, running images).
+This guide covers running the VIKI CLI in Docker.
 
 ## Prerequisites
 
-- Docker (and Docker Compose if you use `docker compose up`)
+- Docker (and Docker Compose if you use `docker compose`)
 - Ollama running on the host (or in another container)
-- A `.env` file with at least `VIKI_API_KEY` set (copy from `.env.example`)
+- A `.env` file (copy from `.env.example`)
 
-## Using Docker from the agent
+## Quick start
 
-## Using Docker from the agent
+```powershell
+# Build the image
+docker compose build
 
-VIKI can run Docker commands (e.g. `docker ps`, `docker run`) via the **shell skill**. Ask VIKI to run a command; she will use the shell skill and may ask for confirmation for higher-risk commands.
+# Interactive CLI session
+docker compose run --rm -it viki
 
-- **VIKI on the host**: If Docker CLI is installed and the daemon is reachable, you can say e.g. “run docker ps” or “list Docker containers” and VIKI will run the appropriate command.
-- **VIKI in Docker**: To let the agent control Docker on the host from inside the container:
-  1. Mount the Docker socket: `-v /var/run/docker.sock:/var/run/docker.sock`
-  2. Install the Docker CLI in the image (extend the Dockerfile with a step that installs the `docker` CLI for your platform), or use an image that already includes it.
+# One-shot command
+docker compose run --rm viki "list files in current directory"
+```
 
-Then the agent can run `docker ps`, `docker images`, `docker run ...`, etc. through the shell skill (with confirmation when the command is classified as destructive).
+## Environment variables
 
 | Variable | Description |
 |----------|-------------|
-| `VIKI_API_KEY` | Required for messaging gateway authentication. |
-| `VIKI_DATA_DIR` | Persistence directory (default `./data`). In Docker use `/app/data` and mount a volume. |
-| `VIKI_WORKSPACE_DIR` | Workspace for agent files (default `./workspace`). In Docker use `/app/workspace` and mount a volume. |
+| `VIKI_DATA_DIR` | Persistence directory. In Docker use `/app/data` (mounted by default). |
+| `VIKI_WORKSPACE_DIR` | Workspace for agent files (`/app/workspace`). |
+| `VIKI_CONFIG_DIR` | Config directory (`/app/config`). |
 | `OLLAMA_HOST` | Ollama API URL. Set to `http://host.docker.internal:11434` when VIKI runs in Docker and Ollama is on the host (Windows/Mac). |
 
-See `.env.example` for more options.
+## Volumes
+
+The `docker-compose.yml` mounts these directories from the host:
+
+| Host path | Container path | Purpose |
+|-----------|---------------|---------|
+| `./data` | `/app/data` | SQLite databases, lessons, training data |
+| `./workspace` | `/app/workspace` | Agent workspace files |
+| `./logs` | `/app/logs` | Telemetry and log output |
+| `./config` | `/app/config` | Settings, models, personas, soul |
+
+## Running on low-end PCs
+
+The Docker image is the same codebase. For low-RAM environments:
+
+1. Use a small Ollama model (`phi3:mini` is ~2.2 GB).
+2. Set `VIKI_LOW_RESOURCE=1` in `.env` or the `environment` section of `docker-compose.yml`.
+3. The image already includes optimized defaults (see `config/settings.yaml`).
+
+## Using Docker from the agent
+
+VIKI can run Docker commands (e.g. `docker ps`, `docker run`) via the **shell skill**. To let the agent control Docker on the host from inside the container:
+
+1. Mount the Docker socket: `-v /var/run/docker.sock:/var/run/docker.sock`
+2. Install the Docker CLI in the image (extend the Dockerfile).
+
+Then the agent can run `docker ps`, `docker images`, `docker run ...`, etc. through the shell skill (with confirmation when the command is classified as destructive).
 
 ---
 

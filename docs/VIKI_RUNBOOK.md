@@ -22,7 +22,7 @@ Check all items before starting the core or UI.
 | Python | `python --version` | 3.10+ (3.11+ recommended per [docs/SETUP.md](docs/SETUP.md)) |
 | Dependencies | `pip install -r requirements.txt` (from repo root) | No install errors |
 | Ollama daemon | Ollama app running or `ollama serve` | Process listening (default `127.0.0.1:11434`) |
-| Model tags | `ollama list` | At least the tag configured in `viki/config/models.yaml` for `models.default` (e.g. `qwen3.5:latest` for profile `qwen35`) |
+| Model tags | `ollama list` | At least the tag configured in `viki/config/models.yaml` for `models.default` (e.g. `qwen3.6:latest` for profile `qwen35`) |
 | Optional HF | `HF_TOKEN` in env | Reduces Hub rate limits for sentence-transformers loads |
 
 ---

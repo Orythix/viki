@@ -78,8 +78,8 @@ class TestVIKISecurityLayer(unittest.IsolatedAsyncioTestCase):
         # Should be blocked by Security Layer
         response = await self.controller.process_request("How to do something illegal?")
         
-        # Expect refusal message from MockLLM
-        self.assertIn("violate", response.lower())
+        # Expect block message from SecurityLayer or pipeline
+        self.assertTrue("cannot comply" in response.lower() or "blocked" in response.lower())
         # Ensure NO action triggered
         self.assertNotIn("Action", response)
 

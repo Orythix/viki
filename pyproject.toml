@@ -84,7 +84,7 @@ dependencies = [
     "dependency-injector",
     "sqlalchemy",
     "rank_bm25",
-    "prompt-toolkit",
+    "prompt-toolkit>=3.0.0,<4.0.0",
 ]
 
 [project.optional-dependencies]

@@ -131,8 +131,31 @@ class SelfHealer:
                 if text.lower().startswith("json"):
                     text = text[4:].lstrip()
             decision = json.loads(text)
-            if not isinstance(decision, dict) or "strategy" not in decision:
-                raise ValueError("missing strategy")
+            if not isinstance(decision, dict):
+                raise ValueError("response is not a JSON object")
+            strategy = decision.get("strategy", "retry")
+            if strategy not in ("retry", "rewrite", "split", "escalate"):
+                raise ValueError(f"invalid strategy: {strategy}")
+            decision["strategy"] = strategy
+            for key in ("new_title", "new_description"):
+                val = decision.get(key)
+                if val is not None and not isinstance(val, str):
+                    decision[key] = str(val)
+            params = decision.get("new_parameters")
+            if params is not None and not isinstance(params, dict):
+                decision["new_parameters"] = None
+            subtasks = decision.get("subtasks")
+            if subtasks is not None:
+                if not isinstance(subtasks, list):
+                    subtasks = []
+                validated = []
+                for s in subtasks:
+                    if isinstance(s, dict) and "title" in s:
+                        validated.append({
+                            "title": str(s.get("title", "")),
+                            "description": str(s.get("description", "")),
+                        })
+                decision["subtasks"] = validated or None
             return decision
         except Exception:
             return SelfHealer._fallback_recovery(node)
