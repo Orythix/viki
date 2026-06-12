@@ -5,7 +5,6 @@ from pathlib import Path
 
 from viki.skills.builtins.megatron_lm_playbook_skill import MegatronLmPlaybookSkill
 
-
 EXPECTED_SLUGS = {
     "build-and-dependency",
     "cicd",
@@ -23,7 +22,14 @@ EXPECTED_SLUGS = {
 
 class TestMegatronLmPlaybooks(unittest.IsolatedAsyncioTestCase):
     def test_each_skill_has_skill_md(self):
-        root = Path(__file__).resolve().parents[1] / "skills" / "playbooks" / "megatron_lm"
+        root = (
+            Path(__file__).resolve().parents[1]
+            / "src"
+            / "viki"
+            / "skills"
+            / "playbooks"
+            / "megatron_lm"
+        )
         for slug in EXPECTED_SLUGS:
             path = root / slug / "SKILL.md"
             self.assertTrue(path.is_file(), f"Missing SKILL.md for {slug}")

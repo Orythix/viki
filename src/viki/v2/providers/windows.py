@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class WindowsProvider(SystemProvider):
     PLATFORM = "windows"
 
-    async def _run_powershell(self, command: str) -> str:
+    async def _run_powershell(self, command: str, timeout: int = 30) -> str:
         proc = await asyncio.create_subprocess_exec(
             "powershell",
             "-NoProfile",
@@ -23,7 +23,13 @@ class WindowsProvider(SystemProvider):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await proc.communicate()
+        try:
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        except TimeoutError:
+            proc.kill()
+            raise RuntimeError(
+                f"PowerShell command timed out after {timeout}s: {command[:100]}"
+            ) from None
         if proc.returncode != 0:
             raise RuntimeError(stderr.decode("cp1252", errors="replace"))
         return stdout.decode("cp1252", errors="replace")

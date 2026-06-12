@@ -17,7 +17,7 @@ Usage:
     proxy = LazySkillProxy(
         name="vision",
         description="Capture a screenshot and describe it.",
-        module_path="skills.builtins.vision_skill",
+        module_path="viki.skills.builtins.vision_skill",
         class_name="VisionSkill",
         ctor_args=lambda controller: (),
         controller=controller,

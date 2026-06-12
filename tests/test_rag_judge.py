@@ -58,7 +58,7 @@ def test_enrich_report_mocked():
         },
     )()
 
-    with patch("eval.rag_judge.run_ollama_judge", return_value=fake):
+    with patch("viki.eval.rag_judge.run_ollama_judge", return_value=fake):
         enrich_report_with_ollama_judge(
             report,
             gold,
@@ -75,9 +75,7 @@ def test_enrich_report_mocked():
 
 
 def test_run_ollama_judge_parse_only():
-    mock_resp = (
-        b'{"message":{"content":"{\\"relevance\\":0.5,\\"covers_expected\\":true,\\"rationale\\":\\"fine\\"}"}}\n'
-    )
+    mock_resp = b'{"message":{"content":"{\\"relevance\\":0.5,\\"covers_expected\\":true,\\"rationale\\":\\"fine\\"}"}}\n'
 
     class FakeResp:
         def read(self):

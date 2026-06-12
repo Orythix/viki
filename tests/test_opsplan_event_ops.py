@@ -1,9 +1,9 @@
-import unittest
 import asyncio
 import os
 import sys
-import shutil
 import tempfile
+import unittest
+
 import yaml
 
 sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "..")))
@@ -13,13 +13,14 @@ from viki.core.orchestrator import VIKIController
 
 class TestOpsPlanEventOps(unittest.TestCase):
     def setUp(self):
-        viki_dir = os.path.join(os.getcwd(), "viki")
+        viki_dir = os.path.join(os.getcwd(), "config")
         self.settings = {
             "system": {
                 "data_dir": None,
                 "log_level": "INFO",
+                "security_scan_requests": False,
             },
-            "models_config": "./tests/test_models.yaml",
+            "models_config": os.path.abspath("./tests/test_models.yaml"),
             "memory": {"short_term_limit": 5, "long_term_enabled": False},
             "skills": {"auto_discover": False, "registry_path": ""},
         }
@@ -32,7 +33,7 @@ class TestOpsPlanEventOps(unittest.TestCase):
         with open(self.settings_path, "w", encoding="utf-8") as f:
             yaml.safe_dump(self.settings, f)
 
-        self.soul_path = os.path.join(viki_dir, "config", "soul.yaml")
+        self.soul_path = os.path.join(viki_dir, "soul.yaml")
         self.controller = VIKIController(self.settings_path, self.soul_path)
 
     def tearDown(self):
@@ -54,6 +55,7 @@ class TestOpsPlanEventOps(unittest.TestCase):
     def async_test(coro):
         def wrapper(self):
             return asyncio.run(coro(self))
+
         return wrapper
 
     @async_test
@@ -73,4 +75,3 @@ class TestOpsPlanEventOps(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

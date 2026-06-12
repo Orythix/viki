@@ -411,6 +411,22 @@ class VIKIController:
         self.capabilities = CapabilityRegistry()
         self.disabled_skills = {}
         self._register_default_skills()
+
+        # V2 Tool Bridge (opt-in via VIKI_V2_MODE=1)
+        if os.environ.get("VIKI_V2_MODE", "0").lower() in ("1", "true", "yes", "on"):
+            try:
+                from viki.v2.bridge import create_v2_bridge
+
+                v2_bridge = create_v2_bridge()
+                self.skill_registry.register_skill(v2_bridge)
+                viki_logger.info(
+                    "V2 Tool Bridge registered with %d tools: %s",
+                    len(v2_bridge.list_tools()),
+                    ", ".join(v2_bridge.list_tools()),
+                )
+            except Exception as e:
+                viki_logger.warning("V2 Tool Bridge failed to load: %s", e)
+
         # Phase 7 (P0): MCP integration. We hold the client here; actual
         # connection happens in `attach_mcp_skills_sync()` which is called
         # at boot by API/main entry points (and tolerates missing SDK / config).
@@ -1349,7 +1365,7 @@ class VIKIController:
         (
             "look_at_screen",
             "Capture and describe screen content.",
-            "skills.builtins.vision_skill",
+            "viki.skills.builtins.vision_skill",
             "VisionSkill",
             False,
             "safe",
@@ -1357,7 +1373,7 @@ class VIKIController:
         (
             "python_interpreter",
             "Execute Python in a sandbox.",
-            "skills.builtins.interpreter_skill",
+            "viki.skills.builtins.interpreter_skill",
             "InterpreterSkill",
             True,
             "medium",
@@ -1365,7 +1381,7 @@ class VIKIController:
         (
             "browser",
             "Headless browser navigation and scraping.",
-            "skills.builtins.browser_skill",
+            "viki.skills.builtins.browser_skill",
             "BrowserSkill",
             False,
             "medium",
@@ -1373,7 +1389,7 @@ class VIKIController:
         (
             "swarm_control",
             "Multi-agent swarm orchestration.",
-            "skills.builtins.swarm_skill",
+            "viki.skills.builtins.swarm_skill",
             "SwarmSkill",
             True,
             "medium",
@@ -1381,7 +1397,7 @@ class VIKIController:
         (
             "draw_overlay",
             "Floating overlay UI.",
-            "skills.builtins.overlay_skill",
+            "viki.skills.builtins.overlay_skill",
             "OverlaySkill",
             False,
             "safe",
@@ -1389,7 +1405,7 @@ class VIKIController:
         (
             "short_video_agent",
             "Generate short videos.",
-            "skills.builtins.short_video_skill",
+            "viki.skills.builtins.short_video_skill",
             "ShortVideoSkill",
             True,
             "safe",
@@ -1397,16 +1413,23 @@ class VIKIController:
         (
             "calendar",
             "Google Calendar integration.",
-            "skills.builtins.calendar_skill",
+            "viki.skills.builtins.calendar_skill",
             "CalendarSkill",
             True,
             "safe",
         ),
-        ("email", "Gmail integration.", "skills.builtins.email_skill", "EmailSkill", True, "safe"),
+        (
+            "email",
+            "Gmail integration.",
+            "viki.skills.builtins.email_skill",
+            "EmailSkill",
+            True,
+            "safe",
+        ),
         (
             "messaging",
             "Unified messaging across Discord/Telegram/etc.",
-            "skills.builtins.messaging_skill",
+            "viki.skills.builtins.messaging_skill",
             "UnifiedMessagingSkill",
             True,
             "safe",
@@ -1414,7 +1437,7 @@ class VIKIController:
         (
             "twitter",
             "Twitter/X integration.",
-            "skills.builtins.twitter_skill",
+            "viki.skills.builtins.twitter_skill",
             "TwitterSkill",
             False,
             "safe",
@@ -1422,7 +1445,7 @@ class VIKIController:
         (
             "summarize",
             "Summarize long text/web pages.",
-            "skills.builtins.summarize_skill",
+            "viki.skills.builtins.summarize_skill",
             "SummarizeSkill",
             True,
             "safe",
@@ -1430,7 +1453,7 @@ class VIKIController:
         (
             "image_gen",
             "Generate images.",
-            "skills.builtins.image_gen_skill",
+            "viki.skills.builtins.image_gen_skill",
             "ImageGenSkill",
             False,
             "safe",
@@ -1438,7 +1461,7 @@ class VIKIController:
         (
             "obsidian",
             "Obsidian vault notes.",
-            "skills.builtins.obsidian_skill",
+            "viki.skills.builtins.obsidian_skill",
             "ObsidianSkill",
             True,
             "safe",
@@ -1446,7 +1469,7 @@ class VIKIController:
         (
             "tasks",
             "Task list management.",
-            "skills.builtins.tasks_skill",
+            "viki.skills.builtins.tasks_skill",
             "TasksSkill",
             True,
             "safe",
@@ -1454,7 +1477,7 @@ class VIKIController:
         (
             "whisper",
             "Audio transcription.",
-            "skills.builtins.whisper_skill",
+            "viki.skills.builtins.whisper_skill",
             "WhisperSkill",
             True,
             "safe",
@@ -1462,7 +1485,7 @@ class VIKIController:
         (
             "pdf",
             "PDF reading and extraction.",
-            "skills.builtins.pdf_skill",
+            "viki.skills.builtins.pdf_skill",
             "PdfSkill",
             True,
             "safe",
@@ -1470,16 +1493,16 @@ class VIKIController:
         (
             "smart_home",
             "Smart-home device control.",
-            "skills.builtins.smart_home_skill",
+            "viki.skills.builtins.smart_home_skill",
             "SmartHomeSkill",
             False,
             "medium",
         ),
-        ("gif", "GIF generation.", "skills.builtins.gif_skill", "GifSkill", False, "safe"),
+        ("gif", "GIF generation.", "viki.skills.builtins.gif_skill", "GifSkill", False, "safe"),
         (
             "data_analysis",
             "DataFrame analysis.",
-            "skills.builtins.data_analysis_skill",
+            "viki.skills.builtins.data_analysis_skill",
             "DataAnalysisSkill",
             True,
             "safe",
@@ -1487,7 +1510,7 @@ class VIKIController:
         (
             "presentation",
             "Slide deck generation.",
-            "skills.builtins.presentation_skill",
+            "viki.skills.builtins.presentation_skill",
             "PresentationSkill",
             True,
             "safe",
@@ -1495,7 +1518,7 @@ class VIKIController:
         (
             "spreadsheet",
             "Spreadsheet generation/editing.",
-            "skills.builtins.spreadsheet_skill",
+            "viki.skills.builtins.spreadsheet_skill",
             "SpreadsheetSkill",
             True,
             "safe",
@@ -1503,7 +1526,7 @@ class VIKIController:
         (
             "website",
             "Website scaffolding/editing.",
-            "skills.builtins.website_skill",
+            "viki.skills.builtins.website_skill",
             "WebsiteSkill",
             True,
             "safe",
@@ -1511,7 +1534,7 @@ class VIKIController:
         (
             "code_search",
             "Repository code search.",
-            "skills.builtins.code_search_skill",
+            "viki.skills.builtins.code_search_skill",
             "CodeSearchSkill",
             True,
             "safe",
@@ -1519,7 +1542,7 @@ class VIKIController:
         (
             "plan_edit",
             "Multi-file plan-edit-verify loop.",
-            "skills.builtins.plan_edit_skill",
+            "viki.skills.builtins.plan_edit_skill",
             "PlanEditSkill",
             True,
             "medium",
@@ -1527,7 +1550,7 @@ class VIKIController:
         (
             "computer_use",
             "Vision-grounded UI automation.",
-            "skills.builtins.computer_use_skill",
+            "viki.skills.builtins.computer_use_skill",
             "ComputerUseSkill",
             True,
             "medium",
@@ -1535,7 +1558,7 @@ class VIKIController:
     ]
 
     def _register_default_skills(self):
-        from skills.lazy_skill import LazySkillProxy
+        from viki.skills.lazy_skill import LazySkillProxy
 
         allowlist = self.soul.config.get("skill_allowlist")
         low_resource = bool(
@@ -1569,32 +1592,32 @@ class VIKIController:
 
         # Eager skills: cheap to import and used on the hot path.
         eager_specs = [
-            ("skills.builtins.time_skill", "TimeSkill", ()),
-            ("skills.builtins.math_skill", "MathSkill", ()),
-            ("skills.builtins.filesystem_skill", "FileSystemSkill", (self,)),
-            ("skills.thinking", "ThinkingSkill", ()),
-            ("skills.builtins.system_control_skill", "SystemControlSkill", ()),
-            ("skills.builtins.research_skill", "ResearchSkill", (self,)),
-            ("skills.builtins.dev_skill", "DevSkill", (self,)),
-            ("skills.builtins.voice_skill", "VoiceSkill", (self.voice_module, self)),
-            ("skills.builtins.sfs_skill", "SemanticFSSkill", (self,)),
-            ("skills.builtins.security_skill", "SecuritySkill", ()),
-            ("skills.builtins.endpoint_guard_skill", "EndpointGuardSkill", (self,)),
-            ("skills.creation.forge", "ModelForgeSkill", (self,)),
-            ("skills.builtins.recall_skill", "RecallSkill", (self,)),
-            ("skills.builtins.memory_skill", "MemorySkill", (self,)),
-            ("skills.builtins.media_skill", "MediaControlSkill", ()),
-            ("skills.builtins.clipboard_skill", "ClipboardSkill", ()),
-            ("skills.builtins.window_management_skill", "WindowManagerSkill", ()),
-            ("skills.builtins.shell_skill", "ShellSkill", (self,)),
-            ("skills.builtins.notification_skill", "NotificationSkill", ()),
-            ("skills.builtins.coding_workflow_skill", "CodingWorkflowSkill", (self,)),
-            ("skills.builtins.lsp_skill", "LspSkill", (self,)),
+            ("viki.skills.builtins.time_skill", "TimeSkill", ()),
+            ("viki.skills.builtins.math_skill", "MathSkill", ()),
+            ("viki.skills.builtins.filesystem_skill", "FileSystemSkill", (self,)),
+            ("viki.skills.thinking", "ThinkingSkill", ()),
+            ("viki.skills.builtins.system_control_skill", "SystemControlSkill", ()),
+            ("viki.skills.builtins.research_skill", "ResearchSkill", (self,)),
+            ("viki.skills.builtins.dev_skill", "DevSkill", (self,)),
+            ("viki.skills.builtins.voice_skill", "VoiceSkill", (self.voice_module, self)),
+            ("viki.skills.builtins.sfs_skill", "SemanticFSSkill", (self,)),
+            ("viki.skills.builtins.security_skill", "SecuritySkill", ()),
+            ("viki.skills.builtins.endpoint_guard_skill", "EndpointGuardSkill", (self,)),
+            ("viki.skills.creation.forge", "ModelForgeSkill", (self,)),
+            ("viki.skills.builtins.recall_skill", "RecallSkill", (self,)),
+            ("viki.skills.builtins.memory_skill", "MemorySkill", (self,)),
+            ("viki.skills.builtins.media_skill", "MediaControlSkill", ()),
+            ("viki.skills.builtins.clipboard_skill", "ClipboardSkill", ()),
+            ("viki.skills.builtins.window_management_skill", "WindowManagerSkill", ()),
+            ("viki.skills.builtins.shell_skill", "ShellSkill", (self,)),
+            ("viki.skills.builtins.notification_skill", "NotificationSkill", ()),
+            ("viki.skills.builtins.coding_workflow_skill", "CodingWorkflowSkill", (self,)),
+            ("viki.skills.builtins.lsp_skill", "LspSkill", (self,)),
         ]
         # v27: Dynamic Skill Discovery for Builtins
         import pkgutil
 
-        import skills.builtins as builtins_pkg
+        import viki.skills.builtins as builtins_pkg
 
         discovered_specs = []
         registered_modules = {s[0] for s in eager_specs} | {s[2] for s in self._LAZY_SKILL_SPECS}
@@ -1602,7 +1625,7 @@ class VIKIController:
         for _, modname, ispkg in pkgutil.iter_modules(builtins_pkg.__path__):
             if ispkg:
                 continue
-            full_modname = f"skills.builtins.{modname}"
+            full_modname = f"viki.skills.builtins.{modname}"
             if full_modname in registered_modules:
                 continue
 

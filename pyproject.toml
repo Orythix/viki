@@ -61,7 +61,7 @@ ignore = [
     "T201",  # print statements (used for debug)
     "TRY003", # avoid bare except (too many to fix now)
 ]
-per-file-ignores = { "tests/*" = ["S101", "T201"], "src/viki/skills/**" = ["T201", "E701", "E402", "E741", "B904", "B008"], "src/viki/skills/playbooks/**" = ["T201", "E402", "B008"], "src/viki/evolution_engine.py" = ["E402"], "src/viki/core/vector_memory.py" = ["B904"], "src/viki/core/inference_gateway.py" = ["B904"], "src/viki/core/autonomous_monitor.py" = ["E741"], "src/viki/core/continuous_learning.py" = ["E741"], "src/viki/ops/tenant_ops.py" = ["E741"], "src/viki/application/**" = ["E741"] }
+per-file-ignores = { "tests/*" = ["S101", "T201", "E402"], "src/viki/skills/**" = ["T201", "E701", "E402", "E741", "B904", "B008"], "src/viki/skills/playbooks/**" = ["T201", "E402", "B008"], "src/viki/evolution_engine.py" = ["E402"], "src/viki/core/vector_memory.py" = ["B904"], "src/viki/core/inference_gateway.py" = ["B904"], "src/viki/core/autonomous_monitor.py" = ["E741"], "src/viki/core/continuous_learning.py" = ["E741"], "src/viki/ops/tenant_ops.py" = ["E741"], "src/viki/application/**" = ["E741"] }
 
 [tool.ruff.format]
 quote-style = "double"
@@ -82,7 +82,7 @@ namespace_packages = true
 explicit_package_bases = true
 files = ["src/viki"]
 exclude = [
-  "src/viki/skills/playbooks/**",
+  "src/viki/skills/playbooks/.*",
   "src/viki/evolution_engine.py",
   "skill-comply",
 ]

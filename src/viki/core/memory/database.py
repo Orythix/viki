@@ -32,7 +32,10 @@ def get_connection(db_path: str) -> sqlite3.Connection:
     writing to the same file share a single connection (and thus a single WAL).
     Callers should call :func:`release_connection` on shutdown.
     """
-    real_path = os.path.realpath(db_path)
+    if db_path == ":memory:":
+        real_path = ":memory:"
+    else:
+        real_path = os.path.realpath(db_path)
     with _lock:
         conn = _connections.get(real_path)
         if conn is not None:
@@ -64,7 +67,10 @@ def release_connection(db_path: str) -> None:
 
     When the last reference is released the underlying connection is closed.
     """
-    real_path = os.path.realpath(db_path)
+    if db_path == ":memory:":
+        real_path = ":memory:"
+    else:
+        real_path = os.path.realpath(db_path)
     with _lock:
         current = _refcount.get(real_path, 0)
         if current <= 1:

@@ -5,7 +5,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from viki.core.knowledge_ingestion import LearningModule
 from viki.eval.rag_eval import (
     GoldRow,
@@ -16,7 +15,7 @@ from viki.eval.rag_eval import (
 
 @pytest.fixture
 def no_encoder(monkeypatch):
-    monkeypatch.setattr("core.embeddings.get_encoder", lambda: None)
+    monkeypatch.setattr("viki.core.embeddings.get_encoder", lambda: None)
 
 
 @pytest.fixture
@@ -61,7 +60,8 @@ def test_load_gold_jsonl(tmp_path):
 def test_load_gold_rejects_empty_constraints(tmp_path):
     p = tmp_path / "bad.jsonl"
     p.write_text(
-        json.dumps({"id": "a", "query": "q", "must_contain_any": [], "must_contain_all": []}) + "\n",
+        json.dumps({"id": "a", "query": "q", "must_contain_any": [], "must_contain_all": []})
+        + "\n",
         encoding="utf-8",
     )
     with pytest.raises(ValueError):
@@ -121,6 +121,6 @@ def test_eval_must_not_contain_violation(tmp_path, no_encoder):
 
 def test_example_fixture_loads():
     root = Path(__file__).resolve().parent.parent
-    fixture = root / "eval" / "fixtures" / "rag_gold.example.jsonl"
+    fixture = root / "src" / "viki" / "eval" / "fixtures" / "rag_gold.example.jsonl"
     rows = load_gold_jsonl(fixture)
     assert len(rows) == 3

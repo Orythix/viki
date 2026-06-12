@@ -2,51 +2,92 @@
 
 from __future__ import annotations
 
-import logging
-import re
+from dataclasses import dataclass
+from typing import Any
 
-logger = logging.getLogger(__name__)
-
-SYSTEM_INTENT_EXAMPLES = [
-    ("what is my wifi password", "network", {"action": "wifi_password"}),
-    ("show me my wireless key", "network", {"action": "wifi_password"}),
-    ("what network am I connected to", "network", {"action": "info"}),
-    ("what os am i running", "system", {"query": "os"}),
-    ("show my hardware specs", "system", {"query": "hardware"}),
-    ("how much ram do i have", "system", {"query": "ram"}),
-    ("list running processes", "system", {"query": "processes"}),
-    ("what is my ip address", "network", {"action": "ip_address"}),
-    ("ping google.com", "network", {"action": "ping", "target": "google.com"}),
-    ("show disk info", "system", {"query": "disk"}),
-]
+from ..llm import get_llm_client
 
 
-class IntentAnalysis:
-    def __init__(self, tool: str, params: dict, confidence: float, raw: str):
-        self.tool = tool
-        self.params = params
-        self.confidence = confidence
-        self.raw = raw
+@dataclass
+class IntentResult:
+    goal: str
+    tool: str
+    parameters: dict[str, Any]
+    confidence: float
+    requires_clarification: bool = False
 
 
 class IntentAnalyzer:
-    def __init__(self):
-        self._patterns: list[tuple[re.Pattern, str, dict]] = []
+    """
+    LLM-based intent classification.
+    No keyword lists, no regex patterns. Uses tool descriptions + examples.
+    """
 
-        for query, tool, params in SYSTEM_INTENT_EXAMPLES:
-            pattern = re.compile(re.escape(query), re.IGNORECASE)
-            self._patterns.append((pattern, tool, params))
+    def __init__(self, tool_registry=None):
+        self.tool_registry = tool_registry
+        self._llm = get_llm_client()
 
-    def analyze(self, user_input: str) -> IntentAnalysis | None:
-        user_input = user_input.strip().lower()
+    def _format_tools_for_prompt(self) -> str:
+        """Format available tools for the LLM prompt."""
+        if not self.tool_registry:
+            return "No tools available"
 
-        for pattern, tool, params in self._patterns:
-            if pattern.search(user_input):
-                return IntentAnalysis(
-                    tool=tool,
-                    params=dict(params),
-                    confidence=0.95,
-                    raw=user_input,
-                )
+        lines = []
+        for tool in self.tool_registry._tools.values():
+            lines.append(f"## {tool.name}")
+            lines.append(f"Description: {tool.description}")
+            if tool.capabilities:
+                lines.append(f"Capabilities: {', '.join(tool.capabilities)}")
+            if tool.examples:
+                lines.append(f"Example queries: {', '.join(tool.examples[:5])}")
+            lines.append(f"Permission tier: {tool.permission_tier.name}")
+            lines.append("")
+        return "\n".join(lines)
 
-        return None
+    async def analyze(self, user_input: str) -> IntentResult | None:
+        """Analyze user input and determine which tool(s) can fulfill it."""
+        if not self.tool_registry or not self.tool_registry._tools:
+            return None
+
+        tool_descriptions = self._format_tools_for_prompt()
+
+        prompt = f"""You are an intent analysis system for a local AI assistant.
+
+Your job: analyze the user's request and determine which tool can fulfill it.
+
+Rules:
+- Do NOT match keywords — understand the semantic meaning
+- Multiple phrasings should map to the same tool
+- If uncertain, return requires_clarification: true
+- Extract structured parameters from natural language
+
+Available tools:
+{tool_descriptions}
+
+User request: {user_input}
+
+Respond in JSON format with:
+{{
+    "goal": "one sentence describing user's goal",
+    "tool": "tool_name",
+    "parameters": {{}},
+    "confidence": 0.0-1.0,
+    "requires_clarification": false
+}}"""
+
+        try:
+            schema = {
+                "type": "object",
+                "properties": {
+                    "goal": {"type": "string"},
+                    "tool": {"type": "string"},
+                    "parameters": {"type": "object"},
+                    "confidence": {"type": "number"},
+                    "requires_clarification": {"type": "boolean"},
+                },
+                "required": ["goal", "tool", "parameters", "confidence", "requires_clarification"],
+            }
+            result = await self._llm.structured_output(prompt, schema)
+            return IntentResult(**result)
+        except Exception:
+            return None

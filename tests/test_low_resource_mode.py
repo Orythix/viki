@@ -18,19 +18,18 @@ import unittest
 
 from viki.core.orchestrator import VIKIController
 
-
 HEAVY_MODULES = (
-    "skills.builtins.vision_skill",
-    "skills.builtins.browser_skill",
-    "skills.builtins.computer_use_skill",
-    "skills.builtins.whisper_skill",
-    "skills.builtins.pdf_skill",
-    "skills.builtins.image_gen_skill",
-    "skills.builtins.short_video_skill",
-    "skills.builtins.spreadsheet_skill",
-    "skills.builtins.presentation_skill",
-    "skills.builtins.data_analysis_skill",
-    "skills.builtins.plan_edit_skill",
+    "viki.skills.builtins.vision_skill",
+    "viki.skills.builtins.browser_skill",
+    "viki.skills.builtins.computer_use_skill",
+    "viki.skills.builtins.whisper_skill",
+    "viki.skills.builtins.pdf_skill",
+    "viki.skills.builtins.image_gen_skill",
+    "viki.skills.builtins.short_video_skill",
+    "viki.skills.builtins.spreadsheet_skill",
+    "viki.skills.builtins.presentation_skill",
+    "viki.skills.builtins.data_analysis_skill",
+    "viki.skills.builtins.plan_edit_skill",
 )
 
 
@@ -58,6 +57,7 @@ class TestLowResourceBoot(unittest.TestCase):
                     except Exception:
                         pass
                 import asyncio
+
                 try:
                     asyncio.run(self.controller.shutdown())
                 except Exception:
@@ -79,7 +79,8 @@ class TestLowResourceBoot(unittest.TestCase):
             self.assertIn(skill_name, registered, f"{skill_name} should be registered")
         for mod in HEAVY_MODULES:
             self.assertNotIn(
-                mod, sys.modules,
+                mod,
+                sys.modules,
                 f"{mod} should NOT be imported at boot under low_resource_mode",
             )
 

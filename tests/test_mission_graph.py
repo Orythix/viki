@@ -5,7 +5,6 @@ Phase 4: tests for hierarchical MissionGraph + persistence + sub-agent runner.
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import tempfile
 import unittest
@@ -28,7 +27,7 @@ class TestMissionGraphSchema(unittest.TestCase):
         g = MissionGraph(mission_id="m1", goal="x")
         a = g.add(title="A")
         b = g.add(title="B", depends_on=[a])
-        c = g.add(title="C", depends_on=[b])
+        g.add(title="C", depends_on=[b])
 
         ready = g.ready_nodes()
         self.assertEqual(len(ready), 1)
@@ -42,7 +41,7 @@ class TestMissionGraphSchema(unittest.TestCase):
     def test_summary(self):
         g = MissionGraph(mission_id="m", goal="g")
         a = g.add(title="A")
-        b = g.add(title="B")
+        g.add(title="B")
         g.nodes[a].status = NodeStatus.DONE
         s = g.summary()
         self.assertEqual(s["total"], 2)
@@ -98,7 +97,7 @@ class TestMissionGraphRunner(unittest.TestCase):
 
 class TestSelfHealer(unittest.TestCase):
     def test_fallback_retry_resets_attempts(self):
-        from core.self_healer import SelfHealer
+        from viki.core.self_healer import SelfHealer
 
         g = MissionGraph(mission_id="m", goal="x")
         nid = g.add(title="t", skill="bad")
@@ -112,14 +111,13 @@ class TestSelfHealer(unittest.TestCase):
         self.assertEqual(decision["strategy"], "escalate")
 
     def test_split_creates_subtasks(self):
-        from core.self_healer import SelfHealer
+        from viki.core.self_healer import SelfHealer
 
         g = MissionGraph(mission_id="m", goal="x")
         nid = g.add(title="parent", skill="bad")
         node = g.nodes[nid]
         node.status = NodeStatus.FAILED
 
-        healer = SelfHealer(model_router=None, learning_module=None)
         SelfHealer._apply_recovery(
             g,
             node,

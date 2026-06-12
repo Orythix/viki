@@ -11,6 +11,7 @@ from viki.config.logger import viki_logger
 from viki.skills.base import BaseSkill
 
 # Prefer ddgs (new package name); fall back to duckduckgo_search and suppress rename warning
+warnings.filterwarnings("ignore", message="This package.*has been renamed")
 HAS_DDG = False
 DDGS = None
 try:

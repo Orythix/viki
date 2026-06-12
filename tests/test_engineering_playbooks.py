@@ -5,7 +5,6 @@ from pathlib import Path
 
 from viki.skills.builtins.engineering_playbook_skill import EngineeringPlaybookSkill
 
-
 EXPECTED_ENGINEERING = {
     "idea_refine",
     "spec_driven_development",
@@ -57,12 +56,14 @@ EXPECTED_REFERENCES = {
     "accessibility_checklist",
 }
 EXPECTED_PERSONAS = {"code_reviewer", "test_engineer", "security_auditor"}
-EXPECTED_ALL = EXPECTED_ENGINEERING | SECOND_WAVE_ENGINEERING | EXPECTED_REFERENCES | EXPECTED_PERSONAS
+EXPECTED_ALL = (
+    EXPECTED_ENGINEERING | SECOND_WAVE_ENGINEERING | EXPECTED_REFERENCES | EXPECTED_PERSONAS
+)
 
 
 class TestEngineeringPlaybooks(unittest.IsolatedAsyncioTestCase):
     def test_all_playbooks_exist_and_non_empty(self):
-        root = Path(__file__).resolve().parents[1] / "skills" / "playbooks"
+        root = Path(__file__).resolve().parents[1] / "src" / "viki" / "skills" / "playbooks"
         for slug in EXPECTED_ALL:
             matches = list(root.rglob(f"{slug}.md"))
             self.assertTrue(matches, f"Missing playbook file for slug: {slug}")
@@ -75,7 +76,14 @@ class TestEngineeringPlaybooks(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(EXPECTED_ALL.issubset(enum))
 
     def test_second_wave_playbooks_have_required_structure(self):
-        root = Path(__file__).resolve().parents[1] / "skills" / "playbooks" / "engineering"
+        root = (
+            Path(__file__).resolve().parents[1]
+            / "src"
+            / "viki"
+            / "skills"
+            / "playbooks"
+            / "engineering"
+        )
         required_sections = (
             "## Overview",
             "## When to Use",
@@ -114,9 +122,15 @@ class TestEngineeringPlaybooks(unittest.IsolatedAsyncioTestCase):
 
     async def test_section_process_returns_process_section(self):
         skill = EngineeringPlaybookSkill()
-        result = await skill.execute({"playbook": "incremental_implementation", "section": "Process"})
+        result = await skill.execute(
+            {"playbook": "incremental_implementation", "section": "Process"}
+        )
         self.assertNotIn("section 'Process' not found", result)
-        self.assertTrue("checklist" in result.lower() or "cycle" in result.lower() or "process" in result.lower())
+        self.assertTrue(
+            "checklist" in result.lower()
+            or "cycle" in result.lower()
+            or "process" in result.lower()
+        )
 
     async def test_invalid_playbook_returns_error_with_valid_list(self):
         skill = EngineeringPlaybookSkill()

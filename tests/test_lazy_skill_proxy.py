@@ -10,7 +10,6 @@ Verifies:
 from __future__ import annotations
 
 import asyncio
-import importlib
 import sys
 import unittest
 
@@ -26,7 +25,7 @@ class TestLazySkillProxy(unittest.TestCase):
         proxy = LazySkillProxy(
             name="lazy_demo",
             description="A demo skill",
-            module_path="skills.builtins.time_skill",
+            module_path="viki.skills.builtins.time_skill",
             class_name="TimeSkill",
             schema={"type": "object", "properties": {}},
         )
@@ -40,21 +39,21 @@ class TestLazySkillProxy(unittest.TestCase):
         proxy = LazySkillProxy(
             name="t",
             description="time",
-            module_path="skills.builtins.time_skill",
+            module_path="viki.skills.builtins.time_skill",
             class_name="TimeSkill",
         )
-        sys.modules.pop("skills.builtins.time_skill", None)
-        self.assertNotIn("skills.builtins.time_skill", sys.modules)
+        sys.modules.pop("viki.skills.builtins.time_skill", None)
+        self.assertNotIn("viki.skills.builtins.time_skill", sys.modules)
         result = _run(proxy.execute({}))
         self.assertIsInstance(result, str)
-        self.assertIn("skills.builtins.time_skill", sys.modules)
+        self.assertIn("viki.skills.builtins.time_skill", sys.modules)
         self.assertTrue(proxy.is_loaded())
 
     def test_failed_import_returns_friendly_error(self):
         proxy = LazySkillProxy(
             name="missing",
             description="does not exist",
-            module_path="skills.builtins.this_module_does_not_exist",
+            module_path="viki.skills.builtins.this_module_does_not_exist",
             class_name="Nope",
         )
         out = _run(proxy.execute({}))

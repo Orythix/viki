@@ -7,7 +7,6 @@ circuit to an empty list.
 """
 from __future__ import annotations
 
-import os
 import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
@@ -32,7 +31,11 @@ class TestTrivialInputHelper(unittest.TestCase):
         self.assertFalse(is_trivial_input("again"))
 
     def test_long_input_is_not_trivial(self):
-        self.assertFalse(is_trivial_input("hello, can you help me write a python script that processes 100 files?"))
+        self.assertFalse(
+            is_trivial_input(
+                "hello, can you help me write a python script that processes 100 files?"
+            )
+        )
 
     def test_task_request_is_not_trivial(self):
         self.assertFalse(is_trivial_input("run pytest"))
@@ -59,17 +62,19 @@ class TestLearningCheapRetrieve(unittest.TestCase):
             pass
 
     def test_trivial_input_returns_empty_lessons_without_db_hit(self):
-        from core.knowledge_ingestion import LearningModule
+        from viki.core.knowledge_ingestion import LearningModule
+
         lm = LearningModule(self._td.name)
 
         # The cheap-retrieve fast path must NOT touch the encoder property.
-        with patch("core.embeddings.get_encoder") as mock_get:
+        with patch("viki.core.embeddings.get_encoder") as mock_get:
             result = lm.get_relevant_lessons("hi")
             self.assertEqual(result, [])
             mock_get.assert_not_called()
 
     def test_non_trivial_input_does_query_db(self):
-        from core.knowledge_ingestion import LearningModule
+        from viki.core.knowledge_ingestion import LearningModule
+
         lm = LearningModule(self._td.name)
         # No lessons in the DB; should still return [] but exercises the
         # SQL path. We only assert it doesn't crash.
@@ -88,8 +93,8 @@ class TestMemoryCheapRetrieve(unittest.TestCase):
             pass
 
     def test_trivial_input_skips_semantic_query(self):
-        from core.memory import HierarchicalMemory
-        from core.knowledge_ingestion import LearningModule
+        from viki.core.knowledge_ingestion import LearningModule
+        from viki.core.memory import HierarchicalMemory
 
         learning = LearningModule(self._td.name)
         config = {

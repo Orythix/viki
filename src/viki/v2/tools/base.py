@@ -17,6 +17,19 @@ class ToolResult:
     error_type: str | None = None
     warnings: list[str] = field(default_factory=list)
 
+    def to_llm_observation(self) -> str:
+        """Format the result for LLM consumption in the ReAct loop."""
+        if self.success:
+            import json
+
+            result_str = json.dumps(self.data, indent=2, default=str)
+            warnings_str = ""
+            if self.warnings:
+                warnings_str = "\nWarnings:\n" + "\n".join(f"  - {w}" for w in self.warnings)
+            return f"Tool succeeded.\nResult:\n{result_str}{warnings_str}"
+        else:
+            return f"Tool failed: [{self.error_type}] {self.error}"
+
 
 class BaseTool(ABC):
     name: str = ""

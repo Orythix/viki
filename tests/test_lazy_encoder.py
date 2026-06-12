@@ -7,7 +7,6 @@ a non-trivial query asks for an embedding.
 """
 from __future__ import annotations
 
-import os
 import sys
 import tempfile
 import unittest
@@ -32,24 +31,24 @@ class TestLazyEncoder(unittest.TestCase):
 
     def test_learning_module_does_not_eager_load_encoder(self):
         """Constructing LearningModule shouldn't touch the encoder property."""
-        from core.knowledge_ingestion import LearningModule
+        from viki.core.knowledge_ingestion import LearningModule
 
         # The encoder should still be unloaded after init.
         lm = LearningModule(self._td.name)
         self.assertFalse(lm._encoder_loaded, "encoder should not load during __init__")
 
     def test_narrative_memory_does_not_eager_load_encoder(self):
-        from core.memory.narrative import NarrativeMemory
+        from viki.core.memory.narrative import NarrativeMemory
 
         nm = NarrativeMemory(self._td.name)
         self.assertFalse(nm._encoder_loaded, "encoder should not load during __init__")
 
     def test_encoder_loads_on_first_access(self):
         """Accessing the property triggers `get_encoder`."""
-        from core.knowledge_ingestion import LearningModule
+        from viki.core.knowledge_ingestion import LearningModule
 
         lm = LearningModule(self._td.name)
-        with patch("core.embeddings.get_encoder", return_value=object()) as mock_get:
+        with patch("viki.core.embeddings.get_encoder", return_value=object()) as mock_get:
             _ = lm.encoder
             _ = lm.encoder  # second call must NOT re-trigger
             mock_get.assert_called_once()

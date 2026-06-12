@@ -12,7 +12,7 @@ class TestWorkingMemory:
     """Test WorkingMemory."""
 
     def test_add_and_get_messages(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             config = {"memory": {"short_term_limit": 15}, "system": {"data_dir": tmpdir}}
             db_path = str(Path(tmpdir) / "working.db")
             db = WorkingMemory(config, db_path=db_path)
@@ -31,7 +31,7 @@ class TestWorkingMemory:
                 db.close()
 
     def test_session_isolation(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             config = {"memory": {"short_term_limit": 15}, "system": {"data_dir": tmpdir}}
             db_path = str(Path(tmpdir) / "working.db")
             db = WorkingMemory(config, db_path=db_path)

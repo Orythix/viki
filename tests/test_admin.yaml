@@ -1,3 +1,0 @@
-admin_id: TEST_ID
-admin_secret: TEST_SECRET
-logs_path: ./tests/data_admin/logs.txt

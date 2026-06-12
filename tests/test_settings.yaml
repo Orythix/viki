@@ -2,8 +2,9 @@ system:
   log_level: "INFO"
   data_dir: "./data"
   workspace_dir: "./workspace"
+  security_scan_requests: false
 
-models_config: "./tests/test_models.yaml"
+models_config: "test_models.yaml"
 
 memory:
   short_term_limit: 20

@@ -63,7 +63,8 @@ class SystemControlSkill(BaseSkill):
         return (
             "Control the OS. "
             "Actions: open_app(name), open_url(url), click(x,y), "
-            "type(text), press(key), scroll(amount), hotkey(keys)."
+            "type(text), press(key), scroll(amount), hotkey(keys), "
+            "get_wifi_password(ssid)."
         )
 
     @property
@@ -73,7 +74,16 @@ class SystemControlSkill(BaseSkill):
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["open_app", "open_url", "click", "type", "press", "scroll", "hotkey"],
+                    "enum": [
+                        "open_app",
+                        "open_url",
+                        "click",
+                        "type",
+                        "press",
+                        "scroll",
+                        "hotkey",
+                        "get_wifi_password",
+                    ],
                     "description": "The system control action to perform",
                 },
                 "name": {"type": "string", "description": "App name to open (for open_app)"},
@@ -89,6 +99,10 @@ class SystemControlSkill(BaseSkill):
                 "keys": {
                     "type": "string",
                     "description": "Hotkey combo (for hotkey, e.g. 'ctrl+c')",
+                },
+                "ssid": {
+                    "type": "string",
+                    "description": "WiFi network name (omit to list saved networks)",
                 },
             },
             "required": ["action"],
@@ -144,10 +158,13 @@ class SystemControlSkill(BaseSkill):
                 await asyncio.to_thread(pyautogui.scroll, int(amount))
                 return f"Scrolled by {amount}."
 
+            if action == "get_wifi_password":
+                return await self._get_wifi_password(params.get("ssid"))
+
         except Exception as e:
             return f"Desktop action failed: {e}"
 
-        return f"Unknown action: '{action}'. Supported: open_app, open_url, click, type, press, hotkey, scroll."
+        return f"Unknown action: '{action}'. Supported: open_app, open_url, click, type, press, hotkey, scroll, get_wifi_password."
 
     async def _open_app(self, app_name: str) -> str:
         if not app_name:
@@ -224,3 +241,67 @@ class SystemControlSkill(BaseSkill):
             return f"Launched protocol {url}."
         except Exception as e:
             return f"Error opening URL: {e}"
+
+    async def _get_wifi_password(self, ssid: str | None = None) -> str:
+        """Retrieve the WiFi password for the given SSID using netsh."""
+        import platform
+
+        if platform.system() != "Windows":
+            return "WiFi password retrieval is only supported on Windows."
+
+        # If no SSID given, list saved networks
+        if not ssid:
+            proc = await asyncio.create_subprocess_exec(
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                "netsh wlan show profiles | Select-String 'All User Profile'",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await proc.communicate()
+            lines = [l.strip() for l in stdout.decode().split("\n") if l.strip()]
+            if not lines:
+                return "No saved WiFi networks found."
+            networks = []
+            for line in lines:
+                parts = line.split(":", 1)
+                if len(parts) == 2:
+                    networks.append(parts[1].strip().strip('"'))
+            if not networks:
+                return "No saved WiFi networks found."
+            return (
+                "Saved WiFi networks:\n"
+                + "\n".join(f"  - {n}" for n in networks)
+                + "\n\nAsk for the password of a specific network."
+            )
+
+        # Retrieve password for a specific SSID
+        proc = await asyncio.create_subprocess_exec(
+            "powershell",
+            "-NoProfile",
+            "-Command",
+            f'netsh wlan show profile name="{ssid}" key=clear',
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+        output = stdout.decode()
+        if "not found" in output.lower() or not output:
+            return (
+                f"WiFi network '{ssid}' not found."
+                " Use get_wifi_password (no SSID) to list saved networks."
+            )
+
+        password = ""
+        for line in output.split("\n"):
+            if "Key Content" in line or "Password" in line:
+                password = line.split(":")[-1].strip()
+                break
+
+        if password:
+            return f"WiFi password for '{ssid}': {password}"
+        return (
+            f"Could not retrieve password for '{ssid}'."
+            " The network may use Windows authentication or no password."
+        )
