@@ -1536,15 +1536,14 @@ class VIKIController:
 
     def _skill_action_severity(self, skill_name: str, params: dict[str, Any]) -> str:
         skill_obj = self.skill_registry.get_skill(skill_name) if self.skill_registry else None
-        if skill_obj is not None and skill_name.startswith("mcp_"):
-            st = (getattr(skill_obj, "safety_tier", None) or "medium").lower()
+        if skill_obj is not None:
+            st = (getattr(skill_obj, "safety_tier", None) or "safe").lower()
             if st == "destructive":
                 return "destructive"
             if st == "medium":
                 return "medium"
             if getattr(skill_obj, "requires_user_confirmation", False):
                 return "medium"
-            return "safe"
         return self.safety.get_action_severity(skill_name, params)
 
     def get_router_telemetry(self) -> dict[str, Any]:
@@ -1576,6 +1575,14 @@ class VIKIController:
         if not self.safety.validate_action(skill_name, params):
             viki_logger.warning("Reflex blocked: safety policy.")
             return "Reflex blocked: safety policy."
+
+        severity = self._skill_action_severity(skill_name, params)
+        if severity in ("medium", "destructive"):
+            self.pending_actions[session_id] = reflex_action_override
+            return (
+                f"Reflex matched '{skill_name}'. Safety Check: this is a {severity} action. "
+                "Confirm to proceed, or say no to cancel."
+            )
 
         if on_event:
             on_event("status", f"REFLEX EXECUTING {skill_name}")
@@ -2392,21 +2399,6 @@ class VIKIController:
         # Heuristic: 2 out of 3 signals usually mean the user knows what they want.
         signals = sum([has_intent, has_tech, has_product])
         return signals >= 2
-
-    def _skill_action_severity(self, skill_name: str, params: dict[str, Any]) -> str:
-        """Determines the risk level of an autonomous action."""
-        dangerous = ["shellskill", "systemcontrolskill", "securityskill"]
-        if skill_name.lower() in dangerous:
-            return "destructive"
-
-        # Heuristic for filesystem risk
-        if skill_name.lower() == "filesystemskill":
-            if any(
-                k in str(params).lower() for k in ["delete", "remove", "overwrite", "rm ", "del "]
-            ):
-                return "medium"
-
-        return "low"
 
     async def shutdown(self):
         if getattr(self, "_shutting_down", False):

@@ -55,6 +55,10 @@ class SystemControlSkill(BaseSkill):
         pyautogui.FAILSAFE = True
 
     @property
+    def safety_tier(self) -> str:
+        return "destructive"
+
+    @property
     def name(self) -> str:
         return "system_control"
 
