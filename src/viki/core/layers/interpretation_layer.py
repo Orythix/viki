@@ -73,6 +73,9 @@ class InterpretationLayer(CortexLayer):
         "memory",
         "storage",
         "network",
+        "wifi",
+        "password",
+        "wireless",
     }
     DATA_KEYWORDS = {
         "sqlite",
@@ -262,7 +265,7 @@ class InterpretationLayer(CortexLayer):
             "conversation": ["general", "chatter"],
             "cloud": ["cloud", "reasoning"],
             "devops": ["devops", "coding"],
-            "system": ["system", "fast_response"],
+            "system": ["system", "system_command", "fast_response"],
             "data": ["data", "reasoning"],
             "ai": ["ai", "reasoning"],
             "productivity": ["productivity", "fast_response"],

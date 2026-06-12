@@ -67,7 +67,7 @@ class SkillRegistry:
             "reasoning": ["research", "system_control", "shell", "summarize", "memory_skill"],
             "cloud": [],
             "devops": [],
-            "system": [],
+            "system": ["system_control", "shell"],
             "data": [],
             "ai": [],
             "productivity": [],
