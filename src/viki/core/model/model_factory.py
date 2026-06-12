@@ -41,6 +41,14 @@ class ModelFactory:
             from viki.core.inference_providers import MistralLLM
 
             return MistralLLM(merged_config)
+        if provider_type in (
+            "nvidia_nim",
+            "nvidia",
+            "nim",
+        ):
+            from viki.core.inference_providers import NvidiaLLM
+
+            return NvidiaLLM(merged_config)
         if provider_type in ("bedrock", "aws_bedrock"):
             from viki.core.inference_providers import BedrockLLM
 

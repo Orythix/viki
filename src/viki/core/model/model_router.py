@@ -244,7 +244,10 @@ class ModelRouter:
             "Error calling Groq Model:",
             "Error calling Mistral Model:",
             "Error calling Bedrock Model:",
+            "Error calling NVIDIA NIM model",
+            "Error streaming NVIDIA NIM model",
             "Error: Model ",
+            "Error: NVIDIA NIM model",
         )
         return any(text.startswith(p) for p in prefixes)
 

@@ -52,7 +52,8 @@ system:
 
   # When true, OpenAI/Anthropic API profiles are never selected; use Ollama (models.yaml) only.
   # Set false and configure real keys when you want cloud models. Env: VIKI_LOCAL_LLM_ONLY=true|false.
-  local_llm_only: true
+  # NIM integration: set to false — NVIDIA NIM is now the primary provider.
+  local_llm_only: false
 
   # Max reasoning steps per request. Lower = less LLM churn, fewer tokens per task.
   max_steps: 15
@@ -91,8 +92,8 @@ system:
   lesson_export_min_access_count: 2
 
   # When true, fire a 1-token Ollama "ping" at boot to load the default model into RAM/VRAM.
-  # Cuts ~5-15s off the cold first-reply on a 4 GB / 4-core box. Disabled in low_resource_mode and air_gap.
-  prewarm_default_model: true
+  # Disabled — primary model is now NVIDIA NIM (cloud), no local Ollama prewarm needed.
+  prewarm_default_model: false
 
   # At startup, log warnings if critical skills (email, calendar, research) are misconfigured.
   skill_health_check: true

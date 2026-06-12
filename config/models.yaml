@@ -9,14 +9,18 @@ models:
     anthropic:
       type: anthropic
       api_key: ${ANTHROPIC_API_KEY}
+    nvidia_nim:
+      type: nvidia_nim
+      base_url: https://integrate.api.nvidia.com/v1
+      api_key_env: NVIDIA_API_KEY
     mock:
       type: mock
-  default: gemma4
+  default: nim-nemotron
   profiles:
     gemma4:
       provider: ollama
       model_name: gemma4:12b
-      priority: 100
+      priority: 20
       timeout_seconds: 120
       max_context_tokens: 32768
       capabilities:
@@ -25,20 +29,19 @@ models:
       - coding
       - tool_use
       - general
-      - chatter
       supports_native_tools: false
       supports_streaming: true
       local_first: true
       ollama_options:
         num_predict: 2048
         num_ctx: 8192
-      description: 'Primary sovereign local model for all standard operations.
+      description: 'Local Ollama fallback (offline / air-gap only). Primary is now NVIDIA NIM.
 
         '
     viki-evolved:
       provider: ollama
       model_name: gemma4:12b
-      priority: 90
+      priority: 18
       timeout_seconds: 180
       max_context_tokens: 32768
       capabilities:
@@ -53,27 +56,25 @@ models:
       ollama_options:
         num_predict: 4096
         num_ctx: 16384
-      description: 'Enhanced reasoning model with evolved VIKI persona (uses gemma4:12b).
+      description: 'Local Ollama fallback for evolved VIKI persona (offline only).
 
         '
     phi3-mini:
       provider: ollama
       model_name: phi3:mini
-      priority: 70
+      priority: 10
       timeout_seconds: 60
       max_context_tokens: 8192
       capabilities:
       - chat
       - general
-      - chatter
-      - fast_response
       supports_streaming: true
-      tier: fast
+      tier: local_fast
       ollama_enable_thinking: false
       ollama_options:
         num_predict: 1024
         num_ctx: 4096
-      description: 'Fast lightweight model (3.8B, 2.2GB) for quick responses and low-RAM environments.
+      description: 'Local Ollama lightweight fallback (offline only). NIM handles fast tasks via nim-nemotron-nano.
 
         '
     viki-trainer:
@@ -117,9 +118,165 @@ models:
       description: 'Long-context analysis and writing model.
 
         '
+
+    # --- NVIDIA NIM profiles -------------------------------------------
+    # NOTE: Some NVIDIA-hosted models (e.g. nvidia/llama-3.1-nemotron-ultra-253b-v1)
+    # require account-level activation at https://build.nvidia.com before use.
+    # The profiles below use universally accessible models by default.
+    # To switch to a gated model, update model_name and visit build.nvidia.com to enable it.
+    nim-nemotron:
+      provider: nvidia_nim
+      model_name: nvidia/llama-3.3-nemotron-super-49b-v1
+      priority: 100
+      timeout_seconds: 120
+      max_context_tokens: 131072
+      capabilities:
+      - chat
+      - reasoning
+      - coding
+      - tool_use
+      - analysis
+      - planning
+      - general
+      - chatter
+      - sovereign
+      - memory
+      - autonomous_planning
+      supports_native_tools: true
+      supports_streaming: true
+      cost_per_1k_in: 0.0004
+      cost_per_1k_out: 0.0012
+      description: 'PRIMARY — NVIDIA NIM Nemotron Super 49B. Default model for all
+        VIKI operations via NVIDIA free cloud inference.
+
+        '
+
+    nim-nemotron-nano:
+      provider: nvidia_nim
+      model_name: nvidia/llama-3.1-nemotron-nano-8b-v1
+      priority: 92
+      tier: fast
+      timeout_seconds: 30
+      max_context_tokens: 131072
+      capabilities:
+      - chat
+      - fast_response
+      - general
+      - chatter
+      supports_streaming: true
+      cost_per_1k_in: 0.0001
+      cost_per_1k_out: 0.0001
+      description: 'NVIDIA NIM — Nemotron Nano 8B. Primary fast-path model for reflex
+        and lightweight tasks via NVIDIA free cloud inference.
+
+        '
+
+    nim-llama4:
+      provider: nvidia_nim
+      model_name: meta/llama-4-maverick-17b-128e-instruct
+      priority: 90
+      timeout_seconds: 60
+      max_context_tokens: 131072
+      capabilities:
+      - chat
+      - reasoning
+      - vision
+      - multimodal
+      - tool_use
+      supports_native_tools: true
+      supports_streaming: true
+      cost_per_1k_in: 0.0002
+      cost_per_1k_out: 0.0006
+      description: 'NVIDIA NIM — Llama 4 Maverick 17B (128 experts MoE). Primary
+        multimodal / vision model via NVIDIA free cloud inference.
+
+        '
+
+    nim-llama-fast:
+      provider: nvidia_nim
+      model_name: meta/llama-3.1-8b-instruct
+      priority: 80
+      timeout_seconds: 30
+      max_context_tokens: 131072
+      capabilities:
+      - chat
+      - general
+      - fast_response
+      - chatter
+      supports_native_tools: true
+      supports_streaming: true
+      cost_per_1k_in: 0.0001
+      cost_per_1k_out: 0.0001
+      description: 'NVIDIA NIM — Llama 3.1 8B Instruct. Fast NIM model for lightweight
+        tasks via NVIDIA free cloud inference.
+
+        '
+
+    nim-deepseek-r1:
+      provider: nvidia_nim
+      model_name: deepseek-ai/deepseek-v4-flash
+      priority: 95
+      tier: deep
+      timeout_seconds: 120
+      max_context_tokens: 131072
+      capabilities:
+      - reasoning
+      - coding
+      - analysis
+      - math
+      supports_streaming: true
+      cost_per_1k_in: 0.0008
+      cost_per_1k_out: 0.002
+      description: 'NVIDIA NIM — DeepSeek V4 Pro. Primary deep reasoning and math
+        model via NVIDIA free cloud inference.
+
+        '
+
+    nim-mistral-large:
+      provider: nvidia_nim
+      model_name: mistralai/mistral-large-3-675b-instruct-2512
+      priority: 88
+      timeout_seconds: 180
+      max_context_tokens: 131072
+      capabilities:
+      - chat
+      - reasoning
+      - coding
+      - writing
+      - analysis
+      supports_native_tools: true
+      supports_streaming: true
+      cost_per_1k_in: 0.002
+      cost_per_1k_out: 0.006
+      description: 'NVIDIA NIM — Mistral Large 3 675B. Primary writing and frontier
+        reasoning model via NVIDIA free cloud inference.
+
+        '
+
+    nim-embed:
+      provider: nvidia_nim
+      model_name: nvidia/llama-nemotron-embed-1b-v2
+      embedding_model: true
+      priority: 60
+      timeout_seconds: 30
+      max_context_tokens: 8192
+      capabilities:
+      - embedding
+      - rag
+      description: 'NVIDIA NIM — Llama Nemotron Embed 1B v2. Multilingual text embeddings
+        for RAG memory (26 languages, 8192 token context).
+
+        '
+
   routing:
-    prefer_local_models: true
+    prefer_local_models: false
     fallback_order:
+    - nim-nemotron
+    - nim-deepseek-r1
+    - nim-mistral-large
+    - nim-llama4
+    - nim-llama-fast
+    - nim-nemotron-nano
     - gemma4
     - viki-evolved
     - phi3-mini
@@ -127,25 +284,50 @@ models:
     - claude-sonnet
     task_routes:
       coding:
-        primary: gemma4
+        primary: nim-nemotron
         fallback:
-        - gpt-5
-      reasoning:
-        primary: viki-evolved
-        fallback:
+        - nim-mistral-large
+        - nim-deepseek-r1
         - gemma4
-        - gpt-5
-        - claude-sonnet
+      reasoning:
+        primary: nim-deepseek-r1
+        fallback:
+        - nim-nemotron
+        - nim-mistral-large
+        - gemma4
+      math:
+        primary: nim-deepseek-r1
+        fallback:
+        - nim-nemotron
+        - gemma4
       training:
         primary: viki-trainer
       fast:
-        primary: phi3-mini
+        primary: nim-nemotron-nano
         fallback:
+        - nim-llama-fast
         - gemma4
       writing:
-        primary: gemma4
+        primary: nim-mistral-large
         fallback:
-        - gpt-5
+        - nim-nemotron
+        - gemma4
+      vision:
+        primary: nim-llama4
+        fallback:
+        - nim-nemotron
+      embedding:
+        primary: nim-embed
+      general:
+        primary: nim-nemotron
+        fallback:
+        - nim-llama-fast
+        - gemma4
+      planning:
+        primary: nim-nemotron
+        fallback:
+        - nim-deepseek-r1
+        - gemma4
   memory:
     enabled: true
     backend: local
@@ -156,7 +338,7 @@ models:
     save_model_usage: true
     save_tool_calls: true
   budget:
-    monthly_limit_usd: 5.0
-    warning_threshold_usd: 3.5
-    hard_limit_usd: 5.0
-    emergency_local_only: true
+    monthly_limit_usd: 50.0
+    warning_threshold_usd: 40.0
+    hard_limit_usd: 50.0
+    emergency_local_only: false

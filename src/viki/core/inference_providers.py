@@ -437,6 +437,236 @@ class MistralLLM(LLMProvider):
 
 
 # ---------------------------------------------------------------------------
+# NVIDIA NIM (OpenAI-compatible cloud inference)
+# ---------------------------------------------------------------------------
+class NvidiaLLM(LLMProvider):
+    """NVIDIA NIM — OpenAI-compatible API for hosted frontier models.
+
+    Supports chat, streaming, structured output, and (optionally) text
+    embeddings when `embedding_model: true` is set in the profile config.
+
+    API keys start with ``nvapi-`` and are obtained for free from
+    https://build.nvidia.com.  The hosted base URL is
+    ``https://integrate.api.nvidia.com/v1``.
+    """
+
+    _NIM_BASE_URL = "https://integrate.api.nvidia.com/v1"
+
+    def __init__(self, config: dict[str, Any]):
+        super().__init__(config)
+        self.provider_name = "nvidia_nim"
+        self._client = None
+        self._is_embedding_model = bool(config.get("embedding_model", False))
+
+        api_key = os.getenv(self.config.get("api_key_env", "NVIDIA_API_KEY"))
+        if not self._looks_like_nvidia_secret(api_key):
+            self.available = False
+            self.unavailable_reason = (
+                "NVIDIA NIM API key missing or invalid; expected NVIDIA_API_KEY "
+                "starting with 'nvapi-'. Get a free key at https://build.nvidia.com."
+            )
+            return
+
+        try:
+            from openai import AsyncOpenAI  # type: ignore
+
+            base_url = self.config.get("base_url", self._NIM_BASE_URL)
+            self._client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+            self._api_key = api_key
+            viki_logger.debug(
+                "NvidiaLLM initialised: model=%s base_url=%s", self.model_name, base_url
+            )
+        except ImportError as e:
+            self.available = False
+            self.unavailable_reason = f"openai client missing: {e}"
+            self._client = None
+        except Exception as e:
+            self.available = False
+            self.unavailable_reason = str(e)
+            self._client = None
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _looks_like_nvidia_secret(key: str | None) -> bool:
+        if not key or not str(key).strip():
+            return False
+        s = str(key).strip()
+        if s.lower() in ("none", "dummy", "placeholder", "test", "your-api-key-here", "changeme"):
+            return False
+        return s.startswith("nvapi-") and len(s) >= 20
+
+    def _extra_body(self) -> dict[str, Any]:
+        """Return any NIM-specific extra_body parameters from the profile config."""
+        extra: dict[str, Any] = {}
+        if "top_p" in self.config:
+            extra["top_p"] = float(self.config["top_p"])
+        if "max_tokens" in self.config:
+            extra["max_tokens"] = int(self.config["max_tokens"])
+        return extra
+
+    # ------------------------------------------------------------------
+    # LLMProvider interface
+    # ------------------------------------------------------------------
+
+    def is_cloud(self) -> bool:
+        return True
+
+    # --- Embedding (only for embedding-model profiles) -----------------
+
+    async def embed(self, texts: list[str], input_type: str = "query") -> list[list[float]]:
+        """Return embeddings for *texts* using an NVIDIA NIM embedding model.
+
+        Only works when the profile has ``embedding_model: true``.
+
+        Args:
+            texts: List of strings to embed.
+            input_type: ``"query"`` for search queries (default), ``"passage"``
+                for documents being indexed. Required by asymmetric NIM models.
+        """
+        if not self.available or self._client is None:
+            raise RuntimeError(f"NvidiaLLM embedding model '{self.model_name}' is unavailable.")
+        if not self._is_embedding_model:
+            raise RuntimeError(
+                f"Model '{self.model_name}' is not configured as an embedding model. "
+                "Set 'embedding_model: true' in the model profile."
+            )
+        # Allow profile-level override of default input_type
+        effective_input_type = self.config.get("embed_input_type", input_type)
+        try:
+            response = await self._client.embeddings.create(
+                model=self.model_name,
+                input=texts,
+                encoding_format="float",
+                extra_body={"input_type": effective_input_type, "truncate": "END"},
+            )
+            return [item.embedding for item in response.data]
+        except Exception as e:
+            raise RuntimeError(f"NVIDIA NIM embedding failed: {e}") from e
+
+    # --- Chat ----------------------------------------------------------
+
+    async def chat(self, messages: list[dict[str, str]], temperature: float = 0.7) -> str:
+        if not self.available or self._client is None:
+            return f"Error: NVIDIA NIM model '{self.model_name}' is unavailable."
+        t0 = time.perf_counter()
+        success = False
+        try:
+            kwargs: dict[str, Any] = {
+                "model": self.model_name,
+                "messages": messages,
+                "temperature": temperature,
+            }
+            extra = self._extra_body()
+            if extra:
+                kwargs["extra_body"] = extra
+
+            response = await self._client.chat.completions.create(**kwargs)
+            usage = getattr(response, "usage", None)
+            if usage:
+                self.record_token_usage(
+                    getattr(usage, "prompt_tokens", 0) or 0,
+                    getattr(usage, "completion_tokens", 0) or 0,
+                )
+            success = True
+            return response.choices[0].message.content or ""
+        except Exception as e:
+            viki_logger.error("NvidiaLLM.chat failed for '%s': %s", self.model_name, e)
+            return f"Error calling NVIDIA NIM model '{self.model_name}': {e}"
+        finally:
+            try:
+                from viki.core.usage_log import emit_llm_inference
+
+                emit_llm_inference(self, time.perf_counter() - t0, success, "chat")
+            except Exception:
+                pass
+
+    # --- Structured output --------------------------------------------
+
+    async def chat_structured(
+        self,
+        messages: list[dict[str, str]],
+        response_model: type[T],
+        temperature: float = 0.0,
+        image_path: str = None,
+    ) -> T:
+        t0 = time.perf_counter()
+        success = False
+        try:
+            import instructor  # type: ignore
+
+            client = instructor.from_openai(self._client, mode=instructor.Mode.JSON)
+            kwargs: dict[str, Any] = {
+                "model": self.model_name,
+                "messages": messages,
+                "response_model": response_model,
+                "temperature": temperature,
+            }
+            extra = self._extra_body()
+            if extra:
+                kwargs["extra_body"] = extra
+
+            result = await client.chat.completions.create(**kwargs)
+            success = True
+            return result
+        except Exception as e:
+            viki_logger.debug("NvidiaLLM structured via instructor failed: %s — falling back", e)
+            # Fallback: plain chat + JSON parse
+            text = await self.chat(
+                messages + [{"role": "user", "content": "Return only a single JSON object."}],
+                temperature=temperature,
+            )
+            try:
+                result = response_model.model_validate_json(text)
+                success = True
+                return result
+            except Exception:
+                start = text.find("{")
+                end = text.rfind("}")
+                if start != -1 and end != -1:
+                    return response_model.model_validate_json(text[start : end + 1])
+                raise
+        finally:
+            try:
+                from viki.core.usage_log import emit_llm_inference
+
+                emit_llm_inference(self, time.perf_counter() - t0, success, "chat_structured")
+            except Exception:
+                pass
+
+    # --- Streaming ----------------------------------------------------
+
+    async def chat_stream(self, messages: list[dict[str, str]], temperature: float = 0.7):
+        if not self.available or self._client is None:
+            yield f"Error: NVIDIA NIM model '{self.model_name}' is unavailable."
+            return
+        try:
+            kwargs: dict[str, Any] = {
+                "model": self.model_name,
+                "messages": messages,
+                "temperature": temperature,
+                "stream": True,
+            }
+            extra = self._extra_body()
+            if extra:
+                kwargs["extra_body"] = extra
+
+            stream = await self._client.chat.completions.create(**kwargs)
+            async for chunk in stream:
+                try:
+                    delta = chunk.choices[0].delta.content if chunk.choices else None
+                except Exception:
+                    delta = None
+                if delta:
+                    yield delta
+        except Exception as e:
+            viki_logger.error("NvidiaLLM.chat_stream failed for '%s': %s", self.model_name, e)
+            yield f"Error streaming NVIDIA NIM model '{self.model_name}': {e}"
+
+
+# ---------------------------------------------------------------------------
 # Bedrock (AWS) — Claude / Llama / Mistral
 # ---------------------------------------------------------------------------
 class BedrockLLM(LLMProvider):
