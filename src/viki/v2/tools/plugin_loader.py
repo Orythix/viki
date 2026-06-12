@@ -5,12 +5,10 @@ from __future__ import annotations
 import importlib
 import inspect
 import logging
-import os
 import pkgutil
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 from .base import BaseTool
 
@@ -56,7 +54,9 @@ class PluginLoader:
             pkg = importlib.import_module(package_name)
         except Exception:
             return results
-        for _, modname, ispkg in pkgutil.iter_modules(pkg.__path__ if hasattr(pkg, "__path__") else [str(path)]):
+        for _, modname, ispkg in pkgutil.iter_modules(
+            pkg.__path__ if hasattr(pkg, "__path__") else [str(path)]
+        ):
             if ispkg:
                 continue
             full_modname = f"{package_name}.{modname}"
@@ -67,18 +67,21 @@ class PluginLoader:
         results: list[PluginInfo] = []
         try:
             from importlib.metadata import entry_points
+
             eps = entry_points(group="viki.tools")
             for ep in eps:
                 try:
                     cls = ep.load()
                     if isinstance(cls, type) and issubclass(cls, BaseTool) and cls is not BaseTool:
                         name = getattr(cls, "name", None) or ep.name
-                        results.append(PluginInfo(
-                            name=name,
-                            module_path=ep.value,
-                            class_name=cls.__name__,
-                            tool_class=cls,
-                        ))
+                        results.append(
+                            PluginInfo(
+                                name=name,
+                                module_path=ep.value,
+                                class_name=cls.__name__,
+                                tool_class=cls,
+                            )
+                        )
                 except Exception as exc:
                     logger.debug("PluginLoader: failed to load entry point %s: %s", ep.name, exc)
         except Exception:
@@ -97,12 +100,14 @@ class PluginLoader:
                 continue
             if issubclass(obj, BaseTool) and not getattr(obj, "__abstractmethods__", None):
                 tool_name = getattr(obj, "name", None) or name
-                results.append(PluginInfo(
-                    name=tool_name,
-                    module_path=full_modname,
-                    class_name=name,
-                    tool_class=obj,
-                ))
+                results.append(
+                    PluginInfo(
+                        name=tool_name,
+                        module_path=full_modname,
+                        class_name=name,
+                        tool_class=obj,
+                    )
+                )
         return results
 
     def get_tool_class(self, name: str) -> type[BaseTool] | None:

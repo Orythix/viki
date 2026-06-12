@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import re
 import time
 from typing import Any
@@ -260,9 +259,18 @@ class DeliberationLayer(CortexLayer):
             if "?" in s:
                 return False
             greetings = (
-                "hello", "hi ", "hey ", "how are you", "how's your day",
-                "good morning", "good afternoon", "good evening", "how do you do",
-                "what's up", "hey viki", "hello viki",
+                "hello",
+                "hi ",
+                "hey ",
+                "how are you",
+                "how's your day",
+                "good morning",
+                "good afternoon",
+                "good evening",
+                "how do you do",
+                "what's up",
+                "hey viki",
+                "hello viki",
             )
             return any(g in lower for g in greetings)
 
@@ -368,6 +376,7 @@ class DeliberationLayer(CortexLayer):
                     import base64
 
                     try:
+
                         def read_image():
                             with open(image_path, "rb") as image_file:
                                 return base64.b64encode(image_file.read()).decode("utf-8")

@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from ..tools.base import ToolResult
@@ -125,12 +125,12 @@ class ExecutionEngine:
                 if isinstance(r, EngineReport):
                     processed.append(r)
                 elif isinstance(r, Exception):
-                    processed.append(
-                        EngineReport(success=False, error=str(r))
-                    )
+                    processed.append(EngineReport(success=False, error=str(r)))
                 else:
                     processed.append(
-                        EngineReport(success=False, error=f"Unexpected result type: {type(r).__name__}")
+                        EngineReport(
+                            success=False, error=f"Unexpected result type: {type(r).__name__}"
+                        )
                     )
             return processed
         except asyncio.TimeoutError:

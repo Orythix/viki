@@ -7,8 +7,6 @@ import os
 import urllib.request
 from typing import Any
 
-from viki.config.logger import viki_logger
-
 
 def debug_enabled() -> bool:
     return os.environ.get("VIKI_DEBUG", "").lower() in ("true", "1", "yes")
@@ -56,7 +54,15 @@ def looks_like_openai_secret(key: str | None) -> bool:
         return False
     s = str(key).strip()
     lowered = s.lower()
-    if lowered in ("ollama", "none", "dummy", "placeholder", "test", "your-api-key-here", "changeme"):
+    if lowered in (
+        "ollama",
+        "none",
+        "dummy",
+        "placeholder",
+        "test",
+        "your-api-key-here",
+        "changeme",
+    ):
         return False
     return s.startswith("sk-")
 
@@ -66,7 +72,15 @@ def looks_like_anthropic_secret(key: str | None) -> bool:
         return False
     s = str(key).strip()
     lowered = s.lower()
-    if lowered in ("ollama", "none", "dummy", "placeholder", "test", "your-api-key-here", "changeme"):
+    if lowered in (
+        "ollama",
+        "none",
+        "dummy",
+        "placeholder",
+        "test",
+        "your-api-key-here",
+        "changeme",
+    ):
         return False
     return s.startswith("sk-ant-")
 

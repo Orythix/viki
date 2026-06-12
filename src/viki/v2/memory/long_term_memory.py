@@ -180,7 +180,7 @@ class LongTermMemory:
                     v = list(struct.unpack(f"{len(emb_bytes) // 4}f", emb_bytes))
                 except Exception:
                     continue
-                dot = sum(a * b for a, b in zip(q, v))
+                dot = sum(a * b for a, b in zip(q, v, strict=False))
                 q_norm = sum(a * a for a in q) ** 0.5
                 v_norm = sum(a * a for a in v) ** 0.5
                 sim = dot / (q_norm * v_norm) if q_norm and v_norm else 0.0

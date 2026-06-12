@@ -14,7 +14,6 @@ from viki.core.autonomous_monitor import WatchdogModule, WellnessPulse
 from viki.core.biometric_service import BioModule
 from viki.core.capabilities import CapabilityRegistry
 from viki.core.cognitive_loop import CognitiveRouter, RouterTelemetry
-from viki.core.layers import ConsciousnessStack
 from viki.core.config_watcher import ConfigWatcher
 from viki.core.continuous_learning import ContinuousLearner
 from viki.core.deliberation import DeliberationEngine
@@ -26,18 +25,19 @@ from viki.core.git_context import get_git_workspace_snapshot
 # Orythix Cognitive Subsystems
 from viki.core.governor import EthicalGovernor
 from viki.core.identity_profile import Soul
-from viki.core.model import ModelRouter
 from viki.core.knowledge_gaps import KnowledgeGapDetector
 from viki.core.knowledge_ingestion import LearningModule
+from viki.core.layers import ConsciousnessStack
 from viki.core.memory import HierarchicalMemory
 from viki.core.meta_cognition import ReflectorModule
 
 # Phase 6: Autonomy
 from viki.core.mission_control import MissionControl
+from viki.core.model import ModelRouter
 from viki.core.orchestrator_helpers import (
+    _LAZY_SKILL_SPECS,
     _build_env_nested_overrides,
     _build_env_overrides,
-    _LAZY_SKILL_SPECS,
     json_type_matches,
     load_yaml,
     persona_from_soul_path,
@@ -2237,6 +2237,7 @@ class VIKIController:
             return final_output
 
         import re
+
         _self_ref = re.search(
             r"(who\s+are\s+you|what\s+are\s+you|tell\s+me\s+about\s+(yourself|you(\s+viki)?)|"
             r"about\s+yourself|introduce\s+yourself|describe\s+yourself)",

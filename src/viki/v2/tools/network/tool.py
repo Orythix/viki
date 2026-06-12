@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from ...core.permission_manager import PermissionTier
 from ..base import BaseTool, ToolResult
-from .providers import NetProvider, SystemNetProvider
+from .providers import NetProvider
 
 
 class NetworkTool(BaseTool):

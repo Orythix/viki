@@ -27,6 +27,7 @@ class FallbackLLM(LLMProvider):
         finally:
             try:
                 from viki.core.usage_log import emit_llm_inference
+
                 emit_llm_inference(self, time.perf_counter() - t0, success, "chat")
             except Exception:
                 pass
@@ -47,6 +48,7 @@ class FallbackLLM(LLMProvider):
         finally:
             try:
                 from viki.core.usage_log import emit_llm_inference
+
                 emit_llm_inference(self, time.perf_counter() - t0, success, "chat_structured")
             except Exception:
                 pass

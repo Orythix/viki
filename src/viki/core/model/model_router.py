@@ -82,7 +82,9 @@ class ModelRouter:
             entry["cooldown_until"] = now + self.COOLDOWN_SECONDS
             viki_logger.warning(
                 "Model '%s' failed %d times; cooling down for %ds",
-                model_name, self.CONSECUTIVE_FAIL_THRESHOLD, self.COOLDOWN_SECONDS,
+                model_name,
+                self.CONSECUTIVE_FAIL_THRESHOLD,
+                self.COOLDOWN_SECONDS,
             )
 
     def record_model_success(self, model_name: str):
@@ -112,6 +114,7 @@ class ModelRouter:
             if self.budget is None and self._budget_config:
                 try:
                     from viki.core.resource_budget import LLMBudget
+
                     self.budget = LLMBudget(self._budget_config)
                 except Exception as e:
                     viki_logger.debug("Failed to init LLMBudget: %s", e)
@@ -235,9 +238,12 @@ class ModelRouter:
         if not isinstance(text, str):
             return False
         prefixes = (
-            "Error calling API Model:", "Error calling Local Model:",
-            "Error calling Gemini Model:", "Error calling Groq Model:",
-            "Error calling Mistral Model:", "Error calling Bedrock Model:",
+            "Error calling API Model:",
+            "Error calling Local Model:",
+            "Error calling Gemini Model:",
+            "Error calling Groq Model:",
+            "Error calling Mistral Model:",
+            "Error calling Bedrock Model:",
             "Error: Model ",
         )
         return any(text.startswith(p) for p in prefixes)
@@ -279,11 +285,15 @@ class ModelRouter:
         errors: list[dict[str, Any]] = []
         for attempt, model in enumerate(chain):
             try:
-                outbound = self._redact_messages_for_cloud(messages) if model.is_cloud() else messages
+                outbound = (
+                    self._redact_messages_for_cloud(messages) if model.is_cloud() else messages
+                )
                 if self.budget is not None and model.is_cloud():
                     estimate = model.estimate_cost_usd(prompt_tokens=512, completion_tokens=256)
                     allowed, reason = self.budget.can_spend(
-                        getattr(model, "provider_name", "unknown"), estimate, is_cloud=True,
+                        getattr(model, "provider_name", "unknown"),
+                        estimate,
+                        is_cloud=True,
                     )
                     if not allowed:
                         errors.append({"model": model.model_name, "reason": reason})
@@ -302,10 +312,15 @@ class ModelRouter:
                 model.record_performance(latency, True)
                 if self.budget is not None and model.is_cloud():
                     self.budget.record_success(getattr(model, "provider_name", "unknown"))
-                    self.budget.record_cost(getattr(model, "provider_name", "unknown"), getattr(model, "total_cost_usd", 0.0))
+                    self.budget.record_cost(
+                        getattr(model, "provider_name", "unknown"),
+                        getattr(model, "total_cost_usd", 0.0),
+                    )
                 return {
-                    "text": text, "model_name": model.model_name,
-                    "attempts": attempt + 1, "errors": errors,
+                    "text": text,
+                    "model_name": model.model_name,
+                    "attempts": attempt + 1,
+                    "errors": errors,
                 }
             except Exception as e:
                 if self.budget is not None and model.is_cloud():

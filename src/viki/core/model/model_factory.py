@@ -31,14 +31,18 @@ class ModelFactory:
             return LocalLLM(merged_config)
         if provider_type in ("gemini", "google", "vertex"):
             from viki.core.inference_providers import GeminiLLM
+
             return GeminiLLM(merged_config)
         if provider_type == "groq":
             from viki.core.inference_providers import GroqLLM
+
             return GroqLLM(merged_config)
         if provider_type == "mistral":
             from viki.core.inference_providers import MistralLLM
+
             return MistralLLM(merged_config)
         if provider_type in ("bedrock", "aws_bedrock"):
             from viki.core.inference_providers import BedrockLLM
+
             return BedrockLLM(merged_config)
         raise ValueError(f"Unknown provider type: {provider_type}")

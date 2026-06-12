@@ -28,6 +28,7 @@ def _get_embedder():
             return _embedder if _embedder is not False else None
         try:
             from sentence_transformers import SentenceTransformer
+
             _embedder = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
             logger.info("KnowledgeBase: sentence-transformers loaded")
         except Exception:
@@ -51,7 +52,7 @@ def _compute_embedding(text: str) -> bytes | None:
 def _cosine_similarity(a: bytes, b: bytes) -> float:
     fa = struct.unpack(f"{len(a) // 4}f", a)
     fb = struct.unpack(f"{len(b) // 4}f", b)
-    dot = sum(x * y for x, y in zip(fa, fb))
+    dot = sum(x * y for x, y in zip(fa, fb, strict=False))
     return dot
 
 
@@ -91,7 +92,8 @@ class KnowledgeBase:
         return self._local.conn
 
     def _ensure_schema(self):
-        self._conn.executescript("""
+        self._conn.executescript(
+            """
             CREATE TABLE IF NOT EXISTS knowledge (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 key         TEXT UNIQUE NOT NULL,
@@ -106,9 +108,17 @@ class KnowledgeBase:
             );
             CREATE INDEX IF NOT EXISTS idx_knowledge_key ON knowledge(key);
             CREATE INDEX IF NOT EXISTS idx_knowledge_tags ON knowledge(tags);
-        """)
+        """
+        )
 
-    def store(self, key: str, content: str, source: str = "", tags: list[str] | None = None, metadata: dict[str, Any] | None = None) -> bool:
+    def store(
+        self,
+        key: str,
+        content: str,
+        source: str = "",
+        tags: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> bool:
         now = time.time()
         embedding = _compute_embedding(content)
         tags_json = json.dumps(tags or [])
@@ -126,7 +136,14 @@ class KnowledgeBase:
             logger.error("KnowledgeBase.store(%s) failed: %s", key, exc)
             return False
 
-    def store_async(self, key: str, content: str, source: str = "", tags: list[str] | None = None, metadata: dict[str, Any] | None = None) -> None:
+    def store_async(
+        self,
+        key: str,
+        content: str,
+        source: str = "",
+        tags: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
         threading.Thread(
             target=self.store,
             args=(key, content, source, tags, metadata),
@@ -134,12 +151,12 @@ class KnowledgeBase:
         ).start()
 
     def get(self, key: str) -> KnowledgeEntry | None:
-        row = self._conn.execute(
-            "SELECT * FROM knowledge WHERE key = ?", (key,)
-        ).fetchone()
+        row = self._conn.execute("SELECT * FROM knowledge WHERE key = ?", (key,)).fetchone()
         if row is None:
             return None
-        self._conn.execute("UPDATE knowledge SET access_count = access_count + 1 WHERE id = ?", (row["id"],))
+        self._conn.execute(
+            "UPDATE knowledge SET access_count = access_count + 1 WHERE id = ?", (row["id"],)
+        )
         self._conn.commit()
         return self._row_to_entry(row)
 
@@ -160,7 +177,9 @@ class KnowledgeBase:
             ).fetchall()
         return [r["key"] for r in rows]
 
-    def search_similar(self, query: str, top_k: int = 5, min_score: float = 0.3) -> list[tuple[KnowledgeEntry, float]]:
+    def search_similar(
+        self, query: str, top_k: int = 5, min_score: float = 0.3
+    ) -> list[tuple[KnowledgeEntry, float]]:
         query_emb = _compute_embedding(query)
         if query_emb is None:
             rows = self._conn.execute(
@@ -168,7 +187,6 @@ class KnowledgeBase:
             ).fetchall()
             return [(self._row_to_entry(r), 0.0) for r in rows]
 
-        dim = len(query_emb) // 4
         all_rows = self._conn.execute(
             "SELECT * FROM knowledge WHERE embedding IS NOT NULL"
         ).fetchall()

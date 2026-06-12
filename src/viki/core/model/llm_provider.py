@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import time
 from abc import ABC, abstractmethod
 from typing import Any, TypeVar
 
 from pydantic import BaseModel
-
-from viki.config.logger import viki_logger
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -48,6 +45,7 @@ class LLMProvider(ABC):
             self.trust_score = min(1.0, self.trust_score + 0.01)
         try:
             from viki.core.usage_log import emit_model_feedback
+
             emit_model_feedback(self, latency, success)
         except Exception:
             pass
@@ -66,6 +64,7 @@ class LLMProvider(ABC):
         self.total_cost_usd += delta
         try:
             from api.events import get_event_bus
+
             get_event_bus().publish(
                 "usage",
                 {"input": input_tokens, "output": output_tokens, "model": self.model_name},

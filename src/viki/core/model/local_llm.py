@@ -16,7 +16,7 @@ from viki.config.logger import viki_logger
 from viki.core.schema import ThoughtObject, VIKIResponse, VIKIResponseLite
 
 from .llm_provider import LLMProvider
-from .utils import debug_enabled, ollama_model_exists
+from .utils import ollama_model_exists
 
 T = Any
 
@@ -126,6 +126,7 @@ class LocalLLM(LLMProvider):
                 data["tools"] = tools
                 data["stream"] = False
             if image_path:
+
                 def read_image():
                     with open(image_path, "rb") as image_file:
                         return base64.b64encode(image_file.read()).decode("utf-8")
@@ -165,6 +166,7 @@ class LocalLLM(LLMProvider):
         finally:
             try:
                 from viki.core.usage_log import emit_llm_inference
+
                 emit_llm_inference(self, time.perf_counter() - t0, success, "chat")
             except Exception:
                 pass
@@ -192,7 +194,7 @@ class LocalLLM(LLMProvider):
                         resp_json = await resp.json()
                     except (aiohttp.ContentTypeError, json.JSONDecodeError) as e:
                         viki_logger.error(f"Failed to parse Ollama response: {e}")
-                        raise ValueError(f"Invalid JSON response from Ollama: {resp.status}")
+                        raise ValueError(f"Invalid JSON response from Ollama: {resp.status}") from e
                     if "error" in resp_json:
                         raise ValueError(f"Ollama Error: {resp_json['error']}")
                     if "message" not in resp_json:
@@ -210,6 +212,7 @@ class LocalLLM(LLMProvider):
             finally:
                 try:
                     from viki.core.usage_log import emit_llm_inference
+
                     emit_llm_inference(self, time.perf_counter() - t0, success, "chat_with_tools")
                 except Exception:
                     pass
@@ -251,28 +254,40 @@ class LocalLLM(LLMProvider):
         return "properties" in data and "required" in data
 
     async def _ollama_recover_after_schema_echo(
-        self, msgs_without_guide: list[dict[str, Any]],
-        response_model: type[T], temperature: float, image_path: str | None,
+        self,
+        msgs_without_guide: list[dict[str, Any]],
+        response_model: type[T],
+        temperature: float,
+        image_path: str | None,
     ) -> str:
         recovery = [dict(m) for m in msgs_without_guide]
         if response_model == VIKIResponse:
-            recovery.append({
-                "role": "system",
-                "content": (
-                    "You returned a JSON Schema. That is wrong. Return ONLY a data object "
-                    "with fields final_thought, final_response, and action as described. "
-                    "final_response must contain your actual reply to the user."
-                ),
-            })
+            recovery.append(
+                {
+                    "role": "system",
+                    "content": (
+                        "You returned a JSON Schema. That is wrong. Return ONLY a data object "
+                        "with fields final_thought, final_response, and action as described. "
+                        "final_response must contain your actual reply to the user."
+                    ),
+                }
+            )
         else:
-            recovery.append({
-                "role": "system",
-                "content": "Return only the answer JSON object, not a schema describing it.",
-            })
+            recovery.append(
+                {
+                    "role": "system",
+                    "content": "Return only the answer JSON object, not a schema describing it.",
+                }
+            )
         text = await self.chat(
-            recovery, temperature=min(0.4, max(0.1, temperature)),
-            format="json", image_path=image_path,
-            response_format={"type": "json_schema", "json_schema": response_model.model_json_schema()},
+            recovery,
+            temperature=min(0.4, max(0.1, temperature)),
+            format="json",
+            image_path=image_path,
+            response_format={
+                "type": "json_schema",
+                "json_schema": response_model.model_json_schema(),
+            },
         )
         text = (text if isinstance(text, str) else str(text or "")).strip()
         try:
@@ -283,21 +298,29 @@ class LocalLLM(LLMProvider):
             return text
 
         plain_msgs = [dict(m) for m in msgs_without_guide]
-        plain_msgs.append({
-            "role": "system",
-            "content": "Reply in plain language only. Answer the user's last message helpfully. No JSON, no code fences, no preamble.",
-        })
+        plain_msgs.append(
+            {
+                "role": "system",
+                "content": "Reply in plain language only. Answer the user's last message helpfully. No JSON, no code fences, no preamble.",
+            }
+        )
         return await self.chat(
-            plain_msgs, temperature=min(0.55, max(0.15, temperature)),
-            format=None, image_path=image_path,
+            plain_msgs,
+            temperature=min(0.55, max(0.15, temperature)),
+            format=None,
+            image_path=image_path,
         )
 
     async def chat_structured(
-        self, messages: list[dict[str, str]], response_model: type[T],
-        temperature: float = 0.0, image_path: str = None,
+        self,
+        messages: list[dict[str, str]],
+        response_model: type[T],
+        temperature: float = 0.0,
+        image_path: str = None,
     ) -> T:
         msgs: list[dict[str, Any]] = [dict(m) for m in messages]
         if image_path:
+
             def read_image():
                 with open(image_path, "rb") as image_file:
                     return base64.b64encode(image_file.read()).decode("utf-8")
@@ -312,7 +335,10 @@ class LocalLLM(LLMProvider):
         msgs.append({"role": "system", "content": guide})
         json_schema = response_model.model_json_schema()
         content = await self.chat(
-            msgs, temperature=temperature, format="json", image_path=image_path,
+            msgs,
+            temperature=temperature,
+            format="json",
+            image_path=image_path,
             response_format={"type": "json_schema", "json_schema": json_schema},
         )
         content = (content if isinstance(content, str) else str(content or "")).strip()
@@ -321,7 +347,10 @@ class LocalLLM(LLMProvider):
             data = self._parse_structured_json_heuristics(content)
             if response_model == VIKIResponse and self._data_is_json_schema_echo(data):
                 content = await self._ollama_recover_after_schema_echo(
-                    msgs[:-1], response_model, temperature, image_path,
+                    msgs[:-1],
+                    response_model,
+                    temperature,
+                    image_path,
                 )
                 content = (content if isinstance(content, str) else str(content or "")).strip()
                 if content.startswith(("{", "[")):
@@ -336,7 +365,9 @@ class LocalLLM(LLMProvider):
                         final_response=content[:8000] if len(content) > 8000 else content,
                     )
                 if response_model == VIKIResponse and self._data_is_json_schema_echo(data):
-                    return self._structured_fallback(response_model, content, ValueError("schema echo persisted"))
+                    return self._structured_fallback(
+                        response_model, content, ValueError("schema echo persisted")
+                    )
 
             if response_model == VIKIResponse:
                 data = self._patch_viki_response(data)
@@ -349,13 +380,18 @@ class LocalLLM(LLMProvider):
                 retry_count += 1
                 guide_text = self._compact_json_output_guide(response_model)
                 retry_msgs = [dict(m) for m in msgs[:-1]]
-                retry_msgs.append({
-                    "role": "system",
-                    "content": "Your previous response was not valid JSON. Return ONLY a single valid JSON object.\n" + guide_text,
-                })
+                retry_msgs.append(
+                    {
+                        "role": "system",
+                        "content": "Your previous response was not valid JSON. Return ONLY a single valid JSON object.\n"
+                        + guide_text,
+                    }
+                )
                 content2 = await self.chat(
-                    retry_msgs, temperature=min(0.5, temperature + 0.1 * retry_count),
-                    format="json", image_path=image_path,
+                    retry_msgs,
+                    temperature=min(0.5, temperature + 0.1 * retry_count),
+                    format="json",
+                    image_path=image_path,
                     response_format={"type": "json_schema", "json_schema": json_schema},
                 )
                 content2 = (content2 if isinstance(content2, str) else str(content2 or "")).strip()
@@ -378,12 +414,17 @@ class LocalLLM(LLMProvider):
             content = match.group(1).strip()
         else:
             content = content.replace("```json", "").replace("```", "").strip()
-        content = content.replace(": None", ": null").replace(": True", ": true").replace(": False", ": false")
+        content = (
+            content.replace(": None", ": null")
+            .replace(": True", ": true")
+            .replace(": False", ": false")
+        )
         try:
             return json.loads(content)
         except json.JSONDecodeError:
             try:
                 import ast
+
                 val = ast.literal_eval(content)
                 if isinstance(val, dict):
                     return val
@@ -470,11 +511,17 @@ class LocalLLM(LLMProvider):
         if "response" in data and "plan" in data and "final_thought" not in data:
             response_obj = data["response"]
             intent = (
-                response_obj.get("intent", "unknown") if isinstance(response_obj, dict) else str(response_obj)
+                response_obj.get("intent", "unknown")
+                if isinstance(response_obj, dict)
+                else str(response_obj)
             )
             plan = str(data.get("plan", []))
             return {
-                "final_thought": {"intent_summary": intent, "primary_strategy": plan, "confidence": 0.8},
+                "final_thought": {
+                    "intent_summary": intent,
+                    "primary_strategy": plan,
+                    "confidence": 0.8,
+                },
                 "action": data.get("action"),
                 "final_response": data.get("final_response", f"Plan: {plan}"),
             }
@@ -487,9 +534,16 @@ class LocalLLM(LLMProvider):
     def _patch_flattened_thought_object(self, data: dict) -> None:
         if "intent_summary" in data and "primary_strategy" in data and "final_thought" not in data:
             thought_fields = [
-                "intent_vector", "intent_summary", "assumptions", "constraints",
-                "risk_score", "primary_strategy", "rejected_strategies",
-                "symbolic_graph", "confidence", "provenance",
+                "intent_vector",
+                "intent_summary",
+                "assumptions",
+                "constraints",
+                "risk_score",
+                "primary_strategy",
+                "rejected_strategies",
+                "symbolic_graph",
+                "confidence",
+                "provenance",
             ]
             thought_obj: dict[str, Any] = {}
             for f in thought_fields:
@@ -518,6 +572,8 @@ class LocalLLM(LLMProvider):
             strategy = data.get("internal_metacognition", summary)
             data["final_thought"] = {
                 "intent_summary": summary[:200] if isinstance(summary, str) else "User request",
-                "primary_strategy": strategy[:200] if isinstance(strategy, str) else "Direct response",
+                "primary_strategy": strategy[:200]
+                if isinstance(strategy, str)
+                else "Direct response",
                 "confidence": 0.7,
             }

@@ -133,8 +133,8 @@ def create_v2_bridge(provider=None) -> V2ToolBridge:
     from viki.v2.tools.dev.tool import DevTool
     from viki.v2.tools.filesystem.tool import FileSystemTool
     from viki.v2.tools.git.tool import GitTool
-    from viki.v2.tools.network.tool import NetworkTool
     from viki.v2.tools.network.providers import SystemNetProvider
+    from viki.v2.tools.network.tool import NetworkTool
     from viki.v2.tools.shell.tool import ShellTool
     from viki.v2.tools.system.tool import SystemTool
 

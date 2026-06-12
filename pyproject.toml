@@ -61,6 +61,7 @@ ignore = [
     "B008",  # function calls in default arguments (intentional in some cases)
     "T201",  # print statements (used for debug)
     "TRY003", # avoid bare except (too many to fix now)
+    "BLE001", # blind except Exception (legacy codebase, 500+ occurrences)
 ]
 per-file-ignores = { "tests/*" = ["S101", "T201", "E402"], "src/viki/skills/**" = ["T201", "E701", "E402", "E741", "B904", "B008"], "src/viki/skills/playbooks/**" = ["T201", "E402", "B008"], "src/viki/evolution_engine.py" = ["E402"], "src/viki/core/vector_memory.py" = ["B904"], "src/viki/core/inference_gateway.py" = ["B904"], "src/viki/core/autonomous_monitor.py" = ["E741"], "src/viki/core/continuous_learning.py" = ["E741"], "src/viki/ops/tenant_ops.py" = ["E741"], "src/viki/application/**" = ["E741"] }
 
