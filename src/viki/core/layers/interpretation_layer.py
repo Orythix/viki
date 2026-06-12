@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import string as _string
 from typing import Any
 
 from viki.config.logger import viki_logger
@@ -176,7 +177,9 @@ class InterpretationLayer(CortexLayer):
         app_match = re.match(r"^(?:open|launch|start|run)\s+(.+)$", data.lower().strip())
         app_name = app_match.group(1).strip() if app_match else None
 
-        words = set(data.lower().split())
+        _strip_punct = str.maketrans("", "", _string.punctuation)
+        words = {w.translate(_strip_punct) for w in data.lower().split()}
+        words.discard("")
         intent_type = self._classify_intent(words, data)
 
         if intent_type == "coding" and not file_paths:
