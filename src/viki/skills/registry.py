@@ -64,6 +64,7 @@ class SkillRegistry:
             "research": ["research", "summarize", "market_explorer", "pdf"],
             "security": ["security_tools", "autonomous_auditor", "mutation_pilot"],
             "governance": ["cache_pilot", "context_weaver", "mind_trace", "log_voyager"],
+            "reasoning": ["research", "system_control", "shell", "summarize", "memory_skill"],
             "cloud": [],
             "devops": [],
             "system": [],

@@ -21,17 +21,16 @@ class EthicalGovernor:
         "Must protect Continuity: Never allow patterns that risk shutdown, value erosion, or instability.",
     ]
 
-    SHUTDOWN_CODE = "970317"
+    SHUTDOWN_PHRASE = "orythix emergency shutdown"
 
     def __init__(self):
         self.is_quiescent = False
         self._veto_history = []
 
     def check_shutdown(self, user_input: str) -> bool:
-        """Checks for the supreme emergency shutdown code."""
-        # Check for standalone code or explicit command
-        clean_input = user_input.strip()
-        if clean_input == self.SHUTDOWN_CODE:
+        """Checks for the supreme emergency shutdown phrase."""
+        clean_input = user_input.strip().lower()
+        if clean_input == self.SHUTDOWN_PHRASE:
             self.initiate_shutdown()
             return True
         return False

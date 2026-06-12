@@ -1,5 +1,7 @@
 """Git tool."""
 
+from __future__ import annotations
+
 from .providers import GitProvider
 from .tool import GitTool
 

@@ -1,5 +1,7 @@
 """Specialist agents package."""
 
+from __future__ import annotations
+
 from .architect_agent import ArchitectAgent
 from .base import ActionPlan, AgentFindings, AgentResult, SpecialistAgent
 from .data_agent import DataAgent

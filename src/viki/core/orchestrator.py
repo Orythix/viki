@@ -14,7 +14,7 @@ from viki.core.autonomous_monitor import WatchdogModule, WellnessPulse
 from viki.core.biometric_service import BioModule
 from viki.core.capabilities import CapabilityRegistry
 from viki.core.cognitive_loop import CognitiveRouter, RouterTelemetry
-from viki.core.cognitive_processor import ConsciousnessStack
+from viki.core.layers import ConsciousnessStack
 from viki.core.config_watcher import ConfigWatcher
 from viki.core.continuous_learning import ContinuousLearner
 from viki.core.deliberation import DeliberationEngine
@@ -26,7 +26,7 @@ from viki.core.git_context import get_git_workspace_snapshot
 # Orythix Cognitive Subsystems
 from viki.core.governor import EthicalGovernor
 from viki.core.identity_profile import Soul
-from viki.core.inference_gateway import ModelRouter
+from viki.core.model import ModelRouter
 from viki.core.knowledge_gaps import KnowledgeGapDetector
 from viki.core.knowledge_ingestion import LearningModule
 from viki.core.memory import HierarchicalMemory
@@ -35,6 +35,9 @@ from viki.core.meta_cognition import ReflectorModule
 # Phase 6: Autonomy
 from viki.core.mission_control import MissionControl
 from viki.core.orchestrator_helpers import (
+    _build_env_nested_overrides,
+    _build_env_overrides,
+    _LAZY_SKILL_SPECS,
     json_type_matches,
     load_yaml,
     persona_from_soul_path,
@@ -83,79 +86,15 @@ class VIKIController:
         self, system: dict[str, Any], workspace_override: str | None
     ) -> None:
         """Apply env/YAML overrides to the `system` settings dict."""
-        if os.environ.get("VIKI_DATA_DIR"):
-            system["data_dir"] = os.path.abspath(os.path.expanduser(os.environ["VIKI_DATA_DIR"]))
-        if os.environ.get("VIKI_WORKSPACE_DIR"):
-            system["workspace_dir"] = os.path.abspath(
-                os.path.expanduser(os.environ["VIKI_WORKSPACE_DIR"])
-            )
-        if os.environ.get("VIKI_PERSONA"):
-            system["persona"] = os.environ.get("VIKI_PERSONA", "").strip()
+        system.update(_build_env_overrides())
+        for section, values in _build_env_nested_overrides().items():
+            existing = self.settings.setdefault(section, {})
+            if not isinstance(existing, dict):
+                existing = {}
+                self.settings[section] = existing
+            existing.update(values)
         if workspace_override:
             system["workspace_dir"] = os.path.abspath(workspace_override)
-
-        # Shadow mode and air gap from env (optional)
-        if os.environ.get("VIKI_SHADOW_MODE", "").lower() in ("1", "true", "yes"):
-            system["shadow_mode"] = True
-        if os.environ.get("VIKI_AIR_GAP", "").lower() in ("1", "true", "yes"):
-            system["air_gap"] = True
-        if os.environ.get("VIKI_LOCAL_LLM_ONLY") is not None:
-            system["local_llm_only"] = os.environ.get(
-                "VIKI_LOCAL_LLM_ONLY", ""
-            ).strip().lower() in (
-                "1",
-                "true",
-                "yes",
-            )
-        if os.environ.get("VIKI_GIT_CONTEXT", "").lower() in ("1", "true", "yes"):
-            system["git_workspace_context"] = True
-        if os.environ.get("VIKI_LOW_RESOURCE", "").lower() in ("1", "true", "yes"):
-            system["low_resource_mode"] = True
-
-        if os.environ.get("VIKI_SESSION_USAGE_LOG") is not None:
-            raw = os.environ.get("VIKI_SESSION_USAGE_LOG", "").strip().lower()
-            system["session_usage_log"] = raw in ("1", "true", "yes")
-
-        if os.environ.get("VIKI_AUTO_WEB_RESEARCH") is not None:
-            raw = os.environ.get("VIKI_AUTO_WEB_RESEARCH", "").strip().lower()
-            system["auto_web_research_when_uncertain"] = raw in ("1", "true", "yes", "on")
-
-        if os.environ.get("VIKI_LESSON_EXPORT_MIN_ACCESS") is not None:
-            raw = os.environ.get("VIKI_LESSON_EXPORT_MIN_ACCESS", "").strip()
-            try:
-                system["lesson_export_min_access_count"] = max(1, int(raw))
-            except ValueError:
-                pass
-
-        if os.environ.get("VIKI_ENDPOINT_GUARD") is not None:
-            raw = os.environ.get("VIKI_ENDPOINT_GUARD", "").strip().lower()
-            eg = self.settings.setdefault("endpoint_guard", {})
-            if not isinstance(eg, dict):
-                eg = {}
-                self.settings["endpoint_guard"] = eg
-            if raw in ("1", "true", "yes", "on"):
-                eg["enabled"] = True
-                eg.setdefault("auto_start_watcher", True)
-            elif raw in ("0", "false", "no", "off"):
-                eg["enabled"] = False
-
-        if os.environ.get("VIKI_BACKGROUND_EVOLUTION_AT_BOOT") is not None:
-            raw = os.environ.get("VIKI_BACKGROUND_EVOLUTION_AT_BOOT", "").strip().lower()
-            forge = self.settings.setdefault("forge", {})
-            if not isinstance(forge, dict):
-                forge = {}
-                self.settings["forge"] = forge
-            forge["background_evolution_at_boot"] = raw in ("1", "true", "yes", "on")
-
-        # Bio webcam: unset = keep YAML default; explicit 0/1 overrides
-        if os.environ.get("VIKI_BIO_WEBCAM") is not None:
-            system["bio_webcam_enabled"] = os.environ.get(
-                "VIKI_BIO_WEBCAM", ""
-            ).strip().lower() in (
-                "1",
-                "true",
-                "yes",
-            )
 
     def _resolve_models_config(self) -> None:
         models_conf_rel = self.settings.get("models_config", "./config/models.yaml")
@@ -1360,202 +1299,7 @@ class VIKIController:
     # registered as LazySkillProxy on every boot — they only fully load when
     # the planner actually invokes them. Reduces cold-start by ~30–60% on
     # low-end Windows boxes.
-    _LAZY_SKILL_SPECS = [
-        # (skill_name, description, module_path, class_name, needs_controller, safety_tier)
-        (
-            "look_at_screen",
-            "Capture and describe screen content.",
-            "viki.skills.builtins.vision_skill",
-            "VisionSkill",
-            False,
-            "safe",
-        ),
-        (
-            "python_interpreter",
-            "Execute Python in a sandbox.",
-            "viki.skills.builtins.interpreter_skill",
-            "InterpreterSkill",
-            True,
-            "medium",
-        ),
-        (
-            "browser",
-            "Headless browser navigation and scraping.",
-            "viki.skills.builtins.browser_skill",
-            "BrowserSkill",
-            False,
-            "medium",
-        ),
-        (
-            "swarm_control",
-            "Multi-agent swarm orchestration.",
-            "viki.skills.builtins.swarm_skill",
-            "SwarmSkill",
-            True,
-            "medium",
-        ),
-        (
-            "draw_overlay",
-            "Floating overlay UI.",
-            "viki.skills.builtins.overlay_skill",
-            "OverlaySkill",
-            False,
-            "safe",
-        ),
-        (
-            "short_video_agent",
-            "Generate short videos.",
-            "viki.skills.builtins.short_video_skill",
-            "ShortVideoSkill",
-            True,
-            "safe",
-        ),
-        (
-            "calendar",
-            "Google Calendar integration.",
-            "viki.skills.builtins.calendar_skill",
-            "CalendarSkill",
-            True,
-            "safe",
-        ),
-        (
-            "email",
-            "Gmail integration.",
-            "viki.skills.builtins.email_skill",
-            "EmailSkill",
-            True,
-            "safe",
-        ),
-        (
-            "messaging",
-            "Unified messaging across Discord/Telegram/etc.",
-            "viki.skills.builtins.messaging_skill",
-            "UnifiedMessagingSkill",
-            True,
-            "safe",
-        ),
-        (
-            "twitter",
-            "Twitter/X integration.",
-            "viki.skills.builtins.twitter_skill",
-            "TwitterSkill",
-            False,
-            "safe",
-        ),
-        (
-            "summarize",
-            "Summarize long text/web pages.",
-            "viki.skills.builtins.summarize_skill",
-            "SummarizeSkill",
-            True,
-            "safe",
-        ),
-        (
-            "image_gen",
-            "Generate images.",
-            "viki.skills.builtins.image_gen_skill",
-            "ImageGenSkill",
-            False,
-            "safe",
-        ),
-        (
-            "obsidian",
-            "Obsidian vault notes.",
-            "viki.skills.builtins.obsidian_skill",
-            "ObsidianSkill",
-            True,
-            "safe",
-        ),
-        (
-            "tasks",
-            "Task list management.",
-            "viki.skills.builtins.tasks_skill",
-            "TasksSkill",
-            True,
-            "safe",
-        ),
-        (
-            "whisper",
-            "Audio transcription.",
-            "viki.skills.builtins.whisper_skill",
-            "WhisperSkill",
-            True,
-            "safe",
-        ),
-        (
-            "pdf",
-            "PDF reading and extraction.",
-            "viki.skills.builtins.pdf_skill",
-            "PdfSkill",
-            True,
-            "safe",
-        ),
-        (
-            "smart_home",
-            "Smart-home device control.",
-            "viki.skills.builtins.smart_home_skill",
-            "SmartHomeSkill",
-            False,
-            "medium",
-        ),
-        ("gif", "GIF generation.", "viki.skills.builtins.gif_skill", "GifSkill", False, "safe"),
-        (
-            "data_analysis",
-            "DataFrame analysis.",
-            "viki.skills.builtins.data_analysis_skill",
-            "DataAnalysisSkill",
-            True,
-            "safe",
-        ),
-        (
-            "presentation",
-            "Slide deck generation.",
-            "viki.skills.builtins.presentation_skill",
-            "PresentationSkill",
-            True,
-            "safe",
-        ),
-        (
-            "spreadsheet",
-            "Spreadsheet generation/editing.",
-            "viki.skills.builtins.spreadsheet_skill",
-            "SpreadsheetSkill",
-            True,
-            "safe",
-        ),
-        (
-            "website",
-            "Website scaffolding/editing.",
-            "viki.skills.builtins.website_skill",
-            "WebsiteSkill",
-            True,
-            "safe",
-        ),
-        (
-            "code_search",
-            "Repository code search.",
-            "viki.skills.builtins.code_search_skill",
-            "CodeSearchSkill",
-            True,
-            "safe",
-        ),
-        (
-            "plan_edit",
-            "Multi-file plan-edit-verify loop.",
-            "viki.skills.builtins.plan_edit_skill",
-            "PlanEditSkill",
-            True,
-            "medium",
-        ),
-        (
-            "computer_use",
-            "Vision-grounded UI automation.",
-            "viki.skills.builtins.computer_use_skill",
-            "ComputerUseSkill",
-            True,
-            "medium",
-        ),
-    ]
+    _LAZY_SKILL_SPECS = _LAZY_SKILL_SPECS  # imported from orchestrator_helpers
 
     def _register_default_skills(self):
         from viki.skills.lazy_skill import LazySkillProxy
@@ -2490,6 +2234,15 @@ class VIKIController:
         if not self._auto_web_research_setting_enabled():
             return final_output
         if not safe_input or len(safe_input.strip()) < 8:
+            return final_output
+
+        import re
+        _self_ref = re.search(
+            r"(who\s+are\s+you|what\s+are\s+you|tell\s+me\s+about\s+(yourself|you(\s+viki)?)|"
+            r"about\s+yourself|introduce\s+yourself|describe\s+yourself)",
+            safe_input.lower().strip(),
+        )
+        if _self_ref:
             return final_output
 
         rs = self.skill_registry.get_skill("research")

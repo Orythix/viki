@@ -1,5 +1,7 @@
 """VIKI v2 — Next-generation OS agent architecture."""
 
+from __future__ import annotations
+
 from .agents import (
     ActionPlan,
     AgentFindings,

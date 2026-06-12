@@ -1,5 +1,7 @@
 """System provider factory — returns the correct provider for the current platform."""
 
+from __future__ import annotations
+
 import sys
 
 

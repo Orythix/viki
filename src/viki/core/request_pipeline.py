@@ -123,7 +123,7 @@ class _AttachmentStage:
 class _GovernorStage:
     async def run(self, ctrl: Any, ctx: RequestContext) -> str | None:
         if ctrl.governor.check_shutdown(ctx.user_input):
-            return "Orythix — Quiescent (shutdown key 970317 accepted)"
+            return "Orythix — Quiescent (emergency shutdown accepted)"
 
         if ctrl.governor.is_quiescent:
             if ctrl.governor.check_reawaken(ctx.user_input):

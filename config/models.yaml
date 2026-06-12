@@ -26,7 +26,7 @@ models:
       - tool_use
       - general
       - chatter
-      supports_native_tools: true
+      supports_native_tools: false
       supports_streaming: true
       local_first: true
       ollama_options:
@@ -48,7 +48,7 @@ models:
       - memory
       - autonomous_planning
       - general
-      supports_native_tools: true
+      supports_native_tools: false
       supports_streaming: true
       ollama_options:
         num_predict: 4096

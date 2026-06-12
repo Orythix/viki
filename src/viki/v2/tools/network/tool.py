@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from ...core.permission_manager import PermissionTier
-from ...providers.base import SystemProvider
 from ..base import BaseTool, ToolResult
+from .providers import NetProvider, SystemNetProvider
 
 
 class NetworkTool(BaseTool):
@@ -50,13 +50,13 @@ class NetworkTool(BaseTool):
         "required": ["action"],
     }
 
-    def __init__(self, provider: SystemProvider | None = None):
+    def __init__(self, provider: NetProvider | None = None):
         self.provider = provider
 
     async def execute(self, params: dict, provider=None) -> ToolResult:
         p = provider or self.provider
         if not p:
-            return ToolResult(success=False, error="No system provider available")
+            return ToolResult(success=False, error="No network provider available")
 
         action = params.get("action", "info")
         try:
@@ -64,11 +64,16 @@ class NetworkTool(BaseTool):
                 data = await p.get_wifi_password(params.get("target"))
             elif action == "ip_address":
                 data = await p.get_ip_address()
+            elif action == "dns":
+                data = await p.get_dns_info()
             elif action == "ping":
                 host = params.get("target", "8.8.8.8")
                 data = await p.ping(host)
-            elif action == "info":
-                data = await p.get_network_info()
+            elif action == "traceroute":
+                host = params.get("target", "8.8.8.8")
+                data = await p.traceroute(host)
+            elif action == "adapters":
+                data = await p.get_network_adapters()
             else:
                 data = await p.get_network_info()
             return ToolResult(success=True, data=data)

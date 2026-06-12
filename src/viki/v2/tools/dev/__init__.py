@@ -1,5 +1,7 @@
 """Dev tool."""
 
+from __future__ import annotations
+
 from .providers import DevProvider, RepoProfile
 from .tool import DevTool
 

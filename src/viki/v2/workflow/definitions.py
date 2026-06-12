@@ -1,5 +1,7 @@
 """Built-in workflow definitions for common tasks."""
 
+from __future__ import annotations
+
 from .engine import RollbackStep, Workflow, WorkflowStep
 
 # ---------------------------------------------------------------------------

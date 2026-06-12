@@ -1,5 +1,5 @@
 from viki.config.logger import viki_logger
-from viki.core.inference_gateway import LLMProvider
+from viki.core.model import LLMProvider
 
 
 class DeliberationEngine:

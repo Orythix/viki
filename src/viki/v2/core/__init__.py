@@ -1,8 +1,11 @@
 """V2 Core modules."""
 
+from __future__ import annotations
+
 from .agent import AgentResponse, CoreAgent
 from .context_builder import ContextBuilder
 from .context_manager import ContextManager
+from .execution_engine import EngineReport, ExecutionEngine
 from .intent_analyzer import IntentAnalyzer, IntentResult
 from .permission_manager import PermissionCheck, PermissionManager, PermissionTier
 from .repo_analyzer import RepoAnalyzer, RepositoryProfile
@@ -17,6 +20,8 @@ __all__ = [
     "AgentResponse",
     "ContextBuilder",
     "ContextManager",
+    "EngineReport",
+    "ExecutionEngine",
     "IntentAnalyzer",
     "IntentResult",
     "PermissionManager",
@@ -36,6 +41,5 @@ __all__ = [
     "TaskPlan",
     "TaskStep",
     "StepResult",
-    "ExecutionReport",
     "ToolSelector",
 ]
