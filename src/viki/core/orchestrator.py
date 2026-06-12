@@ -691,8 +691,10 @@ class VIKIController:
             return "skipped (background_evolution_at_boot false)"
         if getattr(self, "air_gap", False):
             return "skipped (air_gap)"
-        if getattr(self, "low_resource_mode", False):
-            return "skipped (low_resource_mode)"
+        if not force and getattr(self, "low_resource_mode", False):
+            env_val = os.environ.get("VIKI_BACKGROUND_EVOLUTION_AT_BOOT")
+            if env_val is None or env_val.lower() not in ("1", "true", "yes", "on"):
+                return "skipped (low_resource_mode)"
         if getattr(self, "shadow_mode", False):
             return "skipped (shadow_mode)"
 

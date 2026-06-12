@@ -667,6 +667,180 @@ class NvidiaLLM(LLMProvider):
 
 
 # ---------------------------------------------------------------------------
+# OpenCode — gateway to Zen and Go coding/reasoning models (GPT-5.5, Qwen, etc.)
+# ---------------------------------------------------------------------------
+class OpenCodeLLM(LLMProvider):
+    """OpenCode API — access to Zen and Go optimized coding/reasoning models.
+
+    OpenCode exposes OpenAI-compatible endpoints at:
+    - OpenCode Zen: ``https://opencode.ai/zen/v1``
+    - OpenCode Go: ``https://opencode.ai/zen/go/v1``
+
+    API keys are obtained at https://opencode.ai and start with ``sk-``.
+    Set ``OPENCODE_API_KEY`` in your environment.
+    """
+
+    _OC_BASE_URL = "https://opencode.ai/zen/v1"
+    _OC_SITE_URL = "https://github.com/Orythix/viki"
+    _OC_SITE_NAME = "VIKI"
+
+    def __init__(self, config: dict[str, Any]):
+        super().__init__(config)
+        self.provider_name = "opencode"
+        self._client = None
+
+        api_key = os.getenv(self.config.get("api_key_env", "OPENCODE_API_KEY"))
+        if not self._looks_like_opencode_secret(api_key):
+            self.available = False
+            self.unavailable_reason = (
+                "OpenCode API key missing or invalid; expected OPENCODE_API_KEY "
+                "starting with 'sk-'. Get a key at https://opencode.ai."
+            )
+            return
+
+        try:
+            from openai import AsyncOpenAI  # type: ignore
+
+            base_url = self.config.get("base_url", self._OC_BASE_URL)
+            self._client = AsyncOpenAI(
+                api_key=api_key,
+                base_url=base_url,
+                default_headers={
+                    "HTTP-Referer": self._OC_SITE_URL,
+                    "X-Title": self._OC_SITE_NAME,
+                },
+            )
+            viki_logger.debug(
+                "OpenCodeLLM initialised: model=%s base_url=%s", self.model_name, base_url
+            )
+        except ImportError as e:
+            self.available = False
+            self.unavailable_reason = f"openai client missing: {e}"
+            self._client = None
+        except Exception as e:
+            self.available = False
+            self.unavailable_reason = str(e)
+            self._client = None
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _looks_like_opencode_secret(key: str | None) -> bool:
+        if not key or not str(key).strip():
+            return False
+        s = str(key).strip()
+        if s.lower() in ("none", "dummy", "placeholder", "test", "your-api-key-here", "changeme"):
+            return False
+        return s.startswith("sk-") and len(s) >= 20
+
+    # ------------------------------------------------------------------
+    # LLMProvider interface
+    # ------------------------------------------------------------------
+
+    def is_cloud(self) -> bool:
+        return True
+
+    async def chat(self, messages: list[dict[str, str]], temperature: float = 0.7) -> str:
+        if not self.available or self._client is None:
+            return f"Error: OpenCode model '{self.model_name}' is unavailable."
+        t0 = time.perf_counter()
+        success = False
+        try:
+            response = await self._client.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                temperature=temperature,
+            )
+            usage = getattr(response, "usage", None)
+            if usage:
+                self.record_token_usage(
+                    getattr(usage, "prompt_tokens", 0) or 0,
+                    getattr(usage, "completion_tokens", 0) or 0,
+                )
+            success = True
+            return response.choices[0].message.content or ""
+        except Exception as e:
+            viki_logger.error("OpenCodeLLM.chat failed for '%s': %s", self.model_name, e)
+            return f"Error calling OpenCode model '{self.model_name}': {e}"
+        finally:
+            try:
+                from viki.core.usage_log import emit_llm_inference
+
+                emit_llm_inference(self, time.perf_counter() - t0, success, "chat")
+            except Exception:
+                pass
+
+    async def chat_structured(
+        self,
+        messages: list[dict[str, str]],
+        response_model: type[T],
+        temperature: float = 0.0,
+        image_path: str = None,
+    ) -> T:
+        t0 = time.perf_counter()
+        success = False
+        try:
+            import instructor  # type: ignore
+
+            client = instructor.from_openai(self._client, mode=instructor.Mode.JSON)
+            result = await client.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                response_model=response_model,
+                temperature=temperature,
+            )
+            success = True
+            return result
+        except Exception as e:
+            viki_logger.debug("OpenCodeLLM structured via instructor failed: %s — falling back", e)
+            text = await self.chat(
+                messages + [{"role": "user", "content": "Return only a single JSON object."}],
+                temperature=temperature,
+            )
+            try:
+                result = response_model.model_validate_json(text)
+                success = True
+                return result
+            except Exception:
+                start = text.find("{")
+                end = text.rfind("}")
+                if start != -1 and end != -1:
+                    return response_model.model_validate_json(text[start : end + 1])
+                raise
+        finally:
+            try:
+                from viki.core.usage_log import emit_llm_inference
+
+                emit_llm_inference(self, time.perf_counter() - t0, success, "chat_structured")
+            except Exception:
+                pass
+
+    async def chat_stream(self, messages: list[dict[str, str]], temperature: float = 0.7):
+        if not self.available or self._client is None:
+            yield f"Error: OpenCode model '{self.model_name}' is unavailable."
+            return
+        try:
+            stream = await self._client.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                temperature=temperature,
+                stream=True,
+            )
+            async for chunk in stream:
+                try:
+                    delta = chunk.choices[0].delta.content if chunk.choices else None
+                except Exception:
+                    delta = None
+                if delta:
+                    yield delta
+        except Exception as e:
+            viki_logger.error("OpenCodeLLM.chat_stream failed for '%s': %s", self.model_name, e)
+            yield f"Error streaming OpenCode model '{self.model_name}': {e}"
+
+
+# ---------------------------------------------------------------------------
 # Bedrock (AWS) — Claude / Llama / Mistral
 # ---------------------------------------------------------------------------
 class BedrockLLM(LLMProvider):

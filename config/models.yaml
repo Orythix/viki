@@ -13,6 +13,14 @@ models:
       type: nvidia_nim
       base_url: https://integrate.api.nvidia.com/v1
       api_key_env: NVIDIA_API_KEY
+    opencode_zen:
+      type: opencode
+      base_url: https://opencode.ai/zen/v1
+      api_key_env: OPENCODE_API_KEY
+    opencode_go:
+      type: opencode
+      base_url: https://opencode.ai/zen/go/v1
+      api_key_env: OPENCODE_API_KEY
     mock:
       type: mock
   default: nim-nemotron
@@ -268,12 +276,96 @@ models:
 
         '
 
+    # --- OpenCode model profiles ---------------------------------------
+    oc-gpt55:
+      provider: opencode_zen
+      model_name: opencode/gpt-5.5
+      priority: 94
+      timeout_seconds: 120
+      max_context_tokens: 131072
+      capabilities:
+      - chat
+      - reasoning
+      - planning
+      - general
+      - chatter
+      - sovereign
+      - memory
+      - autonomous_planning
+      supports_streaming: true
+      cost_per_1k_in: 0.0
+      cost_per_1k_out: 0.0
+      description: 'OpenCode Zen — GPT-5.5. Premium coding and sovereign intelligence model.
+
+        '
+
+    oc-qwen37:
+      provider: opencode_go
+      model_name: qwen/qwen3.7-plus
+      priority: 91
+      timeout_seconds: 120
+      max_context_tokens: 131072
+      capabilities:
+      - chat
+      - reasoning
+      - coding
+      - general
+      - training
+      - dataset_generation
+      supports_streaming: true
+      cost_per_1k_in: 0.0
+      cost_per_1k_out: 0.0
+      description: 'OpenCode Go — Qwen 3.7 Plus. Zero-cost coding and training engine.
+
+        '
+
+    oc-deepseek:
+      provider: opencode_go
+      model_name: deepseek/deepseek-v4-pro
+      priority: 93
+      timeout_seconds: 180
+      max_context_tokens: 131072
+      capabilities:
+      - reasoning
+      - coding
+      - math
+      - self_reflection
+      - analysis
+      supports_streaming: true
+      cost_per_1k_in: 0.0
+      cost_per_1k_out: 0.0
+      description: 'OpenCode Go — DeepSeek V4 Pro. Zero-cost deep reasoning model.
+
+        '
+
+    oc-mimo:
+      provider: opencode_go
+      model_name: mimo/mimo-v2.5
+      priority: 87
+      timeout_seconds: 90
+      max_context_tokens: 32768
+      capabilities:
+      - chat
+      - general
+      - writing
+      - self_reflection
+      supports_streaming: true
+      cost_per_1k_in: 0.0
+      cost_per_1k_out: 0.0
+      description: 'OpenCode Go — MiMo v2.5. Zero-cost writing and prompt reflection.
+
+        '
+
   routing:
     prefer_local_models: false
     fallback_order:
     - nim-nemotron
+    - oc-deepseek
     - nim-deepseek-r1
+    - oc-gpt55
     - nim-mistral-large
+    - oc-mimo
+    - oc-qwen37
     - nim-llama4
     - nim-llama-fast
     - nim-nemotron-nano
@@ -286,22 +378,37 @@ models:
       coding:
         primary: nim-nemotron
         fallback:
+        - oc-qwen37
         - nim-mistral-large
         - nim-deepseek-r1
         - gemma4
       reasoning:
         primary: nim-deepseek-r1
         fallback:
+        - oc-deepseek
         - nim-nemotron
+        - oc-gpt55
         - nim-mistral-large
         - gemma4
       math:
         primary: nim-deepseek-r1
         fallback:
+        - oc-deepseek
         - nim-nemotron
         - gemma4
       training:
-        primary: viki-trainer
+        primary: oc-qwen37
+        fallback:
+        - viki-trainer
+      dataset_generation:
+        primary: oc-qwen37
+        fallback:
+        - viki-trainer
+      self_reflection:
+        primary: oc-mimo
+        fallback:
+        - oc-deepseek
+        - viki-trainer
       fast:
         primary: nim-nemotron-nano
         fallback:
@@ -310,6 +417,7 @@ models:
       writing:
         primary: nim-mistral-large
         fallback:
+        - oc-mimo
         - nim-nemotron
         - gemma4
       vision:
@@ -321,11 +429,14 @@ models:
       general:
         primary: nim-nemotron
         fallback:
+        - oc-mimo
         - nim-llama-fast
         - gemma4
       planning:
         primary: nim-nemotron
         fallback:
+        - oc-gpt55
+        - oc-deepseek
         - nim-deepseek-r1
         - gemma4
   memory:

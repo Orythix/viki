@@ -49,6 +49,10 @@ class ModelFactory:
             from viki.core.inference_providers import NvidiaLLM
 
             return NvidiaLLM(merged_config)
+        if provider_type == "opencode":
+            from viki.core.inference_providers import OpenCodeLLM
+
+            return OpenCodeLLM(merged_config)
         if provider_type in ("bedrock", "aws_bedrock"):
             from viki.core.inference_providers import BedrockLLM
 

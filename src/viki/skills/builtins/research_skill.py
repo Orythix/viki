@@ -11,23 +11,23 @@ from viki.config.logger import viki_logger
 from viki.skills.base import BaseSkill
 
 # Prefer ddgs (new package name); fall back to duckduckgo_search and suppress rename warning
-warnings.filterwarnings("ignore", message="This package.*has been renamed")
 HAS_DDG = False
 DDGS = None
-try:
-    from ddgs import DDGS as _DDGS
-
-    DDGS = _DDGS
-    HAS_DDG = True
-except ImportError:
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore", RuntimeWarning)
     try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", RuntimeWarning)
-            from duckduckgo_search import DDGS as _DDGS
+        from ddgs import DDGS as _DDGS
+
         DDGS = _DDGS
         HAS_DDG = True
     except ImportError:
-        pass
+        try:
+            from duckduckgo_search import DDGS as _DDGS
+
+            DDGS = _DDGS
+            HAS_DDG = True
+        except ImportError:
+            pass
 
 
 class ResearchSkill(BaseSkill):
@@ -88,10 +88,23 @@ class ResearchSkill(BaseSkill):
             def ddg_search():
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", RuntimeWarning)
-                    with DDGS() as ddgs:
-                        return list(
-                            ddgs.text(query, region="wt-wt", safesearch="off", max_results=5)
-                        )
+                    try:
+                        with DDGS() as ddgs:
+                            res = list(
+                                ddgs.text(query, region="wt-wt", safesearch="off", max_results=5)
+                            )
+                            if res:
+                                return res
+                    except Exception as e:
+                        viki_logger.debug(f"DDG search with params failed: {e}. Trying fallback...")
+
+                    # Fallback: search with basic parameters
+                    try:
+                        with DDGS() as ddgs:
+                            return list(ddgs.text(query, max_results=5))
+                    except Exception as e:
+                        viki_logger.warning(f"DDG fallback search failed: {e}")
+                        return []
 
             results = await asyncio.to_thread(ddg_search)
 

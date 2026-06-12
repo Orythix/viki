@@ -165,6 +165,12 @@ class ReflexBrain:
                 None,
             )
 
+        # WiFi password fast path: intercept BEFORE the deliberation gate
+        # so "what is my wifi password?" routes directly to system_control.
+        wifi_action = self._match_wifi_query(clean_input)
+        if wifi_action is not None:
+            return None, wifi_action
+
         if self._should_defer_to_deliberation(clean_input):
             return None, None
 
@@ -267,6 +273,54 @@ class ReflexBrain:
                 if location:
                     viki_logger.info(f"Reflex: Time-query fast path for location='{location}'")
                     return ActionCall(skill_name="time_skill", parameters={"location": location})
+        return None
+
+    def _match_wifi_query(self, clean_input: str) -> ActionCall | None:
+        """Dedicated fast path for WiFi password queries. Runs before deliberation gate."""
+        clean = re.sub(
+            r"^(?:(?:hello|hi|hey)\s+\w+[\s,]+)?(?:tell\s+me\s+)?", "", clean_input
+        ).strip()
+
+        wifi_patterns = [
+            r"(?:what(?:'?s|\s+is)\s+)?(?:my\s+)?wifi\s+password",
+            r"(?:wifi|wi-fi|wireless)\s+password",
+            r"password\s+(?:for\s+)?(?:my\s+)?(?:wifi|wi-fi|wireless)",
+            r"(?:show|get|find|retrieve)\s+(?:my\s+)?wifi\s+password",
+            r"(?:what(?:'?s|\s+is)\s+)?(?:the\s+)?(?:password|key)\s+(?:for\s+)?(?:my\s+)?(?:wifi|wi-fi|wireless)(?:\s+network)?",
+            r"wifi\s+(?:key|passphrase|credential)",
+        ]
+
+        ssid_patterns = [
+            r"(?:wifi|wi-fi|wireless)\s+(?:network\s+)?(?:named?\s+|called?\s+|\"(?P<ssid>[^\"]+)\"|'(?P<ssid_q>[^']+)')",
+            r"(?:for|of)\s+(?:the\s+)?(?:wifi|wi-fi|wireless)\s+(?:network\s+)?(?:\"(?P<ssid2>[^\"]+)\"|'(?P<ssid2_q>[^']+)')",
+            r"password\s+(?:for|of)\s+(?P<ssid_bare>[\w\s\-\.]+?)(?:\s+network)?\s*\??$",
+        ]
+
+        for pat in wifi_patterns:
+            if re.search(pat, clean):
+                ssid = None
+                for ssid_pat in ssid_patterns:
+                    m = re.search(ssid_pat, clean)
+                    if m:
+                        groups = m.groupdict()
+                        ssid = (
+                            groups.get("ssid")
+                            or groups.get("ssid_q")
+                            or groups.get("ssid2")
+                            or groups.get("ssid2_q")
+                            or groups.get("ssid_bare")
+                        )
+                        if ssid:
+                            ssid = ssid.strip().strip('"').strip("'")
+                        break
+
+                params: dict[str, Any] = {"action": "get_wifi_password"}
+                if ssid:
+                    params["ssid"] = ssid
+
+                viki_logger.info(f"Reflex: WiFi-password fast path (ssid={ssid or 'list all'})")
+                return ActionCall(skill_name="system_control", parameters=params)
+
         return None
 
     def _match_regex_action(self, clean_input: str) -> ActionCall | None:

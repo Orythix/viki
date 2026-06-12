@@ -294,7 +294,21 @@ class ModelForgeSkill(BaseSkill):
         """
         viki_logger.info("Forge: Initiating Ollama Model Rebuild (Knowledge Injection)...")
 
-        lessons = self.controller.learning.get_frequent_lessons(min_count=2)
+        env_val = os.environ.get("VIKI_LESSON_EXPORT_MIN_ACCESS")
+        if env_val is not None:
+            try:
+                min_access = int(env_val)
+            except ValueError:
+                min_access = 2
+        else:
+            sys_cfg = (
+                (self.controller.settings.get("system") or {})
+                if getattr(self.controller, "settings", None)
+                else {}
+            )
+            min_access = int(sys_cfg.get("lesson_export_min_access_count", 2))
+
+        lessons = self.controller.learning.get_frequent_lessons(min_count=min_access)
         if not lessons:
             return "Forge Skipped: No significant new lessons to integrate."
 
