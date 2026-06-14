@@ -12,7 +12,7 @@ from .repo_analyzer import RepoAnalyzer, RepositoryProfile
 from .response_generator import ResponseGenerator
 from .self_critique import CritiqueIssue, CritiqueLevel, CritiqueResult, SelfCritique
 from .session_manager import Session, SessionManager, Turn
-from .task_planner import StepResult, TaskPlan, TaskPlanner, TaskStep
+from .task_planner import ExecutionReport, StepResult, TaskPlan, TaskPlanner, TaskStep
 from .tool_selector import ToolSelector
 
 __all__ = [
@@ -22,6 +22,7 @@ __all__ = [
     "ContextManager",
     "EngineReport",
     "ExecutionEngine",
+    "ExecutionReport",
     "IntentAnalyzer",
     "IntentResult",
     "PermissionManager",
@@ -36,10 +37,10 @@ __all__ = [
     "CritiqueResult",
     "SessionManager",
     "Session",
+    "StepResult",
     "Turn",
     "TaskPlanner",
     "TaskPlan",
     "TaskStep",
-    "StepResult",
     "ToolSelector",
 ]

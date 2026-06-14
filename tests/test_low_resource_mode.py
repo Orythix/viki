@@ -17,6 +17,7 @@ import tempfile
 import unittest
 
 from viki.core.orchestrator import VIKIController
+from viki.v2.config import reset_config
 
 HEAVY_MODULES = (
     "viki.skills.builtins.vision_skill",
@@ -67,6 +68,9 @@ class TestLowResourceBoot(unittest.TestCase):
                 self._td.cleanup()
             except Exception:
                 pass
+            # Restore VIKI_DATA_DIR and reset config singleton
+            os.environ.pop("VIKI_DATA_DIR", None)
+            reset_config()
 
     def test_low_resource_flag_propagates(self):
         self.controller = VIKIController(self.settings_path, self.soul_path)

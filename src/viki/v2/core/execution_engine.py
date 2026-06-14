@@ -83,7 +83,7 @@ class ExecutionEngine:
                 )
             return EngineReport(success=True, result=result, duration_ms=elapsed)
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             elapsed = (time.monotonic() - start) * 1000
             logger.warning("Tool '%s' timed out after %.1fs", tool_name, effective_timeout)
             return EngineReport(
@@ -133,7 +133,7 @@ class ExecutionEngine:
                         )
                     )
             return processed
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return [
                 EngineReport(
                     success=False,

@@ -16,6 +16,7 @@ import tempfile
 import unittest
 
 from viki.core.orchestrator import VIKIController
+from viki.v2.config import reset_config
 
 
 class TestControllerBoot(unittest.TestCase):
@@ -59,6 +60,8 @@ class TestControllerBoot(unittest.TestCase):
                 self._td.cleanup()
             except Exception:
                 pass
+            # Reset config singleton to avoid polluting other tests
+            reset_config()
 
     def test_boot_has_core_subsystems(self):
         self.controller = VIKIController(self.settings_path, self.soul_path)

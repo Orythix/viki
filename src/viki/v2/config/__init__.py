@@ -490,6 +490,12 @@ def set_config(cfg: V2Config) -> None:
     _config_singleton = cfg
 
 
+def reset_config() -> None:
+    """Reset the config singleton (useful for testing)."""
+    global _config_singleton
+    _config_singleton = None
+
+
 __all__ = [
     "V2Config",
     "LLMConfig",
@@ -500,6 +506,7 @@ __all__ = [
     "load_config",
     "get_config",
     "set_config",
+    "reset_config",
     "parse_cli_overrides",
     "watch_config",
 ]

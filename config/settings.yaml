@@ -48,7 +48,7 @@ system:
   #   - continuous-learning loop is disabled,
   #   - mission control still runs only on explicit /missions.
   # Override at runtime with VIKI_LOW_RESOURCE=1.
-  low_resource_mode: true
+  low_resource_mode: false
 
   # When true, OpenAI/Anthropic API profiles are never selected; use Ollama (models.yaml) only.
   # Set false and configure real keys when you want cloud models. Env: VIKI_LOCAL_LLM_ONLY=true|false.
@@ -75,8 +75,7 @@ system:
   # Optional Ollama generate options merged into every local request (temperature is still set per call).
   # Baseline for all profiles. Per-profile ollama_options in models.yaml override specific keys.
   # Override with env VIKI_OLLAMA_OPTIONS_JSON.
-  # Low-end PCs: keep num_ctx moderate to avoid swapping; num_predict=2048 gives room for quality responses.
-  ollama_options: { num_predict: 2048, num_ctx: 8192 }
+  ollama_options: { num_predict: 4096, num_ctx: 16384, top_k: 40, top_p: 0.95, repeat_penalty: 1.1 }
 
   # When true, run a quick web research pulse at startup. Set false to avoid competing with first user request.
   startup_research: false
@@ -108,12 +107,12 @@ system:
   bio_webcam_enabled: false
 
   # When true (or VIKI_GIT_CONTEXT=1), append cached git branch/status/recent commits from workspace_dir to deliberation context.
-  git_workspace_context: false
+  git_workspace_context: true
 
   # When true, append per-call usage lines (LLM inference, model_feedback, skill_execution) to data_dir/usage_session.jsonl.
   # Disable with VIKI_SESSION_USAGE_LOG=false if you want zero extra disk I/O.
   # Disabled by default on low-end PCs — saves disk I/O and CPU per call.
-  session_usage_log: false
+  session_usage_log: true
 
   # What makes VIKI specific (surfaced in API and CLI)
   differentiators:
@@ -127,33 +126,37 @@ security_layer_path: "./security_layer.md"
 
 memory:
   # Working-memory turns kept for conversation context (clamped 5–50 in code). Lower = less context = less tokens/request.
-  short_term_limit: 5
-  long_term_enabled: false
+  short_term_limit: 20
+  long_term_enabled: true
 
 # Background poll cadences. Bigger numbers = lower idle CPU on low-end PCs.
 proactive:
-  wellness_interval_s: 3600        # how often to check for proactive prompts (default 30 min, increased to 60 min for low-end)
-  wellness_idle_threshold_s: 14400 # only prompt after this much user idle time (default 2 h, increased to 4 h for low-end)
+  wellness_interval_s: 1800        # how often to check for proactive prompts (30 min)
+  wellness_idle_threshold_s: 3600  # only prompt after this much user idle time (1 h)
 
 # Forge / continuous-learning timing. Disabled entirely when low_resource_mode is true.
 forge:
-  continuous_learning_warmup_s: 300       # delay before first promotion check (default 5 min)
-  continuous_learning_interval_s: 21600   # how often to re-score candidate models (default 6 h)
-  capability_index_min_tasks: 0           # 0 = back-compat; raise for stricter promotion thresholds
-  capability_index_bootstrap_iters: 0     # 0 = skip CIs (cheap); 200+ for confidence intervals
+  continuous_learning_warmup_s: 60        # delay before first promotion check (1 min)
+  continuous_learning_interval_s: 3600    # how often to re-score candidate models (1 h)
+  capability_index_min_tasks: 5           # minimum eval tasks for promotion gate
+  capability_index_bootstrap_iters: 100   # bootstrap iterations for confidence intervals
 
   # Background evolution after boot (VIKI running): web snippets -> lessons -> Ollama Modelfile prompt-bake.
   # Does not increase the base GGUF size; it grows the SYSTEM knowledge block and SQLite lessons.
   # Off by default (network + CPU). Env: VIKI_BACKGROUND_EVOLUTION_AT_BOOT=true
-  background_evolution_at_boot: false
-  boot_evolution_delay_s: 180            # seconds after startup pulse begins before ingest+forge
-  boot_research_query_count: 3           # max DuckDuckGo queries per boot cycle
+  background_evolution_at_boot: true
+  boot_evolution_delay_s: 60             # seconds after startup pulse begins before ingest+forge
+  boot_research_query_count: 5           # max DuckDuckGo queries per boot cycle
   boot_research_queries: []              # optional fixed queries (list of strings)
   boot_topics_file: "boot_topics.txt"    # under data_dir: one search query per line (# comments ok)
-  boot_forge_min_lessons: 3              # minimum total lessons before running forge at boot
-  boot_forge_steps: 25                   # passed to internal_forge (prompt-bake path ignores heavy steps)
+  boot_forge_min_lessons: 5              # minimum total lessons before running forge at boot
+  boot_forge_steps: 50                   # passed to internal_forge (prompt-bake path ignores heavy steps)
   # When false (default), boot forge uses strategy prompt_bake only (CPU). If true, uses strategy auto (may run GPU stacks if installed + env gates).
   allow_auto_gpu_training_at_boot: false
+
+  # Promotion gate tuning
+  promotion_min_index_delta: 0.02        # minimum capability index improvement for promotion
+  promotion_min_consecutive_passes: 2    # consecutive passes required before promotion
 
 skills:
   auto_discover: true

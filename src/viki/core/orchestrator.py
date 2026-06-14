@@ -2511,6 +2511,12 @@ class VIKIController:
         except Exception as e:
             viki_logger.debug(f"Controller close: history close failed: {e}")
 
+        try:
+            if hasattr(self, "telemetry") and hasattr(self.telemetry, "close"):
+                self.telemetry.close()
+        except Exception as e:
+            viki_logger.debug(f"Controller close: telemetry close failed: {e}")
+
         # Flush any debounced state that's safe to flush without async
         try:
             if hasattr(self, "scorecard") and hasattr(self.scorecard, "flush"):
