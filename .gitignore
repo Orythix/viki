@@ -71,6 +71,13 @@ scripts/public_mirror.manifest.yaml
 # Accidental pytest cache dirs under qa-automation
 qa-automation/pytest-cache-files-*/
 
+# Test data artifacts (auto-generated)
+tests/data_*/
+
+# SQLite WAL/SHM files
+*.db-shm
+*.db-wal
+
 # Backup and temp
 *.bak
 *.tmp
