@@ -3,7 +3,7 @@ import importlib
 import os
 import re
 import time
-from typing import Any
+from typing import Any, cast
 
 from viki.api.central_nexus import MessagingNexus
 from viki.application.services.forge_orchestrator import ForgeOrchestrator
@@ -50,6 +50,7 @@ from viki.core.performance_benchmark import ControlledBenchmark
 from viki.core.rapid_response_system import ReflexBrain
 from viki.core.react_loop import run_react_loop
 from viki.core.request_pipeline import RequestContext, build_default_preflight_pipeline
+from viki.core.runtime_health import RuntimeHealthReporter
 from viki.core.schema import VIKIResponse
 from viki.core.scorecard import IntelligenceScorecard
 from viki.core.security_guard import SafetyLayer, safe_for_log
@@ -60,6 +61,7 @@ from viki.core.telemetry import TelemetryStore
 from viki.core.telemetry_service import close_persistent_traces
 from viki.core.temporal_memory import TimeTravelModule
 from viki.core.test_healer import TestHealerPipeline
+from viki.core.tool_contract import ToolContractValidator
 from viki.core.variant_optimizer import ModelABTest
 from viki.core.world import WorldModel
 from viki.ops.tenant_ops import ControllerTenantConnector, OpsPlan, SimpleOpsPlanner
@@ -117,21 +119,6 @@ class VIKIController:
             if os.path.exists(candidate_viki):
                 candidate = candidate_viki
         self.settings["security_layer_path"] = candidate
-
-    def _check_integration_credentials(
-        self,
-        cfg: dict[str, Any],
-        env_var: str,
-        integration_label: str,
-        credentials_hint: str,
-    ) -> None:
-        if not cfg.get("enabled"):
-            return
-        path = cfg.get("credentials_path") or os.environ.get(env_var)
-        if not path or not os.path.isfile(path):
-            viki_logger.warning(
-                f"Skill health: {integration_label} is enabled but credentials file not found. {credentials_hint}."
-            )
 
     def _apply_skill_aliases(self) -> None:
         alias_pairs = [
@@ -217,7 +204,11 @@ class VIKIController:
         )
 
         # Security session history for CLI dashboard
-        self.session_history = {"touched_files": [], "executed_commands": [], "blocked_actions": []}
+        self.session_history: dict[str, list[str]] = {
+            "touched_files": [],
+            "executed_commands": [],
+            "blocked_actions": [],
+        }
 
         # 0. Fast Perception Layer (Reflex Brain)
         data_dir = system.get("data_dir", self.DEFAULT_DATA_DIR)
@@ -230,7 +221,7 @@ class VIKIController:
         self._shutdown_event = asyncio.Event()
 
         # Task tracking for proper cleanup
-        self._background_tasks = set()
+        self._background_tasks: set[Any] = set()
         self.is_agent_mode = False
         self.is_plan_mode = False
         self.is_debug_mode = False
@@ -347,8 +338,10 @@ class VIKIController:
             self.llm_budget.config.update(self.model_router._budget_config)
 
         self.skill_registry = SkillRegistry()
+        self.tool_contract = ToolContractValidator(self.skill_registry, self.safety)
+        self.health_reporter = RuntimeHealthReporter(self)
         self.capabilities = CapabilityRegistry()
-        self.disabled_skills = {}
+        self.disabled_skills: dict[Any, Any] = {}
         self._register_default_skills()
 
         # V2 Tool Bridge (opt-in via VIKI_V2_MODE=1)
@@ -382,10 +375,10 @@ class VIKIController:
             init_persistent_traces(os.path.join(data_dir, "traces.db"))
         except Exception as e:
             viki_logger.debug("init_persistent_traces failed: %s", e)
-        self.active_tasks = []
-        self.pending_actions = {}  # For confirmation flow, keyed by session
-        self.pending_ops_plans = {}  # For ops approval flow, keyed by session
-        self._last_response_meta_by_session = {}
+        self.active_tasks: list[Any] = []
+        self.pending_actions: dict[Any, Any] = {}  # For confirmation flow, keyed by session
+        self.pending_ops_plans: dict[Any, Any] = {}  # For ops approval flow, keyed by session
+        self._last_response_meta_by_session: dict[Any, Any] = {}
         # Cumulative LLM token/cost totals per chat session (API/SSE exposure).
         self._session_llm_usage: dict[str, dict[str, Any]] = {}
 
@@ -443,7 +436,7 @@ class VIKIController:
         self.forge_orchestrator = ForgeOrchestrator(self)
 
         self.safe_mode = False
-        self.internal_trace = []
+        self.internal_trace: list[Any] = []
         self.last_interaction_time = time.time()
         self.interaction_pace = "Standard"
 
@@ -542,14 +535,12 @@ class VIKIController:
             if "settings.yaml" in path or path.endswith("settings.yaml"):
                 self.settings.update(fresh)
                 self._apply_system_overrides(self.settings.setdefault("system", {}), None)
-                self._resolve_models_config(
-                    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                )
+                self._resolve_models_config()
                 viki_logger.info("Config hot-reload: settings.yaml applied.")
             elif "models.yaml" in path or path.endswith("models.yaml"):
                 self.models_config = fresh
                 if hasattr(self, "model_router") and self.model_router is not None:
-                    self.model_router._load_config()
+                    self.model_router._load_config(self.models_config_path)
                 viki_logger.info("Config hot-reload: models.yaml applied.")
         except Exception as e:
             viki_logger.warning("Config hot-reload failed for %s: %s", path, e)
@@ -828,130 +819,13 @@ class VIKIController:
 
     def check_skill_health(self) -> None:
         """Optional startup check: log warnings for degraded runtime or misconfigured integrations."""
-        if not self.settings.get("system", {}).get("skill_health_check", True):
-            return
-        integrations = self.settings.get("integrations", {})
-        health = self.get_runtime_health()
-        # Gmail
-        self._check_integration_credentials(
-            integrations.get("gmail", {}),
-            "VIKI_GMAIL_CREDENTIALS_PATH",
-            "Gmail",
-            "Set integrations.gmail.credentials_path or VIKI_GMAIL_CREDENTIALS_PATH",
-        )
-        self._check_integration_credentials(
-            integrations.get("google_calendar", {}),
-            "VIKI_GOOGLE_CALENDAR_CREDENTIALS_PATH",
-            "Google Calendar",
-            "Set integrations.google_calendar.credentials_path or VIKI_GOOGLE_CALENDAR_CREDENTIALS_PATH",
-        )
-        # Research (presence only)
-        if not self.skill_registry.get_skill("research"):
-            viki_logger.warning("Skill health: research skill not registered.")
-        if health["degraded"]:
-            disabled_skills = health["disabled_skills"]
-            unavailable_models = health["unavailable_models"]
-            summary_parts = []
-            if disabled_skills:
-                sample = ", ".join(
-                    f"{name}: {reason}" for name, reason in list(disabled_skills.items())[:3]
-                )
-                summary_parts.append(f"{len(disabled_skills)} optional skills disabled ({sample})")
-            if unavailable_models:
-                sample = ", ".join(
-                    f"{name}: {reason}" for name, reason in list(unavailable_models.items())[:3]
-                )
-                summary_parts.append(f"{len(unavailable_models)} models unavailable ({sample})")
-            if summary_parts:
-                viki_logger.warning(
-                    "Runtime health: degraded mode active - " + " | ".join(summary_parts)
-                )
+        self.health_reporter.check_skill_health()
 
     def get_runtime_health(self) -> dict[str, Any]:
-        model_health = (
-            self.model_router.get_health_snapshot()
-            if self.model_router
-            else {
-                "default_model": None,
-                "available_models": [],
-                "unavailable_models": {},
-            }
-        )
-        # Missing API keys for optional external-provider models should not degrade runtime health.
-        # Otherwise, fresh local setups (no Anthropic/OpenAI keys) will always show degraded status.
-        default_name = model_health.get("default_model")
-        unavailable_models = dict(model_health.get("unavailable_models") or {})
-        for name, reason in list(unavailable_models.items()):
-            if name == default_name:
-                continue
-            if isinstance(reason, str):
-                low = reason.lower()
-                # Common APILLM init failures when keys are unset or placeholders.
-                if ("api key" in low and "missing" in low) or (
-                    "api key" in low and "invalid" in low
-                ):
-                    unavailable_models.pop(name, None)
-        # Cloud profiles are intentionally out of scope when local-only or air-gapped.
-        if self.model_router and (self.local_llm_only or self.air_gap):
-            for name in list(unavailable_models.keys()):
-                if name == default_name:
-                    continue
-                inst = self.model_router.models.get(name)
-                if inst is not None and inst.is_cloud():
-                    unavailable_models.pop(name, None)
-        model_health["unavailable_models"] = unavailable_models
-        registered_skills = sorted(self.skill_registry.list_skills()) if self.skill_registry else []
-        disabled_skills = dict(sorted((self.disabled_skills or {}).items()))
-        warnings = []
-        if disabled_skills:
-            warnings.append(f"{len(disabled_skills)} optional skills disabled")
-        if model_health["unavailable_models"]:
-            warnings.append(f"{len(model_health['unavailable_models'])} models unavailable")
-        return {
-            "degraded": bool(disabled_skills or model_health["unavailable_models"]),
-            "registered_skill_count": len(registered_skills),
-            "registered_skills": registered_skills,
-            "disabled_skills": disabled_skills,
-            "default_model": model_health["default_model"],
-            "available_models": model_health["available_models"],
-            "unavailable_models": model_health["unavailable_models"],
-            "warnings": warnings,
-        }
+        return self.health_reporter.get_runtime_health()
 
     def get_runtime_health_summary(self) -> str:
-        health = self.get_runtime_health()
-        if not health["degraded"]:
-            return "Runtime health: full"
-        parts = []
-        if health["disabled_skills"]:
-            parts.append(f"{len(health['disabled_skills'])} skills disabled")
-
-        unavailable = health.get("unavailable_models") or {}
-        if unavailable:
-            # Surface the actual model names so the user can act on it. For
-            # Ollama-style names (`qwen3.6:latest`) we suggest a concrete
-            # `ollama pull` command. The list is capped at 3 to keep the
-            # summary readable.
-            names = list(unavailable.keys())
-            shown = names[:3]
-            extra = "" if len(names) <= 3 else f" (+{len(names) - 3} more)"
-            joined = ", ".join(f"'{n}'" for n in shown) + extra
-            count = len(names)
-            label = "model" if count == 1 else "models"
-            hint = ""
-            try:
-                first = shown[0]
-                # Ollama tags are always `name:tag`. Strip the tag for the pull hint.
-                if ":" in first:
-                    base = first.split(":", 1)[0]
-                    hint = f" Run: ollama pull {base}"
-                else:
-                    hint = f" Run: ollama pull {first}"
-            except Exception:
-                hint = ""
-            parts.append(f"{count} {label} unavailable: {joined}.{hint}")
-
-        return "Runtime health: degraded — " + " | ".join(parts)
+        return self.health_reporter.get_runtime_health_summary()
 
     async def _continuous_learning_loop(self):
         """Background loop for continuous learning checks."""
@@ -1001,14 +875,17 @@ class VIKIController:
 
     def get_differentiators(self) -> list[str]:
         """Return list of differentiators from settings (what makes VIKI specific)."""
-        return self.settings.get("system", {}).get(
-            "differentiators",
-            [
-                "Local Neural Forge",
-                "Orythix governance",
-                "Reflex layer",
-                "Air-gap capable",
-            ],
+        return cast(
+            "list[str]",
+            self.settings.get("system", {}).get(
+                "differentiators",
+                [
+                    "Local Neural Forge",
+                    "Orythix governance",
+                    "Reflex layer",
+                    "Air-gap capable",
+                ],
+            ),
         )
 
     def _should_checkpoint(self, skill_name: str) -> bool:
@@ -1151,94 +1028,21 @@ class VIKIController:
         return json_type_matches(value, expected_type)
 
     def _validate_required_params(self, required: list[str], params: dict[str, Any]) -> str | None:
-        """Validate required schema fields are present and non-empty."""
-        for field in required:
-            if field not in params:
-                return f"Tool contract violation: missing required param '{field}'."
-            val = params.get(field)
-            if val is None:
-                return f"Tool contract violation: required param '{field}' is None."
-            if isinstance(val, str) and not val.strip():
-                return f"Tool contract violation: required param '{field}' is empty."
-        return None
+        return self.tool_contract.validate_required_params(required, params)
 
     def _validate_param_spec(self, field: str, spec: dict[str, Any], val: Any) -> str | None:
-        """Validate enum/type constraints for a single parameter spec."""
-        if "enum" in spec and isinstance(spec["enum"], list):
-            allowed = spec["enum"]
-            if val not in allowed:
-                return f"Tool contract violation: param '{field}' must be one of {allowed}, got {val!r}."
-
-        expected_type = spec.get("type")
-        if expected_type and not self._json_type_matches(val, str(expected_type)):
-            return f"Tool contract violation: param '{field}' expected type '{expected_type}', got {type(val).__name__}."
-
-        return None
+        return self.tool_contract.validate_param_spec(field, spec, val)
 
     def _validate_property_constraints(
         self, props: dict[str, Any], params: dict[str, Any]
     ) -> str | None:
-        """Validate provided parameters against enum/type constraints in schema."""
-        for field, spec in props.items():
-            if field not in params or not isinstance(spec, dict):
-                continue
-            val = params.get(field)
-            err = self._validate_param_spec(field, spec, val)
-            if err:
-                return err
-        return None
+        return self.tool_contract.validate_property_constraints(props, params)
 
     def _validate_tool_contract_params(self, skill_name: str, params: dict[str, Any]) -> str | None:
-        """
-        Validate incoming params against the skill's declared `schema`.
-        Returns None if validation passes, otherwise a tool-contract error string.
-        """
-        skill = self.skill_registry.get_skill(skill_name)
-        if not skill:
-            return f"Tool contract violation: skill '{skill_name}' not found."
-
-        schema = getattr(skill, "schema", None) or {}
-        if not isinstance(schema, dict) or not schema:
-            # No contract available; don't block.
-            return None
-
-        required = schema.get("required") or []
-        props = schema.get("properties") or {}
-        err = self._validate_required_params(required, params)
-        if err:
-            return err
-        return self._validate_property_constraints(props, params)
+        return self.tool_contract.validate_params(skill_name, params)
 
     def _validate_skill_output(self, skill_name: str, output: Any) -> str | None:
-        """
-        Validate skill output for common failure modes (empty output, explicit errors, or safety-contradictions).
-        Returns None if valid, otherwise a tool-contract output validation error string.
-        """
-        if output is None:
-            return f"Tool contract output validation failed: '{skill_name}' returned None."
-
-        out_str = output if isinstance(output, str) else str(output)
-        if not out_str.strip():
-            return (
-                f"Tool contract output validation failed: '{skill_name}' returned an empty string."
-            )
-
-        out_lower = out_str.strip().lower()
-        error_signals = ("error:", "command failed", "shell error:", "action failed:")
-        if any(s in out_lower for s in error_signals):
-            return f"Tool contract output validation failed: '{skill_name}' produced an error-like result."
-
-        # Reuse existing safety response validators for hallucination patterns.
-        try:
-            resp_check = self.safety.validate_response(out_str)
-            if not resp_check.get("valid", True):
-                issues = resp_check.get("issues") or []
-                return f"Tool contract output validation failed: '{skill_name}' output failed safety validation: {issues}"
-        except Exception:
-            # If validation itself fails, don't block execution completion.
-            pass
-
-        return None
+        return self.tool_contract.validate_output(skill_name, output)
 
     def _should_plan_ops(self, text: str) -> bool:
         """
