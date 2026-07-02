@@ -4,7 +4,7 @@
 
 **Local LLM Orchestration | Private Knowledge Retrieval | Autonomous Self-Evolution**
 
-[![Version](https://img.shields.io/badge/version-8.2.0-blue.svg)](./CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-8.3.0-blue.svg)](./CHANGELOG.md)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Ollama](https://img.shields.io/badge/Ollama-Local_LLM-orange.svg)](https://ollama.ai)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
