@@ -5,7 +5,8 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from enum import StrEnum
+
+from viki._compat import StrEnum
 
 from ..llm import get_llm_client
 

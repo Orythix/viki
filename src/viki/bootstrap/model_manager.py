@@ -5,9 +5,9 @@ from __future__ import annotations
 import asyncio
 import subprocess
 from dataclasses import dataclass, field
-from enum import StrEnum
 from typing import Any
 
+from viki._compat import StrEnum
 from viki.bootstrap.system_detector import HardwareProfile, SystemInfo
 
 
@@ -53,8 +53,8 @@ _AVAILABLE_MODELS: list[ModelInfo] = [
         8192,
         8192,
         7600,
-        "Google's latest — strong reasoning + instruction following",
-        "ollama pull gemma4:12b",
+        description="Google's latest — strong reasoning + instruction following",
+        url="ollama pull gemma4:12b",
     ),
     ModelInfo(
         "gemma4:27b",
@@ -66,8 +66,8 @@ _AVAILABLE_MODELS: list[ModelInfo] = [
         16384,
         16384,
         17000,
-        "Gemma 4 large — best quality on high-end hardware",
-        "ollama pull gemma4:27b",
+        description="Gemma 4 large — best quality on high-end hardware",
+        url="ollama pull gemma4:27b",
     ),
     ModelInfo(
         "phi3:mini",
@@ -79,8 +79,8 @@ _AVAILABLE_MODELS: list[ModelInfo] = [
         3072,
         3072,
         2400,
-        "Microsoft's efficient small model — great for fast responses",
-        "ollama pull phi3:mini",
+        description="Microsoft's efficient small model — great for fast responses",
+        url="ollama pull phi3:mini",
     ),
     ModelInfo(
         "phi3:medium",
@@ -92,8 +92,8 @@ _AVAILABLE_MODELS: list[ModelInfo] = [
         8192,
         8192,
         8300,
-        "Phi-3 medium — quality / speed sweet spot",
-        "ollama pull phi3:medium",
+        description="Phi-3 medium — quality / speed sweet spot",
+        url="ollama pull phi3:medium",
     ),
     ModelInfo(
         "llama3.2:3b",
@@ -105,8 +105,8 @@ _AVAILABLE_MODELS: list[ModelInfo] = [
         2048,
         2048,
         2000,
-        "Meta's efficient lightweight",
-        "ollama pull llama3.2:3b",
+        description="Meta's efficient lightweight",
+        url="ollama pull llama3.2:3b",
     ),
     ModelInfo(
         "llama3.2:1b",
@@ -118,8 +118,8 @@ _AVAILABLE_MODELS: list[ModelInfo] = [
         1024,
         1024,
         700,
-        "Ultra lightweight for CPU-only systems",
-        "ollama pull llama3.2:1b",
+        description="Ultra lightweight for CPU-only systems",
+        url="ollama pull llama3.2:1b",
     ),
     ModelInfo(
         "llama3.3:70b",
@@ -131,8 +131,8 @@ _AVAILABLE_MODELS: list[ModelInfo] = [
         40960,
         40960,
         42000,
-        "Meta's largest — requires high-end hardware",
-        "ollama pull llama3.3:70b",
+        description="Meta's largest — requires high-end hardware",
+        url="ollama pull llama3.3:70b",
     ),
     ModelInfo(
         "qwen3:8b",
@@ -144,8 +144,8 @@ _AVAILABLE_MODELS: list[ModelInfo] = [
         5120,
         5120,
         5000,
-        "Alibaba's strong reasoning model",
-        "ollama pull qwen3:8b",
+        description="Alibaba's strong reasoning model",
+        url="ollama pull qwen3:8b",
     ),
     ModelInfo(
         "qwen3:14b",
@@ -157,8 +157,8 @@ _AVAILABLE_MODELS: list[ModelInfo] = [
         8192,
         8192,
         9000,
-        "Qwen 14B — excellent coding + reasoning",
-        "ollama pull qwen3:14b",
+        description="Qwen 14B — excellent coding + reasoning",
+        url="ollama pull qwen3:14b",
     ),
     ModelInfo(
         "qwen3:32b",
@@ -170,8 +170,8 @@ _AVAILABLE_MODELS: list[ModelInfo] = [
         20480,
         20480,
         20000,
-        "Qwen 32B — high-quality reasoning",
-        "ollama pull qwen3:32b",
+        description="Qwen 32B — high-quality reasoning",
+        url="ollama pull qwen3:32b",
     ),
     ModelInfo(
         "deepseek-r1:7b",
@@ -183,8 +183,8 @@ _AVAILABLE_MODELS: list[ModelInfo] = [
         4096,
         4096,
         4500,
-        "DeepSeek distilled reasoning model",
-        "ollama pull deepseek-r1:7b",
+        description="DeepSeek distilled reasoning model",
+        url="ollama pull deepseek-r1:7b",
     ),
     ModelInfo(
         "deepseek-r1:14b",
@@ -196,8 +196,8 @@ _AVAILABLE_MODELS: list[ModelInfo] = [
         8192,
         8192,
         9000,
-        "DeepSeek 14B distilled — strong reasoning",
-        "ollama pull deepseek-r1:14b",
+        description="DeepSeek 14B distilled — strong reasoning",
+        url="ollama pull deepseek-r1:14b",
     ),
     ModelInfo(
         "deepseek-r1:32b",
@@ -209,8 +209,8 @@ _AVAILABLE_MODELS: list[ModelInfo] = [
         20480,
         20480,
         20000,
-        "DeepSeek 32B — near SOTA reasoning",
-        "ollama pull deepseek-r1:32b",
+        description="DeepSeek 32B — near SOTA reasoning",
+        url="ollama pull deepseek-r1:32b",
     ),
     ModelInfo(
         "mistral:7b",
@@ -222,8 +222,8 @@ _AVAILABLE_MODELS: list[ModelInfo] = [
         4096,
         4096,
         4200,
-        "Mistral AI's original — solid all-rounder",
-        "ollama pull mistral:7b",
+        description="Mistral AI's original — solid all-rounder",
+        url="ollama pull mistral:7b",
     ),
     ModelInfo(
         "codellama:7b",
@@ -235,8 +235,8 @@ _AVAILABLE_MODELS: list[ModelInfo] = [
         4096,
         4096,
         3800,
-        "Meta's code-specialized model",
-        "ollama pull codellama:7b",
+        description="Meta's code-specialized model",
+        url="ollama pull codellama:7b",
     ),
     # Embedding models
     ModelInfo(

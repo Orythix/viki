@@ -4,9 +4,9 @@ import json
 import os
 import time
 import uuid
-from enum import StrEnum
 from typing import Any
 
+from viki._compat import StrEnum
 from viki.config.logger import viki_logger
 from viki.core.ports import RequestProcessorPort
 

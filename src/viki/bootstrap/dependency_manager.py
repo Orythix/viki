@@ -5,7 +5,8 @@ from __future__ import annotations
 import subprocess
 import sys
 from dataclasses import dataclass
-from enum import StrEnum
+
+from viki._compat import StrEnum
 
 
 class DepStatus(StrEnum):

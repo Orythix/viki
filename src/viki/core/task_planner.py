@@ -24,9 +24,9 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass, field
-from enum import StrEnum
 from typing import Any
 
+from viki._compat import StrEnum
 from viki.config.logger import viki_logger
 
 

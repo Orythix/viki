@@ -8,7 +8,9 @@ import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
-from enum import StrEnum
+from typing import cast
+
+from viki._compat import StrEnum
 
 
 class OSType(StrEnum):
@@ -194,7 +196,7 @@ def _detect_ram() -> int:
     try:
         import psutil
 
-        return psutil.virtual_memory().total // (1024 * 1024)
+        return cast("int", psutil.virtual_memory().total // (1024 * 1024))
     except ImportError:
         pass
     return 0

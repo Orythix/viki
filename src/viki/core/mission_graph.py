@@ -27,9 +27,9 @@ import time
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from enum import StrEnum
-from typing import Any
+from typing import Any, cast
 
+from viki._compat import StrEnum
 from viki.config.logger import viki_logger
 
 
@@ -277,7 +277,7 @@ class MissionGraphRunner:
             skill = registry.get_skill(skill_name)
             if skill is None:
                 raise RuntimeError(f"Skill {skill_name!r} not found on controller")
-            return await skill.execute(n.parameters or {})
+            return cast("str", await skill.execute(n.parameters or {}))
 
         return _run
 
