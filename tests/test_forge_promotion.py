@@ -11,7 +11,6 @@ import os
 import tempfile
 import unittest
 from types import SimpleNamespace
-from typing import Optional
 
 from viki.core.continuous_learning import ContinuousLearner
 from viki.core.scorecard import IntelligenceScorecard
@@ -29,7 +28,7 @@ class _StubLearning:
         return None
 
 
-def _stub_controller(data_dir: str, settings: Optional[dict] = None) -> SimpleNamespace:
+def _stub_controller(data_dir: str, settings: dict | None = None) -> SimpleNamespace:
     return SimpleNamespace(
         settings={"system": {"data_dir": data_dir, **(settings or {})}},
         models_config={"models": {"default": "viki-base"}},

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 from ..llm import get_llm_client
 
 
@@ -16,7 +18,7 @@ class ToolSelector:
         """Return all tool definitions for LLM function calling."""
         if not self.tool_registry:
             return []
-        return self.tool_registry.get_tool_definitions()
+        return cast("list[dict[Any, Any]]", self.tool_registry.get_tool_definitions())
 
     def _format_tools_for_selection(self) -> str:
         """Format tools for LLM selection prompt."""

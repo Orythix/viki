@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Any, cast
 
 from ...providers.base import SystemProvider
 
@@ -68,4 +69,4 @@ class SystemNetProvider(NetProvider):
 
     async def get_network_adapters(self) -> list[dict]:
         info = await self._sp.get_network_info()
-        return info.get("adapters", [])
+        return cast("list[dict[Any, Any]]", info.get("adapters", []))

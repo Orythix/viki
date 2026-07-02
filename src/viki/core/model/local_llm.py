@@ -8,7 +8,7 @@ import json
 import os
 import re
 import time
-from typing import Any
+from typing import Any, cast
 
 import aiohttp
 
@@ -103,10 +103,10 @@ class LocalLLM(LLMProvider):
         self,
         messages: list[dict[str, str]],
         temperature: float = 0.7,
-        format: str = None,
-        image_path: str = None,
-        tools: list[dict[str, Any]] = None,
-        response_format: dict = None,
+        format: str | None = None,
+        image_path: str | None = None,
+        tools: list[dict[str, Any]] | None = None,
+        response_format: dict | None = None,
     ) -> str:
         t0 = time.perf_counter()
         success = False
@@ -316,7 +316,7 @@ class LocalLLM(LLMProvider):
         messages: list[dict[str, str]],
         response_model: type[T],
         temperature: float = 0.0,
-        image_path: str = None,
+        image_path: str | None = None,
     ) -> T:
         msgs: list[dict[str, Any]] = [dict(m) for m in messages]
         if image_path:
@@ -420,7 +420,7 @@ class LocalLLM(LLMProvider):
             .replace(": False", ": false")
         )
         try:
-            return json.loads(content)
+            return cast("dict[Any, Any]", json.loads(content))
         except json.JSONDecodeError:
             try:
                 import ast
@@ -432,7 +432,7 @@ class LocalLLM(LLMProvider):
                 pass
             if "'" in content and '"' not in content[:10]:
                 try:
-                    return json.loads(content.replace("'", '"'))
+                    return cast("dict[Any, Any]", json.loads(content.replace("'", '"')))
                 except Exception:
                     pass
             raise

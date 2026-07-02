@@ -3,7 +3,7 @@ Unified messaging skill (CLAWDIS-style). Single interface for Telegram, Discord,
 Delegates to controller bridges when present; otherwise uses env-configured API tokens for send.
 """
 import os
-from typing import Any
+from typing import Any, cast
 
 from viki.skills.base import BaseSkill
 
@@ -93,7 +93,7 @@ class UnifiedMessagingSkill(BaseSkill):
             # Delegate to bridge if controller has it
             bridge = getattr(self._controller, channel, None) if self._controller else None
             if bridge and hasattr(bridge, "send_to"):
-                return await bridge.send_to(recipient, text)
+                return cast("str", await bridge.send_to(recipient, text))
             # Fallback: direct API
             if channel == "telegram":
                 return await self._send_telegram(recipient or "", text)

@@ -145,7 +145,7 @@ class TimeSkill(BaseSkill):
             },
         }
 
-    async def execute(self, params: dict[str, Any] = None) -> str:
+    async def execute(self, params: dict[str, Any] | None = None) -> str:
         params = params or {}
         location = (params.get("location") or "").strip()
         tz_name = (params.get("timezone") or "").strip()

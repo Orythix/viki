@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, cast
 
 import yaml
 
@@ -13,7 +13,7 @@ class Soul:
     def _load_config(self, path: str) -> dict[str, Any]:
         try:
             with open(path) as f:
-                return yaml.safe_load(f)
+                return cast("dict[str, Any]", yaml.safe_load(f))
         except Exception as e:
             import logging
 

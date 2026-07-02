@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import asyncio
 import unittest
-from typing import Any, Dict, List
 
 from viki.core.ensemble import EnsembleEngine
 from viki.core.inference_gateway import LLMProvider
@@ -24,7 +23,7 @@ class _StubProvider(LLMProvider):
         )
         self.provider_name = provider_name
         self.response_prefix = response_prefix
-        self.calls: List[List[Dict[str, str]]] = []
+        self.calls: list[list[dict[str, str]]] = []
 
     def is_cloud(self) -> bool:
         return self.provider_name not in ("local", "ollama", "mock")

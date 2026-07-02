@@ -9,7 +9,7 @@ import threading
 import time
 from collections import defaultdict
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .base import BaseTool, ToolResult
@@ -93,7 +93,7 @@ class ToolRegistry:
         from .base import BaseTool
 
         count = 0
-        seen = set()
+        seen: set[Any] = set()
 
         for raw in paths:
             path = Path(raw)

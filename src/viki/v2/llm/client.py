@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import AsyncGenerator
-from typing import Any
+from typing import Any, cast
 
 import aiohttp
 
@@ -170,13 +170,13 @@ class OllamaClient:
         ]
         response = await self.chat(messages, temperature=temperature, format="json")
         try:
-            return json.loads(response)
+            return cast("dict[str, Any]", json.loads(response))
         except json.JSONDecodeError:
             import re
 
             match = re.search(r"\{.*\}", response, re.DOTALL)
             if match:
-                return json.loads(match.group())
+                return cast("dict[str, Any]", json.loads(match.group()))
             raise
 
 

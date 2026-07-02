@@ -4,6 +4,7 @@ import shutil
 from typing import Any
 
 import requests
+
 from viki.config.logger import viki_logger
 from viki.skills.base import BaseSkill
 

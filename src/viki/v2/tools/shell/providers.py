@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass
@@ -67,8 +68,8 @@ class LocalShellProvider(ShellProvider):
             stderr=asyncio.subprocess.PIPE,
         )
 
-        stdout_chunks = []
-        stderr_chunks = []
+        stdout_chunks: list[Any] = []
+        stderr_chunks: list[Any] = []
 
         async def read_stream(stream, chunks, prefix=""):
             while True:

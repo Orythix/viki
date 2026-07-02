@@ -2,6 +2,7 @@ import asyncio
 from typing import Any
 
 import pyautogui
+
 from viki.config.logger import viki_logger
 from viki.skills.base import BaseSkill
 

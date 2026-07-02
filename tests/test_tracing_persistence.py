@@ -8,10 +8,10 @@ import tempfile
 import unittest
 
 from viki.core.telemetry_service import (
+    close_persistent_traces,
+    get_persistent_traces,
     init_persistent_traces,
     start_span,
-    get_persistent_traces,
-    close_persistent_traces,
 )
 
 
@@ -37,7 +37,7 @@ class TestTracingPersistence(unittest.TestCase):
                 self.assertEqual(inner["parent_span_id"], outer_span)
 
     def test_persistent_traces_grouped(self):
-        with start_span("parent") as p:
+        with start_span("parent"):
             with start_span("child"):
                 pass
         traces = get_persistent_traces(limit=5)

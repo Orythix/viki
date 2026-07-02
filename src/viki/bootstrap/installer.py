@@ -97,6 +97,7 @@ class FirstRunOrchestrator:
         )
 
         mode_map = {"1": InstallMode.LIGHT, "2": InstallMode.DEVELOPER, "3": InstallMode.ADVANCED}
+        assert self.profile is not None
         default_mode = "1" if self.profile.recommended_mode == InstallMode.LIGHT else "2"
 
         choice = Prompt.ask(
@@ -109,6 +110,7 @@ class FirstRunOrchestrator:
         return True
 
     async def _step_check_deps(self) -> bool:
+        assert self.dep_manager is not None, "run _step_select_mode first"
         self.console.rule("[bold blue]Step 2: Dependency Check")
         self.console.print("[dim]Checking installed dependencies...[/]\n")
 
@@ -128,6 +130,7 @@ class FirstRunOrchestrator:
         return True
 
     async def _step_install_deps(self) -> bool:
+        assert self.dep_manager is not None, "run _step_select_mode first"
         missing = self.dep_manager.get_missing()
         if not missing:
             return True
@@ -165,6 +168,7 @@ class FirstRunOrchestrator:
         return True
 
     async def _step_recommend_models(self) -> bool:
+        assert self.system_info is not None and self.profile is not None
         self.console.rule("[bold green]Step 4: Model Recommendation")
         self.console.print("[dim]Analyzing hardware to recommend optimal AI models...[/]\n")
 

@@ -1,7 +1,7 @@
 import time
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 
 
 class ActionCall(BaseModel):
@@ -57,6 +57,8 @@ class SolverOutput(BaseModel):
 
 class VIKIResponse(BaseModel):
     """Final integrated response — simplified for local model reliability."""
+
+    _raw_input: str = PrivateAttr(default="")
 
     final_thought: ThoughtObject
     action: ActionCall | None = Field(None)

@@ -1,7 +1,8 @@
 import json
-from typing import Any
+from typing import Any, cast
 
 from pydantic import BaseModel
+
 from viki.config.logger import viki_logger
 from viki.core.inference_gateway import StructuredPrompt
 from viki.skills.base import BaseSkill
@@ -106,7 +107,7 @@ class ShortVideoSkill(BaseSkill):
 
             # The user requested valid JSON only, no explanations, no markdown.
             # model_dump_json() returns the raw string.
-            return project.model_dump_json(indent=2)
+            return cast("str", project.model_dump_json(indent=2))
 
         except Exception as e:
             viki_logger.error(f"ShortVideoAgent execution error: {e}")

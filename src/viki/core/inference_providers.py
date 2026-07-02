@@ -21,7 +21,7 @@ import asyncio
 import json
 import os
 import time
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 from pydantic import BaseModel
 
@@ -92,7 +92,7 @@ class GeminiLLM(LLMProvider):
     def __init__(self, config: dict[str, Any]):
         super().__init__(config)
         self.provider_name = "gemini"
-        self._client = None
+        self._client: Any = None
         api_key = os.getenv(self.config.get("api_key_env", "GOOGLE_API_KEY"))
         if not _looks_like_gemini_secret(api_key):
             self.available = False
@@ -176,7 +176,7 @@ class GeminiLLM(LLMProvider):
         messages: list[dict[str, str]],
         response_model: type[T],
         temperature: float = 0.0,
-        image_path: str = None,
+        image_path: str | None = None,
     ) -> T:
         # Use instructor's Gemini integration when available; otherwise fall back to
         # a JSON-mode prompt and tolerant parsing.
@@ -302,18 +302,19 @@ class GroqLLM(LLMProvider):
         messages: list[dict[str, str]],
         response_model: type[T],
         temperature: float = 0.0,
-        image_path: str = None,
+        image_path: str | None = None,
     ) -> T:
         try:
             import instructor  # type: ignore
 
             client = instructor.from_openai(self._client, mode=instructor.Mode.JSON)
-            return await client.chat.completions.create(
+            result: T = await client.chat.completions.create(
                 model=self.model_name,
                 messages=messages,
                 response_model=response_model,
                 temperature=temperature,
             )
+            return result
         except Exception as e:
             viki_logger.debug("Groq structured via instructor failed: %s", e)
             text = await self.chat(messages, temperature=temperature)
@@ -331,7 +332,7 @@ class GroqLLM(LLMProvider):
                 stream=True,
             )
             async for chunk in stream:
-                delta = None
+                delta: str | None = None
                 try:
                     delta = chunk.choices[0].delta.content if chunk.choices else None
                 except Exception:
@@ -397,18 +398,19 @@ class MistralLLM(LLMProvider):
         messages: list[dict[str, str]],
         response_model: type[T],
         temperature: float = 0.0,
-        image_path: str = None,
+        image_path: str | None = None,
     ) -> T:
         try:
             import instructor  # type: ignore
 
             client = instructor.from_openai(self._client, mode=instructor.Mode.JSON)
-            return await client.chat.completions.create(
+            result: T = await client.chat.completions.create(
                 model=self.model_name,
                 messages=messages,
                 response_model=response_model,
                 temperature=temperature,
             )
+            return result
         except Exception as e:
             viki_logger.debug("Mistral structured via instructor failed: %s", e)
             text = await self.chat(messages, temperature=temperature)
@@ -455,7 +457,7 @@ class NvidiaLLM(LLMProvider):
     def __init__(self, config: dict[str, Any]):
         super().__init__(config)
         self.provider_name = "nvidia_nim"
-        self._client = None
+        self._client: Any = None
         self._is_embedding_model = bool(config.get("embedding_model", False))
 
         api_key = os.getenv(self.config.get("api_key_env", "NVIDIA_API_KEY"))
@@ -590,7 +592,7 @@ class NvidiaLLM(LLMProvider):
         messages: list[dict[str, str]],
         response_model: type[T],
         temperature: float = 0.0,
-        image_path: str = None,
+        image_path: str | None = None,
     ) -> T:
         t0 = time.perf_counter()
         success = False
@@ -610,7 +612,7 @@ class NvidiaLLM(LLMProvider):
 
             result = await client.chat.completions.create(**kwargs)
             success = True
-            return result
+            return cast("T", result)
         except Exception as e:
             viki_logger.debug("NvidiaLLM structured via instructor failed: %s — falling back", e)
             # Fallback: plain chat + JSON parse
@@ -687,7 +689,7 @@ class OpenCodeLLM(LLMProvider):
     def __init__(self, config: dict[str, Any]):
         super().__init__(config)
         self.provider_name = "opencode"
-        self._client = None
+        self._client: Any = None
 
         api_key = os.getenv(self.config.get("api_key_env", "OPENCODE_API_KEY"))
         if not self._looks_like_opencode_secret(api_key):
@@ -777,7 +779,7 @@ class OpenCodeLLM(LLMProvider):
         messages: list[dict[str, str]],
         response_model: type[T],
         temperature: float = 0.0,
-        image_path: str = None,
+        image_path: str | None = None,
     ) -> T:
         t0 = time.perf_counter()
         success = False
@@ -792,7 +794,7 @@ class OpenCodeLLM(LLMProvider):
                 temperature=temperature,
             )
             success = True
-            return result
+            return cast("T", result)
         except Exception as e:
             viki_logger.debug("OpenCodeLLM structured via instructor failed: %s — falling back", e)
             text = await self.chat(
@@ -931,7 +933,7 @@ class BedrockLLM(LLMProvider):
         messages: list[dict[str, str]],
         response_model: type[T],
         temperature: float = 0.0,
-        image_path: str = None,
+        image_path: str | None = None,
     ) -> T:
         text = await self.chat(messages, temperature=temperature)
         return response_model.model_validate_json(text)

@@ -6,7 +6,7 @@ import asyncio
 import base64
 import os
 import time
-from typing import Any
+from typing import Any, cast
 
 from viki.config.logger import viki_logger
 
@@ -73,7 +73,7 @@ class APILLM(LLMProvider):
             self.unavailable_reason = str(e)
 
     async def chat(
-        self, messages: list[dict[str, str]], temperature: float = 0.7, image_path: str = None
+        self, messages: list[dict[str, str]], temperature: float = 0.7, image_path: str | None = None
     ) -> str:
         t0 = time.perf_counter()
         success = False
@@ -114,7 +114,7 @@ class APILLM(LLMProvider):
             except Exception:
                 pass
             success = True
-            return response.choices[0].message.content
+            return cast("str", response.choices[0].message.content)
         except Exception as e:
             viki_logger.error("APILLM.chat failed for '%s': %s", self.model_name, e)
             return f"Error calling API Model '{self.model_name}'. Check logs for details."
@@ -131,7 +131,7 @@ class APILLM(LLMProvider):
         messages: list[dict[str, str]],
         response_model: type[T],
         temperature: float = 0.0,
-        image_path: str = None,
+        image_path: str | None = None,
     ) -> T:
         t0 = time.perf_counter()
         success = False

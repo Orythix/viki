@@ -1,5 +1,5 @@
-import unittest
 import asyncio
+import unittest
 
 from viki.core.performance_benchmark import ControlledBenchmark
 

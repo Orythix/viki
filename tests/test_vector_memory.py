@@ -9,7 +9,6 @@ import tempfile
 import unittest
 
 from viki.core.vector_memory import (
-    VectorHit,
     build_vector_backend,
 )
 

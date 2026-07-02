@@ -15,9 +15,9 @@ class ContextManager:
         self._memory = project_memory or ProjectMemory()
 
     async def get_context(self, project_name: str) -> dict:
-        """Retrieve all context for a project."""
-        info = self._memory.get_project(project_name)
-        decisions = self._memory.get_decisions(project_name)
+        """Retrieve all context for the active project."""
+        info = await self._memory.get_active_project()
+        decisions = await self._memory.get_recent_decisions()
         return {
             "project": info,
             "decisions": decisions,
@@ -25,16 +25,15 @@ class ContextManager:
 
     async def record_decision(self, project_name: str, decision: str, rationale: str):
         """Record an architectural or design decision."""
-        self._memory.add_decision(
-            project_name=project_name,
+        await self._memory.record_decision(
+            topic=project_name,
             decision=decision,
-            rationale=rationale,
+            reasoning=rationale,
         )
 
     async def summarize_session(self, project_name: str, summary: str):
         """Store a session summary for future reference."""
-        self._memory.add_context(
-            project_name=project_name,
-            key="session_summary",
+        await self._memory.set_context(
+            key=f"session_summary:{project_name}",
             value=summary,
         )

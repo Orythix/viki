@@ -2,7 +2,7 @@ import ast
 import json
 import os
 import time
-from typing import Any
+from typing import Any, cast
 
 from viki.config.logger import viki_logger
 from viki.core.utils.debouncer import SyncDebouncer
@@ -48,7 +48,7 @@ class EvolutionEngine:
         if os.path.exists(self.state_file):
             try:
                 with open(self.state_file) as f:
-                    return json.load(f)
+                    return cast("dict[str, Any]", json.load(f))
             except (OSError, json.JSONDecodeError) as e:
                 viki_logger.warning(f"Failed to load mutations from {self.state_file}: {e}")
         return {
@@ -73,7 +73,7 @@ class EvolutionEngine:
         """Force immediate save (call on shutdown)."""
         self._debouncer.flush(self._do_save_mutations)
 
-    def propose_mutation(self, m_type: str, description: str, value: Any, pattern_id: str = None):
+    def propose_mutation(self, m_type: str, description: str, value: Any, pattern_id: str | None = None):
         """Propose a new mutation based on a detected pattern."""
         # Check if already proposed or applied
         for m in self.mutations["applied"] + self.mutations["pending"]:
@@ -97,7 +97,7 @@ class EvolutionEngine:
         return proposal
 
     def get_pending_proposals(self) -> list[dict[str, Any]]:
-        return self.mutations["pending"]
+        return cast("list[dict[str, Any]]", self.mutations["pending"])
 
     def approve_mutation(self, m_id: str) -> bool:
         for i, m in enumerate(self.mutations["pending"]):
@@ -151,10 +151,10 @@ class EvolutionEngine:
 
         self._save_mutations()
 
-    def get_active_mutations(self, m_type: str = None) -> list[dict[str, Any]]:
+    def get_active_mutations(self, m_type: str | None = None) -> list[dict[str, Any]]:
         if m_type:
             return [m for m in self.mutations["applied"] if m["type"] == m_type]
-        return self.mutations["applied"]
+        return cast("list[dict[str, Any]]", self.mutations["applied"])
 
     def get_agent_weightings(self) -> dict[str, float]:
         """Synthesize final weightings for the Deliberation Layer."""

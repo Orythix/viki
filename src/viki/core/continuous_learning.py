@@ -6,7 +6,7 @@ import asyncio
 import json
 import os
 import time
-from typing import Any
+from typing import Any, cast
 
 from viki.config.logger import viki_logger
 from viki.core.forge_config import resolve_forge_output_ollama_tag
@@ -164,7 +164,7 @@ class ContinuousLearner:
             # Use A/B testing framework for validation
             if hasattr(self.controller, "ab_tester"):
                 validation_result = await self.controller.ab_tester.quick_validation(model_name)
-                return validation_result.get("passed", False)
+                return cast("bool", validation_result.get("passed", False))
             else:
                 # Simple validation: just check if model responds
                 model = self.controller.model_router.models.get(model_name)
@@ -225,7 +225,7 @@ class ContinuousLearner:
         try:
             if os.path.isfile(self.promotion_state_path):
                 with open(self.promotion_state_path, encoding="utf-8") as f:
-                    return json.load(f)
+                    return cast("dict[str, Any]", json.load(f))
         except Exception as e:
             viki_logger.debug("ContinuousLearner: failed to load promotion state: %s", e)
         return {

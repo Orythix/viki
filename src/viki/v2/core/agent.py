@@ -6,6 +6,7 @@ import json
 import logging
 import time
 from collections.abc import Callable
+from typing import Any, cast
 
 from ..agents.manager import AgentManager
 from ..config import V2Config, get_config
@@ -134,9 +135,11 @@ class CoreAgent:
             return await self._execute_named_workflow(
                 workflow_name,
                 user_input,
-                on_step=lambda n, s=None: on_workflow_step(workflow_name, n, s)
-                if on_workflow_step
-                else None,  # noqa: E501
+                on_step=(
+                    (lambda n, s=None: on_workflow_step(workflow_name, n, s))
+                    if on_workflow_step
+                    else None
+                ),
             )
 
         if self._is_multi_agent_task(user_input):
@@ -154,7 +157,7 @@ class CoreAgent:
         final_response = None
         using_stream = on_token is not None
         for _step in range(max_steps):
-            if using_stream:
+            if using_stream and on_token is not None:
                 collected = []
                 async for token in self._llm.chat_stream(messages):
                     # Don't show tool_calls JSON in the live stream to the user
@@ -316,7 +319,7 @@ class CoreAgent:
             if match:
                 data = json.loads(match.group())
                 if "tool" in data:
-                    return data
+                    return cast("dict[Any, Any] | None", data)
         except Exception:
             pass
         return None

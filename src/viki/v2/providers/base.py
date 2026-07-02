@@ -55,3 +55,7 @@ class SystemProvider(ABC):
     @abstractmethod
     async def ping(self, host: str) -> dict:
         ...
+
+    @abstractmethod
+    async def get_network_info(self) -> dict:
+        ...

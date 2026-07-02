@@ -1,6 +1,7 @@
 import datetime
 import os
 import secrets
+from typing import Any
 
 import yaml
 
@@ -9,7 +10,7 @@ from viki.config.logger import viki_logger
 
 class SuperAdminLayer:
     def __init__(self, config_path: str = "./config/admin.yaml"):
-        self.config = {}
+        self.config: dict[Any, Any] = {}
         self.config_path = config_path
         self._load_config()
         self.shutdown_triggered = False

@@ -3,9 +3,10 @@ import json
 import os
 import shutil
 import uuid
-from typing import Any
+from typing import Any, cast
 
 import sqlite_utils
+from sqlite_utils.db import Table
 
 from viki.config.logger import viki_logger
 from viki.core.security_guard import safe_for_log
@@ -30,7 +31,7 @@ class TimeTravelModule:
 
         # Initialize tables
         if "snapshots" not in self.db.table_names():
-            self.db["snapshots"].create(
+            cast(Table, self.db["snapshots"]).create(
                 {
                     "id": int,
                     "timestamp": str,
@@ -42,7 +43,7 @@ class TimeTravelModule:
             )
 
         if "checkpoints" not in self.db.table_names():
-            self.db["checkpoints"].create(
+            cast(Table, self.db["checkpoints"]).create(
                 {
                     "id": str,
                     "timestamp": str,
@@ -58,7 +59,7 @@ class TimeTravelModule:
         timestamp = datetime.datetime.now().isoformat()
         viki_logger.info(f"Taking snapshot: {description}")
 
-        self.db["snapshots"].insert(
+        cast(Table, self.db["snapshots"]).insert(
             {
                 "timestamp": timestamp,
                 "event_type": event_type,
@@ -112,7 +113,7 @@ class TimeTravelModule:
                 backups.append({"original": orig, "backup": backup_path})
         backups_json = json.dumps(backups)
 
-        self.db["checkpoints"].insert(
+        cast(Table, self.db["checkpoints"]).insert(
             {
                 "id": cid,
                 "timestamp": timestamp,
@@ -162,7 +163,7 @@ class TimeTravelModule:
 
     def restore_checkpoint(self, checkpoint_id: str) -> tuple[bool, list[str], str]:
         """Restore files from a checkpoint. Returns (success, list of restored paths, message)."""
-        row = self.db["checkpoints"].get(checkpoint_id)
+        row = cast(Table, self.db["checkpoints"]).get(checkpoint_id)
         if not row:
             return False, [], f"Checkpoint '{checkpoint_id}' not found."
         try:

@@ -6,7 +6,7 @@ import asyncio
 import json
 import os
 import subprocess
-from typing import Any
+from typing import Any, cast
 
 from viki.skills.base import BaseSkill
 
@@ -52,7 +52,7 @@ class TasksSkill(BaseSkill):
             return []
         try:
             with open(path, encoding="utf-8") as f:
-                return json.load(f)
+                return cast("list[Any]", json.load(f))
         except Exception:
             return []
 

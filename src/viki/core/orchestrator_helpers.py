@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Any
+from typing import Any, cast
 
 import yaml
 
@@ -31,7 +31,7 @@ def read_text_truncated(path: str, max_len: int) -> str:
 def load_yaml(path: str) -> dict[str, Any]:
     try:
         with open(path) as f:
-            return yaml.safe_load(f)
+            return cast("dict[str, Any]", yaml.safe_load(f))
     except (OSError, yaml.YAMLError, FileNotFoundError) as e:
         logger.warning("Failed to load YAML config from %s: %s", path, e)
         return {}

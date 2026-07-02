@@ -2,7 +2,7 @@ import hashlib
 import json
 import os
 import time
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 
@@ -19,7 +19,7 @@ def _coerce_flat_embedding(v: Any, dim: int) -> list[float] | None:
         return None
     if a.shape != (dim,) or not np.isfinite(a).all():
         return None
-    return a.astype(np.float32, copy=False).tolist()
+    return cast("list[float] | None", a.astype(np.float32, copy=False).tolist())
 
 
 class NarrativeMemory:
@@ -140,7 +140,7 @@ class NarrativeMemory:
         """
         if cheap or not self.encoder:
             # Fallback to recent history (no embedding work)
-            return self._get_recent_episodes(limit)
+            return cast("list[dict[str, Any]]", self._get_recent_episodes(limit))
 
         try:
             query_emb = self.encoder.encode(current_intent, convert_to_tensor=True)
@@ -170,12 +170,12 @@ class NarrativeMemory:
                 corpus_rows.append(r)
 
             if not corpus_embs:
-                return self._get_recent_episodes(limit)
+                return cast("list[dict[str, Any]]", self._get_recent_episodes(limit))
 
             try:
                 from sentence_transformers import util
             except Exception:
-                return self._get_recent_episodes(limit)
+                return cast("list[dict[str, Any]]", self._get_recent_episodes(limit))
 
             import torch
 
@@ -199,7 +199,7 @@ class NarrativeMemory:
             return results
         except Exception as e:
             viki_logger.error(f"Context Retrieval Failed: {e}")
-            return self._get_recent_episodes(limit)
+            return cast("list[dict[str, Any]]", self._get_recent_episodes(limit))
 
     def _get_recent_episodes(self, limit: int):
         cur = self.conn.cursor()

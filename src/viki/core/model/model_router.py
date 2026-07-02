@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import Any, cast
 
 import yaml
 
@@ -29,8 +29,8 @@ class ModelRouter:
         budget=None,
         system_settings: dict[str, Any] | None = None,
     ):
-        self.models = {}
-        self.default_model = None
+        self.models: dict[Any, Any] = {}
+        self.default_model: LLMProvider | None = None
         self.air_gap = air_gap
         self.local_llm_only = local_llm_only
         self.budget = budget
@@ -93,13 +93,13 @@ class ModelRouter:
     def _first_allowed_model(self) -> LLMProvider | None:
         for m in self.models.values():
             if self._model_allowed(m):
-                return m
+                return cast("LLMProvider | None", m)
         for m in self.models.values():
             if m.available and isinstance(m, LocalLLM):
                 return m
         for m in self.models.values():
             if m.available:
-                return m
+                return cast("LLMProvider | None", m)
         return None
 
     def _load_config(self, path: str):
@@ -152,12 +152,19 @@ class ModelRouter:
             viki_logger.error(f"Failed to load model config from {path}: {e}")
             self.default_model = FallbackLLM({"model_name": "error-fallback"})
 
-    def get_model(self, capabilities: list[str] = None, tier: str = "standard") -> LLMProvider:
+    def _require_default_model(self) -> LLMProvider:
+        """Default model, guaranteed non-None (config loading always sets one)."""
+        if self.default_model is None:
+            self.default_model = FallbackLLM({"model_name": "fallback-mock"})
+        return self.default_model
+
+    def get_model(self, capabilities: list[str] | None = None, tier: str = "standard") -> LLMProvider:
         if not capabilities and tier == "standard":
-            if self._model_allowed(self.default_model):
-                return self.default_model
+            default = self._require_default_model()
+            if self._model_allowed(default):
+                return default
             fb = self._first_allowed_model()
-            return fb or self.default_model
+            return fb or default
 
         best_candidate = None
         best_score = -1
@@ -182,10 +189,11 @@ class ModelRouter:
                 best_candidate = model
 
         if best_candidate:
-            return best_candidate
-        if self._model_allowed(self.default_model):
-            return self.default_model
-        return self._first_allowed_model() or self.default_model
+            return cast("LLMProvider", best_candidate)
+        default = self._require_default_model()
+        if self._model_allowed(default):
+            return default
+        return self._first_allowed_model() or default
 
     def get_health_snapshot(self) -> dict[str, Any]:
         available = []

@@ -18,7 +18,7 @@ import urllib.error
 import urllib.request
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from viki.config.logger import viki_logger
 from viki.eval.rag_eval import GoldRow, RagEvalReport
@@ -58,13 +58,13 @@ def _parse_judge_json(text: str) -> dict[str, Any]:
         if m:
             text = m.group(1).strip()
     try:
-        return json.loads(text)
+        return cast("dict[str, Any]", json.loads(text))
     except json.JSONDecodeError:
         pass
     m = _JSON_BLOCK.search(text)
     if m:
         try:
-            return json.loads(m.group(0))
+            return cast("dict[str, Any]", json.loads(m.group(0)))
         except json.JSONDecodeError:
             pass
     raise ValueError("model did not return valid JSON")

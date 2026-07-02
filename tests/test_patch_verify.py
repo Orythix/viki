@@ -7,7 +7,6 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
-import textwrap
 import unittest
 
 from viki.core.patch_verify import PatchVerify

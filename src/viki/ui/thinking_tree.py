@@ -25,13 +25,13 @@ class ThinkingTree:
         self.interpretation.add(f"Sentiment: [magenta]{sentiment}[/]")
         self.interpretation.add(f"Caps: [blue]{', '.join(capabilities)}[/]")
 
-    def update_deliberation(self, model: str, tier: str, thoughts: str = None):
+    def update_deliberation(self, model: str, tier: str, thoughts: str | None = None):
         self.deliberation.label = "⚖️ [bold green]Deliberation[/]"
         self.deliberation.add(f"Model: [cyan]{model}[/] (Tier: [bold]{tier}[/])")
         if thoughts:
             self.deliberation.add(f"Plan: [italic white]{thoughts[:50]}...[/]")
 
-    def update_execution(self, tool: str, params: dict = None):
+    def update_execution(self, tool: str, params: dict | None = None):
         self.execution.label = "🚀 [bold green]Execution[/]"
         call = f"[bold yellow]{tool}[/]"
         if params:

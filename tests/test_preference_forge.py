@@ -10,11 +10,9 @@ import os
 import sqlite3
 import tempfile
 import unittest
-from typing import List
 
 from viki.core.preference_forge import (
     PreferenceDatasetBuilder,
-    PreferencePair,
     TeacherDistillation,
 )
 
@@ -50,7 +48,7 @@ class _StubLearning:
         )
         self.conn.commit()
 
-    def get_relevant_lessons(self, query: str, limit: int = 1) -> List[str]:
+    def get_relevant_lessons(self, query: str, limit: int = 1) -> list[str]:
         return ["Use the math_skill for arithmetic."]
 
 
@@ -85,7 +83,7 @@ class TestPreferenceDatasetBuilder(unittest.TestCase):
         builder = PreferenceDatasetBuilder(self.learning)
         msg, n = builder.build(out_path)
         self.assertGreaterEqual(n, 2)
-        with open(out_path, "r", encoding="utf-8") as f:
+        with open(out_path, encoding="utf-8") as f:
             rows = [json.loads(line) for line in f if line.strip()]
         sources = {r["source"] for r in rows}
         self.assertIn("failure", sources)

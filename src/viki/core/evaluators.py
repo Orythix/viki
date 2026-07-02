@@ -22,7 +22,7 @@ import tempfile
 import textwrap
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from viki.config.logger import viki_logger
 
@@ -426,7 +426,7 @@ class LLMJudgeEvaluator:
         end = text.rfind("}")
         if start != -1 and end != -1 and end > start:
             try:
-                return json.loads(text[start : end + 1])
+                return cast("dict[str, Any]", json.loads(text[start : end + 1]))
             except json.JSONDecodeError:
                 pass
         return {"score": 0.0, "rationale": "unparseable_judge_output"}

@@ -4,7 +4,6 @@ import unittest
 
 from viki.skills.builtins.coding_workflow_skill import CodingWorkflowSkill
 
-
 EXPECTED_PHASE_PLAYBOOKS = {
     "spec": ["idea_refine", "spec_driven_development", "dependency_and_package_management"],
     "plan": ["planning_and_task_breakdown", "spec_driven_development", "infrastructure_as_code"],

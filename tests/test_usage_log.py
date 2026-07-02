@@ -4,11 +4,11 @@ import tempfile
 import unittest
 
 from viki.core.usage_log import (
+    USAGE_FILENAME,
     configure_session_usage_log,
     emit_llm_inference,
     emit_model_feedback,
     emit_skill_execution,
-    USAGE_FILENAME,
 )
 
 
@@ -44,7 +44,7 @@ class TestUsageLog(unittest.TestCase):
 
             path = os.path.join(d, USAGE_FILENAME)
             self.assertTrue(os.path.isfile(path))
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 lines = [ln.strip() for ln in f if ln.strip()]
             self.assertEqual(len(lines), 3)
             ev = [json.loads(ln)["event"] for ln in lines]

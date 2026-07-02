@@ -8,7 +8,7 @@ import json
 import os
 from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -241,7 +241,7 @@ def _load_config_file(path: Path) -> dict[str, Any]:
             ) from None
     elif ext == ".json":
         with open(path, encoding="utf-8") as f:
-            return json.load(f)
+            return cast("dict[str, Any]", json.load(f))
     return {}
 
 

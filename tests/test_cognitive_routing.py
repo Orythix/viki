@@ -9,10 +9,8 @@ from __future__ import annotations
 
 import asyncio
 import unittest
-from unittest.mock import MagicMock
 
 from viki.core.cognitive_loop import (
-    CognitiveRoute,
     CognitiveRouter,
     RouterTelemetry,
 )

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any
+from typing import Any, cast
 
 from viki.skills.public_safety.auto_learning import get_auto_learning_engine
 from viki.skills.public_safety.base import BasePublicSafetySkill, SkillResult
@@ -133,7 +133,7 @@ class PublicSafetyNLBridge:
         for skill in self._skills.values():
             for cap in skill.capabilities:
                 if cap.name == cap_name:
-                    return cap.input_schema.get("properties", {})
+                    return cast("dict[str, Any]", cap.input_schema.get("properties", {}))
         return {}
 
     def _parse_tool_call(self, response: str) -> list[dict[str, Any]]:
@@ -142,7 +142,7 @@ class PublicSafetyNLBridge:
             data = json.loads(response)
             if isinstance(data, dict):
                 if "tool_calls" in data:
-                    return data["tool_calls"]
+                    return cast("list[dict[str, Any]]", data["tool_calls"])
                 if "tool" in data:
                     return [
                         {

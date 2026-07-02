@@ -19,7 +19,6 @@ import unittest
 from viki.integrations.mcp_client import (
     MCPClient,
     MCPSkillProxy,
-    MCPServerSpec,
     attach_mcp_skills,
     load_specs_from_yaml,
 )

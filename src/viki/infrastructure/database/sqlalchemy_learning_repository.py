@@ -1,50 +1,52 @@
 import json
 import logging
 import time
+from typing import cast
 
-from sqlalchemy import Column, Float, ForeignKey, Integer, String, Text, create_engine, event
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import Float, ForeignKey, Integer, String, Text, create_engine, event
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 from sqlalchemy.pool import NullPool
+
 from viki.domain.entities.learning import FailureRecord, Lesson, Relationship
 from viki.domain.interfaces.learning_repository import ILearningRepository
 
 _log = logging.getLogger("viki.repository")
 
-Base = declarative_base()
+class Base(DeclarativeBase):
+    pass
 
 
 class LessonModel(Base):
     __tablename__ = "lessons"
-    id = Column(String, primary_key=True)
-    content = Column(Text)
-    text_representation = Column(Text)
-    embedding = Column(Text)
-    created_at = Column(Float)
-    last_accessed = Column(Float)
-    access_count = Column(Integer, default=1)
-    author = Column(String)
-    source_task = Column(String)
-    reliability = Column(Float)
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    content: Mapped[str] = mapped_column(Text)
+    text_representation: Mapped[str] = mapped_column(Text)
+    embedding: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[float] = mapped_column(Float)
+    last_accessed: Mapped[float] = mapped_column(Float)
+    access_count: Mapped[int] = mapped_column(Integer, default=1)
+    author: Mapped[str] = mapped_column(String)
+    source_task: Mapped[str] = mapped_column(String)
+    reliability: Mapped[float] = mapped_column(Float)
 
 
 class FailureModel(Base):
     __tablename__ = "failures"
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    action = Column(Text)
-    error = Column(Text)
-    context = Column(Text)
-    timestamp = Column(Float)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    action: Mapped[str] = mapped_column(Text)
+    error: Mapped[str] = mapped_column(Text)
+    context: Mapped[str] = mapped_column(Text)
+    timestamp: Mapped[float] = mapped_column(Float)
 
 
 class RelationshipModel(Base):
     __tablename__ = "relationships"
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    source_id = Column(String, ForeignKey("lessons.id"))
-    target_id = Column(String, ForeignKey("lessons.id"))
-    type = Column(String)
-    weight = Column(Float, default=1.0)
-    metadata_json = Column(Text)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    source_id: Mapped[str] = mapped_column(String, ForeignKey("lessons.id"))
+    target_id: Mapped[str] = mapped_column(String, ForeignKey("lessons.id"))
+    type: Mapped[str] = mapped_column(String)
+    weight: Mapped[float] = mapped_column(Float, default=1.0)
+    metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class SqlAlchemyLearningRepository(ILearningRepository):
@@ -81,6 +83,7 @@ class SqlAlchemyLearningRepository(ILearningRepository):
                     time.sleep(0.1 * (attempt + 1))
                     continue
                 raise
+        assert last_error is not None
         raise last_error
 
     def save_lesson(self, lesson: Lesson) -> None:
@@ -122,7 +125,7 @@ class SqlAlchemyLearningRepository(ILearningRepository):
                     reliability=model.reliability,
                 )
 
-        return self._execute(_op)
+        return cast("Lesson | None", self._execute(_op))
 
     def get_relevant_lessons(self, query: str, limit: int = 5) -> list[Lesson]:
         # Note: True semantic search would require an encoder service.
@@ -151,7 +154,7 @@ class SqlAlchemyLearningRepository(ILearningRepository):
                     for m in models
                 ]
 
-        return self._execute(_op)
+        return cast("list[Lesson]", self._execute(_op))
 
     def save_failure(self, failure: FailureRecord) -> None:
         def _op():
@@ -187,7 +190,7 @@ class SqlAlchemyLearningRepository(ILearningRepository):
                     for m in models
                 ]
 
-        return self._execute(_op)
+        return cast("list[FailureRecord]", self._execute(_op))
 
     def save_relationship(self, relationship: Relationship) -> None:
         def _op():
@@ -229,4 +232,4 @@ class SqlAlchemyLearningRepository(ILearningRepository):
                     for m in models
                 ]
 
-        return self._execute(_op)
+        return cast("list[Lesson]", self._execute(_op))

@@ -9,8 +9,10 @@ from __future__ import annotations
 import enum
 import uuid
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
-from typing import Any
+from datetime import datetime, timezone
+
+UTC = timezone.utc
+from typing import Any, cast
 
 from viki.skills.public_safety.auto_learning import AutoLearningEngine, get_auto_learning_engine
 from viki.skills.public_safety.base import (
@@ -780,7 +782,7 @@ class VIKISafetyAgent(BasePublicSafetySkill):
         else:
             result = await self._run_full_analysis(params)
             await self._auto_learn("general", params, result)
-            return result
+            return cast("dict[str, Any]", result)
 
     async def _run_ai_threat_analysis(self, params: dict[str, Any]) -> dict[str, Any]:
         content = params["content"]

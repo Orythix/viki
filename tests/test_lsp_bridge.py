@@ -13,7 +13,7 @@ import asyncio
 import os
 import tempfile
 import unittest
-from typing import Any, Dict
+from typing import Any
 
 from viki.integrations.lsp_bridge import LSPSession, LSPSpec, _path_to_uri
 
@@ -34,7 +34,7 @@ class _FakeLSPSession(LSPSession):
     def is_alive(self) -> bool:  # type: ignore[override]
         return self._fake_alive
 
-    async def _write_message(self, payload: Dict[str, Any]) -> None:  # type: ignore[override]
+    async def _write_message(self, payload: dict[str, Any]) -> None:  # type: ignore[override]
         self.outbound.append(payload)
 
     def deliver_response(self, msg_id: int, result: Any) -> None:

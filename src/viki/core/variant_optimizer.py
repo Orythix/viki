@@ -77,7 +77,7 @@ class ModelABTest:
         if test_count == 0:
             return {"error": "No test prompts loaded"}
 
-        results = {
+        results: dict[str, Any] = {
             "model_a": {"name": model_a_name, "scores": [], "latencies": [], "errors": 0},
             "model_b": {"name": model_b_name, "scores": [], "latencies": [], "errors": 0},
             "test_count": test_count,
@@ -219,7 +219,7 @@ class ModelABTest:
         if test_count == 0:
             return {"error": "No test prompts available for validation"}
 
-        results = {"model": model_name, "scores": [], "latencies": [], "errors": 0}
+        results: dict[str, Any] = {"model": model_name, "scores": [], "latencies": [], "errors": 0}
 
         # Test on subset of prompts (faster)
         for test_case in test_subset:

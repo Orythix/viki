@@ -56,7 +56,7 @@ class WorkingMemory:
             self.db = db_lib(conn)
             self._init_tables()
         else:
-            self.ephemeral_history = {}
+            self.ephemeral_history: dict[Any, Any] = {}
 
     def _normalize_session_id(self, session_id: str | None = None) -> str:
         return session_id or self.default_session_id
@@ -83,7 +83,7 @@ class WorkingMemory:
         self,
         role: str,
         content: str,
-        metadata: dict[str, Any] = None,
+        metadata: dict[str, Any] | None = None,
         session_id: str | None = None,
     ):
         with self._lock:
@@ -246,7 +246,7 @@ class HierarchicalMemory:
         }
 
     def get_full_context(
-        self, current_input: str, narrative_wisdom: list[dict] = None, session_id: str | None = None
+        self, current_input: str, narrative_wisdom: list[dict] | None = None, session_id: str | None = None
     ) -> dict[str, Any]:
         """Synthesizes context across all layers for the Deliberation layer."""
         # Cheap-retrieve fast path: trivial smalltalk doesn't need semantic
@@ -280,7 +280,7 @@ class HierarchicalMemory:
             except TypeError:
                 # Older signature without `cheap` kwarg.
                 episodic_context = self.episodic.retrieve_context(current_input, limit=3)
-            semantic_knowledge = []
+            semantic_knowledge: list[Any] = []
         else:
             episodic_context = self.episodic.retrieve_context(current_input)
             semantic_knowledge = (

@@ -7,6 +7,7 @@ import asyncio
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 
 @dataclass
@@ -52,7 +53,7 @@ class DevProvider:
 
         def _scan():
             languages = set()
-            frameworks = set()
+            frameworks: set[Any] = set()
             config_files = []
             entry_points = []
 

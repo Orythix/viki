@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from typing import Any, cast
 
 from .base import SystemProvider
 
@@ -39,14 +40,14 @@ class WindowsProvider(SystemProvider):
             "Get-ComputerInfo | Select-Object WindowsVersion, "
             "WindowsEditionId, WindowsInstallationType, OsName, OsVersion | ConvertTo-Json"
         )
-        return json.loads(out)
+        return cast("dict[Any, Any]", json.loads(out))
 
     async def get_hardware_info(self) -> dict:
         out = await self._run_powershell(
             "Get-CimInstance Win32_ComputerSystem | Select-Object Manufacturer, Model, "
             "TotalPhysicalMemory, NumberOfProcessors | ConvertTo-Json"
         )
-        return json.loads(out)
+        return cast("dict[Any, Any]", json.loads(out))
 
     async def get_cpu_info(self) -> dict:
         out = await self._run_powershell(
@@ -55,8 +56,8 @@ class WindowsProvider(SystemProvider):
         )
         data = json.loads(out)
         if isinstance(data, list):
-            return data[0]
-        return data
+            return cast("dict[Any, Any]", data[0])
+        return cast("dict[Any, Any]", data)
 
     async def get_ram_info(self) -> dict:
         out = await self._run_powershell(
@@ -74,7 +75,7 @@ class WindowsProvider(SystemProvider):
         if isinstance(free_data, list):
             free_data = free_data[0]
         data["FreeGB"] = free_data.get("FreeGB", 0)
-        return data
+        return cast("dict[Any, Any]", data)
 
     async def get_disk_info(self) -> list[dict]:
         out = await self._run_powershell(
@@ -85,7 +86,7 @@ class WindowsProvider(SystemProvider):
         data = json.loads(out)
         if isinstance(data, dict):
             data = [data]
-        return data
+        return cast("list[dict[Any, Any]]", data)
 
     async def get_running_processes(self) -> list[dict]:
         out = await self._run_powershell(
@@ -95,7 +96,7 @@ class WindowsProvider(SystemProvider):
         data = json.loads(out)
         if isinstance(data, dict):
             data = [data]
-        return data
+        return cast("list[dict[Any, Any]]", data)
 
     async def get_installed_software(self) -> list[dict]:
         out = await self._run_powershell(
@@ -106,7 +107,7 @@ class WindowsProvider(SystemProvider):
         data = json.loads(out)
         if isinstance(data, dict):
             data = [data]
-        return data
+        return cast("list[dict[Any, Any]]", data)
 
     async def get_wifi_password(self, ssid: str | None = None) -> dict:
         if not ssid:

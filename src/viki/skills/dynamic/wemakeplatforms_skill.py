@@ -33,7 +33,7 @@ class WeMakePlatformsSkill(BaseSkill):
     def triggers(self) -> list[str]:
         return ["wemakeplatforms", "we make platforms team", "wmp team"]
 
-    async def execute(self, params: dict[str, Any] = None) -> str:
+    async def execute(self, params: dict[str, Any] | None = None) -> str:
         params = params or {}
         query = params.get("query", "all").lower()
 

@@ -1,6 +1,6 @@
 import asyncio
 import os
-from typing import Any
+from typing import Any, cast
 
 from viki.config.logger import viki_logger
 
@@ -147,7 +147,7 @@ class VoiceModule:
         with torch.no_grad():
             speech_prob = self.model(tensor_audio, self.sampling_rate).item()
 
-        return speech_prob > threshold
+        return cast("bool", speech_prob > threshold)
 
     async def listen_for_interruption(self, stop_event: asyncio.Event):
         sd_mod = _get_sd()
@@ -182,7 +182,7 @@ class VoiceModule:
         except Exception as e:
             viki_logger.error(f"Interruption listener died: {e}")
 
-    async def speak(self, text: str, interruption_event: asyncio.Event = None):
+    async def speak(self, text: str, interruption_event: asyncio.Event | None = None):
         """
         Streaming TTS Output with Instant Brake.
         """

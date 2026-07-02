@@ -4,7 +4,7 @@ from __future__ import annotations
 
 
 class StructuredPrompt:
-    def __init__(self, request: str, messages: list[dict[str, str]] = None):
+    def __init__(self, request: str, messages: list[dict[str, str]] | None = None):
         self.request = request
         self.messages = messages or []
         self.identity = ""

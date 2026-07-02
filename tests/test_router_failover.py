@@ -7,12 +7,11 @@ from __future__ import annotations
 import asyncio
 import os
 import tempfile
-import time
 import unittest
 
 import yaml
 
-from viki.core.inference_gateway import ModelRouter, LLMProvider
+from viki.core.inference_gateway import LLMProvider, ModelRouter
 from viki.core.resource_budget import LLMBudget
 
 

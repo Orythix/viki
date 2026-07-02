@@ -13,7 +13,6 @@ import json
 import os
 import tempfile
 import unittest
-from types import SimpleNamespace
 
 from viki.core.continuous_learning import ContinuousLearner
 

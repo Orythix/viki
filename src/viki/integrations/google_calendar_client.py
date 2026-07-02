@@ -3,7 +3,9 @@ Google Calendar API client for VIKI. Used by CalendarSkill when integrations.goo
 Requires: google-auth, google-auth-oauthlib, google-api-python-client.
 """
 import os
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+
+UTC = timezone.utc
 
 
 def get_calendar_service(credentials_path: str, token_path: str):

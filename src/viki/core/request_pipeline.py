@@ -8,7 +8,7 @@ stages can be added per ARCHITECTURE_REFACTOR.md without growing _process_reques
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 from viki.config.logger import viki_logger
 
@@ -184,7 +184,7 @@ class _PendingOpsStage:
         negatives = ("no", "n", "reject", "cancel", ctrl.REJECT_TOKEN)
         if raw_lower in affirmatives:
             ctrl.pending_ops_plans.pop(ctx.session_id, None)
-            return await ctrl._apply_ops_plan(pending_ops, session_id=ctx.session_id)
+            return cast("str | None", await ctrl._apply_ops_plan(pending_ops, session_id=ctx.session_id))
         if raw_lower in negatives:
             ctrl.pending_ops_plans.pop(ctx.session_id, None)
             return "OpsPlan cancelled."
@@ -219,7 +219,7 @@ class _PendingActionStage:
             result, err, latency = await ctrl._execute_skill(skill_name, params, budget)
             if err:
                 ctrl.skill_registry.record_execution(skill_name, False, 0.0)
-                return err
+                return cast("str | None", err)
             ctrl.skill_registry.record_execution(skill_name, True, latency)
             return f"Done. {result[:500]}"
         if raw_lower in negatives:

@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
 from viki.skills.builtins.memory_skill import MemorySkill
 
 

@@ -1,5 +1,7 @@
 import pytest
+
 from viki.skills.builtins.mind_trace_skill import MindTraceSkill
+
 
 class MockController:
     def __init__(self):
@@ -21,7 +23,7 @@ class MockController:
                 "total_cost_usd": 0.0001
             }
         }
-    
+
     def get_last_response_meta(self, session_id=None):
         return self.meta
 
@@ -29,7 +31,7 @@ class MockController:
 async def test_mind_trace_last():
     ctrl = MockController()
     skill = MindTraceSkill(ctrl)
-    
+
     result = await skill.execute({"action": "last"})
     assert "STANDARD" in result
     assert "0.450" in result
@@ -41,6 +43,6 @@ async def test_mind_trace_no_meta():
     ctrl = MockController()
     ctrl.meta = {} # Empty
     skill = MindTraceSkill(ctrl)
-    
+
     result = await skill.execute({"action": "last"})
     assert "No recent cognitive trace" in result

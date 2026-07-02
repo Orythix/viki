@@ -32,7 +32,7 @@ AGENT_REGISTRY: dict[str, type[SpecialistAgent]] = {
 @dataclass
 class DispatchReport:
     goal: str
-    results: dict[str, AgentFindings | AgentResult] = field(default_factory=dict)
+    results: dict[str, AgentFindings] = field(default_factory=dict)
     errors: dict[str, str] = field(default_factory=dict)
 
 

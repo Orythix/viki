@@ -1,3 +1,5 @@
+from typing import Any
+
 from viki.config.logger import viki_logger
 from viki.core.model import LLMProvider
 
@@ -9,7 +11,7 @@ class DeliberationEngine:
     Evaluates options against internal goals before acting.
     """
 
-    def __init__(self, llm: LLMProvider, self_model=None):
+    def __init__(self, llm: "LLMProvider | Any", self_model: Any = None):
         self.llm = llm
         self.self_model = self_model
 

@@ -1,8 +1,11 @@
-import pytest
 import os
-import tempfile
 import shutil
+import tempfile
+
+import pytest
+
 from viki.skills.builtins.log_voyager_skill import LogVoyagerSkill
+
 
 class MockTelemetry:
     def get_summary(self):
@@ -28,19 +31,19 @@ def temp_logs(monkeypatch):
     tmp_dir = tempfile.mkdtemp()
     log_dir = os.path.join(tmp_dir, "logs")
     os.makedirs(log_dir)
-    
+
     # Create mock logs
     viki_log = os.path.join(log_dir, "log")
     with open(viki_log, "w") as f:
         f.write("INFO: System start\nERROR: DB Locked\nWARNING: High latency\n")
-        
+
     thought_log = os.path.join(log_dir, "thoughts.log")
     with open(thought_log, "w") as f:
         f.write("THOUGHT: Planning route\nERROR: Router failed\n")
-    
+
     # Mock os.getcwd to return tmp_dir
     monkeypatch.setattr(os, "getcwd", lambda: tmp_dir)
-    
+
     ctrl = MockController()
     yield ctrl, log_dir
     shutil.rmtree(tmp_dir)
@@ -49,7 +52,7 @@ def temp_logs(monkeypatch):
 async def test_log_voyager_scan(temp_logs):
     ctrl, _ = temp_logs
     skill = LogVoyagerSkill(ctrl)
-    
+
     result = await skill.execute({"action": "scan", "query": "ERROR"})
     assert "DB Locked" in result
     assert "Router failed" in result
@@ -58,7 +61,7 @@ async def test_log_voyager_scan(temp_logs):
 async def test_log_voyager_summarize(temp_logs):
     ctrl, _ = temp_logs
     skill = LogVoyagerSkill(ctrl)
-    
+
     result = await skill.execute({"action": "summarize"})
     assert "DEGRADED" in result
     assert "Active Errors: 2" in result

@@ -6,7 +6,7 @@ import asyncio
 import json
 import re
 import time
-from typing import Any
+from typing import Any, cast
 
 from viki.config.logger import viki_logger
 from viki.core.ensemble import EnsembleEngine
@@ -18,7 +18,7 @@ from .cortex_layer import CortexLayer
 class DeliberationLayer(CortexLayer):
     """Layer 3: Planning, Simulation, and Internal Debate."""
 
-    def __init__(self, model_router, soul_config: dict = None, skill_registry=None):
+    def __init__(self, model_router, soul_config: dict | None = None, skill_registry=None):
         super().__init__("Deliberation", "Internal Debate & Solver Engine")
         self.model_router = model_router
         self.soul_config = soul_config or {}
@@ -496,7 +496,7 @@ class DeliberationLayer(CortexLayer):
                 )
                 viki_resp.final_response = viki_resp.final_thought.primary_strategy
 
-            return viki_resp
+            return cast("VIKIResponse", viki_resp)
         except Exception as e:
             viki_logger.error(f"Deliberation Model Failure: {e}")
             if "llm_start" in locals():
@@ -510,7 +510,7 @@ class DeliberationLayer(CortexLayer):
             )
 
     def _judge(self, results: Any) -> VIKIResponse:
-        return results
+        return cast("VIKIResponse", results)
 
     async def _streamed_conversational_reply(
         self,

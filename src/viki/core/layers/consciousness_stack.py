@@ -23,10 +23,10 @@ class ConsciousnessStack:
     def __init__(
         self,
         model_router,
-        soul_config: dict = None,
+        soul_config: dict | None = None,
         skill_registry=None,
         world_model=None,
-        data_dir: str = None,
+        data_dir: str | None = None,
     ):
         self.skill_registry = skill_registry
         self.layer_timing = LayerTiming()
@@ -51,13 +51,13 @@ class ConsciousnessStack:
     async def process(
         self,
         user_input: str,
-        memory_context: dict[str, Any] = None,
+        memory_context: dict[str, Any] | None = None,
         url_context: str = "",
         use_lite_schema: bool = False,
         world_context: str = "",
         signals_context: str = "",
         evolution_log: str = "",
-        action_results: list = None,
+        action_results: list | None = None,
         use_ensemble: bool = True,
         on_event=None,
         model_tier: str = "standard",
@@ -144,7 +144,7 @@ class ConsciousnessStack:
                         )
                     elif layer_name == "Deliberation" and isinstance(data, VIKIResponse):
                         model_name = (
-                            data.metadata.get("model", "unknown") if data.metadata else "unknown"
+                            getattr(data, "metadata", None).get("model", "unknown") if getattr(data, "metadata", None) else "unknown"
                         )
                         on_think(
                             "deliberation",

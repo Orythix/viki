@@ -9,6 +9,7 @@ import re
 import sqlite3
 import subprocess
 import time
+from typing import cast
 
 import yaml
 from rich.console import Console
@@ -48,7 +49,7 @@ def _is_onboarding_needed(content: str) -> bool:
     try:
         settings = yaml.safe_load(content)
         owner_name = settings.get("system", {}).get("owner", {}).get("name")
-        return owner_name == "User"
+        return cast("bool", owner_name == "User")
     except Exception:
         return False
 

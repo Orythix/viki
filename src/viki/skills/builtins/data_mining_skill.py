@@ -1,5 +1,5 @@
 import os
-from typing import Any
+from typing import Any, cast
 
 from viki.config.logger import viki_logger
 from viki.skills.base import BaseSkill
@@ -93,7 +93,7 @@ class DataMiningSkill(BaseSkill):
             f"Results:\n{raw_data[:4000]}\n\n"
             "Output ONLY the JSON array."
         )
-        return await model.chat([{"role": "user", "content": prompt}])
+        return cast("str", await model.chat([{"role": "user", "content": prompt}]))
 
     async def _discover_patterns(self, path: str) -> str:
         """Use Pandas to find basic correlations or LLM for deeper insights."""
@@ -122,7 +122,7 @@ class DataMiningSkill(BaseSkill):
         s = corr_matrix.unstack()
         so = s.sort_values(kind="quicksort", ascending=False)
         top = so[(abs(so) > 0.5) & (so < 1.0)]
-        return top.to_string()
+        return cast("str", top.to_string())
 
     async def _extract_entities(self, text: str, types: list[str]) -> str:
         if not self._controller:
@@ -133,4 +133,4 @@ class DataMiningSkill(BaseSkill):
             f"Text: {text[:2000]}\n\n"
             "Return a structured list of findings."
         )
-        return await model.chat([{"role": "user", "content": prompt}])
+        return cast("str", await model.chat([{"role": "user", "content": prompt}]))

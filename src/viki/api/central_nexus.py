@@ -15,7 +15,7 @@ class MessagingNexus:
         self._request_processor = request_processor
         self.queue = asyncio.PriorityQueue()
         self.active = False
-        self.active_tasks = set()
+        self.active_tasks: set[Any] = set()
 
     async def ingest(self, source: str, user_id: str, text: str, callback: Any, priority: int = 20):
         """

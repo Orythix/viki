@@ -237,7 +237,7 @@ class WorldModel:
         viki_logger.info(f"WorldModel: Mission {status}. Summary: {summary[:50]}...")
         self.state.active_goal = None
         self.state.execution_started = False
-        self._save_state()
+        self.save()
 
     def get_active_mission(self) -> dict[str, Any] | None:
         """Returns the current active mission if one exists."""

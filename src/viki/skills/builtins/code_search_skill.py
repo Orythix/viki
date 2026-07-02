@@ -23,7 +23,7 @@ import re
 import sqlite3
 import time
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from viki.config.logger import viki_logger
 from viki.skills.base import BaseSkill
@@ -116,7 +116,7 @@ class CodeSearchSkill(BaseSkill):
 
     def _data_dir(self) -> str:
         if self._controller and hasattr(self._controller, "settings"):
-            return self._controller.settings.get("system", {}).get("data_dir", "./data")
+            return cast("str", self._controller.settings.get("system", {}).get("data_dir", "./data"))
         return "./data"
 
     def _open_index_db(self) -> None:
@@ -291,7 +291,7 @@ class CodeSearchSkill(BaseSkill):
         if action == "symbol":
             name = params.get("query") or params.get("name") or ""
             language = params.get("language")
-            results = self.find_symbol(name, language=language)
+            symbols = self.find_symbol(name, language=language)
             return json.dumps(
                 [
                     {
@@ -301,7 +301,7 @@ class CodeSearchSkill(BaseSkill):
                         "kind": s.kind,
                         "language": s.language,
                     }
-                    for s in results
+                    for s in symbols
                 ],
                 indent=2,
             )
@@ -336,13 +336,13 @@ class CodeSearchSkill(BaseSkill):
                 f"Provide a concise summary of main classes, functions, and the overall flow."
             )
 
-            return await model.chat([{"role": "user", "content": prompt}])
+            return cast("str", await model.chat([{"role": "user", "content": prompt}]))
         except Exception as e:
             return f"Explain Error: {e}"
 
     def _workspace_dir(self) -> str:
         if self._controller and hasattr(self._controller, "settings"):
-            return self._controller.settings.get("system", {}).get("workspace_dir", "./workspace")
+            return cast("str", self._controller.settings.get("system", {}).get("workspace_dir", "./workspace"))
         return os.getcwd()
 
     # --- index build ---

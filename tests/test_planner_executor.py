@@ -7,9 +7,8 @@ from __future__ import annotations
 import asyncio
 import json
 import unittest
-from typing import Any, Dict, List
 
-from viki.core.task_planner import PlannerExecutor, TaskGraph, TaskStatus, TaskType, PlanTask
+from viki.core.task_planner import PlannerExecutor, PlanTask, TaskGraph, TaskStatus, TaskType
 
 
 class _StubModel:
@@ -60,7 +59,7 @@ class TestPlanner(unittest.TestCase):
 
 class TestExecutor(unittest.TestCase):
     def test_runs_in_dependency_order(self):
-        called: List[str] = []
+        called: list[str] = []
 
         async def cb_search(task):
             called.append(task.id)

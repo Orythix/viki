@@ -130,11 +130,11 @@ class CredentialManager:
         self._key = _derive_key(machine_id, salt)
         self._cipher = Fernet(self._key)
         self._path = os.path.join(self._data_dir, _STORE_FILE)
-        self._store: dict[str, str] = {}
+        self._store = {}
         self._load()
 
     def _load(self) -> None:
-        if not self._enabled or not os.path.exists(self._path):
+        if not self._enabled or self._path is None or not os.path.exists(self._path):
             return
         try:
             encrypted = Path(self._path).read_bytes()
@@ -145,7 +145,7 @@ class CredentialManager:
             self._store = {}
 
     def _save(self) -> None:
-        if not self._enabled:
+        if not self._enabled or self._path is None:
             return
         try:
             raw = json.dumps(self._store, indent=2).encode()
@@ -178,7 +178,7 @@ class CredentialManager:
         return list(self._store.keys())
 
     def is_available(self) -> bool:
-        return self._enabled and os.path.exists(self._path)
+        return self._enabled and self._path is not None and os.path.exists(self._path)
 
 
 # CLI helper

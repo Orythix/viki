@@ -68,7 +68,7 @@ class ReflexBrain:
     Response time target: < 200ms
     """
 
-    def __init__(self, data_dir: str = None):
+    def __init__(self, data_dir: str | None = None):
         self.intent_cache: dict[str, str] = {}
         self.learned_patterns: dict[str, dict[str, Any]] = {}  # normalized_input -> {skill, params}
         self.blacklist: set = set()

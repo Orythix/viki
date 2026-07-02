@@ -1,6 +1,6 @@
 import asyncio
 import os
-from typing import Any
+from typing import Any, cast
 
 
 async def handle_forge_command(controller: Any, user_input: str, session_id: str) -> str:
@@ -14,7 +14,7 @@ async def handle_forge_command(controller: Any, user_input: str, session_id: str
         profile = parts[1] if len(parts) > 1 else "general"
         forge_skill = controller.skill_registry.get_skill("internal_forge")
         if forge_skill:
-            return await forge_skill.execute({"action": action, "profile": profile})
+            return cast("str", await forge_skill.execute({"action": action, "profile": profile}))
 
     mutation = await controller.evolution.propose_skill(task)
     if mutation:
@@ -106,14 +106,14 @@ async def handle_restore_command(controller: Any, user_input: str) -> str:
     cp_id = rest.split()[0] if rest.split() else ""
     if cp_id:
         _, _, msg = controller.history.restore_checkpoint(cp_id)
-        return msg
+        return cast("str", msg)
     return "Usage: /restore  or  /restore <id>"
 
 
 async def handle_undo_command(controller: Any) -> str:
     ok, restored, msg = controller.history.undo_last()
     if not ok:
-        return msg
+        return cast("str", msg)
     extras = (" Restored: " + ", ".join(restored)) if restored else ""
     return f"Undo: {msg}{extras}"
 

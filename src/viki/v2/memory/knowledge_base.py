@@ -11,7 +11,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ def _cosine_similarity(a: bytes, b: bytes) -> float:
     fa = struct.unpack(f"{len(a) // 4}f", a)
     fb = struct.unpack(f"{len(b) // 4}f", b)
     dot = sum(x * y for x, y in zip(fa, fb, strict=False))
-    return dot
+    return cast("float", dot)
 
 
 @dataclass
@@ -89,7 +89,7 @@ class KnowledgeBase:
             self._local.conn.row_factory = sqlite3.Row
             self._local.conn.execute("PRAGMA journal_mode=WAL")
             self._local.conn.execute("PRAGMA synchronous=NORMAL")
-        return self._local.conn
+        return cast(sqlite3.Connection, self._local.conn)
 
     def _ensure_schema(self):
         self._conn.executescript(

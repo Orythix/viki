@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from viki.config.logger import viki_logger
 from viki.core.output_verifier import JudgmentOutcome, JudgmentResult
@@ -83,7 +83,7 @@ class CognitiveRouter:
     hit rate against real sessions.
     """
 
-    def __init__(self, reflex_brain, judgment_engine, telemetry=None, data_dir: str = None):
+    def __init__(self, reflex_brain, judgment_engine, telemetry=None, data_dir: str | None = None):
         self.reflex = reflex_brain
         self.judgment = judgment_engine
         self.telemetry = telemetry or RouterTelemetry()
@@ -158,7 +158,7 @@ class CognitiveRouter:
         if self.reflex is None:
             return None, None
         try:
-            return self.reflex.think(user_input)
+            return cast("tuple[Any, ...]", self.reflex.think(user_input))
         except Exception as e:
             viki_logger.debug("CognitiveRouter: reflex failed: %s", e)
             return None, None

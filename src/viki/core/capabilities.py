@@ -300,7 +300,7 @@ class CapabilityRegistry:
         )
 
     def check_permission(
-        self, skill_name: str, params: dict[str, Any] = None
+        self, skill_name: str, params: dict[str, Any] | None = None
     ) -> CapabilityCheckResult:
         """
         Verify if a skill is allowed by any active capability.

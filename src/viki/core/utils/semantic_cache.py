@@ -3,7 +3,7 @@ import json
 import os
 import sqlite3
 import time
-from typing import Any
+from typing import Any, cast
 
 from viki.config.logger import viki_logger
 
@@ -60,7 +60,7 @@ class SemanticCache:
         try:
             emb = self.encoder.encode(text, convert_to_tensor=False)
             if hasattr(emb, "tolist"):
-                return emb.tolist()
+                return cast("list[float] | None", emb.tolist())
             return list(emb)
         except Exception as e:
             viki_logger.warning(f"Cache embedding failed: {e}")
@@ -86,7 +86,7 @@ class SemanticCache:
             viki_logger.info(f"SemanticCache: Exact HIT for '{query[:30]}...'")
             self._record_hit(conn, query_hash)
             conn.close()
-            return json.loads(row["response_json"])
+            return cast("dict[str, Any] | None", json.loads(row["response_json"]))
 
         # 2. Semantic Match
         if not self.encoder:
@@ -147,7 +147,7 @@ class SemanticCache:
             )
             self._record_hit(conn, best_hash)
             conn.close()
-            return json.loads(best_response)
+            return cast("dict[str, Any] | None", json.loads(best_response))
 
         conn.close()
         return None

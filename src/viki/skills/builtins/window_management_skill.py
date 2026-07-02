@@ -18,8 +18,8 @@ from viki.config.logger import viki_logger
 from viki.skills.base import BaseSkill
 
 _WIN32_AVAILABLE = sys.platform == "win32"
-_win32gui = None
-_win32con = None
+_win32gui: Any = None
+_win32con: Any = None
 _win32_import_error: Exception | None = None
 
 

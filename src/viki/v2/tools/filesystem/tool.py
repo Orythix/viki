@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 from ...core.permission_manager import PermissionTier
 from ..base import BaseTool, ToolResult
 from .providers import FSProvider, LocalFSProvider
@@ -71,7 +73,7 @@ class FileSystemTool(BaseTool):
     async def execute(self, params: dict, provider=None) -> ToolResult:
         p = provider or self.provider
         action = params.get("action")
-        path = params.get("path")
+        path = cast(str, params.get("path"))
 
         try:
             if action == "read":
@@ -106,12 +108,12 @@ class FileSystemTool(BaseTool):
                 return ToolResult(success=True, data={"path": path, "deleted": True})
 
             elif action == "copy":
-                dst = params.get("destination")
+                dst = cast(str, params.get("destination"))
                 await p.copy(path, dst)
                 return ToolResult(success=True, data={"source": path, "destination": dst})
 
             elif action == "move":
-                dst = params.get("destination")
+                dst = cast(str, params.get("destination"))
                 await p.move(path, dst)
                 return ToolResult(success=True, data={"source": path, "destination": dst})
 

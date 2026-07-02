@@ -23,7 +23,7 @@ class LLMProvider(ABC):
         self.avg_latency = 0.0
         self.call_count = 0
         self.available = True
-        self.unavailable_reason = None
+        self.unavailable_reason: str | None = None
         self.cost_per_1k_in: float = float(config.get("cost_per_1k_in", 0.0))
         self.cost_per_1k_out: float = float(config.get("cost_per_1k_out", 0.0))
         self.input_tokens: int = 0
@@ -84,7 +84,7 @@ class LLMProvider(ABC):
         messages: list[dict[str, str]],
         response_model: type[T],
         temperature: float = 0.0,
-        image_path: str = None,
+        image_path: str | None = None,
     ) -> T:
         ...
 

@@ -2,7 +2,7 @@
 Obsidian vault skill: search, read, create, refactor notes. Config: obsidian.vault_path in settings.
 """
 import os
-from typing import Any
+from typing import Any, cast
 
 from viki.skills.base import BaseSkill
 
@@ -84,7 +84,7 @@ class ObsidianSkill(BaseSkill):
                 return f"Note not found: {path}"
             try:
                 with open(full, encoding="utf-8", errors="ignore") as f:
-                    return f.read()[:8000]
+                    return cast("str", f.read()[:8000])
             except Exception as e:
                 return f"Read error: {e}"
 

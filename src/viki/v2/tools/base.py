@@ -34,10 +34,10 @@ class ToolResult:
 class BaseTool(ABC):
     name: str = ""
     description: str = ""
-    capabilities: list[str] = field(default_factory=list)
+    capabilities: list[str] = []
     permission_tier: PermissionTier = PermissionTier.SAFE
-    examples: list[str] = field(default_factory=list)
-    parameters: dict = field(default_factory=dict)
+    examples: list[str] = []
+    parameters: dict = {}
 
     @abstractmethod
     async def execute(self, params: dict, provider=None) -> ToolResult:

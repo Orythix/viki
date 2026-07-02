@@ -33,9 +33,9 @@ class MCPTool(BaseTool):
         tool_name: str,
         safety_tier: str = "medium",
     ):
-        self._name = name
-        self._description = description
-        self._parameters = parameters
+        self.name = name
+        self.description = description
+        self.parameters = parameters
         self._server = server
         self._tool_name = tool_name
         self._client: V2MCPClient | None = None
@@ -43,32 +43,9 @@ class MCPTool(BaseTool):
         tier_name = _PERMISSION_MAP.get(safety_tier, "ELEVATED")
         from ...core.permission_manager import PermissionTier
 
-        self._permission_tier = PermissionTier[tier_name]
+        self.permission_tier = PermissionTier[tier_name]
         self.capabilities = ["mcp", server]
-
-    @property
-    def name(self) -> str:
-        return self._name
-
-    @property
-    def description(self) -> str:
-        return self._description
-
-    @property
-    def parameters(self) -> dict:
-        return self._parameters
-
-    @parameters.setter
-    def parameters(self, value: dict):
-        self._parameters = value
-
-    @property
-    def permission_tier(self):
-        return self._permission_tier
-
-    @property
-    def examples(self):
-        return [f"Call MCP tool '{self._tool_name}' via server '{self._server}'"]
+        self.examples = [f"Call MCP tool '{tool_name}' via server '{server}'"]
 
     def bind_client(self, client: V2MCPClient):
         self._client = client
@@ -87,9 +64,9 @@ class MCPTool(BaseTool):
         return {
             "type": "function",
             "function": {
-                "name": self._name,
-                "description": f"[MCP/{self._server}] {self._description}",
-                "parameters": self._parameters,
+                "name": self.name,
+                "description": f"[MCP/{self._server}] {self.description}",
+                "parameters": self.parameters,
             },
         }
 

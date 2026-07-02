@@ -15,6 +15,7 @@ class RequestProcessorPort(Protocol):
         self,
         user_input: str,
         on_event: Any = None,
+        on_think: Any = None,
         attachment_paths: list[str] | None = None,
         session_id: str | None = None,
     ) -> str:

@@ -1,8 +1,11 @@
-import pytest
 import os
-import tempfile
 import shutil
+import tempfile
+
+import pytest
+
 from viki.skills.builtins.autonomous_auditor_skill import AutonomousAuditorSkill
+
 
 class MockController:
     def __init__(self, workspace_dir):
@@ -16,7 +19,7 @@ def temp_workspace():
     vuln_file = os.path.join(ws_dir, "vuln.py")
     with open(vuln_file, "w") as f:
         f.write("import sqlite3\nconn = sqlite3.connect('test.db')\ncur = conn.cursor()\ncur.execute(f'SELECT * FROM users WHERE id = {user_id}')")
-    
+
     ctrl = MockController(ws_dir)
     yield ctrl, vuln_file
     shutil.rmtree(ws_dir)
@@ -25,7 +28,7 @@ def temp_workspace():
 async def test_auditor_audit_file(temp_workspace):
     ctrl, vuln_file = temp_workspace
     skill = AutonomousAuditorSkill(ctrl)
-    
+
     result = await skill.execute({"action": "security", "path": vuln_file})
     assert "AUDIT_REQUEST" in result
     assert "vuln.py" in result
@@ -36,7 +39,7 @@ async def test_auditor_audit_file(temp_workspace):
 async def test_auditor_missing_file(temp_workspace):
     ctrl, _ = temp_workspace
     skill = AutonomousAuditorSkill(ctrl)
-    
+
     result = await skill.execute({"action": "audit", "path": "non_existent.py"})
     assert "Error: Path" in result
 
@@ -44,7 +47,7 @@ async def test_auditor_missing_file(temp_workspace):
 async def test_auditor_directory(temp_workspace):
     ctrl, vuln_file = temp_workspace
     skill = AutonomousAuditorSkill(ctrl)
-    
+
     result = await skill.execute({"action": "audit", "path": os.path.dirname(vuln_file)})
     assert "Found 1 files" in result
     assert "vuln.py" in result

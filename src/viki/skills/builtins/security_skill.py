@@ -3,9 +3,10 @@ import os
 import re
 import shutil
 import subprocess
-from typing import Any
+from typing import Any, cast
 
 import requests
+
 from viki.config.logger import viki_logger
 from viki.skills.base import BaseSkill
 
@@ -217,7 +218,7 @@ class SecuritySkill(BaseSkill):
             "4. Remediation steps.\n\n"
             "Focus on accuracy and technical depth."
         )
-        return await model.chat([{"role": "user", "content": prompt}])
+        return cast("str", await model.chat([{"role": "user", "content": prompt}]))
 
     def _is_public_target(self, target: str) -> bool:
         """Determines if the target is outside the allowed local range."""

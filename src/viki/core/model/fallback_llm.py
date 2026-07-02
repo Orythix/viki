@@ -37,7 +37,7 @@ class FallbackLLM(LLMProvider):
         messages: list[dict[str, str]],
         response_model: type[T],
         temperature: float = 0.0,
-        image_path: str = None,
+        image_path: str | None = None,
     ) -> T:
         t0 = time.perf_counter()
         success = False

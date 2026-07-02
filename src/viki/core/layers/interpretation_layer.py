@@ -15,6 +15,8 @@ from .cortex_layer import CortexLayer
 class InterpretationLayer(CortexLayer):
     """Layer 2: Entity Extraction & Intent Classification."""
 
+    world_model: Any = None
+
     COMMAND_KEYWORDS = {"open", "launch", "start", "run", "execute", "close", "kill", "stop"}
     MEDIA_KEYWORDS = {
         "play",

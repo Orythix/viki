@@ -5,7 +5,7 @@ import os
 import sys
 import time
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from viki.config.logger import viki_logger
 from viki.skills.base import BaseSkill
@@ -157,7 +157,7 @@ class SkillRegistry:
         return f"{rate:.0f}% Success ({latency:.2f}s) {status}"
 
     def get_context_description(
-        self, mode: str = "metadata", names: list[str] = None, skip_escalation: bool = False
+        self, mode: str = "metadata", names: list[str] | None = None, skip_escalation: bool = False
     ) -> str:
         """Generate formatted skill list for LLM context.
 
@@ -346,7 +346,7 @@ class LibrarySkillBridge(BaseSkill):
             # Execute via shell skill or controller's sandbox
             shell = self._controller.skill_registry.get_skill("shell")
             if shell:
-                return await shell.execute({"command": cmd})
+                return cast("str", await shell.execute({"command": cmd}))
 
             # Fallback to subprocess if shell skill not available
             import subprocess

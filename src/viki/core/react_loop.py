@@ -1,5 +1,5 @@
 import time
-from typing import Any
+from typing import Any, cast
 
 from viki.config.logger import viki_logger
 from viki.core.agent_constants import DEFAULT_AGENT_MAX_STEPS, MAX_CLARIFICATION_REQUESTS
@@ -23,7 +23,7 @@ async def run_react_loop(
     cognitive_route,
     use_lite: bool,
     signals_state: str,
-    agency_weights: str,
+    agency_weights: dict[str, float],
     project_instructions: str,
     is_continuation: bool,
     task_type: str,
@@ -94,7 +94,7 @@ async def run_react_loop(
                     controller.memory.working.add_message(
                         "assistant", reflex_msg, session_id=session_id
                     )
-                    return reflex_msg
+                    return cast("str", reflex_msg)
                 if err:
                     try:
                         controller.reflex.report_failure(safe_input)

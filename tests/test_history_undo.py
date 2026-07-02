@@ -36,7 +36,7 @@ class TestUndoLast(unittest.TestCase):
             ok, restored, _ = ttm.undo_last()
             self.assertTrue(ok)
             self.assertIn(os.path.abspath(target), restored)
-            with open(target, "r", encoding="utf-8") as f:
+            with open(target, encoding="utf-8") as f:
                 self.assertEqual(f.read(), "ORIGINAL")
             ttm.close()
 

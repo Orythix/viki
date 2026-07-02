@@ -10,9 +10,9 @@ import sqlite3
 import tempfile
 import unittest
 
-from viki.skills.dynamic.sql_query_skill import SqlQuerySkill
 from viki.skills.dynamic.aws_console_skill import AwsConsoleSkill
 from viki.skills.dynamic.kubernetes_ctl_skill import KubernetesCtlSkill
+from viki.skills.dynamic.sql_query_skill import SqlQuerySkill
 
 
 def _run(coro):

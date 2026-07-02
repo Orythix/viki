@@ -17,8 +17,8 @@ class MetaCognitionLayer(CortexLayer):
         self,
         name: str,
         description: str,
-        layer_timing: LayerTiming = None,
-        pattern_tracker: PatternTracker = None,
+        layer_timing: LayerTiming | None = None,
+        pattern_tracker: PatternTracker | None = None,
     ):
         super().__init__(name, description)
         self.layer_timing = layer_timing

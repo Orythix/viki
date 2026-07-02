@@ -1,18 +1,20 @@
 import asyncio
-import os
 import json
-from viki.core.orchestrator import VIKIController
+import os
+
 from viki.config.resolve import get_soul_path
+from viki.core.orchestrator import VIKIController
+
 
 async def verify_v8_1_features():
     print("--- Verifying VIKI v8.1.0 Sovereign Scaling Features ---")
-    
+
     script_dir = os.path.dirname(os.path.abspath(__file__))
     settings_path = os.path.join(script_dir, "config", "settings.yaml")
     soul_path = get_soul_path(settings_path)
-    
+
     controller = VIKIController(settings_path, soul_path)
-    
+
     # 1. Verify Telemetry
     print("\n[1/4] Verifying Distributed Telemetry Store...")
     controller.telemetry.record("test", "verification", {"status": "ok"}, severity="INFO")
@@ -43,11 +45,11 @@ async def verify_v8_1_features():
 
     # 4. Verify Progressive Disclosure (Sovereign Hub)
     print("\n[4/4] Verifying Progressive Disclosure (150+ Skills)...")
-    with open("./data/sovereign_library.json", "r") as f:
+    with open("./data/sovereign_library.json") as f:
         lib = json.load(f)
         total_skills = sum(len(skills) for skills in lib.values())
         print(f"SUCCESS: Sovereign Library contains {total_skills} registered skills across {len(lib)} categories.")
-        
+
     print("\n--- Verification Complete ---")
 
 if __name__ == "__main__":

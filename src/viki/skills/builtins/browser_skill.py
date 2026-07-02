@@ -17,10 +17,10 @@ class BrowserSkill(BaseSkill):
             "Usage: browser(action='navigate', url='google.com')\n"
             "Actions: click(selector), type(selector, text), screenshot()"
         )
-        self.browser = None
-        self.context = None
-        self.page = None
-        self.playwright = None
+        self.browser: Any = None
+        self.context: Any = None
+        self.page: Any = None
+        self.playwright: Any = None
 
     @property
     def name(self) -> str:

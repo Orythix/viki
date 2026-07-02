@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 from ...core.permission_manager import PermissionTier
 from ..base import BaseTool, ToolResult
 from .providers import DevProvider
@@ -42,7 +44,7 @@ class DevTool(BaseTool):
     async def execute(self, params: dict, provider=None) -> ToolResult:
         p = provider or self.provider
         action = params.get("action")
-        path = params.get("path")
+        path = cast(str, params.get("path"))
 
         try:
             if action == "analyze_repo":

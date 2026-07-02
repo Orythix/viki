@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any
+from typing import Any, cast
 
 from viki.core.patch_verify import PatchVerify
 from viki.core.task_planner import PlannerExecutor, TaskType
@@ -79,7 +79,7 @@ class PlanEditSkill(BaseSkill):
             path = task.parameters.get("path")
             if not (dev and path):
                 return "read_file requires dev_tools skill and 'path' param."
-            return await dev.execute({"action": "read_file", "path": path})
+            return cast("str", await dev.execute({"action": "read_file", "path": path}))
 
         async def _do_patch(task) -> str:
             path = task.parameters.get("path")

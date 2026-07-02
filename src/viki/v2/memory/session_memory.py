@@ -31,7 +31,7 @@ class SessionMemory:
 
     def get_context(self, token_limit: int = 4096) -> list[dict]:
         """Return messages in LLM format, truncated to token limit."""
-        messages = []
+        messages: list[Any] = []
         total = 0
         for turn in reversed(self.turns):
             msgs = [{"role": "user", "content": turn.user}]
