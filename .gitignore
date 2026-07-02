@@ -83,3 +83,7 @@ tests/data_*/
 *.tmp
 *.orig
 *~
+
+# One-off local experiments and reports
+scratch/
+reports/
