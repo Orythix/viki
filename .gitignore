@@ -2,6 +2,11 @@
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Test-run droppings (pytest tmp data dirs)
+data_learning_*/
+data_security_*/
+*$py.class
 *.so
 *.egg
 *.egg-info/
