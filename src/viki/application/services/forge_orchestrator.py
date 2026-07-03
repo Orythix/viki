@@ -127,6 +127,77 @@ class ForgeOrchestrator:
         except Exception as e:
             return f"Forge Error: {str(e)}"
 
+    async def bake_lora(
+        self,
+        base_model_hf: str | None = None,
+        base_model_tag: str | None = None,
+        target_tag: str = "viki-lora",
+    ) -> str:
+        """Real fine-tuning path: export lessons → LoRA train → Ollama adapter model.
+
+        Unlike ``bake_profile`` (which bakes lessons into a system prompt),
+        this trains actual adapter weights on the lessons DB. Requires the
+        optional ML stack (torch/transformers/peft/trl/datasets); reports
+        clearly when unavailable.
+        """
+        from viki.core.forge_lora import (
+            LoraConfig,
+            LoraDatasetExporter,
+            LoraTrainer,
+            ml_stack_available,
+            write_adapter_modelfile,
+        )
+
+        data_dir = self.controller.settings.get("system", {}).get("data_dir", "./data")
+        forge_cfg = self.controller.settings.get("forge", {}) or {}
+        lora_cfg = LoraConfig(
+            base_model=base_model_hf
+            or forge_cfg.get("lora_base_model_hf", LoraConfig.base_model),
+            output_dir=os.path.join(data_dir, "forge", "lora"),
+        )
+
+        # 1. Export dataset from the lessons DB.
+        dataset_path = os.path.join(data_dir, "forge", "lora_dataset.jsonl")
+        exporter = LoraDatasetExporter(self.controller.learning.conn, lora_cfg)
+        n = await asyncio.to_thread(exporter.export, dataset_path)
+        if n == 0:
+            return "Forge LoRA: No usable lessons found. Interact more to seed knowledge."
+
+        # 2. Train (heavy; runs in a worker thread).
+        ok, reason = ml_stack_available()
+        if not ok:
+            return (
+                f"Forge LoRA: dataset with {n} examples exported to {dataset_path}, "
+                f"but training is unavailable. {reason}"
+            )
+        trainer = LoraTrainer(lora_cfg)
+        result = await asyncio.to_thread(trainer.train, dataset_path)
+        if result.get("status") != "trained":
+            return f"Forge LoRA: training failed: {result.get('reason', 'unknown')}"
+
+        # 3. Register with Ollama via adapter Modelfile.
+        tag = base_model_tag or forge_cfg.get("lora_base_model_tag", "phi3:mini")
+        modelfile_path = os.path.join(data_dir, f"Modelfile.{target_tag}")
+        write_adapter_modelfile(tag, result["adapter_dir"], modelfile_path)
+        try:
+            process = await asyncio.create_subprocess_exec(
+                "ollama", "create", target_tag, "-f", modelfile_path,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _, stderr = await process.communicate()
+            if process.returncode == 0:
+                return (
+                    f"Forge LoRA Success: trained on {n} lessons "
+                    f"({result['seconds']}s) → model '{target_tag}'."
+                )
+            return f"Forge LoRA: trained, but ollama create failed: {stderr.decode()}"
+        except FileNotFoundError:
+            return (
+                f"Forge LoRA: adapter trained at {result['adapter_dir']}; "
+                f"run manually: ollama create {target_tag} -f {modelfile_path}"
+            )
+
     async def switch_to_profile(self, profile_name: str) -> str:
         """Switch the controller's active model to a specific profile."""
         if profile_name not in self.profiles:

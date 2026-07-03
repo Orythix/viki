@@ -212,6 +212,16 @@ class ModelForgeSkill(BaseSkill):
             profile = params.get("profile", "general")
             return cast("str", await self.controller.forge_orchestrator.switch_to_profile(profile))
 
+        if action == "bake_lora":
+            return cast(
+                "str",
+                await self.controller.forge_orchestrator.bake_lora(
+                    base_model_hf=params.get("base_model_hf"),
+                    base_model_tag=params.get("base_model_tag"),
+                    target_tag=params.get("target_tag", "viki-lora"),
+                ),
+            )
+
         # Legacy Evolution path
         from viki.core.preference_forge import trl_dpo_available
 
