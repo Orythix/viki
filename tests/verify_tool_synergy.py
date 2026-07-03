@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
 from viki.skills.builtins.market_explorer_skill import MarketExplorerSkill
 
 

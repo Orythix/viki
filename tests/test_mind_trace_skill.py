@@ -1,4 +1,5 @@
 import pytest
+
 from viki.skills.builtins.mind_trace_skill import MindTraceSkill
 
 

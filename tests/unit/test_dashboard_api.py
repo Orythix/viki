@@ -2,6 +2,7 @@
 
 import pytest
 from aiohttp.test_utils import TestClient, TestServer
+
 from viki.api.dashboard import create_dashboard_app
 
 

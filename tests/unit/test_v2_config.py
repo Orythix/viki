@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 import pytest
 import yaml
+
 from viki.core.config import (
     LLMConfig,
     V2Config,

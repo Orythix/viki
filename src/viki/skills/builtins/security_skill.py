@@ -6,6 +6,7 @@ import subprocess
 from typing import Any, cast
 
 import requests
+
 from viki.config.logger import viki_logger
 from viki.skills.base import BaseSkill
 

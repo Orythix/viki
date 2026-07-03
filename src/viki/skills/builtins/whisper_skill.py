@@ -49,6 +49,7 @@ class WhisperSkill(BaseSkill):
                 with open(path, "rb") as f:
                     data = f.read()
                 import aiohttp
+
                 from viki.core.utils.http_session import get_session
 
                 session = get_session()

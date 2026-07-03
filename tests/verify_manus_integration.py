@@ -3,6 +3,7 @@ import shutil
 import tempfile
 
 import pytest
+
 from viki.skills.builtins.manus_skill import ManusSkill
 
 

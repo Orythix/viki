@@ -3,6 +3,7 @@ import os
 from typing import Any
 
 import pyttsx3
+
 from viki.config.logger import viki_logger
 from viki.skills.base import BaseSkill
 

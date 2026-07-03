@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 
 import pytest
+
 from viki.core.endpoint_guard import (
     assess_path_risk,
     candidate_download_directories,

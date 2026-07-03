@@ -3,6 +3,7 @@ import shutil
 import tempfile
 
 import pytest
+
 from viki.skills.builtins.log_voyager_skill import LogVoyagerSkill
 
 

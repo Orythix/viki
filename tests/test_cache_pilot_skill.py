@@ -2,6 +2,7 @@ import shutil
 import tempfile
 
 import pytest
+
 from viki.core.utils.semantic_cache import SemanticCache
 from viki.skills.builtins.cache_pilot_skill import CachePilotSkill
 
