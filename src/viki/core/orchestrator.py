@@ -344,21 +344,6 @@ class VIKIController:
         self.disabled_skills: dict[Any, Any] = {}
         self._register_default_skills()
 
-        # V2 Tool Bridge (opt-in via VIKI_V2_MODE=1)
-        if os.environ.get("VIKI_V2_MODE", "0").lower() in ("1", "true", "yes", "on"):
-            try:
-                from viki.v2.bridge import create_v2_bridge
-
-                v2_bridge = create_v2_bridge()
-                self.skill_registry.register_skill(v2_bridge)
-                viki_logger.info(
-                    "V2 Tool Bridge registered with %d tools: %s",
-                    len(v2_bridge.list_tools()),
-                    ", ".join(v2_bridge.list_tools()),
-                )
-            except Exception as e:
-                viki_logger.warning("V2 Tool Bridge failed to load: %s", e)
-
         # Phase 7 (P0): MCP integration. We hold the client here; actual
         # connection happens in `attach_mcp_skills_sync()` which is called
         # at boot by API/main entry points (and tolerates missing SDK / config).

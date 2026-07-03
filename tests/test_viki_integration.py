@@ -9,9 +9,9 @@ import yaml
 # Add project root (parent of viki folder) to path
 sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "..")))
 
+from viki.core.config import reset_config
 from viki.core.orchestrator import VIKIController
 from viki.core.telemetry_service import close_persistent_traces
-from viki.v2.config import reset_config
 
 
 class TestVIKIIntegration(unittest.IsolatedAsyncioTestCase):

@@ -16,8 +16,8 @@ import sys
 import tempfile
 import unittest
 
+from viki.core.config import reset_config
 from viki.core.orchestrator import VIKIController
-from viki.v2.config import reset_config
 
 HEAVY_MODULES = (
     "viki.skills.builtins.vision_skill",

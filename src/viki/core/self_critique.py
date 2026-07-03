@@ -5,14 +5,15 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
+from typing import Any
+
+from pydantic import BaseModel
 
 from viki._compat import StrEnum
 
-from ..llm import get_llm_client
-
 logger = logging.getLogger(__name__)
 
-_CACHE_TTL = 60  # seconds
+_CACHE_TTL = 60
 
 
 class CritiqueLevel(StrEnum):
@@ -25,7 +26,7 @@ class CritiqueLevel(StrEnum):
 class CritiqueIssue:
     category: str = ""
     description: str = ""
-    severity: str = "medium"  # low | medium | high
+    severity: str = "medium"
 
 
 @dataclass
@@ -33,6 +34,12 @@ class CritiqueResult:
     score: float = 1.0
     issues: list[CritiqueIssue] = field(default_factory=list)
     passed: bool = True
+
+
+class _CritiqueResponse(BaseModel):
+    score: float
+    issues: list[dict[str, str]]
+    passed: bool
 
 
 _CRITIQUE_LEVEL_MAP: dict[str, CritiqueLevel] = {
@@ -65,8 +72,8 @@ class SelfCritique:
       - FULL: check correctness + completeness + safety + style + efficiency
     """
 
-    def __init__(self, llm_client=None):
-        self._llm = llm_client or get_llm_client()
+    def __init__(self, llm_client: Any = None):
+        self._llm = llm_client
         self._cache: dict[int, tuple[float, CritiqueResult | str]] = {}
 
     @staticmethod
@@ -82,11 +89,13 @@ class SelfCritique:
 
     async def critique(self, task: str, solution: str) -> CritiqueResult:
         """Review a solution and identify weaknesses. Results cached for _CACHE_TTL."""
+        if not self._llm:
+            return CritiqueResult(passed=True, score=1.0)
+
         level = self.detect_level(task)
         if level == CritiqueLevel.NONE:
             return CritiqueResult(passed=True, score=1.0)
 
-        # Check cache before LLM call
         key = hash((task, solution))
         cached = self._cache.get(key)
         if cached is not None:
@@ -103,33 +112,20 @@ class SelfCritique:
             f"Return JSON with: score (0.0-1.0), issues (array of {{category, description, severity}}), "
             f"passed (true if no critical issues)."
         )
-        schema = {
-            "type": "object",
-            "properties": {
-                "score": {"type": "number"},
-                "issues": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "category": {"type": "string"},
-                            "description": {"type": "string"},
-                            "severity": {"type": "string", "enum": ["low", "medium", "high"]},
-                        },
-                        "required": ["category", "description", "severity"],
-                    },
-                },
-                "passed": {"type": "boolean"},
-            },
-            "required": ["score", "issues", "passed"],
-        }
         try:
-            data = await self._llm.structured_output(prompt, schema)
-            issues = [CritiqueIssue(**i) for i in data.get("issues", [])]
+            messages = [
+                {
+                    "role": "system",
+                    "content": "You are a precise code reviewer. Return only valid JSON.",
+                },
+                {"role": "user", "content": prompt},
+            ]
+            data = await self._llm.chat_structured(messages, _CritiqueResponse)
+            issues = [CritiqueIssue(**i) for i in data.issues]
             result = CritiqueResult(
-                score=data.get("score", 1.0),
+                score=data.score,
                 issues=issues,
-                passed=data.get("passed", len(issues) == 0),
+                passed=data.passed,
             )
             self._cache[key] = (time.monotonic(), result)
             return result
@@ -139,10 +135,11 @@ class SelfCritique:
 
     async def improve(self, task: str, solution: str, critique: CritiqueResult) -> str:
         """Rewrite the solution addressing all critique issues. Result cached."""
+        if not self._llm:
+            return solution
         if critique.passed or not critique.issues:
             return solution
 
-        # Check cache
         key = hash((task, solution, tuple(i.description for i in critique.issues)))
         cached = self._cache.get(key)
         if cached is not None:
@@ -153,14 +150,18 @@ class SelfCritique:
         issues_text = "\n".join(
             f"- [{i.severity}] {i.category}: {i.description}" for i in critique.issues
         )
-        prompt = (
-            f"Original task: {task}\n\n"
-            f"Current solution:\n{solution}\n\n"
-            f"Issues to fix:\n{issues_text}\n\n"
-            f"Rewrite the solution fixing ALL issues above. Return only the improved solution."
-        )
+        messages = [
+            {
+                "role": "system",
+                "content": "You are a code reviewer. Rewrite solutions to fix all identified issues.",
+            },
+            {
+                "role": "user",
+                "content": f"Original task: {task}\n\nCurrent solution:\n{solution}\n\nIssues to fix:\n{issues_text}\n\nRewrite the solution fixing ALL issues above. Return only the improved solution.",
+            },
+        ]
         try:
-            improved = await self._llm.chat([{"role": "user", "content": prompt}])
+            improved = await self._llm.chat(messages)
             self._cache[key] = (time.monotonic(), improved)
             return improved
         except Exception as e:

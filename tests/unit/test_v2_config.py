@@ -1,4 +1,4 @@
-"""Tests for V2 config module."""
+"""Tests for V2 config module ported to core."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pytest
 import yaml
-from viki.v2.config import (
+from viki.core.config import (
     LLMConfig,
     V2Config,
     get_config,
@@ -93,8 +93,8 @@ class TestV2ConfigValidation:
 class TestV2ConfigJSON:
     """Loading config from JSON files."""
 
-    def test_json_config(self, temp_dir: Path):
-        config_file = temp_dir / "viki.json"
+    def test_json_config(self, tmp_path: Path):
+        config_file = tmp_path / "viki.json"
         data = {
             "model": "llama3:8b",
             "temperature": 0.3,
@@ -115,26 +115,26 @@ class TestV2ConfigJSON:
         assert cfg.ollama_host == "http://127.0.0.1:11434"
         assert cfg.memory_max_turns == 50
 
-    def test_json_nested_config(self, temp_dir: Path):
+    def test_json_nested_config(self, tmp_path: Path):
         """Config can use nested section keys."""
-        config_file = temp_dir / "viki.json"
+        config_file = tmp_path / "viki.json"
         data = {"llm": {"model": "nested-model"}, "tools": {"plugin_dirs": ["/p1", "/p2"]}}
         config_file.write_text(json.dumps(data), encoding="utf-8")
         cfg = load_config(config_file)
         assert cfg.model == "nested-model"
         assert cfg.plugin_dirs == ["/p1", "/p2"]
 
-    def test_json_partial_override(self, temp_dir: Path):
+    def test_json_partial_override(self, tmp_path: Path):
         """Only specified fields are overridden; others keep defaults."""
-        config_file = temp_dir / "viki.json"
+        config_file = tmp_path / "viki.json"
         config_file.write_text(json.dumps({"model": "tiny"}), encoding="utf-8")
         cfg = load_config(config_file)
         assert cfg.model == "tiny"
         assert cfg.max_steps == 10  # default
 
-    def test_json_case_sensitivity(self, temp_dir: Path):
+    def test_json_case_sensitivity(self, tmp_path: Path):
         """Unknown keys in config file are ignored."""
-        config_file = temp_dir / "viki.json"
+        config_file = tmp_path / "viki.json"
         config_file.write_text(
             json.dumps({"Model": "llama3", "unknown_key": "value"}), encoding="utf-8"
         )
@@ -145,8 +145,8 @@ class TestV2ConfigJSON:
 class TestV2ConfigYAML:
     """Loading config from YAML files."""
 
-    def test_yaml_config(self, temp_dir: Path):
-        config_file = temp_dir / "viki.yaml"
+    def test_yaml_config(self, tmp_path: Path):
+        config_file = tmp_path / "viki.yaml"
         config_file.write_text(
             "model: llama3:8b\nmax_steps: 15\ndata_dir: /custom/data\n",
             encoding="utf-8",
@@ -156,23 +156,23 @@ class TestV2ConfigYAML:
         assert cfg.max_steps == 15
         assert cfg.data_dir == "/custom/data"
 
-    def test_yaml_yml_extension(self, temp_dir: Path):
-        config_file = temp_dir / "viki.yml"
+    def test_yaml_yml_extension(self, tmp_path: Path):
+        config_file = tmp_path / "viki.yml"
         config_file.write_text("model: codellama:7b\n", encoding="utf-8")
         cfg = load_config(config_file)
         assert cfg.model == "codellama:7b"
 
-    def test_yaml_empty(self, temp_dir: Path):
-        config_file = temp_dir / "viki.yaml"
+    def test_yaml_empty(self, tmp_path: Path):
+        config_file = tmp_path / "viki.yaml"
         config_file.write_text("", encoding="utf-8")
         cfg = load_config(config_file)
         assert cfg.model == "gemma4:12b"  # defaults
 
-    def test_yaml_include(self, temp_dir: Path):
+    def test_yaml_include(self, tmp_path: Path):
         """YAML 'include' directive loads and merges additional files."""
-        base_file = temp_dir / "base.yaml"
+        base_file = tmp_path / "base.yaml"
         base_file.write_text("model: from-base\n", encoding="utf-8")
-        config_file = temp_dir / "viki.yaml"
+        config_file = tmp_path / "viki.yaml"
         config_file.write_text(
             yaml.safe_dump({"include": "base.yaml", "max_steps": 30}), encoding="utf-8"
         )
@@ -180,11 +180,11 @@ class TestV2ConfigYAML:
         assert cfg.model == "from-base"
         assert cfg.max_steps == 30
 
-    def test_yaml_include_deep_merge(self, temp_dir: Path):
+    def test_yaml_include_deep_merge(self, tmp_path: Path):
         """Included values are deep-merged, not replaced."""
-        base_file = temp_dir / "base.yaml"
+        base_file = tmp_path / "base.yaml"
         base_file.write_text("max_steps: 5\n", encoding="utf-8")
-        config_file = temp_dir / "viki.yaml"
+        config_file = tmp_path / "viki.yaml"
         config_file.write_text(
             yaml.safe_dump({"include": "base.yaml", "temperature": 0.9}), encoding="utf-8"
         )
@@ -192,13 +192,13 @@ class TestV2ConfigYAML:
         assert cfg.max_steps == 5  # from base
         assert cfg.temperature == 0.9  # from main file
 
-    def test_yaml_include_list(self, temp_dir: Path):
+    def test_yaml_include_list(self, tmp_path: Path):
         """include can be a list of paths."""
-        a = temp_dir / "a.yaml"
+        a = tmp_path / "a.yaml"
         a.write_text("model: from-a\n", encoding="utf-8")
-        b = temp_dir / "b.yaml"
+        b = tmp_path / "b.yaml"
         b.write_text("max_steps: 42\n", encoding="utf-8")
-        config_file = temp_dir / "viki.yaml"
+        config_file = tmp_path / "viki.yaml"
         config_file.write_text(yaml.safe_dump({"include": ["a.yaml", "b.yaml"]}), encoding="utf-8")
         cfg = load_config(config_file)
         assert cfg.model == "from-a"
@@ -210,7 +210,7 @@ class TestV2ConfigEnvVars:
 
     @patch.dict(os.environ, {}, clear=True)
     @patch.object(Path, "home", return_value=Path("/fake/home"))
-    def test_env_var_override(self, mock_home, temp_dir: Path):
+    def test_env_var_override(self, mock_home, tmp_path: Path):
         with patch.dict(os.environ, {"VIKI_MODEL": "gpt4", "OLLAMA_HOST": "http://localhost:8080"}):
             cfg = load_config()
             assert cfg.model == "gpt4"
@@ -218,9 +218,9 @@ class TestV2ConfigEnvVars:
 
     @patch.dict(os.environ, {}, clear=True)
     @patch.object(Path, "home", return_value=Path("/fake/home"))
-    def test_env_beats_file(self, mock_home, temp_dir: Path):
+    def test_env_beats_file(self, mock_home, tmp_path: Path):
         """Environment variables override values from config file."""
-        config_file = temp_dir / "viki.json"
+        config_file = tmp_path / "viki.json"
         config_file.write_text(
             json.dumps({"model": "llama3", "ollama_host": "http://file:11434"}), encoding="utf-8"
         )
@@ -231,9 +231,9 @@ class TestV2ConfigEnvVars:
 
     @patch.dict(os.environ, {}, clear=True)
     @patch.object(Path, "home", return_value=Path("/fake/home"))
-    def test_env_file_suffix(self, mock_home, temp_dir: Path):
+    def test_env_file_suffix(self, mock_home, tmp_path: Path):
         """_FILE suffixed env vars load secrets from files."""
-        secret_file = temp_dir / "model_secret.txt"
+        secret_file = tmp_path / "model_secret.txt"
         secret_file.write_text("secret-model\n", encoding="utf-8")
         with patch.dict(os.environ, {"VIKI_MODEL_FILE": str(secret_file)}):
             cfg = load_config()
@@ -241,9 +241,9 @@ class TestV2ConfigEnvVars:
 
     @patch.dict(os.environ, {}, clear=True)
     @patch.object(Path, "home", return_value=Path("/fake/home"))
-    def test_env_file_suffix_fallback(self, mock_home, temp_dir: Path):
+    def test_env_file_suffix_fallback(self, mock_home, tmp_path: Path):
         """_FILE env var takes precedence over regular env var."""
-        secret_file = temp_dir / "host_secret.txt"
+        secret_file = tmp_path / "host_secret.txt"
         secret_file.write_text("http://secret:11434", encoding="utf-8")
         with patch.dict(
             os.environ,
@@ -285,39 +285,39 @@ class TestV2ConfigEnvVars:
 class TestV2ConfigSearch:
     """Config file search behavior."""
 
-    def test_cwd_config_json(self, temp_dir: Path):
+    def test_cwd_config_json(self, tmp_path: Path):
         """JSON in current dir is found via search."""
-        config_file = temp_dir / "viki.json"
+        config_file = tmp_path / "viki.json"
         config_file.write_text(json.dumps({"model": "cwd-json"}), encoding="utf-8")
         orig_cwd = Path.cwd()
         try:
-            os.chdir(temp_dir)
+            os.chdir(tmp_path)
             cfg = load_config()
             assert cfg.model == "cwd-json"
         finally:
             os.chdir(orig_cwd)
 
-    def test_cwd_config_yaml(self, temp_dir: Path):
+    def test_cwd_config_yaml(self, tmp_path: Path):
         """YAML in current dir is found via search."""
-        config_file = temp_dir / "viki.yaml"
+        config_file = tmp_path / "viki.yaml"
         config_file.write_text("model: cwd-yaml\n", encoding="utf-8")
         orig_cwd = Path.cwd()
         try:
-            os.chdir(temp_dir)
+            os.chdir(tmp_path)
             cfg = load_config()
             assert cfg.model == "cwd-yaml"
         finally:
             os.chdir(orig_cwd)
 
-    def test_config_subdir(self, temp_dir: Path):
+    def test_config_subdir(self, tmp_path: Path):
         """Config in config/ subdirectory is found."""
-        config_dir = temp_dir / "config"
+        config_dir = tmp_path / "config"
         config_dir.mkdir()
         config_file = config_dir / "viki.yaml"
         config_file.write_text("model: subdir-model\n", encoding="utf-8")
         orig_cwd = Path.cwd()
         try:
-            os.chdir(temp_dir)
+            os.chdir(tmp_path)
             cfg = load_config()
             assert cfg.model == "subdir-model"
         finally:
@@ -328,39 +328,39 @@ class TestV2ConfigDotEnv:
     """.env file loading."""
 
     @patch.object(Path, "home", return_value=Path("/fake/home"))
-    def test_dotenv_loaded(self, mock_home, temp_dir: Path):
+    def test_dotenv_loaded(self, mock_home, tmp_path: Path):
         """.env file in current dir is loaded."""
-        env_file = temp_dir / ".env"
+        env_file = tmp_path / ".env"
         env_file.write_text("VIKI_MODEL=dotenv-model\n", encoding="utf-8")
         orig_cwd = Path.cwd()
         try:
-            os.chdir(temp_dir)
+            os.chdir(tmp_path)
             cfg = load_config()
             assert cfg.model == "dotenv-model"
         finally:
             os.chdir(orig_cwd)
 
     @patch.object(Path, "home", return_value=Path("/fake/home"))
-    def test_dotenv_ignores_comments_and_blank(self, mock_home, temp_dir: Path):
+    def test_dotenv_ignores_comments_and_blank(self, mock_home, tmp_path: Path):
         """.env comments and blank lines are ignored."""
-        env_file = temp_dir / ".env"
+        env_file = tmp_path / ".env"
         env_file.write_text("# This is a comment\n\nVIKI_TEMPERATURE=0.1\n", encoding="utf-8")
         orig_cwd = Path.cwd()
         try:
-            os.chdir(temp_dir)
+            os.chdir(tmp_path)
             cfg = load_config()
             assert cfg.temperature == 0.1
         finally:
             os.chdir(orig_cwd)
 
     @patch.object(Path, "home", return_value=Path("/fake/home"))
-    def test_env_beats_dotenv(self, mock_home, temp_dir: Path):
+    def test_env_beats_dotenv(self, mock_home, tmp_path: Path):
         """Environment variable beats .env file value."""
-        env_file = temp_dir / ".env"
+        env_file = tmp_path / ".env"
         env_file.write_text("VIKI_MODEL=dotenv-model\n", encoding="utf-8")
         orig_cwd = Path.cwd()
         try:
-            os.chdir(temp_dir)
+            os.chdir(tmp_path)
             with patch.dict(os.environ, {"VIKI_MODEL": "env-model"}):
                 cfg = load_config()
                 assert cfg.model == "env-model"
@@ -384,9 +384,9 @@ class TestV2ConfigSingleton:
         cfg2 = get_config()
         assert cfg1 is cfg2
 
-    def test_get_config_force_reload(self, temp_dir: Path):
+    def test_get_config_force_reload(self, tmp_path: Path):
         """Passing path forces config reload."""
-        config_file = temp_dir / "viki.json"
+        config_file = tmp_path / "viki.json"
         config_file.write_text(json.dumps({"model": "reloaded"}), encoding="utf-8")
         cfg = get_config(config_file)
         assert cfg.model == "reloaded"
@@ -401,17 +401,17 @@ class TestV2ConfigSingleton:
 class TestV2ConfigCoercion:
     """Type coercion and edge cases."""
 
-    def test_temperature_string_coercion(self, temp_dir: Path):
+    def test_temperature_string_coercion(self, tmp_path: Path):
         """Temperature can be a string in JSON and gets coerced to float."""
-        config_file = temp_dir / "viki.json"
+        config_file = tmp_path / "viki.json"
         config_file.write_text(json.dumps({"temperature": "0.5"}), encoding="utf-8")
         cfg = load_config(config_file)
         assert isinstance(cfg.temperature, float)
         assert cfg.temperature == 0.5
 
-    def test_max_steps_string_coercion(self, temp_dir: Path):
+    def test_max_steps_string_coercion(self, tmp_path: Path):
         """max_steps as string in JSON is coerced to int."""
-        config_file = temp_dir / "viki.json"
+        config_file = tmp_path / "viki.json"
         config_file.write_text(json.dumps({"max_steps": "25"}), encoding="utf-8")
         cfg = load_config(config_file)
         assert isinstance(cfg.max_steps, int)
@@ -426,9 +426,9 @@ class TestV2ConfigCLI:
         assert overrides["model"] == "cli-model"
         assert overrides["max_steps"] == 50
 
-    def test_cli_overrides_apply(self, temp_dir: Path):
+    def test_cli_overrides_apply(self, tmp_path: Path):
         """CLI overrides beat file values."""
-        config_file = temp_dir / "viki.json"
+        config_file = tmp_path / "viki.json"
         config_file.write_text(json.dumps({"model": "file-model"}), encoding="utf-8")
         cfg = load_config(config_file, cli_overrides={"model": "cli-wins"})
         assert cfg.model == "cli-wins"
@@ -445,8 +445,8 @@ class TestV2ConfigCLI:
 class TestV2ConfigJSONSchema:
     """JSON Schema generation."""
 
-    def test_generate_schema_file(self, temp_dir: Path):
-        schema_path = temp_dir / "test_schema.json"
+    def test_generate_schema_file(self, tmp_path: Path):
+        schema_path = tmp_path / "test_schema.json"
         result = V2Config.generate_schema_file(target=schema_path)
         assert result == str(schema_path)
         assert schema_path.is_file()

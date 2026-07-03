@@ -15,8 +15,8 @@ import os
 import tempfile
 import unittest
 
+from viki.core.config import reset_config
 from viki.core.orchestrator import VIKIController
-from viki.v2.config import reset_config
 
 
 class TestControllerBoot(unittest.TestCase):

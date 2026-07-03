@@ -154,13 +154,12 @@ class PublicSafetyOrchestrator:
 
     def _build_nl_bridge(self) -> PublicSafetyNLBridge:
         """Build the NL bridge with config settings."""
-        from viki.v2.llm.client import OllamaClient
+        from viki.core.model.local_llm import LocalLLM
 
-        client = OllamaClient(
+        client = LocalLLM(
             base_url=self.config.llm_host,
-            model=self.config.model,
+            model_name=self.config.model,
             temperature=self.config.temperature,
-            num_predict=self.config.max_tokens,
         )
         bridge = PublicSafetyNLBridge(
             llm_client=client,

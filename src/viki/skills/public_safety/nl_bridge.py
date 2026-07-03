@@ -92,9 +92,9 @@ class PublicSafetyNLBridge:
         model: str = "llama3.1:8b",
         auto_learn: bool = True,
     ):
-        from viki.v2.llm.client import OllamaClient
+        from viki.core.model.local_llm import LocalLLM
 
-        self._client = llm_client or OllamaClient(model=model, temperature=0.1)
+        self._client = llm_client or LocalLLM(model_name=model, temperature=0.1)
         self._skills: dict[str, BasePublicSafetySkill] = {
             name: cls() for name, cls in self._SKILL_CLASSES.items()
         }

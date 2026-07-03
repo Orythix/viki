@@ -8,8 +8,6 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..tools.registry import ToolRegistry
-
 logger = logging.getLogger(__name__)
 
 
@@ -20,7 +18,7 @@ class WorkflowStep:
     params: dict = field(default_factory=dict)
     retry_count: int = 2
     timeout: int = 60
-    on_failure: str = "stop"  # "stop" | "skip" | "retry"
+    on_failure: str = "stop"
 
 
 @dataclass
@@ -48,10 +46,14 @@ class WorkflowResult:
 
 
 class WorkflowEngine:
-    """Executes composable multi-step workflows with retry and rollback support."""
+    """Executes composable multi-step workflows with retry and rollback support.
 
-    def __init__(self, registry: ToolRegistry):
-        self._registry = registry
+    Accepts any callable ``execute_fn(name, params)`` so it can wrap
+    ``SkillRegistry``, ``ToolRegistry``, or a test double.
+    """
+
+    def __init__(self, execute_fn: Callable[[str, dict], Any]):
+        self._execute_fn = execute_fn
 
     async def execute(
         self,
@@ -108,7 +110,7 @@ class WorkflowEngine:
         for attempt in range(1, step.retry_count + 1):
             try:
                 result = await asyncio.wait_for(
-                    self._registry.execute(step.tool, params),
+                    self._execute_fn(step.tool, params),
                     timeout=step.timeout,
                 )
                 if self._is_success(result):
@@ -150,7 +152,7 @@ class WorkflowEngine:
         to_undo = [rb for rb in workflow.rollback if rb.name in executed]
         for rb in reversed(to_undo):
             try:
-                await self._registry.execute(rb.tool, rb.params)
+                await self._execute_fn(rb.tool, rb.params)
                 logger.info("Rollback step '%s' executed", rb.name)
             except Exception as e:
                 logger.warning("Rollback step '%s' failed: %s", rb.name, e)

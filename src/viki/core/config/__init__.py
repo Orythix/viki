@@ -1,4 +1,4 @@
-"""V2 configuration — Pydantic-based settings with nested sections, env vars, .env, hot-reload, secrets, CLI overrides, JSON Schema, and include support."""
+"""Core configuration — Pydantic-based settings with nested sections, env vars, .env, hot-reload, secrets, CLI overrides, and JSON Schema support."""
 
 from __future__ import annotations
 
@@ -11,8 +11,6 @@ from pathlib import Path
 from typing import Any, cast
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-
-# ── Section models ─────────────────────────────────────────────────────────────
 
 
 class LLMConfig(BaseModel):
@@ -63,8 +61,6 @@ class DataConfig(BaseModel):
     dir: str = "./data"
 
 
-# ── Flat ↔ nested mapping ─────────────────────────────────────────────────────
-
 _FLAT_TO_SUB: dict[str, tuple[str, str]] = {
     "model": ("llm", "model"),
     "ollama_host": ("llm", "host"),
@@ -83,7 +79,6 @@ _SUB_TO_FLAT = {(v[0], v[1]): k for k, v in _FLAT_TO_SUB.items()}
 
 
 def _flat_to_nested(data: dict) -> dict:
-    """Convert flat keys (``model``) to nested section dict (``{"llm": {"model": ...}}``)."""
     result: dict[str, Any] = {}
     for k, v in data.items():
         if k in _FLAT_TO_SUB:
@@ -94,7 +89,6 @@ def _flat_to_nested(data: dict) -> dict:
         elif k not in ("llm", "memory", "tools", "ui", "data"):
             result[k] = v
         else:
-            # Already a section — merge into existing
             if k not in result:
                 result[k] = v
             elif isinstance(result[k], dict) and isinstance(v, dict):
@@ -105,7 +99,6 @@ def _flat_to_nested(data: dict) -> dict:
 
 
 def _nested_to_flat(data: dict) -> dict:
-    """Convert nested section dict back to flat keys."""
     result: dict[str, Any] = {}
     for section, fields in data.items():
         if isinstance(fields, dict):
@@ -118,11 +111,8 @@ def _nested_to_flat(data: dict) -> dict:
     return result
 
 
-# ── Top-level config ──────────────────────────────────────────────────────────
-
-
 class V2Config(BaseModel):
-    """Central VIKI v2 configuration with nested sections and backward-compat flat properties.
+    """Central VIKI configuration with nested sections and backward-compat flat properties.
 
     Accepts both flat kwargs (``V2Config(model="foo", temperature=0.3)``)
     and nested dict (``V2Config(llm={"model": "foo", "temperature": 0.3})``).
@@ -135,8 +125,6 @@ class V2Config(BaseModel):
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
     ui: UIConfig = Field(default_factory=UIConfig)
     data: DataConfig = Field(default_factory=DataConfig)
-
-    # ── Backward-compat flat properties ──────────────────────────────
 
     @property
     def model(self) -> str:
@@ -182,23 +170,17 @@ class V2Config(BaseModel):
     def memory_max_turns(self) -> int:
         return self.memory.max_turns
 
-    # ── Dual-format constructor ──────────────────────────────────────
-
     @model_validator(mode="before")
     @classmethod
     def _accept_flat_input(cls, data: Any) -> Any:
-        """Accept both flat kwargs and nested dict."""
         if not isinstance(data, dict):
             return data
         if any(k in _FLAT_TO_SUB for k in data):
             return _flat_to_nested(data)
         return data
 
-    # ── JSON Schema export ───────────────────────────────────────────
-
     @classmethod
     def generate_schema_file(cls, target: Path | None = None) -> str:
-        """Write JSON Schema to a file for IDE autocomplete. Returns the path."""
         path = target or Path.home() / ".viki" / "viki.schema.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         schema = cls.model_json_schema()
@@ -206,11 +188,7 @@ class V2Config(BaseModel):
         return str(path)
 
 
-# ── File loading helpers ──────────────────────────────────────────────────────
-
-
 def _find_config_file() -> Path | None:
-    """Search for viki config in standard locations."""
     candidates = [
         Path.cwd() / "viki.yaml",
         Path.cwd() / "viki.json",
@@ -227,7 +205,6 @@ def _find_config_file() -> Path | None:
 
 
 def _load_config_file(path: Path) -> dict[str, Any]:
-    """Load and parse a config file (JSON or YAML)."""
     ext = path.suffix.lower()
     if ext in (".yaml", ".yml"):
         try:
@@ -246,7 +223,6 @@ def _load_config_file(path: Path) -> dict[str, Any]:
 
 
 def _deep_merge(base: dict, override: dict) -> dict:
-    """Deep-merge override into base dict."""
     result = dict(base)
     for k, v in override.items():
         if k in result and isinstance(result[k], dict) and isinstance(v, dict):
@@ -257,35 +233,27 @@ def _deep_merge(base: dict, override: dict) -> dict:
 
 
 def _resolve_includes(raw: dict, base_dir: Path) -> dict:
-    """Process ``include`` / ``includes`` directives in config dict."""
     includes = raw.pop("include", None) or raw.pop("includes", None)
     if not includes:
         return raw
     if isinstance(includes, str):
         includes = [includes]
-
     result: dict = {}
     for inc_path in includes:
         inc_file = Path(inc_path) if Path(inc_path).is_absolute() else base_dir / inc_path
         if inc_file.is_file():
             inc_data = _load_config_file(inc_file)
             result = _deep_merge(result, _resolve_includes(inc_data, inc_file.parent))
-
     result = _deep_merge(result, raw)
     return result
 
 
-# ── Environment & .env ────────────────────────────────────────────────────────
-
-
 def _load_dotenv(base_dir: Path | None = None) -> dict[str, str]:
-    """Parse ``.env`` files from cwd and ``~/.viki/``."""
     result: dict[str, str] = {}
     candidates: list[Path] = [Path.cwd() / ".env"]
     if base_dir is not None and base_dir != Path.cwd():
         candidates.append(base_dir / ".env")
     candidates.append(Path.home() / ".viki" / ".env")
-
     seen = set()
     for path in candidates:
         if not path.is_file() or path in seen:
@@ -315,15 +283,11 @@ _ENV_MAP: dict[str, tuple[str, str]] = {
 
 
 def _load_env() -> dict[str, Any]:
-    """Load settings from environment variables, including ``_FILE`` secrets."""
     result: dict[str, Any] = {}
-
     for env_var, (section, field) in _ENV_MAP.items():
         val = os.environ.get(env_var)
         if val is not None:
             result.setdefault(section, {})[field] = val
-
-        # _FILE suffix: read value from a file path
         file_var = f"{env_var}_FILE"
         file_path = os.environ.get(file_var)
         if file_path:
@@ -332,19 +296,11 @@ def _load_env() -> dict[str, Any]:
                     result.setdefault(section, {})[field] = f.read().strip()
             except OSError:
                 pass
-
     return result
 
 
-# ── CLI overrides ─────────────────────────────────────────────────────────────
-
-
 def parse_cli_overrides(args: list[str] | None = None) -> tuple[dict[str, Any], argparse.Namespace]:
-    """Parse CLI flags into flat config overrides.
-
-    Returns ``(overrides_dict, parsed_namespace)``.
-    """
-    parser = argparse.ArgumentParser(description="VIKI v2", add_help=False)
+    parser = argparse.ArgumentParser(description="VIKI", add_help=False)
     parser.add_argument("--model", help="LLM model name")
     parser.add_argument("--ollama-host", help="Ollama server URL")
     parser.add_argument("--temperature", type=float, help="LLM temperature")
@@ -365,7 +321,6 @@ def parse_cli_overrides(args: list[str] | None = None) -> tuple[dict[str, Any], 
         help="Watch config file for changes and hot-reload",
     )
     parsed, _ = parser.parse_known_args(args)
-
     overrides: dict[str, Any] = {}
     mapping: dict[str, str] = {
         "model": "model",
@@ -381,22 +336,13 @@ def parse_cli_overrides(args: list[str] | None = None) -> tuple[dict[str, Any], 
         val = getattr(parsed, cli_flag, None)
         if val is not None:
             overrides[config_key] = val
-
     return overrides, parsed
-
-
-# ── Hot-reload ────────────────────────────────────────────────────────────────
 
 
 async def watch_config(
     path: Path | None = None,
     interval: float = 1.0,
 ) -> AsyncIterator[V2Config]:
-    """Async generator that yields config on file changes.
-
-    Polls the config file's mtime every ``interval`` seconds.
-    Yields the initial config, then yields again whenever the file changes.
-    """
     watch_path = path or _find_config_file()
     if watch_path is None:
         return
@@ -413,58 +359,43 @@ async def watch_config(
         await asyncio.sleep(interval)
 
 
-# ── Public API ────────────────────────────────────────────────────────────────
-
-
 def load_config(
     path: str | Path | None = None,
     cli_overrides: dict[str, Any] | None = None,
 ) -> V2Config:
-    """Load V2 configuration from config file + ``.env`` + env vars + CLI flags.
+    """Load configuration from config file + .env + env vars + CLI flags.
 
     Resolution order (later wins):
       1. Pydantic model defaults
-      2. Included config files (``include:`` YAML directive)
-      3. Config file (``viki.yaml`` / ``viki.json`` or explicit ``path``)
-      4. ``.env`` file (cwd → ``~/.viki/``)
-      5. Environment variables (``VIKI_MODEL``, ``OLLAMA_HOST``, etc.)
-      6. ``_FILE`` suffixed env vars (for secrets)
-      7. ``cli_overrides`` dict
+      2. Included config files (include: YAML directive)
+      3. Config file (viki.yaml / viki.json or explicit path)
+      4. .env file (cwd → ~/.viki/)
+      5. Environment variables (VIKI_MODEL, OLLAMA_HOST, etc.)
+      6. _FILE suffixed env vars (for secrets)
+      7. cli_overrides dict
     """
     raw: dict[str, Any] = {}
-
     if path is None:
         found = _find_config_file()
     else:
         found = Path(path) if Path(path).is_file() else None
-
     if found is not None:
         file_raw = _load_config_file(found)
         file_raw = _resolve_includes(file_raw, found.parent)
         raw = _deep_merge(raw, file_raw)
-
-    # .env file
     dotenv_raw = _load_dotenv(found.parent if found else None)
     if dotenv_raw:
-        # Map flat env keys to nested sections using env map
         for env_k, env_v in dotenv_raw.items():
             if env_k in _ENV_MAP:
                 section, field = _ENV_MAP[env_k]
                 raw.setdefault(section, {})[field] = env_v
             else:
                 raw.setdefault("llm", {})[env_k] = env_v
-
-    # Environment variables (override .env)
     env_raw = _load_env()
     raw = _deep_merge(raw, env_raw)
-
-    # CLI overrides (highest precedence) — supplied as flat keys
     if cli_overrides:
         raw = _deep_merge(raw, _flat_to_nested(cli_overrides))
-
-    # Always convert remaining flat keys to nested before validation
     raw = _flat_to_nested(raw)
-
     return V2Config.model_validate(raw)
 
 
@@ -474,10 +405,6 @@ _config_singleton: V2Config | None = None
 def get_config(
     path: str | Path | None = None, cli_overrides: dict[str, Any] | None = None
 ) -> V2Config:
-    """Get or create the global ``V2Config`` singleton.
-
-    Passing ``path`` or ``cli_overrides`` forces a reload.
-    """
     global _config_singleton
     if _config_singleton is None or path is not None or cli_overrides:
         _config_singleton = load_config(path, cli_overrides=cli_overrides)
@@ -485,13 +412,11 @@ def get_config(
 
 
 def set_config(cfg: V2Config) -> None:
-    """Set the config singleton (useful for testing)."""
     global _config_singleton
     _config_singleton = cfg
 
 
 def reset_config() -> None:
-    """Reset the config singleton (useful for testing)."""
     global _config_singleton
     _config_singleton = None
 
