@@ -449,17 +449,22 @@ class LearningModule:
                 backend = self._get_vector_backend(rows)
                 if backend is not None:
                     query_emb = self.encoder.encode(context).tolist()
-                    hits = backend.search(query_emb, top_k=limit, query_text=context)
+                    # Over-retrieve so the second-stage reranker has real
+                    # candidates to choose from, then cut back to `limit`.
+                    fetch_k = max(limit * 4, limit)
+                    hits = backend.search(query_emb, top_k=fetch_k, query_text=context)
                     if hits:
                         text_to_id = {r["text_representation"]: r["id"] for r in rows}
-                        out: list[str] = []
+                        candidates: list[str] = []
                         seen = set()
                         for h in hits:
                             if h.text in seen:
                                 continue
                             seen.add(h.text)
-                            out.append(h.text)
-                            lid = text_to_id.get(h.text)
+                            candidates.append(h.text)
+                        out = self._rerank_lessons(context, candidates, limit)
+                        for text in out:
+                            lid = text_to_id.get(text)
                             if lid is not None:
                                 cur.execute(
                                     "UPDATE lessons SET last_accessed = ? WHERE id = ?",
@@ -471,6 +476,18 @@ class LearningModule:
                 viki_logger.debug("get_relevant_lessons vector path failed: %s", e)
 
         return self._lexical_rank_lessons(rows, context=context, limit=limit)
+
+    def _rerank_lessons(self, query: str, candidates: list[str], limit: int) -> list[str]:
+        """Second-stage rerank of retrieval candidates (cross-encoder or lexical)."""
+        if len(candidates) <= limit:
+            return candidates[:limit]
+        try:
+            from viki.core.reranker import get_reranker
+
+            return get_reranker().rerank(query, candidates, top_k=limit)
+        except Exception as e:
+            viki_logger.debug("Reranker failed; using retrieval order: %s", e)
+            return candidates[:limit]
 
     def _get_vector_backend(self, rows):
         """Build (or rebuild when dirty) the vector index over current rows."""
