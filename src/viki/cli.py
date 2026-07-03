@@ -846,7 +846,7 @@ async def _run_interactive_loop(controller, interface, on_event, streaming_state
             interface.print_error(str(e))
 
 
-async def main(workspace_path=None, query=None):
+async def main(workspace_path=None, query=None, dashboard=False, dashboard_port=8321):
     import asyncio
     import logging
 
@@ -921,6 +921,23 @@ async def main(workspace_path=None, query=None):
     except Exception as e:
         _viki_logger.debug(f"MCP attach skipped: {e}")
     controller.check_skill_health()
+
+    if dashboard:
+        from viki.api.dashboard import run_dashboard
+
+        runner = await run_dashboard(controller, port=dashboard_port)
+        interface.console.print(
+            f"[bold green]VIKI dashboard:[/] http://127.0.0.1:{dashboard_port}  (Ctrl+C to stop)"
+        )
+        try:
+            while True:
+                await asyncio.sleep(3600)
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            pass
+        finally:
+            await runner.cleanup()
+            await controller.shutdown()
+        return
 
     # Skip welcome panel for single queries (faster startup)
     if not query:
@@ -1043,6 +1060,19 @@ def run():
         action="store_true",
         help="Run system check and print hardware report",
     )
+    parser.add_argument(
+        "--dashboard",
+        dest="dashboard",
+        action="store_true",
+        help="Start the local web dashboard (chat, health, memory) instead of the CLI",
+    )
+    parser.add_argument(
+        "--dashboard-port",
+        dest="dashboard_port",
+        type=int,
+        default=8321,
+        help="Port for --dashboard (default: 8321)",
+    )
     parser.add_argument("args", nargs="*", help="Optional: [path] [query...]")
     parsed_args = parser.parse_args()
 
@@ -1133,7 +1163,14 @@ def run():
     try:
         import asyncio
 
-        asyncio.run(main(workspace_path=workspace_path, query=query_str))
+        asyncio.run(
+            main(
+                workspace_path=workspace_path,
+                query=query_str,
+                dashboard=parsed_args.dashboard,
+                dashboard_port=parsed_args.dashboard_port,
+            )
+        )
     except KeyboardInterrupt:
         pass
 
