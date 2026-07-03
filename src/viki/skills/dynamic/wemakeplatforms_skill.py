@@ -37,66 +37,17 @@ class WeMakePlatformsSkill(BaseSkill):
         params = params or {}
         query = params.get("query", "all").lower()
 
+        # TODO: Replace with your own team data or remove this skill
         team_data = [
             {
-                "name": "Dave Morris",
-                "role": "President - Puerto Rico",
-                "description": "17+ years in eCommerce and software development, business growth, sales strategy.",
+                "name": "Example User 1",
+                "role": "Software Engineer",
+                "description": "Example team member profile — customize for your organization.",
             },
             {
-                "name": "Asela Neligama",
-                "role": "Managing Director - Sri Lanka",
-                "description": "18+ years in software solutions for e-Commerce, Health-care, Reservations, Classifieds.",
-            },
-            {
-                "name": "Supun Perumbuli",
-                "role": "Technology Director - Sri Lanka",
-                "description": "18+ years in scalable, secure backend, frontend and mobile systems, cloud-native applications.",
-            },
-            {
-                "name": "Peshala A.",
-                "role": "Product Manager",
-                "description": "15+ years in Business Analysis, Project Management and Solution Consulting.",
-            },
-            {
-                "name": "Namal F.",
-                "role": "Software Architect (Full-stack)",
-                "description": "14+ years in Java, J2EE, Spring, Angular, SQL, NoSQL, Kafka.",
-            },
-            {
-                "name": "Harshana K.",
-                "role": "Technical Lead (Full-stack)",
-                "description": "7+ years in scalable, high-performance web and hybrid mobile apps.",
-            },
-            {
-                "name": "Naveen D.",
-                "role": "Senior Technical Lead (Front-end)",
-                "description": "Decade of experience in Angular, Ionic, WordPress.",
-            },
-            {
-                "name": "Nalin B.",
-                "role": "Senior Technical Lead (Full-stack)",
-                "description": "16+ years in Java, Spring, Hibernate, Node.js, Angular, React.",
-            },
-            {
-                "name": "Sachithra C.",
-                "role": "Technical Lead (Full-stack)",
-                "description": "8 years in Transport, Cargo, E-commerce, Finance. Java, Spring Boot, Angular, React, Flutter.",
-            },
-            {
-                "name": "Nirosha J.",
-                "role": "Technical Lead (Full-stack)",
-                "description": "5 years in Java, Spring Boot, Microservices, Angular, React.",
-            },
-            {
-                "name": "Sachin D.",
-                "role": "Technical Lead (Front-end)",
-                "description": "5+ years in Angular, React.js, Vue.js, Next.js, PHP.",
-            },
-            {
-                "name": "Kosala Liyanage",
-                "role": "Lead UI/UX Designer",
-                "description": "Decade of experience in healthcare, education, e-commerce, reservations, payment processing.",
+                "name": "Example User 2",
+                "role": "Technical Lead",
+                "description": "Example team member profile — customize for your organization.",
             },
         ]
 

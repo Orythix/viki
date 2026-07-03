@@ -60,10 +60,10 @@ VIKI is built on the **Orythix Cognitive Architecture**:
    feature work.
 3. **Write tests** — `pytest viki/tests/ -q` should stay green. New skills
    need at least one happy-path test.
-4. **Run lint** — `ruff check viki` (CI runs the same).
+4. **Run lint** — `ruff check src/ tests/` (CI runs the same).
 5. **Update docs** — if you add or change a skill, configuration option, or
    public API, update the relevant `.md` file (often `README.md`,
-   `docs/ARCHITECTURE.md`, or `viki/SECURITY_docs/SETUP.md`).
+   `docs/ARCHITECTURE.md`, or `docs/SETUP.md`).
 6. **Reference issues** — link any related issue in the PR description.
 7. **Follow the PR template** — fill in summary and test plan.
 

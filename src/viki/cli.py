@@ -101,9 +101,12 @@ class SimpleInterface:
         if "970317" in user_input:
             if not self.admin_mode:
                 self.admin_mode = True
+                owner = getattr(self, "_owner_name", None) or os.environ.get(
+                    "VIKI_OWNER_NAME", "Administrator"
+                )
                 self.console.print(
                     Panel(
-                        "[bold red]⚡ ADMINISTRATOR RECOGNIZED[/]\n[gold1]Welcome back, Boss Sachin.[/]",
+                        f"[bold red]⚡ ADMINISTRATOR RECOGNIZED[/]\n[gold1]Welcome back, Boss {owner}.[/]",
                         title="[blink bold red]SUPER ADMIN ACTIVATED[/]",
                         border_style="red",
                         box=box.DOUBLE,
@@ -177,8 +180,18 @@ class SimpleInterface:
             )
 
         if self.admin_mode:
+            owner = "Administrator"
+            if controller:
+                try:
+                    owner = (
+                        controller.settings.get("system", {})
+                        .get("owner", {})
+                        .get("name", os.environ.get("VIKI_OWNER_NAME", "Administrator"))
+                    )
+                except Exception:
+                    owner = os.environ.get("VIKI_OWNER_NAME", "Administrator")
             left_content = (
-                f"\n[bold red]Welcome back, Boss Sachin![/]\n\n"
+                f"\n[bold red]Welcome back, Boss {owner}![/]\n\n"
                 f"[red]       ▐▛███▜▌       [/]\n"
                 f"[red]      ▝▜█████▛▘      [/]\n"
                 f"[red]        ▘▘ ▝▝        [/]\n\n"

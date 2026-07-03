@@ -1,9 +1,39 @@
 [project]
 name = "viki-sdi"
 version = "8.3.0"
-description = "VIKI Sovereign Intelligence"
+description = "VIKI - Virtual Intelligence Knowledge Integrator: an open-source autonomous AI assistant"
 readme = "README.md"
 requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "VIKI Project Contributors" },
+]
+keywords = [
+    "ai", "assistant", "agent", "ollama", "local-llm", "autonomous",
+    "rag", "privacy", "cli", "neural-forge", "open-source",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+]
+
+[project.urls]
+Homepage = "https://github.com/Orythix/viki"
+Repository = "https://github.com/Orythix/viki"
+Documentation = "https://github.com/Orythix/viki/blob/main/docs/DOCUMENTATION.md"
+Changelog = "https://github.com/Orythix/viki/blob/main/CHANGELOG.md"
+Issues = "https://github.com/Orythix/viki/issues"
+
 dependencies = [
     "rich>=13.7.0",
     "pyyaml>=6.0",
@@ -104,7 +134,7 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 asyncio_mode = "auto"
-addopts = "-v --tb=short --cov --cov-report=term-missing --cov-report=html"
+addopts = "-v --tb=short"
 filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::PendingDeprecationWarning",

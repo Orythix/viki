@@ -33,7 +33,10 @@ class Soul:
         try:
             if os.path.exists(personality_path):
                 with open(personality_path, encoding="utf-8") as f:
-                    return f.read()
+                    content = f.read()
+                    owner = os.environ.get("VIKI_OWNER_NAME", "User")
+                    content = content.replace("{{OWNER_NAME}}", owner)
+                    return content
         except Exception:
             pass
 

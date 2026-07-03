@@ -1,8 +1,8 @@
-blank_issues_enabled: false
+blank_issues_enabled: true
 contact_links:
-  - name: Questions & discussion
+  - name: VIKI Documentation
+    url: https://github.com/Orythix/viki/blob/main/docs/DOCUMENTATION.md
+    about: Check the documentation before filing an issue
+  - name: GitHub Discussions
     url: https://github.com/Orythix/viki/discussions
-    about: Ask how to use VIKI, share configurations, or propose ideas before opening an issue.
-  - name: Security vulnerability
-    url: https://github.com/Orythix/viki/security/advisories/new
-    about: Report a vulnerability privately. Do NOT open a public issue for security reports.
+    about: Ask questions and discuss VIKI with the community
