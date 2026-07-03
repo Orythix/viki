@@ -10,7 +10,6 @@ import tempfile
 import unittest
 
 import yaml
-
 from viki.core.inference_gateway import LLMProvider, ModelRouter
 from viki.core.resource_budget import LLMBudget
 

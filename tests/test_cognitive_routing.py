@@ -51,9 +51,7 @@ def _run(coro):
 
 class TestJudgmentOutcomes(unittest.TestCase):
     def setUp(self):
-        self.learning = _StubLearning(
-            lessons=["User prefers Python", "User likes vim shortcuts"]
-        )
+        self.learning = _StubLearning(lessons=["User prefers Python", "User likes vim shortcuts"])
         self.je = JudgmentEngine(self.learning, {})
 
     def test_refuse_on_dangerous_intent(self):
@@ -87,12 +85,12 @@ class TestJudgmentOutcomes(unittest.TestCase):
 
     def test_failure_similarity_escalates(self):
         learning = _StubLearning(
-            failures=["PAST FAILURE: Tried 'browser navigate to acme.com' but got 'ConnectionRefused'"],
+            failures=[
+                "PAST FAILURE: Tried 'browser navigate to acme.com' but got 'ConnectionRefused'"
+            ],
         )
         je = JudgmentEngine(learning, {})
-        result = _run(
-            je.evaluate("browser navigate to acme.com please retry", {})
-        )
+        result = _run(je.evaluate("browser navigate to acme.com please retry", {}))
         # Token overlap with failure -> elevated similarity, escalates DEEP.
         self.assertGreater(result.failure_similarity, 0.0)
 
@@ -115,18 +113,14 @@ class TestCognitiveRouter(unittest.TestCase):
         self.learning = _StubLearning(lessons=["common pattern"])
         self.je = JudgmentEngine(self.learning, {})
         self.reflex = ReflexBrain(data_dir=None)
-        self.skills = _StubSkillRegistry(
-            ["system_control", "media_control", "research"]
-        )
+        self.skills = _StubSkillRegistry(["system_control", "media_control", "research"])
         self.telemetry = RouterTelemetry()
         self.router = CognitiveRouter(
             judgment_engine=self.je, reflex_brain=self.reflex, telemetry=self.telemetry
         )
 
     def test_reflex_action_short_circuits(self):
-        route = _run(
-            self.router.classify("open notepad", skill_registry=self.skills)
-        )
+        route = _run(self.router.classify("open notepad", skill_registry=self.skills))
         self.assertEqual(route.outcome, JudgmentOutcome.REFLEX)
         self.assertIsInstance(route.action_override, ActionCall)
         self.assertEqual(route.action_override.skill_name, "system_control")
@@ -135,9 +129,7 @@ class TestCognitiveRouter(unittest.TestCase):
 
     def test_reflex_with_unknown_skill_falls_through(self):
         empty_registry = _StubSkillRegistry([])
-        route = _run(
-            self.router.classify("open notepad", skill_registry=empty_registry)
-        )
+        route = _run(self.router.classify("open notepad", skill_registry=empty_registry))
         self.assertNotEqual(route.outcome, JudgmentOutcome.REFLEX)
 
     def test_refuse_outcome_creates_refusal_route(self):
@@ -180,11 +172,13 @@ class TestCognitiveRouter(unittest.TestCase):
 
     def test_telemetry_tracks_outcomes(self):
         _run(self.router.classify("open notepad", skill_registry=self.skills))
-        _run(self.router.classify(
-            "Explain pathfinding",
-            context={"task_type": "question"},
-            skill_registry=self.skills,
-        ))
+        _run(
+            self.router.classify(
+                "Explain pathfinding",
+                context={"task_type": "question"},
+                skill_registry=self.skills,
+            )
+        )
         snap = self.telemetry.snapshot()
         self.assertEqual(snap["total"], 2)
         self.assertGreaterEqual(snap["reflex_hits"], 1)

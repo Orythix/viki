@@ -11,6 +11,7 @@ class MockController:
     def __init__(self):
         self.skill_registry = SkillRegistry()
 
+
 def test_sovereign_hub():
     print("RUNNING: Sovereign Tool Hub Verification...")
 
@@ -44,6 +45,7 @@ def test_sovereign_hub():
     assert "aws_ec2_list" in relevant
 
     print("\n✅ Sovereign Tool Hub (100+ Skills) Verified.")
+
 
 if __name__ == "__main__":
     test_sovereign_hub()

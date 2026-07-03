@@ -1,6 +1,6 @@
 import asyncio
 import os
-from typing import Any
+from typing import Any, cast
 
 from viki.config.logger import viki_logger
 from viki.core.forge_config import resolve_forge_output_ollama_tag
@@ -206,11 +206,11 @@ class ModelForgeSkill(BaseSkill):
 
         if action == "bake":
             profile = params.get("profile", "general")
-            return await self.controller.forge_orchestrator.bake_profile(profile)
+            return cast("str", await self.controller.forge_orchestrator.bake_profile(profile))
 
         if action == "switch":
             profile = params.get("profile", "general")
-            return await self.controller.forge_orchestrator.switch_to_profile(profile)
+            return cast("str", await self.controller.forge_orchestrator.switch_to_profile(profile))
 
         # Legacy Evolution path
         from viki.core.preference_forge import trl_dpo_available

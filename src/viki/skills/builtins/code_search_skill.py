@@ -116,7 +116,9 @@ class CodeSearchSkill(BaseSkill):
 
     def _data_dir(self) -> str:
         if self._controller and hasattr(self._controller, "settings"):
-            return cast("str", self._controller.settings.get("system", {}).get("data_dir", "./data"))
+            return cast(
+                "str", self._controller.settings.get("system", {}).get("data_dir", "./data")
+            )
         return "./data"
 
     def _open_index_db(self) -> None:
@@ -342,7 +344,10 @@ class CodeSearchSkill(BaseSkill):
 
     def _workspace_dir(self) -> str:
         if self._controller and hasattr(self._controller, "settings"):
-            return cast("str", self._controller.settings.get("system", {}).get("workspace_dir", "./workspace"))
+            return cast(
+                "str",
+                self._controller.settings.get("system", {}).get("workspace_dir", "./workspace"),
+            )
         return os.getcwd()
 
     # --- index build ---

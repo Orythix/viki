@@ -37,9 +37,27 @@ class TestPlanner(unittest.TestCase):
     def test_parses_json_plan(self):
         plan_json = json.dumps(
             [
-                {"id": "t1", "type": "search_repo", "description": "find foo", "parameters": {"query": "foo"}, "depends_on": []},
-                {"id": "t2", "type": "patch", "description": "apply patch", "parameters": {"path": "x.py"}, "depends_on": ["t1"]},
-                {"id": "t3", "type": "run_tests", "description": "verify", "parameters": {}, "depends_on": ["t2"]},
+                {
+                    "id": "t1",
+                    "type": "search_repo",
+                    "description": "find foo",
+                    "parameters": {"query": "foo"},
+                    "depends_on": [],
+                },
+                {
+                    "id": "t2",
+                    "type": "patch",
+                    "description": "apply patch",
+                    "parameters": {"path": "x.py"},
+                    "depends_on": ["t1"],
+                },
+                {
+                    "id": "t3",
+                    "type": "run_tests",
+                    "description": "verify",
+                    "parameters": {},
+                    "depends_on": ["t2"],
+                },
             ]
         )
         router = _StubRouter(_StubModel(plan_json))
@@ -84,7 +102,9 @@ class TestExecutor(unittest.TestCase):
         )
         graph = TaskGraph(goal="test")
         graph.tasks = [
-            PlanTask(id="t1", type=TaskType.SEARCH_REPO, description="search", parameters={"query": "x"}),
+            PlanTask(
+                id="t1", type=TaskType.SEARCH_REPO, description="search", parameters={"query": "x"}
+            ),
             PlanTask(id="t2", type=TaskType.ANALYZE, description="analyze", depends_on=["t1"]),
             PlanTask(id="t3", type=TaskType.RUN_TESTS, description="run", depends_on=["t2"]),
         ]

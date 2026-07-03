@@ -63,7 +63,9 @@ class IntelligenceScorecard:
         """Force immediate save (call on shutdown)."""
         self._debouncer.flush(self._do_save)
 
-    def record_metric(self, name: str, value: float, context: str | None = None, model: str | None = None):
+    def record_metric(
+        self, name: str, value: float, context: str | None = None, model: str | None = None
+    ):
         if name in self.metrics:
             self.metrics[name].append(MetricEntry(value=value, context=context, model=model))
             # Keep only last 1000 entries per metric for longitudinal analysis

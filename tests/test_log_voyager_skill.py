@@ -3,28 +3,37 @@ import shutil
 import tempfile
 
 import pytest
-
 from viki.skills.builtins.log_voyager_skill import LogVoyagerSkill
 
 
 class MockTelemetry:
     def get_summary(self):
-        return {
-            "total_events": 3,
-            "errors": 2,
-            "warnings": 1,
-            "categories": {"test": 3}
-        }
+        return {"total_events": 3, "errors": 2, "warnings": 1, "categories": {"test": 3}}
+
     def query(self, category=None, limit=20, severity=None):
         return [
-            {"category": "test", "payload": {"message": "DB Locked"}, "severity": "ERROR", "timestamp": 0, "event_type": "err"},
-            {"category": "test", "payload": {"message": "Router failed"}, "severity": "ERROR", "timestamp": 0, "event_type": "err"}
+            {
+                "category": "test",
+                "payload": {"message": "DB Locked"},
+                "severity": "ERROR",
+                "timestamp": 0,
+                "event_type": "err",
+            },
+            {
+                "category": "test",
+                "payload": {"message": "Router failed"},
+                "severity": "ERROR",
+                "timestamp": 0,
+                "event_type": "err",
+            },
         ]
+
 
 class MockController:
     def __init__(self):
         self.settings = {}
         self.telemetry = MockTelemetry()
+
 
 @pytest.fixture
 def temp_logs(monkeypatch):
@@ -48,6 +57,7 @@ def temp_logs(monkeypatch):
     yield ctrl, log_dir
     shutil.rmtree(tmp_dir)
 
+
 @pytest.mark.asyncio
 async def test_log_voyager_scan(temp_logs):
     ctrl, _ = temp_logs
@@ -56,6 +66,7 @@ async def test_log_voyager_scan(temp_logs):
     result = await skill.execute({"action": "scan", "query": "ERROR"})
     assert "DB Locked" in result
     assert "Router failed" in result
+
 
 @pytest.mark.asyncio
 async def test_log_voyager_summarize(temp_logs):

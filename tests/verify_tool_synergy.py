@@ -1,7 +1,6 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from viki.skills.builtins.market_explorer_skill import MarketExplorerSkill
 
 
@@ -9,11 +8,13 @@ class MockSkill:
     def __init__(self, return_val):
         self.execute = AsyncMock(return_value=return_val)
 
+
 class MockController:
     def __init__(self):
         self.skill_registry = MagicMock()
         self.skills = {}
         self.skill_registry.get_skill.side_effect = lambda name: self.skills.get(name)
+
 
 @pytest.mark.asyncio
 async def test_market_explorer_synergy():

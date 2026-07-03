@@ -3,7 +3,6 @@ import shutil
 import tempfile
 
 import pytest
-
 from viki.core.utils.context_retriever import ContextRetriever
 from viki.skills.builtins.context_weaver_skill import ContextWeaverSkill
 
@@ -11,6 +10,7 @@ from viki.skills.builtins.context_weaver_skill import ContextWeaverSkill
 class MockController:
     def __init__(self, workspace_dir):
         self.context_retriever = ContextRetriever(workspace_dir)
+
 
 @pytest.fixture
 def temp_workspace():
@@ -24,6 +24,7 @@ def temp_workspace():
     yield ctrl, test_file
     shutil.rmtree(ws_dir)
 
+
 @pytest.mark.asyncio
 async def test_weaver_pin(temp_workspace):
     ctrl, test_file = temp_workspace
@@ -34,6 +35,7 @@ async def test_weaver_pin(temp_workspace):
     assert "Successfully pinned" in result
     assert test_file in ctrl.context_retriever.pinned_paths
 
+
 @pytest.mark.asyncio
 async def test_weaver_list(temp_workspace):
     ctrl, test_file = temp_workspace
@@ -42,6 +44,7 @@ async def test_weaver_list(temp_workspace):
 
     result = await skill.execute({"action": "list"})
     assert "important.py" in result
+
 
 @pytest.mark.asyncio
 async def test_weaver_unpin(temp_workspace):
@@ -53,6 +56,7 @@ async def test_weaver_unpin(temp_workspace):
     result = await skill.execute({"action": "unpin", "path": test_file})
     assert "Unpinned" in result
     assert len(ctrl.context_retriever.pinned_paths) == 0
+
 
 @pytest.mark.asyncio
 async def test_weaver_retrieval_integration(temp_workspace):

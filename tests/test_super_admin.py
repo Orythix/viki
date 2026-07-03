@@ -3,7 +3,6 @@ import shutil
 
 import pytest
 import yaml
-
 from viki.core.orchestrator import VIKIController
 from viki.core.super_admin import SuperAdminLayer
 
@@ -29,18 +28,17 @@ async def admin_setup():
 
     # Test Admin Config
     admin_config_path = os.path.abspath("./tests/test_admin.yaml")
-    with open(admin_config_path, 'w') as f:
-        f.write("admin_id: TEST_ID\nadmin_secret: TEST_SECRET\nlogs_path: ./tests/data_admin/logs.txt")
+    with open(admin_config_path, "w") as f:
+        f.write(
+            "admin_id: TEST_ID\nadmin_secret: TEST_SECRET\nlogs_path: ./tests/data_admin/logs.txt"
+        )
 
     settings = {
-        "system": {
-            "data_dir": test_data_dir,
-            "workspace_dir": os.path.abspath("./workspace")
-        },
-        "models_config": models_config
+        "system": {"data_dir": test_data_dir, "workspace_dir": os.path.abspath("./workspace")},
+        "models_config": models_config,
     }
     settings_path = os.path.abspath("./tests/temp_settings_admin.yaml")
-    with open(settings_path, 'w') as f:
+    with open(settings_path, "w") as f:
         yaml.dump(settings, f)
 
     # Init Controller
@@ -66,6 +64,7 @@ async def admin_setup():
                     os.remove(path)
             except OSError:
                 pass
+
 
 @pytest.mark.asyncio
 async def test_admin_kill_switch(admin_setup):

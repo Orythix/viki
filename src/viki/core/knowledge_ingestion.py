@@ -4,14 +4,14 @@ import os
 import re
 import sqlite3
 import time
-from typing import Any
+from typing import Any, cast
 
 from viki.config.logger import viki_logger
 
 try:
     import numpy as np
 except Exception as e:
-    np = None
+    np = None  # type: ignore[assignment]
     viki_logger.warning(
         f"NumPy unavailable during LearningModule import ({e}). Semantic features will use list fallback."
     )
@@ -65,7 +65,7 @@ class LearningModule:
         self._migrate_if_needed()
         # Phase 6: vector index over the embeddings column. Built lazily when
         # first queried so cold-start cost stays low.
-        self._vector_backend = None
+        self._vector_backend: Any = None
         self._vector_backend_dirty = True
         self._vector_index_path = os.path.join(self.data_dir, "lessons_vector.sqlite")
 
@@ -256,7 +256,7 @@ class LearningModule:
 
     def save_lesson(
         self,
-        lesson: str = None,
+        lesson: str | None = None,
         relationship: dict[str, str] | None = None,
         author: str = "Self",
         source_task: str = "Unknown",
@@ -266,8 +266,8 @@ class LearningModule:
         if not lesson and "fact" in kwargs:
             trigger = kwargs.get("trigger", "Knowledge Acquisition")
             fact = kwargs["fact"]
-            lesson_obj = {"trigger": trigger, "fact": fact}
-            lesson_str = f"{trigger}: {fact}"
+            lesson_obj: Any = {"trigger": trigger, "fact": fact}
+            lesson_str: Any = f"{trigger}: {fact}"
         else:
             lesson_obj = lesson
             lesson_str = lesson
@@ -349,16 +349,16 @@ class LearningModule:
 
     def get_lessons(
         self,
-        query: str = None,
-        source: str = None,
-        author: str = None,
+        query: str | None = None,
+        source: str | None = None,
+        author: str | None = None,
         limit: int = 10,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
         """Returns detailed lesson records with optional filtering."""
         cur = self.conn.cursor()
         sql = "SELECT id, text_representation, content, author, source_task, reliability, access_count, created_at FROM lessons WHERE 1=1"
-        params = []
+        params: list[Any] = []
         if query:
             sql += " AND text_representation LIKE ?"
             params.append(f"%{query}%")
@@ -384,11 +384,11 @@ class LearningModule:
         self.mark_vector_dirty()
         return cur.rowcount > 0
 
-    def update_lesson(self, lesson_id: str, fact: str = None, reliability: float = None) -> bool:
+    def update_lesson(self, lesson_id: str, fact: str | None = None, reliability: float | None = None) -> bool:
         """Updates an existing lesson's fact content or reliability."""
         cur = self.conn.cursor()
         updates = []
-        params = []
+        params: list[Any] = []
         if fact:
             updates.append("text_representation = ?, content = ?")
             params.extend([fact, json.dumps({"fact": fact})])
@@ -410,7 +410,7 @@ class LearningModule:
         """Returns the total number of unique lessons in the DB."""
         cur = self.conn.cursor()
         cur.execute("SELECT COUNT(*) FROM lessons")
-        return cur.fetchone()[0]
+        return cast("int", cur.fetchone()[0])
 
     def get_relevant_lessons(self, context: str, limit: int = 5) -> list[str]:
         """Performs semantic or lexical search over the knowledge base.
@@ -555,7 +555,7 @@ class LearningModule:
         """Checks if any procedural macros are learned."""
         cur = self.conn.cursor()
         cur.execute("SELECT COUNT(*) FROM macros")
-        return cur.fetchone()[0] > 0
+        return cast("bool", cur.fetchone()[0] > 0)
 
     def save_narrative(self, event: str, significance: float = 0.5, mood: str = "neutral"):
         """Saves a shared experience moment."""
@@ -568,7 +568,7 @@ class LearningModule:
         self.conn.commit()
         viki_logger.info(f"Narrative Logged: {event[:40]}...")
 
-    def get_relevant_narratives(self, query: str = None, limit: int = 2) -> list[str]:
+    def get_relevant_narratives(self, query: str | None = None, limit: int = 2) -> list[str]:
         """Recalls past experiences based on keyword matching (fast)."""
         cur = self.conn.cursor()
         if not query:
@@ -617,7 +617,7 @@ class LearningModule:
     def get_stable_lesson_count(self) -> int:
         cur = self.conn.cursor()
         cur.execute("SELECT COUNT(*) FROM lessons WHERE access_count > 1")
-        return cur.fetchone()[0]
+        return cast("int", cur.fetchone()[0])
 
     @staticmethod
     def resolve_export_min_access_count(
@@ -946,7 +946,7 @@ class LearningModule:
         if hasattr(self, "conn") and self.conn:
             try:
                 self.conn.close()
-                self.conn = None
+                self.conn = None  # type: ignore[assignment]
                 viki_logger.info("Learning: SQLite connection closed.")
             except Exception as e:
                 viki_logger.debug(f"Learning: Failed to close SQLite: {e}")

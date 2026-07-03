@@ -2,7 +2,6 @@ import shutil
 import tempfile
 
 import pytest
-
 from viki.core.utils.semantic_cache import SemanticCache
 from viki.skills.builtins.cache_pilot_skill import CachePilotSkill
 
@@ -10,7 +9,8 @@ from viki.skills.builtins.cache_pilot_skill import CachePilotSkill
 class MockController:
     def __init__(self, data_dir):
         self.settings = {"system": {"data_dir": data_dir}}
-        self.router = type('obj', (object,), {'cache': SemanticCache(data_dir)})
+        self.router = type("obj", (object,), {"cache": SemanticCache(data_dir)})
+
 
 @pytest.fixture
 def temp_viki():
@@ -18,6 +18,7 @@ def temp_viki():
     ctrl = MockController(data_dir)
     yield ctrl
     shutil.rmtree(data_dir)
+
 
 @pytest.mark.asyncio
 async def test_cache_pilot_stats(temp_viki):
@@ -29,6 +30,7 @@ async def test_cache_pilot_stats(temp_viki):
     assert "Total Entries: 1" in result
     assert "test query" in result
 
+
 @pytest.mark.asyncio
 async def test_cache_pilot_list(temp_viki):
     skill = CachePilotSkill(temp_viki)
@@ -38,6 +40,7 @@ async def test_cache_pilot_list(temp_viki):
     result = await skill.execute({"action": "list", "limit": 5})
     assert "query 1" in result
     assert "query 2" in result
+
 
 @pytest.mark.asyncio
 async def test_cache_pilot_prune(temp_viki):
@@ -50,6 +53,7 @@ async def test_cache_pilot_prune(temp_viki):
 
     stats = await skill.execute({"action": "stats"})
     assert "Total Entries: 0" in result or "Total Entries: 0" in stats
+
 
 @pytest.mark.asyncio
 async def test_cache_pilot_clear_all(temp_viki):

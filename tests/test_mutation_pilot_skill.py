@@ -3,12 +3,12 @@ import shutil
 import tempfile
 
 import pytest
-
 from viki.skills.builtins.mutation_pilot_skill import MutationPilotSkill
 
 
 class MockController:
     pass
+
 
 @pytest.fixture
 def temp_code():
@@ -28,6 +28,7 @@ def temp_code():
     yield ctrl, code_file, test_file, tmp_dir
     shutil.rmtree(tmp_dir)
 
+
 @pytest.mark.asyncio
 async def test_mutation_mutate(temp_code):
     ctrl, code_file, _, _ = temp_code
@@ -36,6 +37,7 @@ async def test_mutation_mutate(temp_code):
     result = await skill.execute({"action": "mutate", "path": code_file})
     assert "MUTANT_CREATED" in result
     assert "Applied mutation: '==' -> '!='" in result
+
 
 @pytest.mark.asyncio
 async def test_mutation_benchmark_killed(temp_code, monkeypatch):
@@ -46,11 +48,9 @@ async def test_mutation_benchmark_killed(temp_code, monkeypatch):
     monkeypatch.chdir(tmp_dir)
 
     # Benchmark with a test that SHOULD fail if logic changes
-    result = await skill.execute({
-        "action": "benchmark",
-        "path": code_file,
-        "test_command": f"pytest {test_file}"
-    })
+    result = await skill.execute(
+        {"action": "benchmark", "path": code_file, "test_command": f"pytest {test_file}"}
+    )
 
     assert "MUTANT_KILLED" in result or "Test suite fails on the ORIGINAL" in result
     # Note: Depending on environment, pytest might not be installed or behave differently.

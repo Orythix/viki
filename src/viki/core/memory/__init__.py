@@ -246,7 +246,10 @@ class HierarchicalMemory:
         }
 
     def get_full_context(
-        self, current_input: str, narrative_wisdom: list[dict] | None = None, session_id: str | None = None
+        self,
+        current_input: str,
+        narrative_wisdom: list[dict] | None = None,
+        session_id: str | None = None,
     ) -> dict[str, Any]:
         """Synthesizes context across all layers for the Deliberation layer."""
         # Cheap-retrieve fast path: trivial smalltalk doesn't need semantic

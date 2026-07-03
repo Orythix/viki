@@ -40,9 +40,10 @@ def test_progressive_disclosure():
     print(full_manifest)
 
     assert "SCHEMA" in full_manifest
-    assert "write_file" in full_manifest # Part of filesystem schema
+    assert "write_file" in full_manifest  # Part of filesystem schema
 
     print("\n✅ Smart Context Management Verified.")
+
 
 if __name__ == "__main__":
     test_progressive_disclosure()

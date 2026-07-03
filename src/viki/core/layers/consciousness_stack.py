@@ -144,7 +144,9 @@ class ConsciousnessStack:
                         )
                     elif layer_name == "Deliberation" and isinstance(data, VIKIResponse):
                         model_name = (
-                            getattr(data, "metadata", None).get("model", "unknown") if getattr(data, "metadata", None) else "unknown"
+                            getattr(data, "metadata", None).get("model", "unknown")
+                            if getattr(data, "metadata", None)
+                            else "unknown"
                         )
                         on_think(
                             "deliberation",

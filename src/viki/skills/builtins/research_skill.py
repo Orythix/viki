@@ -7,7 +7,6 @@ from urllib.parse import urlparse
 
 import aiohttp
 from bs4 import BeautifulSoup
-
 from viki.config.logger import viki_logger
 from viki.skills.base import BaseSkill
 

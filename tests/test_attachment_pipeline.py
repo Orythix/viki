@@ -29,6 +29,7 @@ class _FakeWhisperSkill:
 class _FakeRegistry:
     def __init__(self, mapping):
         self._m = mapping
+
     def get_skill(self, name):
         return self._m.get(name)
 

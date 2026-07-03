@@ -38,7 +38,7 @@ class TestSqlQuerySkill(unittest.TestCase):
     def test_select_query_succeeds(self):
         skill = SqlQuerySkill()
         out = _run(skill.execute({"db_path": self.path, "query": "SELECT * FROM t"}))
-        self.assertIn("\"name\": \"a\"", out)
+        self.assertIn('"name": "a"', out)
 
     def test_write_query_rejected(self):
         skill = SqlQuerySkill()

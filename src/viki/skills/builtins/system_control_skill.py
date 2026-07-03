@@ -6,7 +6,6 @@ import webbrowser
 from typing import Any
 
 import pyautogui
-
 from viki.skills.base import BaseSkill
 
 

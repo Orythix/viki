@@ -73,7 +73,9 @@ class EvolutionEngine:
         """Force immediate save (call on shutdown)."""
         self._debouncer.flush(self._do_save_mutations)
 
-    def propose_mutation(self, m_type: str, description: str, value: Any, pattern_id: str | None = None):
+    def propose_mutation(
+        self, m_type: str, description: str, value: Any, pattern_id: str | None = None
+    ):
         """Propose a new mutation based on a detected pattern."""
         # Check if already proposed or applied
         for m in self.mutations["applied"] + self.mutations["pending"]:

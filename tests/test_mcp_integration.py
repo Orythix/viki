@@ -31,6 +31,7 @@ def _run(coro):
 class _FakeRegistry:
     def __init__(self):
         self.skills = {}
+
     def register_skill(self, skill):
         self.skills[skill.name] = skill
 
@@ -112,7 +113,9 @@ class TestMcpSkillProxy(unittest.TestCase):
             return {"result": "ok"}
 
         client.call_tool = fake_call_tool  # monkey patch
-        proxy = MCPSkillProxy(client, "demo", {"name": "do_thing", "description": "x", "input_schema": {}})
+        proxy = MCPSkillProxy(
+            client, "demo", {"name": "do_thing", "description": "x", "input_schema": {}}
+        )
         out = _run(proxy.execute({"a": 1}))
         self.assertEqual(out, "ok")
         self.assertEqual(captured["server"], "demo")
@@ -126,7 +129,9 @@ class TestMcpSkillProxy(unittest.TestCase):
             return {"error": "boom"}
 
         client.call_tool = fake_call_tool
-        proxy = MCPSkillProxy(client, "demo", {"name": "do_thing", "description": "x", "input_schema": {}})
+        proxy = MCPSkillProxy(
+            client, "demo", {"name": "do_thing", "description": "x", "input_schema": {}}
+        )
         out = _run(proxy.execute({}))
         self.assertIn("MCP error: boom", out)
 

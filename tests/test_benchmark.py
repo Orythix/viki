@@ -31,6 +31,7 @@ class TestControlledBenchmark(unittest.TestCase):
     def async_test(coro):
         def wrapper(self):
             return asyncio.run(coro(self))
+
         return wrapper
 
     @async_test
@@ -61,4 +62,3 @@ class TestControlledBenchmark(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

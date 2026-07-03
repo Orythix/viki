@@ -13,8 +13,9 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import scripts.train_viki_opencode as train_viki_opencode
 from viki.core.knowledge_ingestion import LearningModule
+
+import scripts.train_viki_opencode as train_viki_opencode
 
 
 class TestTrainVikiOpencode(unittest.TestCase):

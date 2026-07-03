@@ -124,18 +124,37 @@ class TestPromotionGate(unittest.TestCase):
         suite_dir = os.path.join(self.data_dir, "eval_results", "humaneval_plus")
         os.makedirs(suite_dir, exist_ok=True)
         with open(os.path.join(suite_dir, "run1.jsonl"), "w", encoding="utf-8") as f:
-            f.write(json.dumps({
-                "__metadata__": True,
-                "model_profile": "any-model",
-                "model_name": "any-model:latest",
-                "air_gap": True,
-            }) + "\n")
-            f.write(json.dumps({
-                "task_id": "t1", "score": 1.0, "passed": True,
-            }) + "\n")
-            f.write(json.dumps({
-                "task_id": "t2", "score": 1.0, "passed": True,
-            }) + "\n")
+            f.write(
+                json.dumps(
+                    {
+                        "__metadata__": True,
+                        "model_profile": "any-model",
+                        "model_name": "any-model:latest",
+                        "air_gap": True,
+                    }
+                )
+                + "\n"
+            )
+            f.write(
+                json.dumps(
+                    {
+                        "task_id": "t1",
+                        "score": 1.0,
+                        "passed": True,
+                    }
+                )
+                + "\n"
+            )
+            f.write(
+                json.dumps(
+                    {
+                        "task_id": "t2",
+                        "score": 1.0,
+                        "passed": True,
+                    }
+                )
+                + "\n"
+            )
 
         score = _run(learner._capability_index_for("any-model"))
         self.assertIsNotNone(score, "capability index should compute, not silently fail")

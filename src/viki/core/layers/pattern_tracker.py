@@ -22,7 +22,12 @@ class PatternTracker:
     DEFAULT_MAX_PATTERNS = int(os.environ.get("VIKI_PATTERN_TRACKER_MAX", "5000"))
     DEFAULT_SAVE_EVERY = int(os.environ.get("VIKI_PATTERN_TRACKER_SAVE_EVERY", "10"))
 
-    def __init__(self, data_dir: str | None = None, max_patterns: int | None = None, save_every: int | None = None):
+    def __init__(
+        self,
+        data_dir: str | None = None,
+        max_patterns: int | None = None,
+        save_every: int | None = None,
+    ):
         self.patterns: dict[str, dict[str, Any]] = {}
         self.data_dir = data_dir
         self.max_patterns = int(max_patterns or self.DEFAULT_MAX_PATTERNS)

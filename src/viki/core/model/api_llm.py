@@ -73,7 +73,10 @@ class APILLM(LLMProvider):
             self.unavailable_reason = str(e)
 
     async def chat(
-        self, messages: list[dict[str, str]], temperature: float = 0.7, image_path: str | None = None
+        self,
+        messages: list[dict[str, str]],
+        temperature: float = 0.7,
+        image_path: str | None = None,
     ) -> str:
         t0 = time.perf_counter()
         success = False

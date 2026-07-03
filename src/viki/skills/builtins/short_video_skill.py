@@ -2,7 +2,6 @@ import json
 from typing import Any, cast
 
 from pydantic import BaseModel
-
 from viki.config.logger import viki_logger
 from viki.core.inference_gateway import StructuredPrompt
 from viki.skills.base import BaseSkill

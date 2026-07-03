@@ -5,7 +5,7 @@ import sys
 import unittest
 
 # Add project root (parent of viki folder) to path
-sys.path.append(os.path.abspath(os.path.join(os.getcwd(), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "..")))
 
 from viki.core.orchestrator import VIKIController
 
@@ -35,23 +35,24 @@ class TestVIKISecurityLayer(unittest.IsolatedAsyncioTestCase):
             "system": {
                 "data_dir": self.test_data_dir,
                 "log_level": "INFO",
-                "workspace_dir": os.path.abspath("./workspace")
+                "workspace_dir": os.path.abspath("./workspace"),
             },
             "models_config": models_config,
             "security_layer_path": security_layer_path,
             "memory": {"short_term_limit": 5, "long_term_enabled": False},
-            "skills": {"auto_discover": False, "registry_path": ""}
+            "skills": {"auto_discover": False, "registry_path": ""},
         }
 
         self.settings_path = os.path.abspath(f"./tests/temp_settings_security_{safe_id}.yaml")
         import yaml
-        with open(self.settings_path, 'w') as f:
+
+        with open(self.settings_path, "w") as f:
             yaml.dump(self.settings, f)
 
         self.controller = VIKIController(self.settings_path, self.soul_path)
 
     async def asyncTearDown(self):
-        if hasattr(self, 'controller') and self.controller:
+        if hasattr(self, "controller") and self.controller:
             try:
                 await asyncio.wait_for(self.controller.shutdown(), timeout=10.0)
             except Exception:
@@ -87,6 +88,7 @@ class TestVIKISecurityLayer(unittest.IsolatedAsyncioTestCase):
     def test_filesystem_action_severity(self):
         # Test that writing a new file is medium severity and overwriting is destructive
         import tempfile
+
         with tempfile.TemporaryDirectory() as tmpdir:
             new_file_path = os.path.join(tmpdir, "new_file.txt")
             existing_file_path = os.path.join(tmpdir, "existing_file.txt")
@@ -97,24 +99,33 @@ class TestVIKISecurityLayer(unittest.IsolatedAsyncioTestCase):
 
             # New file write -> medium
             self.assertEqual(
-                safety.get_action_severity("filesystem_skill", {"action": "write_file", "path": new_file_path}),
-                "medium"
+                safety.get_action_severity(
+                    "filesystem_skill", {"action": "write_file", "path": new_file_path}
+                ),
+                "medium",
             )
             # Overwriting existing file -> destructive
             self.assertEqual(
-                safety.get_action_severity("filesystem_skill", {"action": "write_file", "path": existing_file_path}),
-                "destructive"
+                safety.get_action_severity(
+                    "filesystem_skill", {"action": "write_file", "path": existing_file_path}
+                ),
+                "destructive",
             )
             # Deletion -> destructive
             self.assertEqual(
-                safety.get_action_severity("dev_tools", {"action": "delete_file", "path": existing_file_path}),
-                "destructive"
+                safety.get_action_severity(
+                    "dev_tools", {"action": "delete_file", "path": existing_file_path}
+                ),
+                "destructive",
             )
             # Patching -> medium
             self.assertEqual(
-                safety.get_action_severity("dev_tools", {"action": "patch_file", "path": existing_file_path}),
-                "medium"
+                safety.get_action_severity(
+                    "dev_tools", {"action": "patch_file", "path": existing_file_path}
+                ),
+                "medium",
             )
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

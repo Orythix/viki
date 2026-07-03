@@ -35,8 +35,10 @@ def _write_results(data_dir: str, suite: str, results, metadata=None):
 class _StubScorecard:
     def __init__(self):
         self.metrics = {}
+
     def get_summary(self, model=None):
         return {}
+
     def record_metric(self, *a, **kw):
         pass
 
@@ -58,9 +60,12 @@ class _StubController:
 class TestContinuousLearnerIntegration(unittest.TestCase):
     def test_capability_index_returns_number(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
-            _write_results(td, "humaneval_plus",
-                           [{"task_id": f"t{i}", "score": 1.0, "passed": True} for i in range(5)],
-                           metadata={"model_profile": "local-7b", "model_name": "local-7b:latest"})
+            _write_results(
+                td,
+                "humaneval_plus",
+                [{"task_id": f"t{i}", "score": 1.0, "passed": True} for i in range(5)],
+                metadata={"model_profile": "local-7b", "model_name": "local-7b:latest"},
+            )
             ctrl = _StubController(td)
             cl = ContinuousLearner(ctrl)
             score = _run(cl._capability_index_for("local-7b"))

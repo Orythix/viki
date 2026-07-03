@@ -6,11 +6,11 @@ from typing import cast
 from sqlalchemy import Float, ForeignKey, Integer, String, Text, create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 from sqlalchemy.pool import NullPool
-
 from viki.domain.entities.learning import FailureRecord, Lesson, Relationship
 from viki.domain.interfaces.learning_repository import ILearningRepository
 
 _log = logging.getLogger("viki.repository")
+
 
 class Base(DeclarativeBase):
     pass

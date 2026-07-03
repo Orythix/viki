@@ -19,7 +19,11 @@ from viki.integrations.lsp_bridge import LSPSession, LSPSpec, _path_to_uri
 
 
 def _run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro) if not asyncio.get_event_loop().is_running() else asyncio.run(coro)
+    return (
+        asyncio.get_event_loop().run_until_complete(coro)
+        if not asyncio.get_event_loop().is_running()
+        else asyncio.run(coro)
+    )
 
 
 class _FakeLSPSession(LSPSession):
@@ -97,12 +101,20 @@ class TestLSPBridge(unittest.IsolatedAsyncioTestCase):
     async def test_references_request_format(self):
         async def server():
             await asyncio.sleep(0.05)
-            req = next(m for m in self.session.outbound if m.get("method") == "textDocument/references")
+            req = next(
+                m for m in self.session.outbound if m.get("method") == "textDocument/references"
+            )
             self.assertTrue(req["params"]["context"]["includeDeclaration"])
             self.session.deliver_response(
                 req["id"],
                 [
-                    {"uri": _path_to_uri(self.file_path), "range": {"start": {"line": 0, "character": 4}, "end": {"line": 0, "character": 7}}},
+                    {
+                        "uri": _path_to_uri(self.file_path),
+                        "range": {
+                            "start": {"line": 0, "character": 4},
+                            "end": {"line": 0, "character": 7},
+                        },
+                    },
                 ],
             )
 
@@ -115,10 +127,18 @@ class TestLSPBridge(unittest.IsolatedAsyncioTestCase):
     async def test_definition_returns_list_when_single(self):
         async def server():
             await asyncio.sleep(0.05)
-            req = next(m for m in self.session.outbound if m.get("method") == "textDocument/definition")
+            req = next(
+                m for m in self.session.outbound if m.get("method") == "textDocument/definition"
+            )
             self.session.deliver_response(
                 req["id"],
-                {"uri": _path_to_uri(self.file_path), "range": {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 3}}},
+                {
+                    "uri": _path_to_uri(self.file_path),
+                    "range": {
+                        "start": {"line": 0, "character": 0},
+                        "end": {"line": 0, "character": 3},
+                    },
+                },
             )
 
         srv = asyncio.create_task(server())

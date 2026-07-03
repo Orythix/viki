@@ -61,7 +61,9 @@ def _run(coro):
 
 class TestEnsemble(unittest.TestCase):
     def setUp(self):
-        self.anthropic = _StubProvider("claude-mock", "anthropic", priority=4, response_prefix="claude")
+        self.anthropic = _StubProvider(
+            "claude-mock", "anthropic", priority=4, response_prefix="claude"
+        )
         self.openai = _StubProvider("gpt-mock", "openai", priority=4, response_prefix="gpt")
         self.gemini = _StubProvider("gemini-mock", "gemini", priority=3, response_prefix="gemini")
         self.local = _StubProvider("local-mock", "local", priority=2, response_prefix="local")

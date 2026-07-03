@@ -184,7 +184,9 @@ class _PendingOpsStage:
         negatives = ("no", "n", "reject", "cancel", ctrl.REJECT_TOKEN)
         if raw_lower in affirmatives:
             ctrl.pending_ops_plans.pop(ctx.session_id, None)
-            return cast("str | None", await ctrl._apply_ops_plan(pending_ops, session_id=ctx.session_id))
+            return cast(
+                "str | None", await ctrl._apply_ops_plan(pending_ops, session_id=ctx.session_id)
+            )
         if raw_lower in negatives:
             ctrl.pending_ops_plans.pop(ctx.session_id, None)
             return "OpsPlan cancelled."

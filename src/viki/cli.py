@@ -2,6 +2,7 @@ import logging
 import os
 import sys
 import warnings
+from typing import Any
 
 from dotenv import load_dotenv
 from rich import box
@@ -41,14 +42,14 @@ console = Console()
 try:
     import pyperclip
 except ImportError:
-    pyperclip = None
+    pyperclip: Any = None
 
 # Lazy-loaded modules
-_VIKIController = None
-_viki_logger = None
-_get_soul_path = None
-_Container = None
-_run_onboarding = None
+_VIKIController: Any = None
+_viki_logger: Any = None
+_get_soul_path: Any = None
+_Container: Any = None
+_run_onboarding: Any = None
 
 
 def _lazy_load_core():

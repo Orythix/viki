@@ -158,7 +158,9 @@ class ModelRouter:
             self.default_model = FallbackLLM({"model_name": "fallback-mock"})
         return self.default_model
 
-    def get_model(self, capabilities: list[str] | None = None, tier: str = "standard") -> LLMProvider:
+    def get_model(
+        self, capabilities: list[str] | None = None, tier: str = "standard"
+    ) -> LLMProvider:
         if not capabilities and tier == "standard":
             default = self._require_default_model()
             if self._model_allowed(default):
