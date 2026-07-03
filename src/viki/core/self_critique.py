@@ -168,6 +168,55 @@ class SelfCritique:
             logger.warning("SelfCritique.improve failed: %s", e)
             return solution
 
+    async def refine(
+        self,
+        task: str,
+        solution: str,
+        max_iterations: int = 3,
+        score_threshold: float = 0.85,
+        min_improvement: float = 0.05,
+    ) -> tuple[str, list[CritiqueResult]]:
+        """Iteratively critique and improve a solution until convergence.
+
+        Each iteration: critique → improve → re-critique.
+        Stops when:
+        - score >= score_threshold, or
+        - score improvement < min_improvement (converged), or
+        - max_iterations reached.
+
+        Returns (final_solution, list_of_critique_results_per_iteration).
+        """
+        current = solution
+        results: list[CritiqueResult] = []
+
+        for i in range(max_iterations):
+            cr = await self.critique(task, current)
+            results.append(cr)
+
+            if cr.passed or cr.score >= score_threshold:
+                logger.info("Refine: converged at iteration %d (score=%.2f)", i + 1, cr.score)
+                break
+
+            if i > 0:
+                prev_score = results[-2].score
+                delta = cr.score - prev_score
+                if delta < min_improvement:
+                    logger.info(
+                        "Refine: plateau at iteration %d (score=%.2f, delta=%.2f)",
+                        i + 1,
+                        cr.score,
+                        delta,
+                    )
+                    break
+
+            improved = await self.improve(task, current, cr)
+            if improved == current:
+                logger.info("Refine: no change at iteration %d, stopping", i + 1)
+                break
+            current = improved
+
+        return current, results
+
     @staticmethod
     def _build_checks(level: CritiqueLevel) -> str:
         base = "1. Correctness — does it solve the task?\n"

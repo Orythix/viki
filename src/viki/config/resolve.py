@@ -1,6 +1,7 @@
 """
 Resolve soul/persona config path from settings and VIKI_PERSONA env.
 """
+
 import os
 
 import yaml

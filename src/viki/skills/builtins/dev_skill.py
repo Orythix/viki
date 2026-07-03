@@ -218,7 +218,7 @@ class DevSkill(BaseSkill):
             if occurrence is not None:
                 parts = content.split(target)
                 if occurrence < 1 or occurrence > len(parts) - 1:
-                    return f"Error: Occurrence {occurrence} out of range (Found {len(parts)-1})."
+                    return f"Error: Occurrence {occurrence} out of range (Found {len(parts) - 1})."
 
                 # Reconstruct with only one occurrence replaced
                 new_content = (

@@ -1,6 +1,7 @@
 """
 Image generation (DALL-E or Gemini). Set OPENAI_API_KEY or GEMINI API key. Actions: generate(prompt, size).
 """
+
 import os
 from typing import Any
 
@@ -44,21 +45,21 @@ class ImageGenSkill(BaseSkill):
         if not key:
             return "Set OPENAI_API_KEY for DALL-E image generation."
         try:
-            import aiohttp
+            from viki.core.utils.http_session import get_session
 
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    "https://api.openai.com/v1/images/generations",
-                    headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-                    json={"model": "dall-e-3", "prompt": prompt[:4000], "size": size, "n": 1},
-                ) as resp:
-                    if resp.status != 200:
-                        return f"OpenAI API error: {resp.status} {await resp.text()}"
-                    data = await resp.json()
-                    url = data.get("data", [{}])[0].get("url")
-                    if url:
-                        return f"Generated image: {url}"
-                    revised = data.get("data", [{}])[0].get("revised_prompt", "")
-                    return f"Generated (no URL in response). Revised prompt: {revised[:200]}"
+            session = get_session()
+            async with session.post(
+                "https://api.openai.com/v1/images/generations",
+                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                json={"model": "dall-e-3", "prompt": prompt[:4000], "size": size, "n": 1},
+            ) as resp:
+                if resp.status != 200:
+                    return f"OpenAI API error: {resp.status} {await resp.text()}"
+                data = await resp.json()
+                url = data.get("data", [{}])[0].get("url")
+                if url:
+                    return f"Generated image: {url}"
+                revised = data.get("data", [{}])[0].get("revised_prompt", "")
+                return f"Generated (no URL in response). Revised prompt: {revised[:200]}"
         except Exception as e:
             return f"Image gen error: {e}"

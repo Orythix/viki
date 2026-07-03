@@ -3,6 +3,7 @@ P1: tests for the ArtifactManifest helper. The download endpoint security
 behaviour (path-traversal guard, manifest-listed only) is exercised
 indirectly here by inspecting the manifest contents.
 """
+
 from __future__ import annotations
 
 import os

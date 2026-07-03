@@ -7,6 +7,7 @@ stages can be added per ARCHITECTURE_REFACTOR.md without growing _process_reques
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Any, Protocol, cast
 
@@ -366,7 +367,7 @@ class _FileReferenceStage:
                         content = f.read(self.MAX_INLINE_SIZE)
                         truncated = " (truncated)" if len(content) >= self.MAX_INLINE_SIZE else ""
                         inlined.append(
-                            f"[Auto-loaded file: {resolved}{truncated}]\n" f"```\n{content}\n```"
+                            f"[Auto-loaded file: {resolved}{truncated}]\n```\n{content}\n```"
                         )
             except Exception as e:
                 viki_logger.debug(f"FileReferenceStage failed for {resolved}: {e}")
@@ -376,13 +377,105 @@ class _FileReferenceStage:
         return None
 
 
+class _FeedbackCaptureStage:
+    """Capture user corrections as lessons for continuous learning.
+
+    Detects when the current input is corrective feedback to the
+    previous assistant response and stores it as a lesson immediately.
+    """
+
+    _CORRECTION_MARKERS = (
+        "no",
+        "no,",
+        "no ",
+        "wrong",
+        "incorrect",
+        "that's not",
+        "that is not",
+        "actually,",
+        "actually ",
+        "not what i",
+        "that's wrong",
+        "you're wrong",
+        "you are wrong",
+        "mistake",
+        "error",
+        "fix it",
+        "that's not right",
+        "not correct",
+        "try again",
+        "redo",
+        "start over",
+        "different approach",
+        "instead",
+        "what i meant",
+        "let me clarify",
+        "let me correct",
+        "i meant",
+        "i said",
+        "read again",
+        "you misunderstood",
+        "re-read",
+        "pay attention",
+        "listen",
+        "follow",
+        "step by step",
+        "no no",
+    )
+
+    async def run(self, ctrl: Any, ctx: RequestContext) -> str | None:
+        if not hasattr(ctrl, "learning") or not hasattr(ctrl, "memory"):
+            return None
+
+        lower = ctx.user_input.strip().lower()
+        if len(lower) < 5 or len(lower) > 2000:
+            return None
+
+        is_correction = any(m in lower for m in self._CORRECTION_MARKERS)
+        if not is_correction:
+            return None
+
+        try:
+            trace = ctrl.memory.working.get_trace(session_id=ctx.session_id)
+            if not trace:
+                return None
+
+            last_assistant = None
+            for msg in reversed(trace):
+                if msg.get("role") == "assistant" and msg.get("content"):
+                    last_assistant = msg["content"]
+                    break
+
+            if not last_assistant or len(last_assistant) < 20:
+                return None
+
+            ctrl.learning.save_lesson(
+                f"USER_CORRECTION: Input='{ctx.user_input[:300]}' | "
+                f"PreviousResponse='{last_assistant[:300]}' | "
+                f"Follow the user's correction in future responses."
+            )
+            viki_logger.info(
+                "FeedbackCapture: saved correction as lesson (input='%s...')",
+                ctx.user_input[:60],
+            )
+        except Exception as e:
+            viki_logger.debug("FeedbackCapture failed: %s", e)
+
+        return None
+
+
 class RequestPipeline:
-    """Runs ordered preflight stages until one returns a terminal response."""
+    """Runs ordered preflight stages until one returns a terminal response.
+
+    Stages marked as run_with run concurrently with the next sequential stage
+    where possible, reducing wall-clock latency for side-effect-only stages.
+    """
 
     def __init__(self, stages: list[PreflightStage] | None = None):
         if stages is None:
             stages = [
                 _SuperAdminStage(),
+                _FeedbackCaptureStage(),
                 _AttachmentStage(),
                 _FileReferenceStage(),
                 _GovernorStage(),
@@ -394,11 +487,32 @@ class RequestPipeline:
         self._stages: list[PreflightStage] = stages
 
     async def run_preflight(self, ctrl: Any, ctx: RequestContext) -> str | None:
-        for stage in self._stages:
+        idx = 0
+        while idx < len(self._stages):
+            stage = self._stages[idx]
             out = await stage.run(ctrl, ctx)
             if out is not None:
                 return out
+            idx += 1
+            parallel_group = []
+            while idx < len(self._stages) and self._is_parallel_safe(idx):
+                parallel_group.append(self._stages[idx])
+                idx += 1
+            if parallel_group:
+                results = await asyncio.gather(
+                    *(s.run(ctrl, ctx) for s in parallel_group), return_exceptions=True
+                )
+                for r in results:
+                    if isinstance(r, Exception):
+                        viki_logger.debug("Parallel preflight stage failed: %s", r)
+                    elif r is not None:
+                        return r
         return None
+
+    @staticmethod
+    def _is_parallel_safe(idx: int) -> bool:
+        safe_indices = {1, 2, 6}
+        return idx in safe_indices
 
 
 def build_default_preflight_pipeline() -> RequestPipeline:

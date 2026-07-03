@@ -4,6 +4,7 @@ P1: tests for the sandbox executor selection + subprocess backend.
 We deliberately don't run Docker in CI; we just confirm the selector picks
 the correct backend and the subprocess path produces clean output.
 """
+
 from __future__ import annotations
 
 import asyncio

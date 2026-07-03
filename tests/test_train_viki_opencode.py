@@ -1,6 +1,7 @@
 """
 Tests for scripts/train_viki_opencode.py.
 """
+
 from __future__ import annotations
 
 import json
@@ -59,11 +60,13 @@ class TestTrainVikiOpencode(unittest.TestCase):
             pass
 
     def test_workflow(self):
-        with patch.object(train_viki_opencode, "DATA_DIR", self.data_dir), patch.object(
-            train_viki_opencode, "CONFIG_DIR", self.config_dir
-        ), patch.object(train_viki_opencode, "KNOWLEDGE_SEED", self.seed_path), patch.object(
-            train_viki_opencode, "TRAINING_OUTPUT", self.output_path
-        ), patch.object(train_viki_opencode, "REPO_ROOT", self.temp_dir):
+        with (
+            patch.object(train_viki_opencode, "DATA_DIR", self.data_dir),
+            patch.object(train_viki_opencode, "CONFIG_DIR", self.config_dir),
+            patch.object(train_viki_opencode, "KNOWLEDGE_SEED", self.seed_path),
+            patch.object(train_viki_opencode, "TRAINING_OUTPUT", self.output_path),
+            patch.object(train_viki_opencode, "REPO_ROOT", self.temp_dir),
+        ):
             # Run the main function
             train_viki_opencode.main()
 

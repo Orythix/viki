@@ -137,7 +137,8 @@ def ml_stack_available() -> tuple[bool, str]:
         return False, (
             "LoRA fine-tuning requires the ML stack. Missing: "
             + ", ".join(missing)
-            + ". Install with: pip install " + " ".join(missing)
+            + ". Install with: pip install "
+            + " ".join(missing)
         )
     return True, "ok"
 

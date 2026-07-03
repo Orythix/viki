@@ -1,6 +1,7 @@
 """
 Smoke test for the in-process event bus that powers /ws.
 """
+
 from __future__ import annotations
 
 import json

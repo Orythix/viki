@@ -2,6 +2,7 @@
 P2: tests for sparkline series + regression detection on the
 IntelligenceScorecard.
 """
+
 from __future__ import annotations
 
 import tempfile

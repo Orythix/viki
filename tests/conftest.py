@@ -1,4 +1,5 @@
 """Pytest configuration and fixtures for VIKI tests."""
+
 import sys
 import tempfile
 from pathlib import Path

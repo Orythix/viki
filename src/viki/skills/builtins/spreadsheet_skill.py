@@ -2,6 +2,7 @@
 Spreadsheet skill: create or update XLSX and CSV files.
 Manus-style "delivers spreadsheets".
 """
+
 import csv
 import os
 from typing import Any

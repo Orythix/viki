@@ -2,6 +2,7 @@
 Presentation skill: create PowerPoint (PPTX) from outline or natural language.
 Manus-style "delivers PowerPoint presentations (PPTX)".
 """
+
 from typing import Any
 
 from viki.config.logger import viki_logger

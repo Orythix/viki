@@ -2,6 +2,7 @@
 P0 regression: ComputerUseSkill must NOT silently click the screen center
 when no real UI grounding is available.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -46,9 +47,7 @@ class TestComputerUseGrounding(unittest.TestCase):
         self.skill._last_screenshot = os.path.join(self._td.name, "fake.png")
         open(self.skill._last_screenshot, "wb").close()
         # Above the confidence floor but a 1-pixel box → reject.
-        self.skill._last_elements = [
-            UIElement(label="ghost", bbox=(0, 0, 0, 0), confidence=0.99)
-        ]
+        self.skill._last_elements = [UIElement(label="ghost", bbox=(0, 0, 0, 0), confidence=0.99)]
         result = _run(self.skill._do_click_element({"label": "ghost"}))
         payload = json.loads(result)
         self.assertEqual(payload["status"], "rejected")
@@ -57,7 +56,9 @@ class TestComputerUseGrounding(unittest.TestCase):
     def test_no_grounder_returns_empty(self):
         # No controller, no env var → grounding must be empty (not a
         # full-screen dummy element as before).
-        with patch.object(self.skill, "_capture_screenshot", return_value=os.path.join(self._td.name, "x.png")):
+        with patch.object(
+            self.skill, "_capture_screenshot", return_value=os.path.join(self._td.name, "x.png")
+        ):
             with open(os.path.join(self._td.name, "x.png"), "wb") as f:
                 f.write(b"")
             elements = _run(self.skill._ground_elements(os.path.join(self._td.name, "x.png"), None))

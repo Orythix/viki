@@ -1,4 +1,5 @@
 """Tests for offline RAG retrieval evaluation."""
+
 from __future__ import annotations
 
 import json

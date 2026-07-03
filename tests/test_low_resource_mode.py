@@ -9,6 +9,7 @@ Verifies:
 This is a *fast* smoke test: it monkey-patches sys.modules so importing the
 controller doesn't drag the optional packages along.
 """
+
 from __future__ import annotations
 
 import os

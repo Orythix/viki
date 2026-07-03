@@ -5,6 +5,7 @@ We exercise the SQLite path of the SQL skill with pagination, and we sanity
 check that the unsupported-engine and missing-driver branches return clear
 error messages instead of crashing.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -39,13 +40,17 @@ class TestSqlQuerySkill(unittest.TestCase):
 
     def test_pagination_returns_next_offset(self):
         skill = SqlQuerySkill()
-        out = _run(skill.execute({
-            "engine": "sqlite",
-            "db_path": self.db,
-            "query": "SELECT id FROM rows ORDER BY id",
-            "limit": 4,
-            "offset": 0,
-        }))
+        out = _run(
+            skill.execute(
+                {
+                    "engine": "sqlite",
+                    "db_path": self.db,
+                    "query": "SELECT id FROM rows ORDER BY id",
+                    "limit": 4,
+                    "offset": 0,
+                }
+            )
+        )
         data = json.loads(out)
         self.assertEqual(data["count"], 4)
         self.assertEqual(data["limit"], 4)
@@ -54,24 +59,32 @@ class TestSqlQuerySkill(unittest.TestCase):
 
     def test_pagination_terminates_when_no_more_rows(self):
         skill = SqlQuerySkill()
-        out = _run(skill.execute({
-            "engine": "sqlite",
-            "db_path": self.db,
-            "query": "SELECT id FROM rows ORDER BY id",
-            "limit": 4,
-            "offset": 8,
-        }))
+        out = _run(
+            skill.execute(
+                {
+                    "engine": "sqlite",
+                    "db_path": self.db,
+                    "query": "SELECT id FROM rows ORDER BY id",
+                    "limit": 4,
+                    "offset": 8,
+                }
+            )
+        )
         data = json.loads(out)
         self.assertEqual(data["count"], 2)
         self.assertIsNone(data["next_offset"])
 
     def test_blocks_write_query(self):
         skill = SqlQuerySkill()
-        out = _run(skill.execute({
-            "engine": "sqlite",
-            "db_path": self.db,
-            "query": "DELETE FROM rows WHERE id = 1",
-        }))
+        out = _run(
+            skill.execute(
+                {
+                    "engine": "sqlite",
+                    "db_path": self.db,
+                    "query": "DELETE FROM rows WHERE id = 1",
+                }
+            )
+        )
         self.assertIn("Error", out)
 
     def test_unknown_engine(self):
@@ -81,12 +94,16 @@ class TestSqlQuerySkill(unittest.TestCase):
 
     def test_missing_driver_returns_friendly_error(self):
         skill = SqlQuerySkill()
-        out = _run(skill.execute({
-            "engine": "postgres",
-            "host": "localhost",
-            "db": "x",
-            "query": "SELECT 1",
-        }))
+        out = _run(
+            skill.execute(
+                {
+                    "engine": "postgres",
+                    "host": "localhost",
+                    "db": "x",
+                    "query": "SELECT 1",
+                }
+            )
+        )
         self.assertIn("postgres engine", out)
 
 

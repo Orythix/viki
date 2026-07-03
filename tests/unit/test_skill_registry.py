@@ -1,4 +1,5 @@
 """Tests for skill registry."""
+
 import sys
 from pathlib import Path
 

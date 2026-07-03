@@ -1,4 +1,5 @@
 """Unit tests for endpoint_guard heuristics (no filesystem watchers)."""
+
 from __future__ import annotations
 
 import os

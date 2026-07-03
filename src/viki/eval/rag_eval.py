@@ -18,6 +18,7 @@ Metrics (intentionally simple, explainable)
 
 Security note: Gold files may contain sensitive strings; treat them like test data, not logs.
 """
+
 from __future__ import annotations
 
 import json

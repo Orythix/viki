@@ -26,10 +26,7 @@ def classify_events(
     if not trace:
         return {}
 
-    steps_desc = "\n".join(
-        f"- {step.id}: {step.detector.description}"
-        for step in spec.steps
-    )
+    steps_desc = "\n".join(f"- {step.id}: {step.detector.description}" for step in spec.steps)
 
     tool_calls = "\n".join(
         f"[{i}] {event.tool}: input={event.input[:500]} output={event.output[:200]}"
@@ -37,10 +34,8 @@ def classify_events(
     )
 
     prompt_template = (PROMPTS_DIR / "classifier.md").read_text()
-    prompt = (
-        prompt_template
-        .replace("{steps_description}", steps_desc)
-        .replace("{tool_calls}", tool_calls)
+    prompt = prompt_template.replace("{steps_description}", steps_desc).replace(
+        "{tool_calls}", tool_calls
     )
 
     result = subprocess.run(
@@ -52,8 +47,7 @@ def classify_events(
 
     if result.returncode != 0:
         raise RuntimeError(
-            f"classifier subprocess failed (rc={result.returncode}): "
-            f"{result.stderr[:500]}"
+            f"classifier subprocess failed (rc={result.returncode}): {result.stderr[:500]}"
         )
 
     return _parse_classification(result.stdout)
@@ -75,11 +69,7 @@ def _parse_classification(text: str) -> dict[str, list[int]]:
         if not isinstance(parsed, dict):
             logger.warning("Classifier returned non-dict JSON: %s", type(parsed).__name__)
             return {}
-        return {
-            k: [int(i) for i in v]
-            for k, v in parsed.items()
-            if isinstance(v, list)
-        }
+        return {k: [int(i) for i in v] for k, v in parsed.items() if isinstance(v, list)}
     except (json.JSONDecodeError, ValueError, TypeError) as e:
         logger.warning("Failed to parse classification output: %s", e)
         return {}

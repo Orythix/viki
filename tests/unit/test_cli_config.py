@@ -1,4 +1,5 @@
 """Tests for CLI config resolution."""
+
 import os
 import sys
 import tempfile

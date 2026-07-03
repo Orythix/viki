@@ -4,6 +4,7 @@ Optional git workspace snapshot for deliberation context.
 Inspired by snapshot-style repo context in external CLI assistants; keeps prompts
 grounded in branch/status without pulling the full TypeScript stack.
 """
+
 from __future__ import annotations
 
 import os

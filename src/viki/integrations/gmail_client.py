@@ -3,6 +3,7 @@ Gmail API client for VIKI. Used by EmailSkill when integrations.gmail.enabled.
 Requires: google-auth, google-auth-oauthlib, google-api-python-client.
 Credentials: VIKI_GMAIL_CREDENTIALS_PATH or settings integrations.gmail.credentials_path.
 """
+
 import os
 
 

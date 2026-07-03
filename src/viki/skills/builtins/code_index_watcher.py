@@ -11,6 +11,7 @@ Usage:
 The watcher requires the optional `watchdog` dependency. When it's missing
 we log once and become a no-op so VIKI keeps booting.
 """
+
 from __future__ import annotations
 
 import os

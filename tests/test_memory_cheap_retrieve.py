@@ -5,6 +5,7 @@ For trivial conversational input, `MemoryStack.get_full_context` must NOT
 invoke the encoder, AND `LearningModule.get_relevant_lessons` must short-
 circuit to an empty list.
 """
+
 from __future__ import annotations
 
 import tempfile

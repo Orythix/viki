@@ -1,4 +1,5 @@
 """Tests for configuration path resolution."""
+
 import os
 import sys
 import tempfile

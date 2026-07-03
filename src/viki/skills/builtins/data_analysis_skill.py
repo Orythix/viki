@@ -2,6 +2,7 @@
 Data analysis skill: load CSV/Excel, describe stats, visualize (charts), optional LLM summary.
 Manus-style "process datasets, identify patterns, generate reports, create visualizations."
 """
+
 import io
 import os
 from typing import Any

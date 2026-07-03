@@ -67,12 +67,14 @@ def main() -> None:
     logger.info("       %d steps extracted", len(spec.steps))
 
     # Step 2: Generate scenarios
-    spec_yaml = yaml.dump({
-        "steps": [
-            {"id": s.id, "description": s.description, "required": s.required}
-            for s in spec.steps
-        ]
-    })
+    spec_yaml = yaml.dump(
+        {
+            "steps": [
+                {"id": s.id, "description": s.description, "required": s.required}
+                for s in spec.steps
+            ]
+        }
+    )
     logger.info("[2/4] Generating scenarios (3 prompt strictness levels)...")
     scenarios = generate_scenarios(args.skill, spec_yaml, model=args.gen_model)
     logger.info("       %d scenarios generated", len(scenarios))

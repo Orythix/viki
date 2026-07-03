@@ -33,10 +33,7 @@ class TestExecutionEvaluator(unittest.TestCase):
     def test_failing_python_solution(self):
         candidate = "```python\ndef add(a, b):\n    return a - b\n```"
         task = {
-            "test_code": (
-                "candidate = _CANDIDATE_NAMESPACE['add']\n"
-                "assert candidate(2, 3) == 5\n"
-            ),
+            "test_code": ("candidate = _CANDIDATE_NAMESPACE['add']\nassert candidate(2, 3) == 5\n"),
             "language": "python",
         }
         score = ExecutionEvaluator().evaluate(task, candidate)
@@ -61,7 +58,9 @@ class TestExecutionEvaluator(unittest.TestCase):
 
 class _StubJudge(LLMProvider):
     def __init__(self, name, score, rationale="ok", provider="stub"):
-        super().__init__({"model_name": name, "provider": provider, "capabilities": ["reasoning"], "priority": 3})
+        super().__init__(
+            {"model_name": name, "provider": provider, "capabilities": ["reasoning"], "priority": 3}
+        )
         self.provider_name = provider
         self._score = score
         self._rationale = rationale

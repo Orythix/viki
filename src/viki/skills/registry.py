@@ -274,6 +274,13 @@ class SkillRegistry:
         # Clean up path
         sys.path.pop(0)
 
+    async def execute_skill(self, name: str, params: dict) -> Any:
+        """Execute a skill by name with params. Raises ValueError if not found."""
+        skill = self.skills.get(name)
+        if skill is None:
+            raise ValueError(f"Skill '{name}' not found in registry")
+        return await skill.execute(params)
+
     def load_sovereign_library(self, path: str, controller: Any):
         """Load 100+ skills from a JSON library and register them as BridgeSkills."""
         if not os.path.exists(path):

@@ -7,7 +7,7 @@ class LocalAgentPool(IAgentPool):
         self._agents: dict[str, SubAgent] = {}
 
     def provision_agent(self, specialty: str) -> SubAgent:
-        agent = SubAgent(name=f"SubAgent-{len(self._agents)+1}", specialty=specialty)
+        agent = SubAgent(name=f"SubAgent-{len(self._agents) + 1}", specialty=specialty)
         self._agents[agent.id] = agent
         return agent
 

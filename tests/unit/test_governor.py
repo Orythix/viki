@@ -1,4 +1,5 @@
 """Tests for the safety governor."""
+
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock

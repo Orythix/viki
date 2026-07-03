@@ -2,6 +2,7 @@
 A/B Testing Framework for Model Comparison
 Enables data-driven model selection and validation.
 """
+
 import asyncio
 import time
 from typing import Any
@@ -85,7 +86,7 @@ class ModelABTest:
 
         # Test each prompt on both models
         for i, test_case in enumerate(self.test_prompts):
-            viki_logger.debug(f"A/B Test: Running test {i+1}/{test_count}")
+            viki_logger.debug(f"A/B Test: Running test {i + 1}/{test_count}")
 
             # Run models in parallel for this test case
             task_a = self._test_model(model_a, test_case)

@@ -200,7 +200,7 @@ def main():
         prop = pick(PROPS)
 
         if draw_count > 1:
-            print(f"━━━━━━━━━━ 第 {i+1} 抽 ━━━━━━━━━━")
+            print(f"━━━━━━━━━━ 第 {i + 1} 抽 ━━━━━━━━━━")
 
         print(f"[身份] 前世身份: {life}")
         print(f"[动机] 来当龙虾的原因: {reason}")

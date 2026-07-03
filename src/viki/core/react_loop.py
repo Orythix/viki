@@ -189,25 +189,42 @@ async def run_react_loop(
                 )
 
             if viki_resp is None:
-                viki_resp = await controller.cortex.process(
-                    safe_input,
-                    memory_context=memory_context,
-                    url_context=url_context,
-                    use_lite_schema=use_lite,
-                    world_context=world_understanding,
-                    signals_context=signals_state + f", AgencyWeights: {agency_weights}",
-                    evolution_log=controller.evolution.get_evolution_summary(),
-                    action_results=action_results,
-                    use_ensemble=use_ensemble_setting,
-                    on_event=on_event,
-                    on_think=on_think,
-                    model_tier=cognitive_route.model_tier if cognitive_route else "standard",
-                    is_agent_mode=controller.is_agent_mode,
-                    is_plan_mode=controller.is_plan_mode,
-                    is_debug_mode=controller.is_debug_mode,
-                    is_singularity_mode=controller.is_singularity_mode,
-                    execution_started=controller.world.state.execution_started,
-                )
+                cached_resp = None
+                if (
+                    react_step == 0
+                    and not action_results
+                    and hasattr(controller, "cognitive_router")
+                ):
+                    try:
+                        cached = controller.cognitive_router.semantic_cache.lookup(safe_input)
+                        if cached is not None:
+                            viki_logger.info("Semantic cache HIT for input (latency saved)")
+                            cached_resp = cached
+                            if isinstance(cached, dict):
+                                viki_resp = VIKIResponse.model_validate(cached)
+                    except Exception as e:
+                        viki_logger.debug("Semantic cache lookup failed: %s", e)
+
+                if cached_resp is None:
+                    viki_resp = await controller.cortex.process(
+                        safe_input,
+                        memory_context=memory_context,
+                        url_context=url_context,
+                        use_lite_schema=use_lite,
+                        world_context=world_understanding,
+                        signals_context=signals_state + f", AgencyWeights: {agency_weights}",
+                        evolution_log=controller.evolution.get_evolution_summary(),
+                        action_results=action_results,
+                        use_ensemble=use_ensemble_setting,
+                        on_event=on_event,
+                        on_think=on_think,
+                        model_tier=cognitive_route.model_tier if cognitive_route else "standard",
+                        is_agent_mode=controller.is_agent_mode,
+                        is_plan_mode=controller.is_plan_mode,
+                        is_debug_mode=controller.is_debug_mode,
+                        is_singularity_mode=controller.is_singularity_mode,
+                        execution_started=controller.world.state.execution_started,
+                    )
 
             if task_type == "coding" and viki_resp:
                 if viki_resp.intent_type == "clarification":

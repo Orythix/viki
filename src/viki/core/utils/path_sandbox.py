@@ -2,6 +2,7 @@
 Path sandbox for content-creation and file-writing skills.
 Ensures output paths stay under allowed roots and not under blocked system paths.
 """
+
 import os
 from typing import Any
 

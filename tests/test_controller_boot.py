@@ -8,6 +8,7 @@ Confirms:
 
 This is intentionally narrow; deep behaviour is covered by per-module tests.
 """
+
 from __future__ import annotations
 
 import asyncio

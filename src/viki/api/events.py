@@ -2,6 +2,7 @@
 In-process event bus for real-time notifications (Phase 7).
 Powers the WebSocket gateway and internal autonomy monitoring.
 """
+
 from __future__ import annotations
 
 import asyncio

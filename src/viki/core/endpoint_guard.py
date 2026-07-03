@@ -7,6 +7,7 @@ Local endpoint guard: heuristic file-risk checks and optional OS AV CLI.
 
 This complements real antivirus; it is not a full AV engine.
 """
+
 from __future__ import annotations
 
 import os

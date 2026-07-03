@@ -1,6 +1,7 @@
 """
 Smart home: Philips Hue, Eight Sleep (optional). Config: hue bridge IP, API keys in env.
 """
+
 import os
 from typing import Any
 

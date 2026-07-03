@@ -389,7 +389,7 @@ class ControlledBenchmark:
         avg_recovery_count = sum(getattr(r, "recovery_count", 0) for r in results) / len(results)
 
         viki_logger.info(f"BENCHMARK SUMMARY ({results[0].model_name}):")
-        viki_logger.info(f"- Success Rate: {success_rate*100:.1f}%")
+        viki_logger.info(f"- Success Rate: {success_rate * 100:.1f}%")
         viki_logger.info(f"- Restraint Score: {avg_restraint:.2f}")
         viki_logger.info(f"- Avg Latency: {avg_latency:.2f}s")
         viki_logger.info(f"- Avg Recovery Count: {avg_recovery_count:.2f}")

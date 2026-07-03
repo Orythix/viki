@@ -2,6 +2,7 @@
 Greeting / ack / farewell reflexes return canned replies without invoking the
 LLM. This is the cheapest possible "hello viki" path.
 """
+
 from __future__ import annotations
 
 import unittest

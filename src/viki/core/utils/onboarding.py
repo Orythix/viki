@@ -1,6 +1,7 @@
 """
 Interactive onboarding for first-time VIKI users.
 """
+
 import hashlib
 import json
 import logging

@@ -5,6 +5,7 @@ LearningModule and NarrativeMemory must NOT import sentence_transformers
 during __init__. The import / instantiation should only happen the first time
 a non-trivial query asks for an embedding.
 """
+
 from __future__ import annotations
 
 import sys

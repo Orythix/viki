@@ -2,6 +2,7 @@
 PDF edit skill (Nano PDF-style): extract text, optional simple edit. Heavy: PyMuPDF or pdfplumber.
 Paths are restricted to allowed roots (workspace, data).
 """
+
 import os
 from typing import Any
 

@@ -7,6 +7,7 @@ Docker base images, etc.) without raising `ImportError`. Calls to
 `execute()` on those platforms return a clear error string instead of
 crashing the controller.
 """
+
 from __future__ import annotations
 
 import asyncio  # noqa: F401  (kept for backward compatibility)
@@ -115,8 +116,7 @@ class WindowManagerSkill(BaseSkill):
                     "Use the equivalent OS-native tools on macOS / Linux."
                 )
             return (
-                "WindowManagerSkill requires pywin32. "
-                'Install with `pip install -e ".[windows]"`.'
+                'WindowManagerSkill requires pywin32. Install with `pip install -e ".[windows]"`.'
             )
 
         action = params.get("action")

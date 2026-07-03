@@ -504,9 +504,9 @@ def cmd_status(args) -> int:
         global_instincts = [i for i in instincts if i.get("_scope_label") == "global"]
 
         # Print header
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"  INSTINCT STATUS - {len(instincts)} total")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
         print(f"  Project:  {project['name']} ({project['id']})")
         print(f"  Project instincts: {len(project_instincts)}")
@@ -537,7 +537,7 @@ def cmd_status(args) -> int:
     # Pending instinct stats
     pending = _collect_pending_instincts()
     if pending:
-        print(f"\n{'-'*60}")
+        print(f"\n{'-' * 60}")
         print(f"  Pending instincts: {len(pending)} awaiting review")
 
         if len(pending) >= 5:
@@ -559,7 +559,7 @@ def cmd_status(args) -> int:
                 days_left = max(0, PENDING_TTL_DAYS - item["age_days"])
                 print(f"    - {item['name']} ({days_left}d remaining)")
 
-    print(f"\n{'='*60}\n")
+    print(f"\n{'=' * 60}\n")
     return 0
 
 
@@ -581,7 +581,7 @@ def _print_instincts_by_domain(instincts: list[dict]) -> None:
             trigger = inst.get("trigger", "unknown trigger")
             scope_tag = f"[{inst.get('scope', '?')}]"
 
-            print(f"    {conf_bar} {int(conf*100):3d}%  {inst.get('id', 'unnamed')} {scope_tag}")
+            print(f"    {conf_bar} {int(conf * 100):3d}%  {inst.get('id', 'unnamed')} {scope_tag}")
             print(f"              trigger: {trigger}")
 
             # Extract action from content
@@ -896,11 +896,11 @@ def cmd_evolve(args) -> int:
     project_instincts = [i for i in instincts if i.get("_scope_label") == "project"]
     global_instincts = [i for i in instincts if i.get("_scope_label") == "global"]
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  EVOLVE ANALYSIS - {len(instincts)} instincts")
     print(f"  Project: {project['name']} ({project['id']})")
     print(f"  Project-scoped: {len(project_instincts)} | Global: {len(global_instincts)}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     # Group by domain
     by_domain = defaultdict(list)
@@ -946,7 +946,7 @@ def cmd_evolve(args) -> int:
         print("\n## SKILL CANDIDATES\n")
         for i, cand in enumerate(skill_candidates[:5], 1):
             scope_info = ", ".join(cand["scopes"])
-            print(f"{i}. Cluster: \"{cand['trigger']}\"")
+            print(f'{i}. Cluster: "{cand["trigger"]}"')
             print(f"   Instincts: {len(cand['instincts'])}")
             print(f"   Avg confidence: {cand['avg_confidence']:.0%}")
             print(f"   Domains: {', '.join(cand['domains'])}")
@@ -999,7 +999,7 @@ def cmd_evolve(args) -> int:
         else:
             print("\nNo structures generated (need higher-confidence clusters).")
 
-    print(f"\n{'='*60}\n")
+    print(f"\n{'=' * 60}\n")
     return 0
 
 
@@ -1171,9 +1171,9 @@ def _promote_auto(project: dict, force: bool, dry_run: bool) -> int:
         )
         return 0
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  AUTO-PROMOTION CANDIDATES - {len(candidates)} found")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     for cand in candidates:
         proj_names = ", ".join(pname for _, pname, _ in cand["entries"])
@@ -1234,9 +1234,9 @@ def cmd_projects(args) -> int:
         print("Projects are auto-detected when you use Claude Code in a git repo.")
         return 0
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  KNOWN PROJECTS - {len(registry)} total")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     for pid, pinfo in sorted(
         registry.items(), key=lambda x: x[1].get("last_seen", ""), reverse=True
@@ -1269,7 +1269,7 @@ def cmd_projects(args) -> int:
     print("  GLOBAL")
     print(f"    Instincts: {global_personal} personal, {global_inherited} inherited")
 
-    print(f"\n{'='*60}\n")
+    print(f"\n{'=' * 60}\n")
     return 0
 
 

@@ -2,6 +2,7 @@
 Website skill: generate a minimal static site or scaffold in the workspace.
 Manus-style "delivers websites".
 """
+
 import os
 import re
 from typing import Any

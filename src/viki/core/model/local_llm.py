@@ -33,6 +33,7 @@ class LocalLLM(LLMProvider):
         self._ollama_enable_thinking = bool(config.get("ollama_enable_thinking", False))
         _oo = config.get("ollama_options")
         self._ollama_options: dict[str, Any] = dict(_oo) if isinstance(_oo, dict) else {}
+        self._session: aiohttp.ClientSession | None = None
         if not ollama_model_exists(self.base_url, self.model_name):
             self.available = False
             self.unavailable_reason = (
@@ -44,6 +45,11 @@ class LocalLLM(LLMProvider):
                 self.model_name,
                 self.unavailable_reason,
             )
+
+    def _get_session(self) -> aiohttp.ClientSession:
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=300))
+        return self._session
 
     def _ollama_options_merged(self, temperature: float) -> dict[str, Any]:
         o: dict[str, Any] = {"temperature": float(temperature)}
@@ -71,31 +77,28 @@ class LocalLLM(LLMProvider):
             "options": self._ollama_options_merged(temperature),
         }
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{self.base_url}/api/chat", json=data, timeout=300
-                ) as resp:
-                    if resp.status == 404:
-                        yield f"Error: Model '{self.model_name}' not found."
+            async with self._get_session().post(f"{self.base_url}/api/chat", json=data) as resp:
+                if resp.status == 404:
+                    yield f"Error: Model '{self.model_name}' not found."
+                    return
+                async for raw in resp.content:
+                    if not raw:
+                        continue
+                    line = raw.decode("utf-8", errors="ignore").strip()
+                    if not line:
+                        continue
+                    try:
+                        payload = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    msg = payload.get("message") or {}
+                    if msg.get("thinking"):
+                        continue
+                    chunk = msg.get("content") or ""
+                    if chunk:
+                        yield chunk
+                    if payload.get("done"):
                         return
-                    async for raw in resp.content:
-                        if not raw:
-                            continue
-                        line = raw.decode("utf-8", errors="ignore").strip()
-                        if not line:
-                            continue
-                        try:
-                            payload = json.loads(line)
-                        except json.JSONDecodeError:
-                            continue
-                        msg = payload.get("message") or {}
-                        if msg.get("thinking"):
-                            continue
-                        chunk = msg.get("content") or ""
-                        if chunk:
-                            yield chunk
-                        if payload.get("done"):
-                            return
         except Exception as e:
             yield f"Error streaming Local Model: {e}"
 
@@ -137,32 +140,30 @@ class LocalLLM(LLMProvider):
                         messages[i]["images"] = [base64_image]
                         break
 
-            timeout = aiohttp.ClientTimeout(total=300)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                try:
-                    async with session.post(f"{self.base_url}/api/chat", json=data) as resp:
-                        if resp.status == 404:
-                            return f"Error: Model '{self.model_name}' not found."
-                        resp_json = await resp.json()
-                        if "error" in resp_json:
-                            return f"Ollama Error: {resp_json['error']}"
-                        if "message" not in resp_json:
-                            return f"Error: Missing 'message' in Ollama response: {resp_json}"
+            try:
+                async with self._get_session().post(f"{self.base_url}/api/chat", json=data) as resp:
+                    if resp.status == 404:
+                        return f"Error: Model '{self.model_name}' not found."
+                    resp_json = await resp.json()
+                    if "error" in resp_json:
+                        return f"Ollama Error: {resp_json['error']}"
+                    if "message" not in resp_json:
+                        return f"Error: Missing 'message' in Ollama response: {resp_json}"
 
-                        _msg = resp_json["message"]
-                        _msg.pop("thinking", None)
-                        self.record_token_usage(
-                            resp_json.get("prompt_eval_count", 0), resp_json.get("eval_count", 0)
-                        )
+                    _msg = resp_json["message"]
+                    _msg.pop("thinking", None)
+                    self.record_token_usage(
+                        resp_json.get("prompt_eval_count", 0), resp_json.get("eval_count", 0)
+                    )
 
-                        if _msg.get("tool_calls"):
-                            success = True
-                            return json.dumps({"tool_calls": _msg["tool_calls"]})
-
+                    if _msg.get("tool_calls"):
                         success = True
-                        return _msg.get("content") or ""
-                except Exception as e:
-                    return f"Error calling Local Model: {str(e)}"
+                        return json.dumps({"tool_calls": _msg["tool_calls"]})
+
+                    success = True
+                    return _msg.get("content") or ""
+            except Exception as e:
+                return f"Error calling Local Model: {str(e)}"
         finally:
             try:
                 from viki.core.usage_log import emit_llm_inference
@@ -184,38 +185,36 @@ class LocalLLM(LLMProvider):
             "options": self._ollama_options_merged(temperature),
             "tools": tools,
         }
-        timeout = aiohttp.ClientTimeout(total=300)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            try:
-                async with session.post(f"{self.base_url}/api/chat", json=data) as resp:
-                    if resp.status == 404:
-                        raise ValueError(f"Model '{self.model_name}' not found.")
-                    try:
-                        resp_json = await resp.json()
-                    except (aiohttp.ContentTypeError, json.JSONDecodeError) as e:
-                        viki_logger.error(f"Failed to parse Ollama response: {e}")
-                        raise ValueError(f"Invalid JSON response from Ollama: {resp.status}") from e
-                    if "error" in resp_json:
-                        raise ValueError(f"Ollama Error: {resp_json['error']}")
-                    if "message" not in resp_json:
-                        raise ValueError(f"Missing 'message' in response: {resp_json}")
-                    self.record_token_usage(
-                        resp_json.get("prompt_eval_count", 0), resp_json.get("eval_count", 0)
-                    )
-                    success = True
-                    msg = dict(resp_json["message"])
-                    msg.pop("thinking", None)
-                    return msg
-            except Exception as e:
-                viki_logger.error(f"Tool call failed: {e}")
-                return {"role": "assistant", "content": f"Ollama Error: {str(e)}"}
-            finally:
+        try:
+            async with self._get_session().post(f"{self.base_url}/api/chat", json=data) as resp:
+                if resp.status == 404:
+                    raise ValueError(f"Model '{self.model_name}' not found.")
                 try:
-                    from viki.core.usage_log import emit_llm_inference
+                    resp_json = await resp.json()
+                except (aiohttp.ContentTypeError, json.JSONDecodeError) as e:
+                    viki_logger.error(f"Failed to parse Ollama response: {e}")
+                    raise ValueError(f"Invalid JSON response from Ollama: {resp.status}") from e
+                if "error" in resp_json:
+                    raise ValueError(f"Ollama Error: {resp_json['error']}")
+                if "message" not in resp_json:
+                    raise ValueError(f"Missing 'message' in response: {resp_json}")
+                self.record_token_usage(
+                    resp_json.get("prompt_eval_count", 0), resp_json.get("eval_count", 0)
+                )
+                success = True
+                msg = dict(resp_json["message"])
+                msg.pop("thinking", None)
+                return msg
+        except Exception as e:
+            viki_logger.error(f"Tool call failed: {e}")
+            return {"role": "assistant", "content": f"Ollama Error: {str(e)}"}
+        finally:
+            try:
+                from viki.core.usage_log import emit_llm_inference
 
-                    emit_llm_inference(self, time.perf_counter() - t0, success, "chat_with_tools")
-                except Exception:
-                    pass
+                emit_llm_inference(self, time.perf_counter() - t0, success, "chat_with_tools")
+            except Exception:
+                pass
 
     def _compact_json_output_guide(self, response_model: type[T]) -> str:
         if response_model == VIKIResponse:

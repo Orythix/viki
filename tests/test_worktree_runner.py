@@ -2,6 +2,7 @@
 Tests for the best-of-N WorktreeRunner. We exercise the in-place fallback
 path (no git) and a real-git path when `git` is available on PATH.
 """
+
 from __future__ import annotations
 
 import asyncio

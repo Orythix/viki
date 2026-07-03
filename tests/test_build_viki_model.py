@@ -1,6 +1,7 @@
 """
 Tests for scripts/build_viki_model.py.
 """
+
 from __future__ import annotations
 
 import os

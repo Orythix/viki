@@ -1,6 +1,7 @@
 """
 Obsidian vault skill: search, read, create, refactor notes. Config: obsidian.vault_path in settings.
 """
+
 import os
 from typing import Any, cast
 

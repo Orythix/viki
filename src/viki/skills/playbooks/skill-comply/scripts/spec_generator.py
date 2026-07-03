@@ -37,7 +37,7 @@ def generate_spec(
                 f"\n\nPREVIOUS ATTEMPT FAILED with YAML parse error:\n"
                 f"{last_error}\n\n"
                 f"Please fix the YAML. Remember to quote all string values "
-                f"that contain colons, e.g.: description: \"Use type: description format\""
+                f'that contain colons, e.g.: description: "Use type: description format"'
             )
 
         result = subprocess.run(
@@ -54,7 +54,9 @@ def generate_spec(
 
         tmp_path = None
         with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".yaml", delete=False,
+            mode="w",
+            suffix=".yaml",
+            delete=False,
         ) as f:
             f.write(raw_yaml)
             tmp_path = Path(f.name)

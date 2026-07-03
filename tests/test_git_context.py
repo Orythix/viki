@@ -40,8 +40,12 @@ class TestGitContext(unittest.TestCase):
             )
             with open(os.path.join(d, "f.txt"), "w", encoding="utf-8") as f:
                 f.write("x")
-            subprocess.run(["git", "add", "f.txt"], cwd=d, capture_output=True, timeout=5, check=False)
-            subprocess.run(["git", "commit", "-m", "init"], cwd=d, capture_output=True, timeout=10, check=False)
+            subprocess.run(
+                ["git", "add", "f.txt"], cwd=d, capture_output=True, timeout=5, check=False
+            )
+            subprocess.run(
+                ["git", "commit", "-m", "init"], cwd=d, capture_output=True, timeout=10, check=False
+            )
 
             out = git_context.get_git_workspace_snapshot(d, ttl_seconds=0.0)
             self.assertIn("Git snapshot", out)

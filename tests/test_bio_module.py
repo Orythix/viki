@@ -3,6 +3,7 @@ P2: tests for BioModule. We don't open a real camera; we just confirm the
 backend/experimental flag wiring and that the deepface fallback degrades to
 'neutral' when the package is missing.
 """
+
 from __future__ import annotations
 
 import unittest

@@ -384,7 +384,9 @@ class LearningModule:
         self.mark_vector_dirty()
         return cur.rowcount > 0
 
-    def update_lesson(self, lesson_id: str, fact: str | None = None, reliability: float | None = None) -> bool:
+    def update_lesson(
+        self, lesson_id: str, fact: str | None = None, reliability: float | None = None
+    ) -> bool:
         """Updates an existing lesson's fact content or reliability."""
         cur = self.conn.cursor()
         updates = []

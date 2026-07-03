@@ -2,6 +2,7 @@
 Shared embedding model for semantic memory and narrative.
 Loads SentenceTransformer once on first use and reuses across LearningModule and NarrativeMemory.
 """
+
 import os
 from typing import Any
 

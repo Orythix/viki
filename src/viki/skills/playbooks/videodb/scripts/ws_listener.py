@@ -25,6 +25,7 @@ Examples:
   python scripts/ws_listener.py --clear /tmp/mydir                # Custom dir with clear
   kill "$(cat ~/.local/state/videodb/videodb_ws_pid)"             # Stop the listener
 """
+
 import asyncio
 import contextlib
 import json

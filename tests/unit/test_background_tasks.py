@@ -1,4 +1,5 @@
 """Tests for background task quiet mode."""
+
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock

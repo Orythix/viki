@@ -1,6 +1,7 @@
 """
 P1: tests for operator-initiated forge promote/rollback.
 """
+
 from __future__ import annotations
 
 import tempfile

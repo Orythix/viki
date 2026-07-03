@@ -1,6 +1,7 @@
 """
 GIF search (gifgrep-style). GIPHY API: set VIKI_GIPHY_API_KEY.
 """
+
 import os
 from typing import Any
 
@@ -35,25 +36,25 @@ class GifSkill(BaseSkill):
         if not key:
             return "Set VIKI_GIPHY_API_KEY for GIPHY search."
         try:
-            import aiohttp
+            from viki.core.utils.http_session import get_session
 
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    "https://api.giphy.com/v1/gifs/search",
-                    params={
-                        "api_key": key,
-                        "q": query,
-                        "limit": min(int(params.get("limit", 5)), 10),
-                    },
-                ) as resp:
-                    if resp.status != 200:
-                        return f"GIPHY error: {resp.status}"
-                    data = await resp.json()
-                    gifs = data.get("data", [])
-                    urls = [
-                        g.get("images", {}).get("original", {}).get("url") or g.get("url", "")
-                        for g in gifs
-                    ]
-                    return "GIFs:\n" + "\n".join(urls) if urls else "No results."
+            session = get_session()
+            async with session.get(
+                "https://api.giphy.com/v1/gifs/search",
+                params={
+                    "api_key": key,
+                    "q": query,
+                    "limit": min(int(params.get("limit", 5)), 10),
+                },
+            ) as resp:
+                if resp.status != 200:
+                    return f"GIPHY error: {resp.status}"
+                data = await resp.json()
+                gifs = data.get("data", [])
+                urls = [
+                    g.get("images", {}).get("original", {}).get("url") or g.get("url", "")
+                    for g in gifs
+                ]
+                return "GIFs:\n" + "\n".join(urls) if urls else "No results."
         except Exception as e:
             return f"GIF search error: {e}"

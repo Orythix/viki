@@ -875,7 +875,7 @@ async def main(workspace_path=None, query=None, dashboard=False, dashboard_port=
 
     if not config_dir:
         raise FileNotFoundError(
-            "Could not find config/settings.yaml. " "Set VIKI_CONFIG_DIR or run from project root."
+            "Could not find config/settings.yaml. Set VIKI_CONFIG_DIR or run from project root."
         )
 
     settings_path = os.path.join(config_dir, "settings.yaml")

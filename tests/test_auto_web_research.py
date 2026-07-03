@@ -1,4 +1,5 @@
 """Unit tests for automatic web research when the model appears uncertain."""
+
 from __future__ import annotations
 
 import unittest
@@ -31,9 +32,13 @@ class TestAutoWebResearchHeuristics(unittest.TestCase):
         self.assertTrue(
             self.ctrl._response_indicates_knowledge_gap("I'm not sure when that treaty was signed.")
         )
-        self.assertTrue(self.ctrl._response_indicates_knowledge_gap("I don't know the stock price."))
+        self.assertTrue(
+            self.ctrl._response_indicates_knowledge_gap("I don't know the stock price.")
+        )
         self.assertFalse(
-            self.ctrl._response_indicates_knowledge_gap("The capital of France is Paris, known for the Eiffel Tower.")
+            self.ctrl._response_indicates_knowledge_gap(
+                "The capital of France is Paris, known for the Eiffel Tower."
+            )
         )
 
     def test_skips_when_already_has_web_block(self):

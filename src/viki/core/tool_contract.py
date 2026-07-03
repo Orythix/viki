@@ -103,8 +103,7 @@ class ToolContractValidator:
         out_str = output if isinstance(output, str) else str(output)
         if not out_str.strip():
             return (
-                f"Tool contract output validation failed: "
-                f"'{skill_name}' returned an empty string."
+                f"Tool contract output validation failed: '{skill_name}' returned an empty string."
             )
 
         out_lower = out_str.strip().lower()

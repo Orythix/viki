@@ -330,31 +330,32 @@ class ResearchSkill(BaseSkill):
                 resolved_ip = None
 
             timeout = aiohttp.ClientTimeout(total=15)
-            async with aiohttp.ClientSession(headers=self.headers, timeout=timeout) as session:
-                # Re-enable SSL verification for security
-                async with session.get(url, allow_redirects=True, ssl=True) as response:
-                    # DNS rebinding check: verify final IP matches expected
-                    if resolved_ip:
-                        final_url = str(response.url)
-                        final_hostname = urlparse(final_url).hostname
-                        try:
-                            final_ip = socket.gethostbyname(final_hostname)
-                            if final_ip != resolved_ip:
-                                viki_logger.warning(
-                                    f"DNS rebinding detected: {hostname} -> {final_ip}"
-                                )
-                                return "Security: DNS rebinding attempt blocked"
-                        except Exception:
-                            pass
+            from viki.core.utils.http_session import get_session
 
-                    if response.status != 200:
-                        raise RuntimeError(f"Error: HTTP {response.status} when fetching {url}")
+            session = get_session()
+            async with session.get(
+                url, headers=self.headers, timeout=timeout, allow_redirects=True, ssl=True
+            ) as response:
+                # DNS rebinding check: verify final IP matches expected
+                if resolved_ip:
+                    final_url = str(response.url)
+                    final_hostname = urlparse(final_url).hostname
+                    try:
+                        final_ip = socket.gethostbyname(final_hostname)
+                        if final_ip != resolved_ip:
+                            viki_logger.warning(f"DNS rebinding detected: {hostname} -> {final_ip}")
+                            return "Security: DNS rebinding attempt blocked"
+                    except Exception:
+                        pass
 
-                    content_type = response.headers.get("Content-Type", "")
-                    if "text/html" not in content_type and "application/xhtml" not in content_type:
-                        raise RuntimeError(f"Error: URL returned non-HTML content ({content_type})")
+                if response.status != 200:
+                    raise RuntimeError(f"Error: HTTP {response.status} when fetching {url}")
 
-                    html = await response.text()
+                content_type = response.headers.get("Content-Type", "")
+                if "text/html" not in content_type and "application/xhtml" not in content_type:
+                    raise RuntimeError(f"Error: URL returned non-HTML content ({content_type})")
+
+                html = await response.text()
 
             soup = BeautifulSoup(html, "html.parser")
 

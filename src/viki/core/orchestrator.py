@@ -2211,6 +2211,14 @@ class VIKIController:
         except Exception as e:
             viki_logger.debug(f"Evolution flush on shutdown: {e}")
 
+        # Close shared HTTP session
+        try:
+            from viki.core.utils.http_session import close_session
+
+            await close_session()
+        except Exception as e:
+            viki_logger.debug("HTTP session close failed: %s", e)
+
         # Signal background loops to exit cleanly
         if getattr(self, "_shutdown_event", None) is not None:
             self._shutdown_event.set()

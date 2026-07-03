@@ -2,6 +2,7 @@
 Knowledge Gap Detection System
 Identifies areas where VIKI lacks knowledge for targeted learning.
 """
+
 import time
 from typing import Any
 

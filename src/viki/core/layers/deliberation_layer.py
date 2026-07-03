@@ -11,6 +11,7 @@ from typing import Any, cast
 from viki.config.logger import viki_logger
 from viki.core.ensemble import EnsembleEngine
 from viki.core.schema import ActionCall, ThoughtObject, VIKIResponse, VIKIResponseLite
+from viki.core.self_critique import SelfCritique
 
 from .cortex_layer import CortexLayer
 
@@ -101,13 +102,13 @@ class DeliberationLayer(CortexLayer):
             and not action_results
             and getattr(model, "chat_stream", None) is not None
         ):
-            from viki.core.utils.trivial_input import is_conversational_input, is_trivial_input
-
-            raw_input_for_check = context.get("raw_input", "")
-            trivial = is_trivial_input(raw_input_for_check) or is_conversational_input(
-                raw_input_for_check
+            fast_path_ok = (
+                not context.get("project_instructions")
+                and not context.get("world_context")
+                and not context.get("url_context")
+                and not context.get("signals_context")
             )
-            if trivial:
+            if fast_path_ok:
                 streamed = await self._streamed_conversational_reply(model, context, on_event)
                 if streamed is not None:
                     return streamed
@@ -129,6 +130,18 @@ class DeliberationLayer(CortexLayer):
         world_context = context.get("world_context", "")
         project_instructions = context.get("project_instructions", "")
         signals_context = context.get("signals_context", "")
+
+        from viki.core.utils.token_optimizer import condense_text
+
+        # Compress verbose context fields to reduce prompt length and latency
+        if url_context and len(url_context) > 1500:
+            url_context = condense_text(url_context, max_chars=1500)
+        if world_context and len(world_context) > 2000:
+            world_context = condense_text(world_context, max_chars=2000)
+        if project_instructions and len(project_instructions) > 2000:
+            project_instructions = condense_text(project_instructions, max_chars=2000)
+        if signals_context and len(signals_context) > 1000:
+            signals_context = condense_text(signals_context, max_chars=1000, query=raw_input)
 
         action_results = context.get("action_results", [])
 
@@ -489,6 +502,37 @@ class DeliberationLayer(CortexLayer):
 
             viki_resp.sentiment = context.get("sentiment")
             viki_resp.intent_type = context.get("intent_type")
+
+            refine_intents = {
+                "coding",
+                "research",
+                "architecture",
+                "refactor",
+                "design",
+                "database",
+                "schema",
+            }
+            has_action = viki_resp.action is not None and (
+                viki_resp.action.skill_name or viki_resp.action.command
+            )
+            if (
+                intent in refine_intents
+                and not has_action
+                and viki_resp.final_response
+                and len(viki_resp.final_response) > 100
+            ):
+                critique = SelfCritique(
+                    self.model_router.get_model(capabilities=["reasoning"], tier="fast")
+                )
+                improved, _ = await critique.refine(
+                    raw_input,
+                    viki_resp.final_response,
+                    max_iterations=2,
+                    score_threshold=0.8,
+                )
+                if improved and improved != viki_resp.final_response:
+                    viki_logger.info("SelfCritique: refined response for intent '%s'", intent)
+                    viki_resp.final_response = improved
 
             if not viki_resp.final_response or viki_resp.final_response.strip() == "":
                 viki_resp.final_thought.primary_strategy = (

@@ -7,6 +7,7 @@ responses through the existing `_pending` future map, exercising the same
 code paths a real server would hit (publishDiagnostics, hover, references,
 definition).
 """
+
 from __future__ import annotations
 
 import asyncio

@@ -151,8 +151,7 @@ class ForgeOrchestrator:
         data_dir = self.controller.settings.get("system", {}).get("data_dir", "./data")
         forge_cfg = self.controller.settings.get("forge", {}) or {}
         lora_cfg = LoraConfig(
-            base_model=base_model_hf
-            or forge_cfg.get("lora_base_model_hf", LoraConfig.base_model),
+            base_model=base_model_hf or forge_cfg.get("lora_base_model_hf", LoraConfig.base_model),
             output_dir=os.path.join(data_dir, "forge", "lora"),
         )
 
@@ -181,7 +180,11 @@ class ForgeOrchestrator:
         write_adapter_modelfile(tag, result["adapter_dir"], modelfile_path)
         try:
             process = await asyncio.create_subprocess_exec(
-                "ollama", "create", target_tag, "-f", modelfile_path,
+                "ollama",
+                "create",
+                target_tag,
+                "-f",
+                modelfile_path,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )

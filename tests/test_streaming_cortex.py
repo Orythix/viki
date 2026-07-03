@@ -5,6 +5,7 @@ When `on_event` is supplied AND the input is trivial, DeliberationLayer must
 consume model.chat_stream(...) and emit `partial` events for each chunk
 before returning a VIKIResponse.
 """
+
 from __future__ import annotations
 
 import asyncio

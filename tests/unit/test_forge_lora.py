@@ -9,7 +9,6 @@ from viki.core.forge_lora import (
     LoraConfig,
     LoraDatasetExporter,
     LoraTrainer,
-    ml_stack_available,
     write_adapter_modelfile,
 )
 
@@ -38,7 +37,9 @@ def test_export_structured_lesson(tmp_path):
     conn = _make_lessons_db(
         [
             (
-                json.dumps({"trigger": "What editor does the user prefer?", "fact": "Neovim with LazyVim."}),
+                json.dumps(
+                    {"trigger": "What editor does the user prefer?", "fact": "Neovim with LazyVim."}
+                ),
                 "What editor does the user prefer?: Neovim with LazyVim.",
                 1.0,
             )

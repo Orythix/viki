@@ -198,7 +198,7 @@ class PlannerExecutor:
                 t_type = TaskType.ANALYZE
             tasks.append(
                 PlanTask(
-                    id=str(entry.get("id") or f"t{len(tasks)+1}"),
+                    id=str(entry.get("id") or f"t{len(tasks) + 1}"),
                     type=t_type,
                     description=str(entry.get("description", "")),
                     parameters=dict(entry.get("parameters") or {}),

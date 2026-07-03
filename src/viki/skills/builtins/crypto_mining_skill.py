@@ -105,7 +105,7 @@ class CryptoMiningSkill(BaseSkill):
             if resp.status_code == 200:
                 data = resp.json()
                 final_bal = data.get("final_balance", 0) / 100000000  # Convert Satoshi to BTC
-                return f"BTC Balance for {address}: {final_bal} BTC\nTotal Received: {data.get('total_received', 0)/100000000} BTC"
+                return f"BTC Balance for {address}: {final_bal} BTC\nTotal Received: {data.get('total_received', 0) / 100000000} BTC"
             return f"Error: Failed to fetch BTC balance ({resp.status_code})"
 
         return f"Error: Coin '{coin}' is not supported for balance checks yet."

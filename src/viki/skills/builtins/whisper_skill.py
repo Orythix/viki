@@ -2,6 +2,7 @@
 Whisper transcription: audio file or URL to text. OPENAI_API_KEY for API; or local whisper/faster-whisper.
 File paths are restricted to allowed roots (workspace, data).
 """
+
 import os
 from typing import Any
 
@@ -48,20 +49,21 @@ class WhisperSkill(BaseSkill):
                 with open(path, "rb") as f:
                     data = f.read()
                 import aiohttp
+                from viki.core.utils.http_session import get_session
 
-                async with aiohttp.ClientSession() as session:
-                    form = aiohttp.FormData()
-                    form.add_field("file", data, filename=os.path.basename(path))
-                    form.add_field("model", "whisper-1")
-                    async with session.post(
-                        "https://api.openai.com/v1/audio/transcriptions",
-                        headers={"Authorization": f"Bearer {key}"},
-                        data=form,
-                    ) as resp:
-                        if resp.status != 200:
-                            return f"Whisper API error: {resp.status} {await resp.text()}"
-                        out = await resp.json()
-                        return out.get("text", "") or "No text."
+                session = get_session()
+                form = aiohttp.FormData()
+                form.add_field("file", data, filename=os.path.basename(path))
+                form.add_field("model", "whisper-1")
+                async with session.post(
+                    "https://api.openai.com/v1/audio/transcriptions",
+                    headers={"Authorization": f"Bearer {key}"},
+                    data=form,
+                ) as resp:
+                    if resp.status != 200:
+                        return f"Whisper API error: {resp.status} {await resp.text()}"
+                    out = await resp.json()
+                    return out.get("text", "") or "No text."
             except Exception as e:
                 return f"Whisper error: {e}"
 

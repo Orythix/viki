@@ -1,6 +1,7 @@
 """
 P1: tests for the attachment perception stage.
 """
+
 from __future__ import annotations
 
 import asyncio

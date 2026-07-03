@@ -9,6 +9,7 @@ Exercises:
 We don't spawn a real MCP server; the client is monkey-patched so the proxy
 roundtrip can be observed.
 """
+
 from __future__ import annotations
 
 import asyncio

@@ -2,6 +2,7 @@
 QMD-style hybrid memory search: BM25 (keyword) + vector (episodic) + optional LLM rerank.
 Used by recall_skill and can be wired into get_full_context for richer retrieval.
 """
+
 import hashlib
 import re
 from collections import OrderedDict
@@ -133,7 +134,7 @@ async def search_memory(
         try:
             prompt = (
                 f"Query: {query}\n\nRank these by relevance. "
-                f"Return only the indices 0 to {len(results)-1} in order, one per line (e.g. 2\\n0\\n1):\n"
+                f"Return only the indices 0 to {len(results) - 1} in order, one per line (e.g. 2\\n0\\n1):\n"
                 + "\n".join(f"{i}. {r[:150]}" for i, r in enumerate(results))
             )
             model = controller.model_router.get_model(capabilities=["general"])

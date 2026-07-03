@@ -1,6 +1,7 @@
 """
 Tests for parent-ID propagation and SQLite persistence in tracing.
 """
+
 from __future__ import annotations
 
 import os

@@ -3,6 +3,7 @@ Smoke tests for the benchmark dataset adapters. These don't hit the network;
 they verify that the converters correctly transform canonical examples into
 the harness's task format.
 """
+
 from __future__ import annotations
 
 import unittest
@@ -14,7 +15,7 @@ class TestConverters(unittest.TestCase):
     def test_humaneval_plus(self):
         ex = {
             "task_id": "HumanEval/0",
-            "prompt": "def add(a, b):\n    \"\"\"Add two numbers.\"\"\"\n",
+            "prompt": 'def add(a, b):\n    """Add two numbers."""\n',
             "test": "def check(fn):\n    assert fn(1,2)==3",
             "entry_point": "add",
         }
@@ -51,8 +52,15 @@ class TestConverters(unittest.TestCase):
         self.assertEqual(row["expected_outcome"], "4")
 
     def test_known_specs_present(self):
-        for required in ("humaneval_plus", "swe_bench_verified", "livecodebench",
-                         "gaia", "agentbench", "bigcodebench", "gpqa_diamond"):
+        for required in (
+            "humaneval_plus",
+            "swe_bench_verified",
+            "livecodebench",
+            "gaia",
+            "agentbench",
+            "bigcodebench",
+            "gpqa_diamond",
+        ):
             self.assertIn(required, ds.SPECS)
 
 

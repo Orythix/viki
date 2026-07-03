@@ -4,6 +4,7 @@ P2: tests for the capability-index rigor upgrades:
 - bootstrap confidence intervals,
 - per-suite provenance hashes.
 """
+
 from __future__ import annotations
 
 import json
@@ -27,8 +28,9 @@ def _write_suite(root: str, suite: str, run_id: str, results):
 class TestCapabilityIndexRigor(unittest.TestCase):
     def test_min_task_threshold_disqualifies_small_suite(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
-            _write_suite(td, "humaneval_plus", "001",
-                         [{"task_id": "t1", "score": 1.0, "passed": True}])
+            _write_suite(
+                td, "humaneval_plus", "001", [{"task_id": "t1", "score": 1.0, "passed": True}]
+            )
             ci = CapabilityIndex(td, min_tasks=20, bootstrap_iters=0)
             data = ci.compute()
             self.assertEqual(data["axes"]["coding"], 0.0)
@@ -56,8 +58,9 @@ class TestCapabilityIndexRigor(unittest.TestCase):
             ci = CapabilityIndex(td, min_tasks=20, bootstrap_iters=0)
             d1 = ci.compute()
             d2 = ci.compute()
-            self.assertEqual(d1["suites"][0]["provenance_sha256"],
-                             d2["suites"][0]["provenance_sha256"])
+            self.assertEqual(
+                d1["suites"][0]["provenance_sha256"], d2["suites"][0]["provenance_sha256"]
+            )
             self.assertTrue(d1["suites"][0]["provenance_sha256"])
 
     def test_model_filter_selects_latest_matching_run(self):
@@ -67,7 +70,11 @@ class TestCapabilityIndexRigor(unittest.TestCase):
                 "humaneval_plus",
                 "001",
                 [
-                    {"__metadata__": True, "model_profile": "viki-base", "model_name": "viki-base:latest"},
+                    {
+                        "__metadata__": True,
+                        "model_profile": "viki-base",
+                        "model_name": "viki-base:latest",
+                    },
                     {"task_id": "base", "score": 0.0, "passed": False},
                 ],
             )
@@ -76,7 +83,11 @@ class TestCapabilityIndexRigor(unittest.TestCase):
                 "humaneval_plus",
                 "002",
                 [
-                    {"__metadata__": True, "model_profile": "viki-evolved", "model_name": "viki-neural-forge"},
+                    {
+                        "__metadata__": True,
+                        "model_profile": "viki-evolved",
+                        "model_name": "viki-neural-forge",
+                    },
                     {"task_id": "candidate", "score": 1.0, "passed": True},
                 ],
             )

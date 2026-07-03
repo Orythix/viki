@@ -2,6 +2,7 @@
 P1 regression: CodeSearchSkill must persist its index to SQLite and skip
 files whose mtime/sha hasn't changed on subsequent scans.
 """
+
 from __future__ import annotations
 
 import os

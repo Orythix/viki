@@ -2,6 +2,7 @@
 Continuous Learning Pipeline
 Manages automated model improvement cycles.
 """
+
 import asyncio
 import json
 import os
@@ -74,14 +75,14 @@ class ContinuousLearner:
         if should_train:
             viki_logger.info(
                 f"ContinuousLearner: Training conditions met "
-                f"(lessons: {lesson_count}, time since last: {time_since_last/3600:.1f}h)"
+                f"(lessons: {lesson_count}, time since last: {time_since_last / 3600:.1f}h)"
             )
             await self._execute_training_cycle()
         else:
             viki_logger.debug(
                 f"ContinuousLearner: Training not due yet "
                 f"(lessons: {lesson_count}/{self.min_lessons_for_training}, "
-                f"next in: {(schedule_seconds - time_since_last)/3600:.1f}h)"
+                f"next in: {(schedule_seconds - time_since_last) / 3600:.1f}h)"
             )
 
     async def _execute_training_cycle(self):

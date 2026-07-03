@@ -4,6 +4,7 @@ P2 tier-1: Cortex layer integration tests.
 Verifies that the perception/interpretation layers run end-to-end and that
 the layer base contract holds (status flips Idle -> Processing -> Idle).
 """
+
 from __future__ import annotations
 
 import asyncio

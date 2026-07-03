@@ -7,6 +7,7 @@ Verifies:
 - repeated calls reuse the same instance (only one import)
 - import errors degrade gracefully and return a typed error string
 """
+
 from __future__ import annotations
 
 import asyncio

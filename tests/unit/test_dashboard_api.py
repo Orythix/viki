@@ -2,7 +2,6 @@
 
 import pytest
 from aiohttp.test_utils import TestClient, TestServer
-
 from viki.api.dashboard import create_dashboard_app
 
 
@@ -36,8 +35,9 @@ class StubController:
     def get_sovereign_status(self):
         return {"mode": "sovereign", "uptime_s": 42}
 
-    async def process_request(self, text, on_event=None, on_think=None,
-                              attachment_paths=None, session_id=None):
+    async def process_request(
+        self, text, on_event=None, on_think=None, attachment_paths=None, session_id=None
+    ):
         return f"echo: {text}"
 
 

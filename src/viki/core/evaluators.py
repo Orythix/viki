@@ -401,7 +401,7 @@ class LLMJudgeEvaluator:
             EVALUATE THIS AGENT RESPONSE.
 
             TASK:
-            {task.get('prompt', '')}
+            {task.get("prompt", "")}
 
             EXPECTED:
             {ground_truth}

@@ -9,6 +9,7 @@ Do not point at untrusted remotes with sensitive corpus text.
 
 Default: off — keeps CI and quick eval runs fast and deterministic.
 """
+
 from __future__ import annotations
 
 import json

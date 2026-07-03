@@ -1,6 +1,7 @@
 """
 Summarize URLs, PDFs, or YouTube (Molty summarize-style). Uses research_skill for URLs, PyMuPDF/pdfplumber for PDF, optional yt-dlp for YouTube.
 """
+
 import asyncio
 import os
 from typing import Any
