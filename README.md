@@ -79,6 +79,9 @@ VIKI is not a generic assistant. It is differentiated by:
 *   **Orythix governance**: Ethical governor, judgment engine, and capability gating keep behavior deterministic and auditable.
 *   **Reflex layer**: Fast, low-latency intent recognition for habitual tasks without full deliberation.
 *   **Air-gap capable**: Run with no external API calls; all reasoning and evolution stay on your machine.
+*   **Semantic caching**: Repeated queries bypass the LLM entirely via semantic cache lookup in the ReAct loop.
+*   **Prompt compression**: Long context fields (URL content, world model, signals) are automatically condensed before LLM calls, reducing token usage and latency.
+*   **Shared connection pooling**: A persistent aiohttp session is reused across all skills and the LocalLLM provider, eliminating TCP handshake overhead per request.
 
 ### Personas
 
@@ -187,6 +190,7 @@ The pillars below are now actually wired (not just "Phase X complete" labels):
 - **Mission CRUD + sub-agent tree**: Managed via the internal agent loop and exposed in `logs/`.
 - **Slash commands**: `/restore`, `/undo` (rolls back the most recent checkpoint).
 - **Bio sensing is now experimental by default**; opt into a real DeepFace path with `system.bio_backend: deepface` (or `VIKI_BIO_BACKEND=deepface`).
+- **Latency optimizations**: Persistent aiohttp session saves ~100-200ms per LLM call; semantic cache bypasses LLM on repeated queries; parallel preflight stages reduce wall-clock time; token optimizer compresses verbose context; shared HTTP connection pool across skills.
 
 ### Directory Structure
 

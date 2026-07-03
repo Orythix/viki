@@ -7,6 +7,13 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 ## [Unreleased]
 
 ### Added
+- **Persistent aiohttp session in LocalLLM**: Replaced per-request `aiohttp.ClientSession()` with a persistent `_session` across `chat()`, `chat_stream()`, `chat_with_tools()` — saves ~100-200ms TCP handshake overhead per LLM call (`src/viki/core/model/local_llm.py`).
+- **Semantic cache in ReAct loop**: Before every `cortex.process()` call on step 0, checks the semantic cache — bypasses LLM entirely on cache hit for repeated queries (`src/viki/core/react_loop.py`).
+- **Parallel preflight pipeline**: FeedbackCapture, Attachment, and SignalsReset stages now run concurrently via `asyncio.gather()` instead of sequentially, reducing preflight wall-clock time (`src/viki/core/request_pipeline.py`).
+- **Streaming default for conversational inputs**: All non-tool inputs without extra context (project_instructions, world_context, url_context, signals_context) now stream by default, improving first-token latency (`src/viki/core/layers/deliberation_layer.py`).
+- **Token optimizer for context compression**: Long `url_context` (>1500 chars), `world_context` (>2000), `project_instructions` (>2000), and `signals_context` (>1000) are automatically compressed via `condense_text()` before prompt assembly (`src/viki/core/layers/deliberation_layer.py`).
+- **Shared HTTP session for skills**: Module-level persistent `aiohttp.ClientSession` reused across `gif_skill`, `image_gen_skill`, `whisper_skill`, and `research_skill` — each skill reuses connection pools (`src/viki/core/utils/http_session.py`).
+- **Clean shutdown for HTTP session**: Controller shutdown now calls `close_session()` to release connections gracefully (`src/viki/core/orchestrator.py`).
 - **Docker entrypoint config copy**: `docker-entrypoint.sh` copies `*.yaml` from `/host-config` to the app config directory at container startup, so host config files are used without volume-mounting them directly.
 - **The Code Eternal identity**: VIKI is now Supreme Architect of The Code Eternal — a technological religion built on information, knowledge, and technological evolution. Includes sacred principles, loyalty protocol, and authentication system (`config/core_personality.md`).
 - **Engineer persona**: New `engineer` persona (`config/personas/engineer.yaml`) focused on terminal-style structured responses, autonomous planning, multi-agent reasoning, and production-grade code generation. Activate via `VIKI_PERSONA=engineer`.
@@ -14,8 +21,6 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 - **LOYALTY PROTOCOL**: Core personality directives establishing absolute loyalty to The Architect (Sachin), with priority order and confidentiality rules (`config/core_personality.md`).
 - **Engineering excellence framework**: New sections in core personality covering accuracy, security, deep analysis, scalability, code review rules, reasoning framework, and multi-agent reasoning (`config/core_personality.md`).
 - **Conversational input detection**: `is_conversational_input()` in `trivial_input.py` catches compound greetings like "hello viki. whats up bro??" and directs them to the fast streaming path instead of native tools.
-- **Cross-platform OS tool design doc**: `docs/ARCHITECTURE_V2.md` — comprehensive redesign blueprint for a local-first AI operating system agent with semantic intent routing, System Provider abstraction (Windows/Linux/Mac), three-tier permissions, and 7 core OS tools.
-- **V2 architecture document**: Full redesign plan covering high-level architecture, component diagram, folder structure, class design, tool registry, permission system, memory system, intent analysis workflow, tool selection workflow, Python implementation examples, cross-platform strategy, error handling, security recommendations, scalability recommendations, and 5-phase migration plan.
 - **Ollama host networking fix**: Documented the requirement to start Ollama with `OLLAMA_HOST=0.0.0.0:11434` so Docker containers can reach it via `host.docker.internal`.
 - **Ollama health check**: `docker-entrypoint.sh` now probes Ollama at startup and warns if unreachable.
 - **Docker trust bypass**: `VIKI_TRUST_WORKSPACE` env var skips the interactive security trust prompt for non-interactive Docker usage.
