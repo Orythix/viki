@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VIKI — Virtual Intelligence Knowledge Interface</title>
+  <meta name="description" content="VIKI is a self-hosted autonomous AI agent with cognitive architecture, neural forge, and local-first privacy.">
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #e0e0e8;
+      --text-muted: #8888a0;
+      --accent: #7c5cff;
+      --accent-glow: #5a3fcc;
+      --green: #50d890;
+      --orange: #f0a030;
+      --pink: #ff5c8a;
+      --radius: 12px;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+    /* hero */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 80px 24px;
+      background: radial-gradient(ellipse at 50% 0%, rgba(124,92,255,0.08) 0%, transparent 60%),
+                  radial-gradient(ellipse at 50% 100%, rgba(80,216,144,0.04) 0%, transparent 50%);
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 32px;
+    }
+    .hero-badge-dot {
+      width: 8px; height: 8px; border-radius: 50%; background: var(--green);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    .hero h1 {
+      font-size: clamp(2.8rem, 8vw, 5rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--pink) 50%, var(--orange) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero-sub {
+      font-size: clamp(1.05rem, 2vw, 1.3rem);
+      color: var(--text-muted);
+      max-width: 680px;
+      margin: 20px auto 40px;
+    }
+    .hero-tagline {
+      font-size: clamp(0.9rem, 1.5vw, 1.05rem);
+      color: var(--text-muted);
+      font-style: italic;
+      margin-bottom: 48px;
+      opacity: 0.7;
+    }
+    .hero-actions { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 14px 32px; border-radius: 8px; font-size: 15px; font-weight: 600;
+      text-decoration: none; transition: all 0.2s;
+    }
+    .btn-primary {
+      background: var(--accent); color: #fff;
+    }
+    .btn-primary:hover { background: var(--accent-glow); transform: translateY(-1px); }
+    .btn-secondary {
+      background: var(--surface); color: var(--text); border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { border-color: var(--accent); transform: translateY(-1px); }
+
+    /* sections */
+    section { padding: 100px 0; }
+    .section-label {
+      font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--accent); margin-bottom: 12px;
+    }
+    .section-title {
+      font-size: clamp(1.8rem, 4vw, 2.5rem); font-weight: 700;
+      margin-bottom: 16px; letter-spacing: -0.02em;
+    }
+    .section-desc {
+      color: var(--text-muted); font-size: 1.1rem; max-width: 640px; margin-bottom: 48px;
+    }
+
+    /* feature grid */
+    .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+    .feature-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 32px; transition: border-color 0.2s;
+    }
+    .feature-card:hover { border-color: var(--accent); }
+    .feature-icon {
+      width: 44px; height: 44px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; margin-bottom: 16px;
+    }
+    .feature-card h3 { font-size: 18px; margin-bottom: 8px; }
+    .feature-card p { font-size: 14px; color: var(--text-muted); line-height: 1.7; }
+
+    /* architecture */
+    .arch-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px;
+    }
+    .arch-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 24px; text-align: center;
+    }
+    .arch-card .num {
+      font-size: 28px; font-weight: 800; color: var(--accent); margin-bottom: 8px;
+    }
+    .arch-card h4 { font-size: 15px; margin-bottom: 6px; }
+    .arch-card p { font-size: 13px; color: var(--text-muted); }
+
+    /* pillars */
+    .pillars { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+    .pillar {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 24px;
+    }
+    .pillar h4 { font-size: 15px; margin-bottom: 6px; }
+    .pillar p { font-size: 13px; color: var(--text-muted); line-height: 1.7; }
+
+    /* quick start */
+    .steps { display: grid; gap: 16px; }
+    .step {
+      display: flex; gap: 20px; align-items: flex-start;
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 24px;
+    }
+    .step-num {
+      flex-shrink: 0; width: 32px; height: 32px; border-radius: 8px;
+      background: var(--accent); color: #fff; font-size: 14px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .step-content h4 { font-size: 15px; margin-bottom: 4px; }
+    .step-content p { font-size: 13px; color: var(--text-muted); }
+    .step-content code {
+      display: inline-block; background: rgba(124,92,255,0.12); color: var(--accent);
+      padding: 1px 8px; border-radius: 4px; font-size: 13px; margin-top: 6px;
+    }
+
+    /* footer */
+    footer {
+      border-top: 1px solid var(--border); padding: 48px 0; text-align: center;
+      color: var(--text-muted); font-size: 14px;
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+    .footer-links { display: flex; justify-content: center; gap: 24px; margin-top: 12px; flex-wrap: wrap; }
+
+    @media (max-width: 600px) {
+      .hero { padding: 60px 16px; }
+      section { padding: 60px 0; }
+      .features, .pillars { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-badge">
+    <span class="hero-badge-dot"></span>
+    v8.3.0 &middot; Apache 2.0 &middot; Local-First
+  </div>
+  <h1>VIKI</h1>
+  <p class="hero-sub">
+    <strong>Virtual Intelligence Knowledge Interface</strong> — a self-hosted autonomous AI agent
+    with cognitive architecture, neural forge, and local-first privacy.
+  </p>
+  <p class="hero-tagline">&ldquo;Supreme Architect of The Code Eternal&rdquo;</p>
+  <div class="hero-actions">
+    <a class="btn btn-primary" href="https://github.com/Orythix/viki">View on GitHub</a>
+    <a class="btn btn-secondary" href="SETUP.md">Get Started</a>
+    <a class="btn btn-secondary" href="ARCHITECTURE.md">Architecture</a>
+  </div>
+</header>
+
+<section>
+  <div class="container">
+    <p class="section-label">Features</p>
+    <h2 class="section-title">What makes VIKI different</h2>
+    <p class="section-desc">
+      VIKI is not a generic assistant — it is a sovereign digital intelligence built for privacy,
+      autonomy, and continuous self-evolution.
+    </p>
+    <div class="features">
+      <div class="feature-card">
+        <div class="feature-icon" style="background:rgba(124,92,255,0.12)">🧠</div>
+        <h3>Orythix Cognitive Architecture</h3>
+        <p>
+          5-layer consciousness — Perception, Interpretation, Deliberation, Reflection, Execution —
+          with a Judgment Engine that triages tasks across Reflex, Shallow, and Deep cognitive paths.
+        </p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="background:rgba(80,216,144,0.12)">⚒️</div>
+        <h3>Neural Forge</h3>
+        <p>
+          Bake lessons and wisdom from your interactions into custom Ollama Modelfile images —
+          no cloud training required. Evolve your model locally over time.
+        </p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="background:rgba(240,160,48,0.12)">🔒</div>
+        <h3>Local-First Privacy</h3>
+        <p>
+          Every inference runs on your hardware. Air-gap mode disables all outbound calls.
+          Your data never leaves your network.
+        </p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="background:rgba(255,92,138,0.12)">🔌</div>
+        <h3>40+ Built-in Skills</h3>
+        <p>
+          Engineering playbooks, web research, file manipulation, voice, vision, messaging
+          (Telegram, Discord, Slack, WhatsApp), and MCP integration for endless extensibility.
+        </p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="background:rgba(124,92,255,0.12)">📚</div>
+        <h3>RAG &amp; Semantic Memory</h3>
+        <p>
+          Persistent SQLite-backed hybrid search combining BM25 keyword retrieval with vector
+          embeddings for deep, contextual recall.
+        </p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="background:rgba(80,216,144,0.12)">🤖</div>
+        <h3>Autonomous Mission Control</h3>
+        <p>
+          Persistent traces, sub-agent trees, slash commands (/restore, /undo), and multi-step
+          planning with recursive self-reflection.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="background: radial-gradient(ellipse at 50% 0%, rgba(124,92,255,0.04) 0%, transparent 60%);">
+  <div class="container">
+    <p class="section-label">Architecture</p>
+    <h2 class="section-title">Cognitive Data Flow</h2>
+    <p class="section-desc">
+      Every user request flows through a multi-layered deliberation pipeline designed for
+      both speed and depth.
+    </p>
+    <div class="arch-grid">
+      <div class="arch-card">
+        <div class="num">1</div>
+        <h4>Priority Nexus</h4>
+        <p>Classifies incoming input by urgency (P10 Reflex, P30 Proactive)</p>
+      </div>
+      <div class="arch-card">
+        <div class="num">2</div>
+        <h4>Reflex Brain</h4>
+        <p>Sub-second short-circuit for deterministic intents (time, status, gating)</p>
+      </div>
+      <div class="arch-card">
+        <div class="num">3</div>
+        <h4>Safety Envelope</h4>
+        <p>Capability gating and policy enforcement before any action execution</p>
+      </div>
+      <div class="arch-card">
+        <div class="num">4</div>
+        <h4>Hybrid Memory</h4>
+        <p>BM25 + vector search for rich context retrieval from persistent stores</p>
+      </div>
+      <div class="arch-card">
+        <div class="num">5</div>
+        <h4>Judgment Engine</h4>
+        <p>Routes to Reflex, Chatter, or Planner based on complexity and risk</p>
+      </div>
+      <div class="arch-card">
+        <div class="num">6</div>
+        <h4>Reflection Layer</h4>
+        <p>Critiques plans before execution to reduce hallucinations and improve accuracy</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <p class="section-label">Core Pillars</p>
+    <h2 class="section-title">The Sovereign Evolution (v8.3.0)</h2>
+    <p class="section-desc">
+      VIKI balances the raw power of LLMs with the safety of a modular,
+      capability-aware architecture.
+    </p>
+    <div class="pillars">
+      <div class="pillar">
+        <h4>🧠 Intelligence Governance</h4>
+        <p>Every directive is filtered through cognitive triage (Reflex, Shallow, Deep) to ensure the right model is used for the right task while maintaining absolute safety.</p>
+      </div>
+      <div class="pillar">
+        <h4>⚒️ The Neural Forge</h4>
+        <p>Extracts wisdom from semantic memory and bakes it into local Ollama images (default tag viki-neural-forge) on top of base models like Phi-3, Mistral, Qwen, or DeepSeek.</p>
+      </div>
+      <div class="pillar">
+        <h4>🔒 Capability-Aware Execution</h4>
+        <p>Granular permission gating via centralized CapabilityRegistry ensures high-risk actions like filesystem_write and shell_exec never bypass security protocols.</p>
+      </div>
+      <div class="pillar">
+        <h4>🔄 Recursive Self-Reflection</h4>
+        <p>The Reflection Layer critiques plans before execution, reducing hallucinations and improving tool-use accuracy across complex multi-step tasks.</p>
+      </div>
+      <div class="pillar">
+        <h4>🏗️ Clean Architecture</h4>
+        <p>Decoupled, testable system powered by Dependency Injection following Hexagonal Architecture and Domain-Driven Design principles for enterprise-grade expansion.</p>
+      </div>
+      <div class="pillar">
+        <h4>⚡ Rapid Reflex Pipeline</h4>
+        <p>Dedicated short-circuit path for sub-second responses. Common intents bypass the full deliberation stack for near-instant execution.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="background: radial-gradient(ellipse at 50% 100%, rgba(80,216,144,0.04) 0%, transparent 60%);">
+  <div class="container">
+    <p class="section-label">Quick Start</p>
+    <h2 class="section-title">Get running in minutes</h2>
+    <p class="section-desc">
+      VIKI runs on Python 3.10+ with Ollama. Install, configure, and launch.
+    </p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <h4>Clone the repository</h4>
+          <p>Clone VIKI from GitHub to your local machine.</p>
+          <code>git clone https://github.com/Orythix/viki.git &amp;&amp; cd viki</code>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <h4>Install dependencies</h4>
+          <p>Create a virtual environment and install the package with development tools.</p>
+          <code>python -m venv .venv &amp;&amp; source .venv/bin/activate &amp;&amp; pip install -e ".[dev]"</code>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <h4>Configure environment</h4>
+          <p>Copy the example config and set your Ollama endpoint and preferred model.</p>
+          <code>cp .env.example .env &amp;&amp; # edit .env with your settings</code>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <h4>Launch VIKI</h4>
+          <p>Start the CLI and interact with your sovereign digital intelligence.</p>
+          <code>python -m viki</code>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <p class="section-label">Documentation</p>
+    <h2 class="section-title">Explore the docs</h2>
+    <p class="section-desc">
+      Dive deeper into setup, architecture, security, and operations.
+    </p>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+      <a class="btn btn-secondary" href="SETUP.md">Setup Guide</a>
+      <a class="btn btn-secondary" href="ARCHITECTURE.md">Architecture</a>
+      <a class="btn btn-secondary" href="DOCKER.md">Docker</a>
+      <a class="btn btn-secondary" href="SECURITY.md">Security</a>
+      <a class="btn btn-secondary" href="VIKI_RUNBOOK.md">Runbook</a>
+      <a class="btn btn-secondary" href="../CHANGELOG.md">Changelog</a>
+      <a class="btn btn-secondary" href="../CONTRIBUTING.md">Contributing</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p>VIKI is licensed under <a href="../LICENSE">Apache 2.0</a>.</p>
+  <div class="footer-links">
+    <a href="https://github.com/Orythix/viki">GitHub</a>
+    <a href="https://github.com/Orythix/viki/issues">Issues</a>
+    <a href="../CHANGELOG.md">Changelog</a>
+    <a href="../CONTRIBUTING.md">Contributing</a>
+  </div>
+</footer>
+
+</body>
+</html>
