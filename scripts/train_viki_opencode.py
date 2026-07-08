@@ -8,11 +8,9 @@ then exports a comprehensive training dataset.
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO_ROOT))
 
 from viki.core.knowledge_ingestion import LearningModule  # noqa: E402
 

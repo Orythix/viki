@@ -24,11 +24,9 @@ from __future__ import annotations
 
 import asyncio
 import os
-import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO_ROOT))
 
 os.environ.setdefault("VIKI_SKIP_STARTUP_PULSE", "1")
 

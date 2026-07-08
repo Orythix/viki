@@ -1,12 +1,8 @@
 import asyncio
-import os
-import sys
-
-# Add project root to path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Configure logging to show the debate
 import logging
+import os
 
 from viki.core.controller import VIKIController
 

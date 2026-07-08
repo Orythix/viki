@@ -1,9 +1,7 @@
 import os
-import sys
 
 # Add project root to sys.path for imports
 root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(root_dir)
 
 import logging  # noqa: E402
 

@@ -1,9 +1,5 @@
 import asyncio
 import os
-import sys
-
-# Add project root to path
-sys.path.append(os.path.abspath("."))
 
 from viki.config.resolve import get_soul_path
 from viki.core.orchestrator import VIKIController

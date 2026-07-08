@@ -2,7 +2,6 @@ import argparse
 import asyncio
 import os
 import re
-import sys
 from dataclasses import dataclass
 from urllib.parse import urljoin, urlparse
 
@@ -12,8 +11,6 @@ from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if REPO_ROOT not in sys.path:
-    sys.path.append(REPO_ROOT)
 
 from viki.core.llm import LocalLLM  # noqa: E402
 

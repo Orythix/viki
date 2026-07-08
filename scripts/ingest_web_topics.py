@@ -25,7 +25,6 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO_ROOT))
 
 
 class _LearningBridge:
@@ -87,7 +86,7 @@ def _resolve_data_dir(cli: str | None) -> Path:
     if env:
         p = Path(env)
         return p if p.is_absolute() else (REPO_ROOT / p).resolve()
-    settings_path = REPO_ROOT / "viki" / "config" / "settings.yaml"
+    settings_path = REPO_ROOT / "config" / "settings.yaml"
     if settings_path.is_file():
         import yaml  # noqa: E402
 

@@ -1,11 +1,7 @@
 import asyncio
 import os
-import sys
 
 import yaml
-
-# Add project root to path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from viki.core.memory import HierarchicalMemory
 

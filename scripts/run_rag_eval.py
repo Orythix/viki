@@ -22,8 +22,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 _REPO = Path(__file__).resolve().parent.parent
-if str(_REPO) not in sys.path:
-    sys.path.insert(0, str(_REPO))
 
 # Quiet per-query lesson dumps (viki_logger is the "VIKI" root; INFO logs huge Unicode on Windows consoles).
 logging.getLogger("VIKI").setLevel(logging.WARNING)

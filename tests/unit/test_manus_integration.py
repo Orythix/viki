@@ -1,10 +1,19 @@
 import os
 import shutil
+import subprocess
 import tempfile
 
 import pytest
 
 from viki.skills.builtins.manus_skill import ManusSkill
+
+
+def _bash_works() -> bool:
+    try:
+        r = subprocess.run(["bash", "-c", "echo ok"], capture_output=True, timeout=10)
+        return r.returncode == 0
+    except Exception:
+        return False
 
 
 class MockController:
@@ -39,6 +48,7 @@ async def test_manus_skill_md_execution(temp_workspace):
     assert "Backend: subprocess" in result  # Default in tests
 
 
+@pytest.mark.skipif(not _bash_works(), reason="requires a working bash for the subprocess backend")
 @pytest.mark.asyncio
 async def test_manus_raw_task(temp_workspace):
     ctrl, _ = temp_workspace

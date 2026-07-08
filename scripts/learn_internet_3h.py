@@ -27,8 +27,6 @@ import time
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO_ROOT))
-sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from viki.core.knowledge_ingestion import LearningModule  # noqa: E402
 from viki.skills.builtins.research_skill import HAS_DDG, ResearchSkill  # noqa: E402

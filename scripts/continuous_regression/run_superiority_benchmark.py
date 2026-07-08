@@ -3,15 +3,12 @@ import asyncio
 import datetime as _dt
 import json
 import os
-import sys
 import tempfile
 from typing import Any
 
 import yaml
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-if REPO_ROOT not in sys.path:
-    sys.path.append(REPO_ROOT)
 
 from viki.core.orchestrator import VIKIController  # noqa: E402
 from viki.core.performance_benchmark import ControlledBenchmark  # noqa: E402

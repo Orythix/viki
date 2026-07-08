@@ -9,8 +9,8 @@ from viki.core.orchestrator import VIKIController
 async def verify_v8_1_features():
     print("--- Verifying VIKI v8.1.0 Sovereign Scaling Features ---")
 
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    settings_path = os.path.join(script_dir, "config", "settings.yaml")
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    settings_path = os.path.join(repo_root, "config", "settings.yaml")
     soul_path = get_soul_path(settings_path)
 
     controller = VIKIController(settings_path, soul_path)
