@@ -35,19 +35,14 @@ dependencies = [
     "cryptography>=41.0.0",
     "prompt-toolkit>=3.0.0",
     "pyperclip>=1.8.0",
-    "sentence-transformers>=2.2.0",
     "sqlite-utils>=3.35.0",
     "rank-bm25>=0.2.2",
     "numpy>=1.24.0",
     "watchdog>=3.0.0",
-    "huggingface-hub>=0.20.0",
-    "transformers>=4.36.0",
-    "torch>=2.1.0",
-    "accelerate>=0.25.0",
-    "peft>=0.7.0",
-    "trl>=0.7.0",
-    "datasets>=2.16.0",
 ]
+
+[project.scripts]
+viki = "viki.cli:run"
 
 [project.urls]
 Homepage = "https://github.com/Orythix/viki"
@@ -57,6 +52,18 @@ Changelog = "https://github.com/Orythix/viki/blob/main/CHANGELOG.md"
 Issues = "https://github.com/Orythix/viki/issues"
 
 [project.optional-dependencies]
+# Semantic embeddings, reranking, and model training (forge/LoRA/DPO).
+# Without this extra, VIKI falls back to keyword search and disables training skills.
+ml = [
+    "sentence-transformers>=2.2.0",
+    "huggingface-hub>=0.20.0",
+    "transformers>=4.36.0",
+    "torch>=2.1.0",
+    "accelerate>=0.25.0",
+    "peft>=0.7.0",
+    "trl>=0.7.0",
+    "datasets>=2.16.0",
+]
 dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",

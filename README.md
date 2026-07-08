@@ -228,27 +228,20 @@ VIKI/
     ./.venv/Scripts/Activate.ps1
     pip install -e .
     ```
-    For tests and lint: `pip install -e ".[dev]"`. Dependencies are declared in `pyproject.toml`; `requirements.txt` only installs the package in editable mode (`-e .`).
+    This installs the lightweight core and registers the `viki` command. Dependencies are declared in `pyproject.toml`.
 
 #### Install profiles (optional extras)
 
 Extras are defined in [`pyproject.toml`](pyproject.toml) under `[project.optional-dependencies]`:
 
-- **`dev`** — `pytest`, `pytest-asyncio`, `ruff` (CI and local development).
-- **`windows`** — `pypiwin32` for Windows-specific integrations.
-- **`optional-network`** — `scapy`.
-- **`vad`** — `silero-vad` (voice activity).
-- **`qt`** — `PyQt5` (e.g. desktop overlay in `viki/ui/overlay.py`).
-- **`embeddings`** — `sentence-transformers`, `torch`, `torchaudio`.
-- **`browser`** — `playwright` (run `playwright install chromium` after install for the browser skill).
-- **`vision`** — `opencv-python`.
-- **`agent-full`** — convenience bundle of common agent dependencies (see `pyproject.toml` for the exact list).
+- **`ml`** — `sentence-transformers`, `torch`, `transformers`, `peft`, `trl`, etc. Enables semantic embeddings, reranking, and model training (forge/LoRA/DPO). Without it, VIKI falls back to keyword search and training skills are disabled.
+- **`dev`** — `pytest`, `pytest-asyncio`, `ruff`, `mypy` (CI and local development).
 
 Examples:
 
 ```powershell
 pip install -e ".[dev]"
-pip install -e ".[windows,qt]"
+pip install -e ".[ml]"
 ```
 
 2.  **Configure environment** (recommended so paths and secrets are not hardcoded):
