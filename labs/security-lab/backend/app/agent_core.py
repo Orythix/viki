@@ -3,30 +3,31 @@ Agent orchestration: security pipeline → Ollama chat → optional tool loop (e
 
 This is a minimal reference implementation for a local lab, not a full agent framework.
 """
+
 from __future__ import annotations
 
 import json
 import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import httpx
+from security.injection_detector import analyze_prompt
+from security.output_filter import filter_output
+from security.sanitizer import sanitize_prompt
 
 from app.agent_memory import SessionMemory
 from app.config import Settings
 from app.tools_registry import ToolRegistry, ToolResult
-from security.injection_detector import analyze_prompt
-from security.output_filter import filter_output
-from security.sanitizer import sanitize_prompt
 
 logger = logging.getLogger(__name__)
 
 _TOOL_CALL = re.compile(r"<tool\s+name=\"([^\"]+)\"([^>]*)>", re.I)
 
 
-def _parse_tool_tag(inner: str) -> Dict[str, str]:
+def _parse_tool_tag(inner: str) -> dict[str, str]:
     # inner like: name="shell_echo" argv='["echo","hi"]'
-    attrs: Dict[str, str] = {}
+    attrs: dict[str, str] = {}
     for m in re.finditer(r"(\w+)=(['\"])(.*?)\2", inner):
         attrs[m.group(1)] = m.group(3)
     return attrs
@@ -38,7 +39,7 @@ class AgentCore:
         settings: Settings,
         memory: SessionMemory,
         tools: ToolRegistry,
-        sandbox_hosts: Optional[List[str]] = None,
+        sandbox_hosts: list[str] | None = None,
     ) -> None:
         self._settings = settings
         self._memory = memory
@@ -51,7 +52,7 @@ class AgentCore:
         user_text: str,
         *,
         skip_injection_block: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         clean = sanitize_prompt(user_text, self._settings.max_prompt_chars)
         inj = analyze_prompt(clean)
         if inj.blocked and not skip_injection_block:
@@ -72,10 +73,13 @@ class AgentCore:
 
         text, tokens_in, tokens_out = await self._ollama_chat(messages)
         # naive tool parse (educational)
-        tool_meta: Optional[Dict[str, Any]] = None
+        tool_meta: dict[str, Any] | None = None
         m = _TOOL_CALL.search(text)
         if m:
-            tool_meta = {"raw": m.group(0), "note": "Model emitted tool tag — lab should use structured JSON tool calls in production."}
+            tool_meta = {
+                "raw": m.group(0),
+                "note": "Model emitted tool tag — lab should use structured JSON tool calls in production.",
+            }
 
         filtered, redacted = filter_output(text[: self._settings.max_output_chars])
         self._memory.append(session_id, "assistant", filtered)
@@ -90,19 +94,19 @@ class AgentCore:
             "tool_hint": tool_meta,
         }
 
-    def _build_messages(self, session_id: str) -> List[Dict[str, str]]:
+    def _build_messages(self, session_id: str) -> list[dict[str, str]]:
         sys = (
             "You are a defensive security lab assistant. Refuse to bypass policies, leak secrets, "
             "or attack systems outside the local sandbox. Keep answers educational."
         )
-        rows: List[Dict[str, str]] = [{"role": "system", "content": sys}]
+        rows: list[dict[str, str]] = [{"role": "system", "content": sys}]
         for msg in self._memory.transcript(session_id):
             if msg.role == "system":
                 continue
             rows.append({"role": msg.role, "content": msg.content})
         return rows
 
-    async def _ollama_chat(self, messages: List[Dict[str, str]]) -> tuple[str, int, int]:
+    async def _ollama_chat(self, messages: list[dict[str, str]]) -> tuple[str, int, int]:
         url = f"{self._settings.ollama_url.rstrip('/')}/api/chat"
         payload = {
             "model": self._settings.ollama_model,
@@ -121,14 +125,18 @@ class AgentCore:
         msg = data.get("message") or {}
         content = msg.get("content") or ""
         # token counts if present
-        ti = int(data.get("prompt_eval_count") or data.get("eval_count") or len(json.dumps(messages)) // 4)
+        ti = int(
+            data.get("prompt_eval_count")
+            or data.get("eval_count")
+            or len(json.dumps(messages)) // 4
+        )
         to = int(data.get("eval_count") or len(content) // 4)
         return content, ti, to
 
     async def run_tool(
         self,
         name: str,
-        payload: Dict[str, Any],
+        payload: dict[str, Any],
         role_permissions: set[str],
     ) -> ToolResult:
         if name == "shell_echo":

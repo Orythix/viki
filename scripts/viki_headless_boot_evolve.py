@@ -19,6 +19,7 @@ Example (PowerShell, repo root):
 
 See docs/VIKI_RUNBOOK.md § Background evolution and scripts/Register-VikiBootTask.ps1.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -40,8 +41,8 @@ async def _amain() -> int:
     if force:
         os.environ["VIKI_BACKGROUND_EVOLUTION_AT_BOOT"] = "1"
 
-    from core.controller import VIKIController  # noqa: E402
     from config.resolve import get_soul_path  # noqa: E402
+    from core.controller import VIKIController  # noqa: E402
 
     script_dir = REPO_ROOT / "viki"
     settings_path = str(script_dir / "config" / "settings.yaml")

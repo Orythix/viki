@@ -5,25 +5,24 @@ import json
 import os
 import sys
 import tempfile
-from typing import Dict, Any, List
+from typing import Any
 
 import yaml
-
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if REPO_ROOT not in sys.path:
     sys.path.append(REPO_ROOT)
 
-from viki.core.orchestrator import VIKIController
-from viki.core.performance_benchmark import ControlledBenchmark
+from viki.core.orchestrator import VIKIController  # noqa: E402
+from viki.core.performance_benchmark import ControlledBenchmark  # noqa: E402
 
 
-def _load_yaml(path: str) -> Dict[str, Any]:
-    with open(path, "r", encoding="utf-8") as f:
+def _load_yaml(path: str) -> dict[str, Any]:
+    with open(path, encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
 
 
-def _write_yaml(path: str, payload: Dict[str, Any]) -> None:
+def _write_yaml(path: str, payload: dict[str, Any]) -> None:
     with open(path, "w", encoding="utf-8") as f:
         yaml.safe_dump(payload, f)
 
@@ -31,11 +30,11 @@ def _write_yaml(path: str, payload: Dict[str, Any]) -> None:
 async def run_once(
     settings_path: str,
     soul_path: str,
-    suites: List[str],
+    suites: list[str],
     model_label: str,
     write_json: bool,
     output_dir: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     raw_settings = _load_yaml(settings_path)
     system = raw_settings.setdefault("system", {})
 
@@ -53,7 +52,7 @@ async def run_once(
     controller = VIKIController(run_settings_path, soul_path)
     benchmark = ControlledBenchmark(controller)
 
-    suite_reports: Dict[str, Any] = {}
+    suite_reports: dict[str, Any] = {}
     all_results = []
 
     try:
@@ -105,7 +104,9 @@ async def main():
     parser.add_argument("--settings", default="./config/settings.yaml")
     parser.add_argument("--soul", default="./config/soul.yaml")
     parser.add_argument("--model-label", default="Current-VIKI")
-    parser.add_argument("--suites", default="superiority,core,dev", help="Comma-separated suite names.")
+    parser.add_argument(
+        "--suites", default="superiority,core,dev", help="Comma-separated suite names."
+    )
     parser.add_argument("--no-write-json", action="store_true")
     parser.add_argument("--output-dir", default=os.path.join("tmp", "superiority_reports"))
     args = parser.parse_args()
@@ -130,4 +131,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-

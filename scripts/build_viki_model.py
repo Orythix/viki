@@ -40,17 +40,17 @@ Examples (PowerShell):
     $env:VIKI_DPO_RUN_TRAIN = "1"
     python scripts/build_viki_model.py --strategy dpo
 """
+
 from __future__ import annotations
 
 import argparse
 import asyncio
-import json
 import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
@@ -96,13 +96,14 @@ def fail(msg: str) -> str:
 # Settings + path helpers
 # ---------------------------------------------------------------------------
 
-def load_settings() -> Dict[str, Any]:
+
+def load_settings() -> dict[str, Any]:
     settings_path = REPO_ROOT / "config" / "settings.yaml"
     with settings_path.open("r", encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
 
 
-def resolve_base_model(cli_value: Optional[str], settings: Dict[str, Any]) -> str:
+def resolve_base_model(cli_value: str | None, settings: dict[str, Any]) -> str:
     if cli_value:
         return cli_value.strip()
     env = (os.environ.get("VIKI_FORGE_BASE_OLLAMA_MODEL") or "").strip()
@@ -112,7 +113,7 @@ def resolve_base_model(cli_value: Optional[str], settings: Dict[str, Any]) -> st
     return (sysconf.get("forge_base_ollama_model") or "qwen3.6:latest").strip()
 
 
-def resolve_data_dir(cli_value: Optional[str], settings: Dict[str, Any]) -> Path:
+def resolve_data_dir(cli_value: str | None, settings: dict[str, Any]) -> Path:
     if cli_value:
         d = Path(cli_value)
     else:
@@ -132,6 +133,7 @@ def resolve_data_dir(cli_value: Optional[str], settings: Dict[str, Any]) -> Path
 # Ollama interaction
 # ---------------------------------------------------------------------------
 
+
 def _run(cmd: list[str], capture: bool = True, timeout: int = 60) -> subprocess.CompletedProcess:
     return subprocess.run(
         cmd,
@@ -142,7 +144,7 @@ def _run(cmd: list[str], capture: bool = True, timeout: int = 60) -> subprocess.
     )
 
 
-def ollama_available() -> Tuple[bool, str]:
+def ollama_available() -> tuple[bool, str]:
     if shutil.which("ollama") is None:
         return False, "`ollama` is not on PATH. Install from https://ollama.com/download."
     try:
@@ -150,7 +152,10 @@ def ollama_available() -> Tuple[bool, str]:
     except Exception as e:
         return False, f"`ollama list` raised: {e!r}"
     if r.returncode != 0:
-        return False, f"Ollama daemon not reachable. Start it with `ollama serve`. stderr={r.stderr.strip()}"
+        return (
+            False,
+            f"Ollama daemon not reachable. Start it with `ollama serve`. stderr={r.stderr.strip()}",
+        )
     return True, r.stdout
 
 
@@ -169,7 +174,7 @@ def ollama_has_model(tag: str) -> bool:
     return False
 
 
-def ollama_create(tag: str, modelfile_path: Path) -> Tuple[bool, str]:
+def ollama_create(tag: str, modelfile_path: Path) -> tuple[bool, str]:
     r = _run(["ollama", "create", tag, "-f", str(modelfile_path)], timeout=900)
     out = (r.stdout or "") + (r.stderr or "")
     return r.returncode == 0, out.strip()
@@ -184,12 +189,13 @@ def ollama_show(tag: str) -> str:
 # Strategies
 # ---------------------------------------------------------------------------
 
+
 def export_dataset(
     data_dir: Path,
     *,
     min_access_count: int,
-    settings: Dict[str, Any],
-) -> Tuple[Path, str]:
+    settings: dict[str, Any],
+) -> tuple[Path, str]:
     from viki.core.knowledge_ingestion import LearningModule  # type: ignore
 
     dataset_path = data_dir / "training_dataset_lora.jsonl"
@@ -204,16 +210,16 @@ def export_dataset(
 
 
 def build_modelfile_content(base_model: str, lessons: list[str]) -> str:
-    knowledge_block = "\n".join(f"- {l}" for l in lessons[-50:])
+    knowledge_block = "\n".join(f"- {lesson}" for lesson in lessons[-50:])
     return (
         f"FROM {base_model}\n"
-        f"SYSTEM \"\"\"\n"
+        f'SYSTEM """\n'
         f"You are VIKI, a continuously evolving digital intelligence.\n"
         f"Here is your internalized knowledge base:\n"
         f"{knowledge_block}\n"
-        f"\"\"\"\n"
+        f'"""\n'
         f"PARAMETER temperature 0.6\n"
-        f"PARAMETER stop \"<|eot_id|>\"\n"
+        f'PARAMETER stop "<|eot_id|>"\n'
     )
 
 
@@ -238,9 +244,7 @@ def strategy_prompt_bake(
 
     info(f"Reinforced lessons (min_count={min_count}): {len(lessons)}")
     modelfile_path = data_dir / "Modelfile.viki_evolved"
-    modelfile_path.write_text(
-        build_modelfile_content(base_model, lessons), encoding="utf-8"
-    )
+    modelfile_path.write_text(build_modelfile_content(base_model, lessons), encoding="utf-8")
     ok(f"Modelfile written -> {modelfile_path}")
 
     if dry_run:
@@ -380,6 +384,7 @@ def strategy_preference(
 # Optional: promote viki-evolved as the default profile
 # ---------------------------------------------------------------------------
 
+
 def set_default_profile(profile_name: str = "viki-evolved") -> bool:
     models_yaml = REPO_ROOT / "config" / "models.yaml"
     try:
@@ -409,6 +414,7 @@ def set_default_profile(profile_name: str = "viki-evolved") -> bool:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         prog="build_viki_model",
@@ -427,7 +433,9 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Output Ollama tag (prompt_bake). Default: forge_output_ollama_tag / VIKI_FORGE_OUTPUT_OLLAMA_MODEL / viki-neural-forge.",
     )
-    p.add_argument("--base", default=None, help="Base Ollama model (FROM line). Defaults to settings/env.")
+    p.add_argument(
+        "--base", default=None, help="Base Ollama model (FROM line). Defaults to settings/env."
+    )
     p.add_argument("--steps", type=int, default=60, help="Training steps (lora/dpo/orpo).")
     p.add_argument(
         "--min-count",
@@ -437,8 +445,12 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument("--data-dir", default=None, help="VIKI data dir. Defaults to settings/env.")
     p.add_argument("--no-export", action="store_true", help="Skip JSONL dataset export step.")
-    p.add_argument("--set-default", action="store_true", help="Patch models.yaml -> default: viki-evolved.")
-    p.add_argument("--dry-run", action="store_true", help="Run all checks but skip ollama create / training.")
+    p.add_argument(
+        "--set-default", action="store_true", help="Patch models.yaml -> default: viki-evolved."
+    )
+    p.add_argument(
+        "--dry-run", action="store_true", help="Run all checks but skip ollama create / training."
+    )
     return p.parse_args()
 
 
@@ -468,10 +480,7 @@ def main() -> int:
             return 1
         ok("Ollama daemon reachable.")
         if not ollama_has_model(base_model):
-            fail(
-                f"Base model '{base_model}' not found locally. "
-                f"Run: ollama pull {base_model}"
-            )
+            fail(f"Base model '{base_model}' not found locally. Run: ollama pull {base_model}")
             return 1
         ok(f"Base model present: {base_model}")
     else:
@@ -573,4 +582,4 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except KeyboardInterrupt:
         print("\nInterrupted.")
-        raise SystemExit(130)
+        raise SystemExit(130) from None

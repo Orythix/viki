@@ -4,18 +4,17 @@ VIKI Training via opencode (deepseek-v4-flash-free).
 Imports curated lessons into VIKI's SQLite knowledge DB,
 then exports a comprehensive training dataset.
 """
+
 from __future__ import annotations
 
 import json
-import os
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from viki.core.knowledge_ingestion import LearningModule
-
+from viki.core.knowledge_ingestion import LearningModule  # noqa: E402
 
 DATA_DIR = REPO_ROOT / "data"
 CONFIG_DIR = REPO_ROOT / "config"
@@ -262,8 +261,8 @@ def generate_enhanced_dataset() -> str:
                 "### Response:\n"
                 "Angular has built-in i18n:\n\n"
                 "1. Add localization in template:\n"
-                "   <h1 i18n=\"@@welcomeHeader\">Welcome</h1>\n"
-                "   <p i18n=\"@@description\">\n"
+                '   <h1 i18n="@@welcomeHeader">Welcome</h1>\n'
+                '   <p i18n="@@description">\n'
                 "     Hello {name, plural, one {friend} other {friends}}!\n"
                 "   </p>\n\n"
                 "2. Extract translation template:\n"
@@ -273,10 +272,10 @@ def generate_enhanced_dataset() -> str:
                 "   - src/locale/messages.si.xlf (Sinhala)\n"
                 "   - src/locale/messages.ta.xlf (Tamil)\n\n"
                 "4. Configure in angular.json:\n"
-                "   \"i18n\": {\n"
-                "     \"sourceLocale\": \"en-US\",\n"
-                "     \"locales\": {\n"
-                "       \"si\": \"src/locale/messages.si.xlf\"\n"
+                '   "i18n": {\n'
+                '     "sourceLocale": "en-US",\n'
+                '     "locales": {\n'
+                '       "si": "src/locale/messages.si.xlf"\n'
                 "     }\n"
                 "   }\n\n"
                 "5. Build per locale:\n"
@@ -364,20 +363,20 @@ def generate_enhanced_dataset() -> str:
                 "1. Install: ng add @angular-eslint/schematics\n\n"
                 "2. Key config in .eslintrc.json:\n"
                 "   {\n"
-                "     \"rules\": {\n"
-                "       \"@angular-eslint/component-selector\": [\"error\", {\n"
-                "         \"type\": \"element\",\n"
-                "         \"prefix\": \"app\",\n"
-                "         \"style\": \"kebab-case\"\n"
+                '     "rules": {\n'
+                '       "@angular-eslint/component-selector": ["error", {\n'
+                '         "type": "element",\n'
+                '         "prefix": "app",\n'
+                '         "style": "kebab-case"\n'
                 "       }],\n"
-                "       \"@angular-eslint/directive-selector\": [\"error\", {\n"
-                "         \"type\": \"attribute\",\n"
-                "         \"prefix\": \"app\",\n"
-                "         \"style\": \"camelCase\"\n"
+                '       "@angular-eslint/directive-selector": ["error", {\n'
+                '         "type": "attribute",\n'
+                '         "prefix": "app",\n'
+                '         "style": "camelCase"\n'
                 "       }],\n"
-                "       \"@typescript-eslint/explicit-function-return-type\": \"warn\",\n"
-                "       \"@typescript-eslint/no-unused-vars\": [\"error\", {\n"
-                "         \"argsIgnorePattern\": \"^_\"\n"
+                '       "@typescript-eslint/explicit-function-return-type": "warn",\n'
+                '       "@typescript-eslint/no-unused-vars": ["error", {\n'
+                '         "argsIgnorePattern": "^_"\n'
                 "       }]\n"
                 "     }\n"
                 "   }\n\n"
@@ -410,11 +409,11 @@ def generate_enhanced_dataset() -> str:
                 "     apiUrl: 'https://api.example.com',\n"
                 "   };\n\n"
                 "3. angular.json fileReplacement:\n"
-                "   \"configurations\": {\n"
-                "     \"production\": {\n"
-                "       \"fileReplacements\": [{\n"
-                "         \"replace\": \"src/environments/environment.ts\",\n"
-                "         \"with\": \"src/environments/environment.prod.ts\"\n"
+                '   "configurations": {\n'
+                '     "production": {\n'
+                '       "fileReplacements": [{\n'
+                '         "replace": "src/environments/environment.ts",\n'
+                '         "with": "src/environments/environment.prod.ts"\n'
                 "       }]\n"
                 "     }\n"
                 "   }\n\n"

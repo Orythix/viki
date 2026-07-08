@@ -3,12 +3,12 @@ Shared pytest fixtures.
 
 Live tests are skipped unless QA_LIVE_API=1 so CI stays fast and deterministic.
 """
+
 from __future__ import annotations
 
 import os
 
 import pytest
-
 from qa_lab.client import SecurityLabClient
 from qa_lab.config import Settings
 
@@ -24,7 +24,9 @@ def _live_enabled() -> bool:
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Function]) -> None:
     if _live_enabled():
         return
-    skip = pytest.mark.skip(reason="Live API tests: set QA_LIVE_API=1 and run labs/security-lab (see labs/qa-automation/README.md)")
+    skip = pytest.mark.skip(
+        reason="Live API tests: set QA_LIVE_API=1 and run labs/security-lab (see labs/qa-automation/README.md)"
+    )
     for item in items:
         if "live" in item.keywords:
             item.add_marker(skip)

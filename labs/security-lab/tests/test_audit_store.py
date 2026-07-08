@@ -2,7 +2,6 @@ import os
 from pathlib import Path
 
 import pytest
-
 from app.audit_store import AuditStore
 
 

@@ -5,22 +5,24 @@ Risks: shell escape, SSRF if HTTP not restricted.
 
 Mitigations: allowlist binaries; timeout; no shell=True; validate URLs against internal host allowlist.
 """
+
 from __future__ import annotations
 
 import logging
 import shutil
 import subprocess
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 import httpx
+from security.sandbox_url import validate_http_target
 
 from app.config import Settings
-from security.sandbox_url import validate_http_target
 
 logger = logging.getLogger(__name__)
 
 
 class ToolResult:
-    def __init__(self, ok: bool, output: str, meta: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(self, ok: bool, output: str, meta: dict[str, Any] | None = None) -> None:
         self.ok = ok
         self.output = output
         self.meta = meta or {}
@@ -30,10 +32,10 @@ class ToolRegistry:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
 
-    def list_tools(self) -> List[str]:
+    def list_tools(self) -> list[str]:
         return ["shell_echo", "http_get_sandbox"]
 
-    def run_shell_echo(self, argv: List[str], allowlist: set[str]) -> ToolResult:
+    def run_shell_echo(self, argv: list[str], allowlist: set[str]) -> ToolResult:
         if not argv:
             return ToolResult(False, "no argv")
         bin_name = argv[0].lower()
@@ -59,7 +61,7 @@ class ToolRegistry:
         except OSError as e:
             return ToolResult(False, str(e))
 
-    async def http_get_sandbox(self, url: str, allowed_hosts: List[str]) -> ToolResult:
+    async def http_get_sandbox(self, url: str, allowed_hosts: list[str]) -> ToolResult:
         try:
             ok, reason = validate_http_target(url, allowed_hosts)
             if not ok:

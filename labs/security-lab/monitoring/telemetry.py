@@ -15,17 +15,18 @@ Mitigations
 - Keep endpoints behind API key + RBAC; bind Docker ports to 127.0.0.1 only.
 - Do not ship detailed per-process command lines in responses.
 """
+
 from __future__ import annotations
 
 import logging
 import os
 import time
-from typing import Any, Dict
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-def resource_snapshot() -> Dict[str, Any]:
+def resource_snapshot() -> dict[str, Any]:
     """
     Best-effort snapshot. If ``psutil`` is not installed, returns a stub
     (open-source optional dependency).

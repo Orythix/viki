@@ -15,18 +15,20 @@ Mitigations
 - For PostgreSQL: dedicated role, minimal grants, TLS to DB in shared networks.
 - Encrypt backups if they leave the lab machine.
 """
+
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import threading
 import time
 import uuid
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional
-import re
+from typing import Any
 from urllib.parse import urlparse
 
 
@@ -35,12 +37,12 @@ class AuditEntry:
     id: str
     ts: float
     kind: str
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
 
 
 def _is_postgres_url(url: str) -> bool:
     u = url.strip().lower()
-    return u.startswith("postgresql://") or u.startswith("postgres://")
+    return u.startswith(("postgresql://", "postgres://"))
 
 
 def _sqlite_file_path(database_url: str) -> Path:
@@ -102,12 +104,8 @@ class AuditStore:
                 )
                 """
             )
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(ts)"
-            )
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_audit_kind ON audit_log(kind)"
-            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(ts)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_kind ON audit_log(kind)")
             conn.commit()
 
     @contextmanager
@@ -119,7 +117,7 @@ class AuditStore:
         finally:
             conn.close()
 
-    def append(self, kind: str, payload: Dict[str, Any]) -> str:
+    def append(self, kind: str, payload: dict[str, Any]) -> str:
         eid = str(uuid.uuid4())
         ts = time.time()
         blob = json.dumps(payload, ensure_ascii=False)
@@ -142,7 +140,7 @@ class AuditStore:
                     conn.commit()
         return eid
 
-    def recent(self, limit: int = 100, kind: Optional[str] = None) -> List[AuditEntry]:
+    def recent(self, limit: int = 100, kind: str | None = None) -> list[AuditEntry]:
         with self._lock:
             if self._backend == "sqlite":
                 q = "SELECT id, ts, kind, payload FROM audit_log"
@@ -168,7 +166,7 @@ class AuditStore:
                 with psycopg.connect(self._url, row_factory=dict_row) as conn:
                     rows = conn.execute(q, args_pg).fetchall()
 
-        out: List[AuditEntry] = []
+        out: list[AuditEntry] = []
         for r in rows:
             out.append(
                 AuditEntry(

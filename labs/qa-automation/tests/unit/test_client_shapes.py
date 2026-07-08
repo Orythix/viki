@@ -3,12 +3,12 @@ Unit tests — no running server. Validates request construction with mocks.
 
 Why: CI proves framework logic; live tests prove environment wiring.
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
 import httpx
-
 from qa_lab.client import SecurityLabClient
 from qa_lab.config import Settings
 

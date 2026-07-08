@@ -4,6 +4,7 @@ Central configuration from environment variables.
 Why env vars: CI injects secrets; local dev uses .env (never committed).
 Security: never log raw API keys; rotate keys used in shared environments.
 """
+
 from __future__ import annotations
 
 import os
@@ -17,7 +18,7 @@ class Settings:
     role: str = "lab_admin"
 
     @classmethod
-    def from_env(cls) -> "Settings":
+    def from_env(cls) -> Settings:
         return cls(
             base_url=os.environ.get("QA_BASE_URL", "http://127.0.0.1:8000").rstrip("/"),
             api_key=os.environ.get("QA_API_KEY", "dev-lab-change-me"),

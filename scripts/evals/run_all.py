@@ -14,13 +14,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+from scripts.evals import eval_datasets  # noqa: E402
 from scripts.evals.harness import (  # noqa: E402
     HarnessConfig,
     build_controller,
     default_results_root,
     run_harness,
 )
-from scripts.evals import eval_datasets  # noqa: E402
 from viki.core.capability_index import CapabilityIndex  # noqa: E402
 
 SUITES = [
@@ -45,8 +45,12 @@ async def main_async():
         action="store_true",
         help="Materialize real benchmark fixtures via HuggingFace before running.",
     )
-    parser.add_argument("--concurrency", "-c", type=int, default=1, help="Concurrently run N tasks (default: 1).")
-    parser.add_argument("--resume", "-r", action="store_true", help="Resume evaluation from the last matching run.")
+    parser.add_argument(
+        "--concurrency", "-c", type=int, default=1, help="Concurrently run N tasks (default: 1)."
+    )
+    parser.add_argument(
+        "--resume", "-r", action="store_true", help="Resume evaluation from the last matching run."
+    )
     args = parser.parse_args()
 
     if args.prepare_datasets:
@@ -83,7 +87,9 @@ async def main_async():
     print(json.dumps(index, indent=2))
     print()
     for s in summaries:
-        print(f"  {s.get('suite'):24} pass_rate={s.get('pass_rate', 0):.2f} mean_score={s.get('mean_score', 0):.3f}")
+        print(
+            f"  {s.get('suite'):24} pass_rate={s.get('pass_rate', 0):.2f} mean_score={s.get('mean_score', 0):.3f}"
+        )
     return index
 
 

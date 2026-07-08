@@ -11,13 +11,13 @@ Risks / mitigations
 Same as ``tools_registry.http_get_sandbox``: never pass user-controlled URLs to
 requests without this gate; keep allowlists minimal.
 """
+
 from __future__ import annotations
 
-from typing import List
 from urllib.parse import urlparse
 
 
-def validate_http_target(url: str, allowed_hosts: List[str]) -> tuple[bool, str]:
+def validate_http_target(url: str, allowed_hosts: list[str]) -> tuple[bool, str]:
     """
     Returns (allowed, reason). ``allowed`` means the URL may be fetched under
     lab policy (still subject to RBAC and rate limits).

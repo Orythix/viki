@@ -1,9 +1,10 @@
 """Structured logging for audit correlation (request_id, user role, event type)."""
+
 from __future__ import annotations
 
 import logging
 import sys
-from typing import Any, Dict
+from typing import Any
 
 from pythonjsonlogger import jsonlogger
 
@@ -22,5 +23,5 @@ def setup_logging(level: int = logging.INFO) -> None:
 
 
 def log_security_event(logger: logging.Logger, event: str, **fields: Any) -> None:
-    payload: Dict[str, Any] = {"event": event, **fields}
+    payload: dict[str, Any] = {"event": event, **fields}
     logger.warning("security_event", extra={"extra_fields": payload})

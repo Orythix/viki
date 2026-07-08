@@ -6,13 +6,13 @@ Risks: memory poisoning — untrusted content stored as "facts" influences later
 Mitigations: separate system vs user channels; cap message count; optional injection scan on retrieve;
 do not auto-elevate user text to system prompts.
 """
+
 from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
 from threading import Lock
-from typing import Deque, Dict, List, Literal, Optional
-
+from typing import Literal
 
 Role = Literal["user", "assistant", "system"]
 
@@ -25,7 +25,7 @@ class Message:
 
 class SessionMemory:
     def __init__(self, max_messages: int = 40) -> None:
-        self._sessions: Dict[str, Deque[Message]] = {}
+        self._sessions: dict[str, deque[Message]] = {}
         self._lock = Lock()
         self._max = max_messages
 
@@ -34,7 +34,7 @@ class SessionMemory:
             q = self._sessions.setdefault(session_id, deque(maxlen=self._max))
             q.append(Message(role=role, content=content))
 
-    def transcript(self, session_id: str) -> List[Message]:
+    def transcript(self, session_id: str) -> list[Message]:
         with self._lock:
             q = self._sessions.get(session_id)
             if not q:

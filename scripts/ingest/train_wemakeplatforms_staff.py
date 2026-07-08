@@ -4,11 +4,10 @@ import os
 import re
 import sys
 from dataclasses import dataclass
-from typing import List, Optional
 from urllib.parse import urljoin, urlparse
 
-import yaml
 import requests
+import yaml
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
@@ -16,11 +15,11 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if REPO_ROOT not in sys.path:
     sys.path.append(REPO_ROOT)
 
-from viki.core.forge_config import DEFAULT_FORGE_OUTPUT_OLLAMA_TAG
-from viki.core.knowledge_ingestion import LearningModule
-from viki.core.llm import LocalLLM
-from viki.skills.builtins.research_skill import ResearchSkill
+from viki.core.llm import LocalLLM  # noqa: E402
 
+from viki.core.forge_config import DEFAULT_FORGE_OUTPUT_OLLAMA_TAG  # noqa: E402
+from viki.core.knowledge_ingestion import LearningModule  # noqa: E402
+from viki.skills.builtins.research_skill import ResearchSkill  # noqa: E402
 
 FACT_PREFIX = "FACT:"
 STAFF_ROLE_PREFIX = "STAFF_ROLE:"
@@ -30,7 +29,7 @@ STAFF_ROLE_PREFIX = "STAFF_ROLE:"
 class TrainingConfig:
     index_url: str
     pair_size: int
-    max_profiles: Optional[int]
+    max_profiles: int | None
     sleep_seconds: float
 
 
@@ -38,8 +37,9 @@ def _get_repo_root() -> str:
     # scripts/ -> repo root
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+
 def _load_settings(settings_path: str) -> dict:
-    with open(settings_path, "r", encoding="utf-8") as f:
+    with open(settings_path, encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
 
 
@@ -61,7 +61,7 @@ def _build_components(settings_path: str):
         models_config_path = os.path.join(REPO_ROOT, models_config_path)
 
     models_cfg = {}
-    with open(models_config_path, "r", encoding="utf-8") as f:
+    with open(models_config_path, encoding="utf-8") as f:
         models_cfg = yaml.safe_load(f) or {}
 
     models_root = models_cfg.get("models", {})
@@ -85,7 +85,7 @@ def _build_components(settings_path: str):
     return learning, llm, research_skill
 
 
-def _extract_profile_urls(index_html: str, index_url: str) -> List[str]:
+def _extract_profile_urls(index_html: str, index_url: str) -> list[str]:
     soup = BeautifulSoup(index_html, "html.parser")
     hrefs = set()
     for a in soup.find_all("a", href=True):
@@ -94,14 +94,14 @@ def _extract_profile_urls(index_html: str, index_url: str) -> List[str]:
             continue
         hrefs.add(urljoin(index_url, href))
 
-    profile_urls: List[str] = []
+    profile_urls: list[str] = []
     for u in sorted(hrefs):
         parsed = urlparse(u)
         path = parsed.path or ""
         if not path.startswith("/our-team/"):
             continue
 
-        remainder = path[len("/our-team/"):].strip("/")
+        remainder = path[len("/our-team/") :].strip("/")
         if not remainder:
             continue
         # Only accept single slug profiles, e.g. /our-team/name/ (no nested paths).
@@ -112,7 +112,7 @@ def _extract_profile_urls(index_html: str, index_url: str) -> List[str]:
 
     # De-duplicate while preserving order
     seen = set()
-    unique: List[str] = []
+    unique: list[str] = []
     for u in profile_urls:
         if u in seen:
             continue
@@ -130,7 +130,7 @@ def _is_contactish(text: str) -> bool:
     return False
 
 
-def _chunked(items: List[str], size: int):
+def _chunked(items: list[str], size: int):
     for i in range(0, len(items), size):
         yield items[i : i + size]
 
@@ -149,9 +149,11 @@ def _build_extraction_prompt(url_list_tag: str) -> str:
     )
 
 
-def _truncate_page_sections(urls: List[str], contents: List[object], max_chars: int = 3500) -> List[str]:
-    truncated_sections: List[str] = []
-    for u, c in zip(urls, contents):
+def _truncate_page_sections(
+    urls: list[str], contents: list[object], max_chars: int = 3500
+) -> list[str]:
+    truncated_sections: list[str] = []
+    for u, c in zip(urls, contents, strict=False):
         if isinstance(c, Exception) or not c:
             continue
         text = str(c)
@@ -161,8 +163,8 @@ def _truncate_page_sections(urls: List[str], contents: List[object], max_chars: 
     return truncated_sections
 
 
-def _parse_fact_lines(model_output: str) -> List[str]:
-    facts: List[str] = []
+def _parse_fact_lines(model_output: str) -> list[str]:
+    facts: list[str] = []
     for line in str(model_output).splitlines():
         line = line.strip()
         if not line.startswith(FACT_PREFIX):
@@ -176,7 +178,14 @@ def _parse_fact_lines(model_output: str) -> List[str]:
     return facts
 
 
-async def _train_one_batch(learning: LearningModule, llm: LocalLLM, research_skill: ResearchSkill, urls: List[str], batch_idx: int, total: int) -> List[str]:  #NOSONAR
+async def _train_one_batch(
+    learning: LearningModule,
+    llm: LocalLLM,
+    research_skill: ResearchSkill,
+    urls: list[str],
+    batch_idx: int,
+    total: int,
+) -> list[str]:  # NOSONAR
     url_list_tag = ", ".join(urls)
     prompt = _build_extraction_prompt(url_list_tag=url_list_tag)
 
@@ -243,9 +252,16 @@ async def _train_one_batch(learning: LearningModule, llm: LocalLLM, research_ski
 
 
 async def main():
-    parser = argparse.ArgumentParser(description="Train VIKI memory on WeMakePlatforms staff pages.")
+    parser = argparse.ArgumentParser(
+        description="Train VIKI memory on WeMakePlatforms staff pages."
+    )
     parser.add_argument("--index-url", default="https://www.wemakeplatforms.io/our-team")
-    parser.add_argument("--pair-size", type=int, default=2, help="How many profile URLs per request (VIKI fetches up to 2).")
+    parser.add_argument(
+        "--pair-size",
+        type=int,
+        default=2,
+        help="How many profile URLs per request (VIKI fetches up to 2).",
+    )
     parser.add_argument("--max-profiles", type=int, default=0, help="0 means all profiles.")
     parser.add_argument("--sleep-seconds", type=float, default=0.5, help="Delay between batches.")
     args = parser.parse_args()
@@ -291,4 +307,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-

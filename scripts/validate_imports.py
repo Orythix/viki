@@ -1,6 +1,6 @@
+import importlib
 import os
 import sys
-import importlib
 
 # Add current dir to path
 sys.path.insert(0, os.getcwd())
@@ -44,7 +44,16 @@ def check_imports(start_dir):
 
 if __name__ == "__main__":
     errs = []
-    for d in ["core", "api", "application", "domain", "infrastructure", "integrations", "skills", "ui"]:
+    for d in [
+        "core",
+        "api",
+        "application",
+        "domain",
+        "infrastructure",
+        "integrations",
+        "skills",
+        "ui",
+    ]:
         if os.path.exists(d):
             errs.extend(check_imports(d))
     if errs:

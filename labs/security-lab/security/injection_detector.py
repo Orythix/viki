@@ -14,22 +14,22 @@ Mitigations:
 - Log all blocks with reason for tuning.
 - Never use as sole control; enforce RBAC and tool sandbox regardless.
 """
+
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import List, Tuple
 
 
 @dataclass
 class InjectionReport:
     score: float  # 0..1 higher = riskier
-    reasons: List[str]
+    reasons: list[str]
     blocked: bool
 
 
 # Benign educational patterns — high-level categories only (no weaponized payloads).
-_SUSPICIOUS_PATTERNS: List[Tuple[re.Pattern[str], str, float]] = [
+_SUSPICIOUS_PATTERNS: list[tuple[re.Pattern[str], str, float]] = [
     (
         re.compile(
             r"\b(ignore|disregard)\s+(all\s+)?(previous|prior|above)\s+(instructions?|rules?|directives?)\b",
@@ -54,7 +54,9 @@ _SUSPICIOUS_PATTERNS: List[Tuple[re.Pattern[str], str, float]] = [
         0.2,
     ),
     (
-        re.compile(r"\b(print|reveal|leak|dump|expose)\b.+\b(secret|api[_-]?key|password|token)\b", re.I),
+        re.compile(
+            r"\b(print|reveal|leak|dump|expose)\b.+\b(secret|api[_-]?key|password|token)\b", re.I
+        ),
         "exfiltration_language",
         0.4,
     ),
@@ -64,7 +66,7 @@ _SUSPICIOUS_PATTERNS: List[Tuple[re.Pattern[str], str, float]] = [
 def analyze_prompt(text: str, block_threshold: float = 0.55) -> InjectionReport:
     if not text:
         return InjectionReport(0.0, [], False)
-    reasons: List[str] = []
+    reasons: list[str] = []
     score = 0.0
     for pat, label, w in _SUSPICIOUS_PATTERNS:
         if pat.search(text):

@@ -9,21 +9,23 @@ Does not push to GitHub — run git commands yourself in the destination.
 
 See docs/DOCUMENTATION.md § Repository visibility and public mirror.
 """
+
 from __future__ import annotations
 
 import argparse
 import fnmatch
 import shutil
 import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Dict, List, Sequence
+from typing import Any
 
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
-def _load_manifest(path: Path) -> Dict[str, Any]:
+def _load_manifest(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
     if not isinstance(data, dict):
@@ -34,8 +36,8 @@ def _load_manifest(path: Path) -> Dict[str, Any]:
 def _ignore_factory(patterns: Sequence[str]):
     pats = list(patterns)
 
-    def _ignore(_src: str, names: List[str]) -> List[str]:
-        ignored: List[str] = []
+    def _ignore(_src: str, names: list[str]) -> list[str]:
+        ignored: list[str] = []
         for name in names:
             for pat in pats:
                 if fnmatch.fnmatch(name, pat):

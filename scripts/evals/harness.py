@@ -17,8 +17,9 @@ import os
 import sys
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 # Reconfigure stdout/stderr to UTF-8 on Windows/legacy hosts to handle Unicode characters.
 try:
@@ -40,6 +41,9 @@ from viki.core.evaluators import EvalScore, ExecutionEvaluator, LLMJudgeEvaluato
 
 # Import Rich components for a premium console experience
 try:
+    from rich import box
+    from rich.console import Console
+    from rich.panel import Panel
     from rich.progress import (
         BarColumn,
         MofNCompleteColumn,
@@ -48,10 +52,8 @@ try:
         TextColumn,
         TimeRemainingColumn,
     )
-    from rich.console import Console
     from rich.table import Table
-    from rich.panel import Panel
-    from rich import box
+
     HAS_RICH = True
 except ImportError:
     HAS_RICH = False
@@ -62,10 +64,10 @@ class HarnessConfig:
     suite: str
     tasks_path: str
     results_root: str
-    limit: Optional[int] = None
+    limit: int | None = None
     air_gap: bool = False
     use_llm_judge: bool = True
-    persona: Optional[str] = None
+    persona: str | None = None
     timeout: int = 60
     concurrency: int = 1
     resume: bool = False
@@ -75,13 +77,13 @@ def _ensure_dir(path: str) -> None:
     os.makedirs(path, exist_ok=True)
 
 
-def _active_model_identity(controller) -> Dict[str, Optional[str]]:
+def _active_model_identity(controller) -> dict[str, str | None]:
     """Best-effort identity for the model under evaluation."""
-    model_profile: Optional[str] = None
-    model_name: Optional[str] = None
+    model_profile: str | None = None
+    model_name: str | None = None
     try:
-        model_profile = (
-            ((getattr(controller, "models_config", {}) or {}).get("models") or {}).get("default")
+        model_profile = ((getattr(controller, "models_config", {}) or {}).get("models") or {}).get(
+            "default"
         )
     except Exception:
         model_profile = None
@@ -103,12 +105,12 @@ def _active_model_identity(controller) -> Dict[str, Optional[str]]:
     }
 
 
-def load_jsonl(path: str) -> List[Dict[str, Any]]:
-    out: List[Dict[str, Any]] = []
+def load_jsonl(path: str) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
     if not os.path.isfile(path):
         viki_logger.warning("Eval dataset not found at %s; returning empty list.", path)
         return out
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if not line:
@@ -121,7 +123,7 @@ def load_jsonl(path: str) -> List[Dict[str, Any]]:
 
 
 async def _grade_task_with_retry(
-    task: Dict[str, Any],
+    task: dict[str, Any],
     response: str,
     use_llm_judge: bool,
     model_router,
@@ -132,7 +134,7 @@ async def _grade_task_with_retry(
     grader = task.get("grader") or "auto"
     if grader == "execution" or task.get("test_code") or task.get("expected_stdout"):
         return ExecutionEvaluator().evaluate(task, response)
-        
+
     if grader == "llm" or (use_llm_judge and model_router is not None):
         delay = 1.0
         for attempt in range(retries):
@@ -142,14 +144,19 @@ async def _grade_task_with_retry(
             except Exception as e:
                 viki_logger.warning(
                     "LLM judge failed on attempt %d/%d (%s). Retrying in %.1fs...",
-                    attempt + 1, retries, e, delay
+                    attempt + 1,
+                    retries,
+                    e,
+                    delay,
                 )
                 if attempt == retries - 1:
-                    viki_logger.error("LLM judge chronically failed; falling back to keyword grader.")
+                    viki_logger.error(
+                        "LLM judge chronically failed; falling back to keyword grader."
+                    )
                     break
                 await asyncio.sleep(delay)
                 delay *= backoff_factor
-                
+
     # Fallback: keyword/contains scoring
     expected = (task.get("expected_outcome") or "").strip().lower()
     response_lower = (response or "").strip().lower()
@@ -157,59 +164,63 @@ async def _grade_task_with_retry(
     return EvalScore(score=score, passed=bool(score >= 0.5), reason="keyword_fallback")
 
 
-def _find_recent_run_cache(results_dir: str, suite: str, model_id: dict) -> Dict[str, Dict[str, Any]]:
+def _find_recent_run_cache(
+    results_dir: str, suite: str, model_id: dict
+) -> dict[str, dict[str, Any]]:
     """Scan the target directory for a previous matching run and index completed tasks."""
     cache = {}
     if not os.path.exists(results_dir):
         return cache
-        
+
     matching_file = None
     latest_time = 0.0
-    
+
     # Iterate over files to find the newest run with matching model metadata
     for filename in os.listdir(results_dir):
         if filename.endswith(".jsonl"):
             filepath = os.path.join(results_dir, filename)
             try:
-                with open(filepath, "r", encoding="utf-8") as f:
+                with open(filepath, encoding="utf-8") as f:
                     first_line = f.readline().strip()
                     if not first_line:
                         continue
                     meta = json.loads(first_line)
                     if not meta.get("__metadata__") or meta.get("suite") != suite:
                         continue
-                    
+
                     # Verify model identifiers match
                     m_profile = meta.get("model_profile")
                     m_name = meta.get("model_name")
-                    if m_profile == model_id.get("model_profile") or m_name == model_id.get("model_name"):
+                    if m_profile == model_id.get("model_profile") or m_name == model_id.get(
+                        "model_name"
+                    ):
                         mtime = os.path.getmtime(filepath)
                         if mtime > latest_time:
                             latest_time = mtime
                             matching_file = filepath
             except Exception:
                 continue
-                
+
     if matching_file:
         viki_logger.info("Found matching run for cache resumption: %s", matching_file)
         try:
-            with open(matching_file, "r", encoding="utf-8") as f:
-                next(f) # Skip metadata line
+            with open(matching_file, encoding="utf-8") as f:
+                next(f)  # Skip metadata line
                 for line in f:
                     row = json.loads(line.strip())
                     if "task_id" in row:
                         cache[row["task_id"]] = row
         except Exception as e:
             viki_logger.warning("Failed to load matching run cache: %s", e)
-            
+
     return cache
 
 
 async def run_harness(
     cfg: HarnessConfig,
     controller,
-    inject_prompt: Optional[Callable[[Dict[str, Any]], str]] = None,
-) -> Dict[str, Any]:
+    inject_prompt: Callable[[dict[str, Any]], str] | None = None,
+) -> dict[str, Any]:
     """Drive the controller against the suite's tasks concurrently with caching and rich output."""
     tasks = load_jsonl(cfg.tasks_path)
     if cfg.limit:
@@ -227,9 +238,9 @@ async def run_harness(
     _ensure_dir(suite_dir)
     run_id = time.strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:6]
     out_path = os.path.join(suite_dir, f"{run_id}.jsonl")
-    
+
     model_id = _active_model_identity(controller)
-    
+
     # 1. Load run cache if requested
     cache = {}
     if cfg.resume:
@@ -265,37 +276,37 @@ async def run_harness(
     total_score = 0.0
     sem = asyncio.Semaphore(cfg.concurrency)
     write_lock = asyncio.Lock()
-    
+
     # Pre-write metadata header
     with open(out_path, "w", encoding="utf-8") as out:
         out.write(json.dumps(metadata) + "\n")
 
     # Define the worker coroutine
-    async def evaluate_task(task_item: Dict[str, Any], index: int, progress_bar=None, task_tracker=None):
+    async def evaluate_task(
+        task_item: dict[str, Any], index: int, progress_bar=None, task_tracker=None
+    ):
         nonlocal passed, total_score
         task_id = task_item.get("id", str(index))
         prompt = inject_prompt(task_item) if inject_prompt else task_item.get("prompt", "")
-        
+
         # Resumed/Cached Hit Check
         if cfg.resume and task_id in cache:
             cached_row = cache[task_id]
             # Verify prompt or simple match
             cached_score = cached_row.get("score", 0.0)
             cached_passed = cached_row.get("passed", False)
-            
+
             async with write_lock:
                 with open(out_path, "a", encoding="utf-8") as f:
                     f.write(json.dumps(cached_row) + "\n")
-                    
+
             if cached_passed:
                 passed += 1
             total_score += cached_score
-            
+
             if progress_bar and task_tracker:
                 progress_bar.update(
-                    task_tracker, 
-                    advance=1, 
-                    description=f"[dim]Skipped (Cached) {task_id}[/]"
+                    task_tracker, advance=1, description=f"[dim]Skipped (Cached) {task_id}[/]"
                 )
             return
 
@@ -312,14 +323,11 @@ async def run_harness(
             except Exception as e:
                 response = f"ERROR: {e}"
             latency = time.perf_counter() - t0
-            
+
             score = await _grade_task_with_retry(
-                task_item, 
-                response, 
-                cfg.use_llm_judge, 
-                getattr(controller, "model_router", None)
+                task_item, response, cfg.use_llm_judge, getattr(controller, "model_router", None)
             )
-            
+
             row = {
                 "task_id": task_id,
                 "task_name": task_item.get("name") or task_id,
@@ -333,39 +341,40 @@ async def run_harness(
                 "latency_seconds": round(latency, 3),
                 "judge_votes": score.judge_votes,
             }
-            
+
             async with write_lock:
                 with open(out_path, "a", encoding="utf-8") as f:
                     f.write(json.dumps(row) + "\n")
-                    
+
             if score.passed:
                 passed += 1
             total_score += score.score
-            
+
             if progress_bar and task_tracker:
-                p_rate = passed / (index + 1) if index >= 0 else 0.0
                 status_color = "green" if score.passed else "red"
                 status_symbol = "✓" if score.passed else "✗"
                 progress_bar.update(
-                    task_tracker, 
+                    task_tracker,
                     advance=1,
-                    description=f"[{status_color}]{status_symbol} {task_id} -> {score.score:.2f} ({latency:.1f}s)[/]"
+                    description=f"[{status_color}]{status_symbol} {task_id} -> {score.score:.2f} ({latency:.1f}s)[/]",
                 )
 
     # 2. Rich Progress Bar Rendering Loop
     if HAS_RICH:
         console = Console()
-        console.print(Panel(
-            f"[bold magenta]VIKI EVALUATION PIPELINE[/]\n"
-            f"[dim]Suite      :[/] [cyan]{cfg.suite}[/]\n"
-            f"[dim]Model      :[/] [yellow]{model_id.get('model_label', 'Unknown')}[/]\n"
-            f"[dim]Concurrency:[/] [green]{cfg.concurrency}[/]\n"
-            f"[dim]Resuming   :[/] {'[green]YES[/]' if cache else '[dim]NO[/]'}",
-            box=box.ROUNDED,
-            border_style="magenta",
-            expand=False
-        ))
-        
+        console.print(
+            Panel(
+                f"[bold magenta]VIKI EVALUATION PIPELINE[/]\n"
+                f"[dim]Suite      :[/] [cyan]{cfg.suite}[/]\n"
+                f"[dim]Model      :[/] [yellow]{model_id.get('model_label', 'Unknown')}[/]\n"
+                f"[dim]Concurrency:[/] [green]{cfg.concurrency}[/]\n"
+                f"[dim]Resuming   :[/] {'[green]YES[/]' if cache else '[dim]NO[/]'}",
+                box=box.ROUNDED,
+                border_style="magenta",
+                expand=False,
+            )
+        )
+
         progress = Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -376,28 +385,25 @@ async def run_harness(
             TimeRemainingColumn(),
             console=console,
         )
-        
+
         with progress:
             task_tracker = progress.add_task(
-                "Evaluating...", 
-                total=len(tasks), 
-                pass_rate=0.0, 
-                mean_score=0.0
+                "Evaluating...", total=len(tasks), pass_rate=0.0, mean_score=0.0
             )
-            
+
             # Run all tasks concurrently/sequentially according to Semaphore
             coroutines = []
             for i, task_item in enumerate(tasks):
                 coroutines.append(evaluate_task(task_item, i, progress, task_tracker))
-                
+
             await asyncio.gather(*coroutines)
-            
+
             # Final progress update
             progress.update(
-                task_tracker, 
-                description="[bold green]✓ Done![/]", 
-                pass_rate=passed / len(tasks), 
-                mean_score=total_score / len(tasks)
+                task_tracker,
+                description="[bold green]✓ Done![/]",
+                pass_rate=passed / len(tasks),
+                mean_score=total_score / len(tasks),
             )
     else:
         # Standard fallback loop without Rich
@@ -417,7 +423,7 @@ async def run_harness(
         "model_profile": metadata.get("model_profile"),
         "model_name": metadata.get("model_name"),
     }
-    
+
     # Try to apply evaluation signal to model router
     try:
         router = getattr(controller, "model_router", None)
@@ -434,14 +440,14 @@ async def run_harness(
         table = Table(title="Evaluation Run Summary", box=box.DOUBLE, header_style="bold cyan")
         table.add_column("Metric", style="dim")
         table.add_column("Value", style="bold")
-        
+
         table.add_row("Run ID", summary["run_id"])
         table.add_row("Suite", summary["suite"])
         table.add_row("Tasks Count", str(summary["task_count"]))
         table.add_row("Pass Rate", f"[bold green]{summary['pass_rate']:.2%}[/]")
         table.add_row("Mean Score", f"[bold yellow]{summary['mean_score']:.3f}[/]")
         table.add_row("Logs Path", summary["results_path"])
-        
+
         console.print()
         console.print(table)
         console.print()
@@ -453,7 +459,7 @@ async def run_harness(
             summary["mean_score"],
             summary["results_path"],
         )
-        
+
     return summary
 
 
@@ -469,15 +475,19 @@ def make_arg_parser(suite: str, default_dataset: str) -> argparse.ArgumentParser
     parser.add_argument("--results-dir", default=None, help="Override output directory.")
     parser.add_argument("--timeout", type=int, default=60, help="Per-task timeout (seconds).")
     parser.add_argument("--mock", action="store_true", help="Use MockLLM (CI smoke).")
-    parser.add_argument("--concurrency", "-c", type=int, default=1, help="Concurrently run N tasks (default: 1).")
-    parser.add_argument("--resume", "-r", action="store_true", help="Resume evaluation from the last matching run.")
+    parser.add_argument(
+        "--concurrency", "-c", type=int, default=1, help="Concurrently run N tasks (default: 1)."
+    )
+    parser.add_argument(
+        "--resume", "-r", action="store_true", help="Resume evaluation from the last matching run."
+    )
     return parser
 
 
-def build_controller(args, persona_name: Optional[str] = None):
+def build_controller(args, persona_name: str | None = None):
     """Construct a VIKIController suitable for evals."""
-    from core.orchestrator import VIKIController
     from config.resolve import get_soul_path
+    from core.orchestrator import VIKIController
 
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     repo_dir = os.path.dirname(base_dir)
