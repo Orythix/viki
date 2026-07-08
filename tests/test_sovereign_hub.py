@@ -18,9 +18,12 @@ def test_sovereign_hub():
     ctrl = MockController()
     registry = ctrl.skill_registry
 
-    # Use relative path that works in both local and CI
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    library_path = os.path.join(base_dir, "data", "sovereign_library.json")
+    # The library ships as package data inside viki/data/
+    import viki
+
+    library_path = os.path.join(
+        os.path.dirname(os.path.abspath(viki.__file__)), "data", "sovereign_library.json"
+    )
     registry.load_sovereign_library(library_path, ctrl)
 
     skills = registry.list_skills()

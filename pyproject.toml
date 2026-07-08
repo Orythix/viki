@@ -78,7 +78,7 @@ dev = [
 ]
 
 [tool.setuptools.package-data]
-viki = ["api/static/*.html"]
+viki = ["api/static/*.html", "data/sovereign_library.json"]
 
 [tool.ruff]
 line-length = 100

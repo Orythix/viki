@@ -111,7 +111,7 @@ git config core.hooksPath .githooks
 
 ### Python Style
 
-* Follow **PEP 8**; line length is **120** (see `pyproject.toml`).
+* Follow **PEP 8**; line length is **100** (see `pyproject.toml`).
 * Use **type hints** on new public functions and class methods.
 * Document non-trivial functions with docstrings (purpose, args, returns,
   raises). Avoid noise comments that just narrate what the code already says.
@@ -119,6 +119,18 @@ git config core.hooksPath .githooks
   responsive.
 
 
+
+## Repository Layout
+
+Tracked, reviewable content:
+
+* `src/viki/` — the Python package (the only code that ships).
+* `playbooks/` — vendored playbook/skill content loaded at runtime (not lint/type-checked).
+* `tests/` — pytest suite; `labs/` — self-contained subprojects with their own CI.
+* `scripts/` — maintenance and verification scripts; `config/` — default configuration.
+
+Local-only directories (gitignored; safe to delete): `data/` (runtime state),
+`logs/`, `workspace/`, `reports/`, `scratch/`, and `FOCUS/`.
 
 ## Subprojects
 

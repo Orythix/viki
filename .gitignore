@@ -39,8 +39,8 @@ Thumbs.db
 Desktop.ini
 
 # VIKI-specific
+FOCUS/
 data/
-!data/sovereign_library.json
 !data/missions.json
 data-docker/
 logs/
