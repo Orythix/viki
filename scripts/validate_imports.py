@@ -9,8 +9,6 @@ sys.path.insert(0, os.getcwd())
 SKIP_PREFIXES = (
     "ui.",
     "skills.dynamic.",
-    "skills.playbooks.manim-video.",
-    "skills.playbooks.videodb.",
 )
 
 

@@ -1,6 +1,6 @@
 # Documentation index
 
-Central map of **first-party** docs in this monorepo (engineering playbooks under `viki/skills/playbooks/` are listed in that folder’s README).
+Central map of **first-party** docs in this monorepo (engineering playbooks under `playbooks/` are listed in that folder’s README).
 
 ## Core VIKI
 
@@ -53,7 +53,7 @@ Central map of **first-party** docs in this monorepo (engineering playbooks unde
 
 ## Engineering playbooks
 
-See [viki/skills/playbooks/README.md](../viki/skills/playbooks/README.md) (upstream import + in-house waves + `megatron_lm/`).
+See [playbooks/README.md](../playbooks/README.md) (upstream import + in-house waves + `megatron_lm/`).
 
 ---
 

@@ -81,6 +81,8 @@ viki = ["api/static/*.html"]
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+# playbooks/ is vendored content (docs plus example snippets), not project code
+extend-exclude = ["playbooks"]
 
 [tool.ruff.lint]
 select = [
@@ -102,7 +104,7 @@ ignore = [
     "TRY003", # avoid bare except (too many to fix now)
     "BLE001", # blind except Exception (legacy codebase, 500+ occurrences)
 ]
-per-file-ignores = { "tests/*" = ["S101", "T201", "E402"], "src/viki/skills/**" = ["T201", "E701", "E402", "E741", "B904", "B008"], "src/viki/skills/playbooks/**" = ["T201", "E402", "B008"], "src/viki/evolution_engine.py" = ["E402"], "src/viki/core/vector_memory.py" = ["B904"], "src/viki/core/inference_gateway.py" = ["B904"], "src/viki/core/autonomous_monitor.py" = ["E741"], "src/viki/core/continuous_learning.py" = ["E741"], "src/viki/ops/tenant_ops.py" = ["E741"], "src/viki/application/**" = ["E741"] }
+per-file-ignores = { "tests/*" = ["S101", "T201", "E402"], "src/viki/skills/**" = ["T201", "E701", "E402", "E741", "B904", "B008"], "src/viki/evolution_engine.py" = ["E402"], "src/viki/core/vector_memory.py" = ["B904"], "src/viki/core/inference_gateway.py" = ["B904"], "src/viki/core/autonomous_monitor.py" = ["E741"], "src/viki/core/continuous_learning.py" = ["E741"], "src/viki/ops/tenant_ops.py" = ["E741"], "src/viki/application/**" = ["E741"] }
 
 [tool.ruff.format]
 quote-style = "double"
@@ -125,7 +127,6 @@ files = ["src/viki"]
 mypy_path = "src"
 plugins = ["pydantic.mypy"]
 exclude = [
-  "src/viki/skills/playbooks/.*",
   "src/viki/evolution_engine.py",
   "skill-comply",
 ]

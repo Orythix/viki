@@ -16,7 +16,8 @@ RUN chmod +x /docker-entrypoint.sh
 
 # Copy project files
 COPY pyproject.toml ./
-COPY src/     ./src/
+COPY src/       ./src/
+COPY playbooks/ ./playbooks/
 # Config goes where the code expects it: ../config/ relative to src/viki/
 COPY config/  ./src/viki/config/
 
