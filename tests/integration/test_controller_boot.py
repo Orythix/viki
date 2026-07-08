@@ -23,7 +23,7 @@ from viki.core.orchestrator import VIKIController
 class TestControllerBoot(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         cls.settings_path = os.path.join(base, "config", "settings.yaml")
         cls.soul_path = os.path.join(base, "config", "soul.yaml")
 

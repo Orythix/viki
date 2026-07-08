@@ -23,7 +23,7 @@ class TestVIKILearning(unittest.IsolatedAsyncioTestCase):
 
         # Resolve config paths
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        viki_dir = os.path.dirname(base_dir)
+        viki_dir = os.path.dirname(os.path.dirname(base_dir))
         models_config = os.path.join(base_dir, "test_models.yaml")
         self.soul_path = os.path.join(viki_dir, "config", "soul.yaml")
 

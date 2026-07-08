@@ -8,7 +8,7 @@ from viki.skills.builtins.time_skill import TimeSkill
 @pytest.fixture
 async def orchestrator():
     # Use a mock/test config path
-    settings_path = "./tests/test_settings.yaml"
+    settings_path = "./tests/integration/test_settings.yaml"
     soul_path = "./tests/data/test_soul.yaml"
     orc = VIKIController(settings_path, soul_path)
     yield orc

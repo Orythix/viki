@@ -1,6 +1,6 @@
 models:
   default: "default-mock"
-  
+
   providers:
     test_provider:
       type: "mock"
@@ -15,7 +15,7 @@ models:
       provider: "test_provider"
       model_name: "coding-v1"
       capabilities: ["coding"]
-      
+
     fast-mock:
       provider: "test_provider"
       model_name: "fast-v1"

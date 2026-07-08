@@ -20,7 +20,7 @@ class TestOpsPlanEventOps(unittest.TestCase):
                 "log_level": "INFO",
                 "security_scan_requests": False,
             },
-            "models_config": os.path.abspath("./tests/test_models.yaml"),
+            "models_config": os.path.abspath("./tests/integration/test_models.yaml"),
             "memory": {"short_term_limit": 5, "long_term_enabled": False},
             "skills": {"auto_discover": False, "registry_path": ""},
         }

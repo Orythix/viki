@@ -63,7 +63,7 @@ EXPECTED_ALL = (
 
 class TestEngineeringPlaybooks(unittest.IsolatedAsyncioTestCase):
     def test_all_playbooks_exist_and_non_empty(self):
-        root = Path(__file__).resolve().parents[1] / "playbooks"
+        root = Path(__file__).resolve().parents[2] / "playbooks"
         for slug in EXPECTED_ALL:
             matches = list(root.rglob(f"{slug}.md"))
             self.assertTrue(matches, f"Missing playbook file for slug: {slug}")
@@ -76,7 +76,7 @@ class TestEngineeringPlaybooks(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(EXPECTED_ALL.issubset(enum))
 
     def test_second_wave_playbooks_have_required_structure(self):
-        root = Path(__file__).resolve().parents[1] / "playbooks" / "engineering"
+        root = Path(__file__).resolve().parents[2] / "playbooks" / "engineering"
         required_sections = (
             "## Overview",
             "## When to Use",

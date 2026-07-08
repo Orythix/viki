@@ -18,7 +18,7 @@ class TestVIKIIntegration(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         # Update paths relative to d:/My Projects/VIKI/viki
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        viki_dir = os.path.dirname(base_dir)  # viki folder
+        viki_dir = os.path.dirname(os.path.dirname(base_dir))  # repo root
 
         # Use a temporary data directory for tests to avoid locking main DB
         self.test_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)

@@ -22,7 +22,7 @@ EXPECTED_SLUGS = {
 
 class TestMegatronLmPlaybooks(unittest.IsolatedAsyncioTestCase):
     def test_each_skill_has_skill_md(self):
-        root = Path(__file__).resolve().parents[1] / "playbooks" / "megatron_lm"
+        root = Path(__file__).resolve().parents[2] / "playbooks" / "megatron_lm"
         for slug in EXPECTED_SLUGS:
             path = root / slug / "SKILL.md"
             self.assertTrue(path.is_file(), f"Missing SKILL.md for {slug}")

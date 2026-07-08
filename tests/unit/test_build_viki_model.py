@@ -14,8 +14,8 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 # Add repo root and src/viki to path so we can import scripts and viki packages correctly
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src" / "viki"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src" / "viki"))
 
 import scripts.build_viki_model as build_viki_model
 
