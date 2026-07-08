@@ -16,6 +16,7 @@ Usage:
   # Run a quick trial (e.g. 2 minutes) for a subset:
   python scripts/learn_skills_3h.py --duration-hours 0.03
 """
+
 from __future__ import annotations
 
 import argparse

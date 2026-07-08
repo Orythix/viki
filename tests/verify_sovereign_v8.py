@@ -47,7 +47,12 @@ async def verify_v8_1_features():
 
     # 4. Verify Progressive Disclosure (Sovereign Hub)
     print("\n[4/4] Verifying Progressive Disclosure (150+ Skills)...")
-    with open("./data/sovereign_library.json") as f:
+    import viki
+
+    library_path = os.path.join(
+        os.path.dirname(os.path.abspath(viki.__file__)), "data", "sovereign_library.json"
+    )
+    with open(library_path) as f:
         lib = json.load(f)
         total_skills = sum(len(skills) for skills in lib.values())
         print(

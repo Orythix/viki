@@ -1,4 +1,5 @@
 """Tests for defensive prompt-injection heuristics."""
+
 from security.injection_detector import analyze_prompt
 
 

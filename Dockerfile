@@ -16,12 +16,15 @@ RUN chmod +x /docker-entrypoint.sh
 
 # Copy project files
 COPY pyproject.toml ./
-COPY src/     ./src/
+COPY src/       ./src/
+COPY playbooks/ ./playbooks/
 # Config goes where the code expects it: ../config/ relative to src/viki/
 COPY config/  ./src/viki/config/
 
-# Install dependencies and the package itself
-RUN pip install --no-cache-dir -e . 2>&1 || pip install --no-cache-dir --break-system-packages -e .
+# Install dependencies and the package itself.
+# The [ml] extra (torch/transformers) keeps forge/embedding features available;
+# drop it for a much slimmer image if you only need the core agent.
+RUN pip install --no-cache-dir -e ".[ml]" 2>&1 || pip install --no-cache-dir --break-system-packages -e ".[ml]"
 
 # Copy Modelfile and scripts (optional but useful for forge workflows)
 COPY Modelfile ./Modelfile

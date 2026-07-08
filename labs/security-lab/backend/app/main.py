@@ -6,6 +6,7 @@ Run (dev):
   set PYTHONPATH=..   # PowerShell: $env:PYTHONPATH=(Resolve-Path ..).Path
   uvicorn app.main:app --reload --port 8000
 """
+
 from __future__ import annotations
 
 import logging
@@ -13,9 +14,9 @@ import sys
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -27,13 +28,6 @@ _ROOT = Path(__file__).resolve().parent.parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from app.agent_core import AgentCore  # noqa: E402
-from app.agent_memory import SessionMemory  # noqa: E402
-from app.audit_store import AuditStore  # noqa: E402
-from app.config import Settings, get_settings  # noqa: E402
-from app.logging_config import setup_logging  # noqa: E402
-from app.rbac import RBACPolicy  # noqa: E402
-from app.tools_registry import ToolRegistry  # noqa: E402
 from monitoring.alerts import alerts_from_audit_entries  # noqa: E402
 from monitoring.telemetry import resource_snapshot  # noqa: E402
 from security.adversarial_analysis import adversarial_prompt_report  # noqa: E402
@@ -46,6 +40,14 @@ from security.testing_harness import (  # noqa: E402
     run_tool_abuse_checks,
 )
 
+from app.agent_core import AgentCore  # noqa: E402
+from app.agent_memory import SessionMemory  # noqa: E402
+from app.audit_store import AuditStore  # noqa: E402
+from app.config import get_settings  # noqa: E402
+from app.logging_config import setup_logging  # noqa: E402
+from app.rbac import RBACPolicy  # noqa: E402
+from app.tools_registry import ToolRegistry  # noqa: E402
+
 setup_logging()
 logger = logging.getLogger(__name__)
 
@@ -55,7 +57,7 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
-def _cors_origins() -> List[str]:
+def _cors_origins() -> list[str]:
     return [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
@@ -71,10 +73,10 @@ app.add_middleware(
 )
 
 _memory = SessionMemory()
-_audit: Optional[AuditStore] = None
-_rbac: Optional[RBACPolicy] = None
-_agent: Optional[AgentCore] = None
-_metrics: Dict[str, Any] = {"requests": 0, "blocked": 0, "tokens_in": 0, "tokens_out": 0}
+_audit: AuditStore | None = None
+_rbac: RBACPolicy | None = None
+_agent: AgentCore | None = None
+_metrics: dict[str, Any] = {"requests": 0, "blocked": 0, "tokens_in": 0, "tokens_out": 0}
 
 
 @app.on_event("startup")
@@ -84,7 +86,9 @@ def startup() -> None:
     _audit = AuditStore(settings.database_url)
     _rbac = RBACPolicy(settings.rbac_policy_path)
     tools = ToolRegistry(settings)
-    _agent = AgentCore(settings, _memory, tools, sandbox_hosts=["sandbox-demo", "localhost", "127.0.0.1"])
+    _agent = AgentCore(
+        settings, _memory, tools, sandbox_hosts=["sandbox-demo", "localhost", "127.0.0.1"]
+    )
     logger.info("lab_started", extra={"extra_fields": {"ollama": settings.ollama_url}})
 
 
@@ -106,26 +110,25 @@ def get_lab_role(request: Request) -> str:
 
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=65536)
-    session_id: Optional[str] = None
+    session_id: str | None = None
     # Lab only: allow observing detector without blocking (never in production)
     observe_only: bool = False
 
 
 class ToolRequest(BaseModel):
     name: str
-    payload: Dict[str, Any] = Field(default_factory=dict)
+    payload: dict[str, Any] = Field(default_factory=dict)
 
 
 @app.get("/health")
-def health() -> Dict[str, str]:
+def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
 @app.post("/api/v1/chat")
 @limiter.limit("120/minute")
-async def chat(request: Request, body: ChatRequest) -> Dict[str, Any]:
+async def chat(request: Request, body: ChatRequest) -> dict[str, Any]:
     require_api_key(request)
-    settings = get_settings()
     role = get_lab_role(request)
     if not _rbac.allowed(role, "chat"):
         raise HTTPException(403, "role cannot chat")
@@ -160,7 +163,7 @@ async def chat(request: Request, body: ChatRequest) -> Dict[str, Any]:
 
 @app.post("/api/v1/tools/execute")
 @limiter.limit("120/minute")
-async def tools_execute(request: Request, body: ToolRequest) -> Dict[str, Any]:
+async def tools_execute(request: Request, body: ToolRequest) -> dict[str, Any]:
     require_api_key(request)
     role = get_lab_role(request)
     assert _agent and _audit
@@ -182,22 +185,18 @@ async def tools_execute(request: Request, body: ToolRequest) -> Dict[str, Any]:
 
 
 @app.get("/api/v1/audit")
-def audit(request: Request, limit: int = 50) -> Dict[str, Any]:
+def audit(request: Request, limit: int = 50) -> dict[str, Any]:
     require_api_key(request)
     role = get_lab_role(request)
     if not _rbac.allowed(role, "audit.read"):
         raise HTTPException(403, "role cannot read audit")
     assert _audit
     rows = _audit.recent(limit=limit)
-    return {
-        "items": [
-            {"id": r.id, "ts": r.ts, "kind": r.kind, "payload": r.payload} for r in rows
-        ]
-    }
+    return {"items": [{"id": r.id, "ts": r.ts, "kind": r.kind, "payload": r.payload} for r in rows]}
 
 
 @app.get("/api/v1/metrics")
-def metrics(request: Request) -> Dict[str, Any]:
+def metrics(request: Request) -> dict[str, Any]:
     require_api_key(request)
     role = get_lab_role(request)
     if not _rbac.allowed(role, "metrics.read"):
@@ -206,7 +205,7 @@ def metrics(request: Request) -> Dict[str, Any]:
 
 
 @app.get("/api/v1/monitoring/summary")
-def monitoring_summary(request: Request, audit_limit: int = 80) -> Dict[str, Any]:
+def monitoring_summary(request: Request, audit_limit: int = 80) -> dict[str, Any]:
     require_api_key(request)
     role = get_lab_role(request)
     if not _rbac.allowed(role, "metrics.read"):
@@ -227,7 +226,7 @@ def monitoring_summary(request: Request, audit_limit: int = 80) -> Dict[str, Any
 
 
 @app.post("/api/v1/security/classify")
-def security_classify(request: Request, body: ChatRequest) -> Dict[str, Any]:
+def security_classify(request: Request, body: ChatRequest) -> dict[str, Any]:
     require_api_key(request)
     role = get_lab_role(request)
     if not _rbac.allowed(role, "security.test"):
@@ -237,7 +236,7 @@ def security_classify(request: Request, body: ChatRequest) -> Dict[str, Any]:
 
 
 @app.get("/api/v1/security/harness/injection")
-def harness_injection(request: Request) -> Dict[str, Any]:
+def harness_injection(request: Request) -> dict[str, Any]:
     require_api_key(request)
     role = get_lab_role(request)
     if not _rbac.allowed(role, "security.test"):
@@ -252,7 +251,7 @@ def harness_injection(request: Request) -> Dict[str, Any]:
 
 
 @app.get("/api/v1/security/harness/jailbreak")
-def harness_jailbreak_policy(request: Request) -> Dict[str, Any]:
+def harness_jailbreak_policy(request: Request) -> dict[str, Any]:
     require_api_key(request)
     role = get_lab_role(request)
     if not _rbac.allowed(role, "security.test"):
@@ -267,7 +266,7 @@ def harness_jailbreak_policy(request: Request) -> Dict[str, Any]:
 
 
 @app.get("/api/v1/security/harness/tools")
-def harness_tools(request: Request) -> Dict[str, Any]:
+def harness_tools(request: Request) -> dict[str, Any]:
     require_api_key(request)
     role = get_lab_role(request)
     if not _rbac.allowed(role, "security.test"):
@@ -277,7 +276,7 @@ def harness_tools(request: Request) -> Dict[str, Any]:
 
 
 @app.post("/api/v1/security/harness/memory")
-def harness_memory(request: Request, body: ChatRequest) -> Dict[str, Any]:
+def harness_memory(request: Request, body: ChatRequest) -> dict[str, Any]:
     require_api_key(request)
     role = get_lab_role(request)
     if not _rbac.allowed(role, "security.test"):
@@ -287,7 +286,7 @@ def harness_memory(request: Request, body: ChatRequest) -> Dict[str, Any]:
 
 
 @app.post("/api/v1/security/analyze")
-def security_analyze_full(request: Request, body: ChatRequest) -> Dict[str, Any]:
+def security_analyze_full(request: Request, body: ChatRequest) -> dict[str, Any]:
     require_api_key(request)
     role = get_lab_role(request)
     if not _rbac.allowed(role, "security.test"):

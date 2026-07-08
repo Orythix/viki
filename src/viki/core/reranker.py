@@ -32,8 +32,7 @@ def _tokenize(text: str) -> list[str]:
 class Reranker(Protocol):
     """Scores candidates against a query and returns them re-ordered."""
 
-    def rerank(self, query: str, candidates: list[str], top_k: int = 5) -> list[str]:
-        ...
+    def rerank(self, query: str, candidates: list[str], top_k: int = 5) -> list[str]: ...
 
 
 class LexicalReranker:

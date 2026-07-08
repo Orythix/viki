@@ -22,13 +22,14 @@ What it does (none of these are branded; works on a fresh install):
 
 Exit code 0 on full pass, non-zero on the first failure.
 """
+
 from __future__ import annotations
 
 import json
 import os
 import sys
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 import requests
 
@@ -37,11 +38,11 @@ API_KEY = os.getenv("VIKI_API_KEY")
 TIMEOUT = float(os.getenv("VIKI_SMOKE_TIMEOUT", "60"))
 
 
-def _headers() -> Dict[str, str]:
+def _headers() -> dict[str, str]:
     if not API_KEY:
         print(
             "FAIL: VIKI_API_KEY is not set. Generate one with "
-            "`python -c \"import secrets; print(secrets.token_urlsafe(32))\"` "
+            '`python -c "import secrets; print(secrets.token_urlsafe(32))"` '
             "and put it in .env (and your shell)."
         )
         sys.exit(2)
@@ -51,7 +52,7 @@ def _headers() -> Dict[str, str]:
 def _request(
     method: str,
     path: str,
-    payload: Optional[Dict[str, Any]] = None,
+    payload: dict[str, Any] | None = None,
 ) -> requests.Response:
     url = f"{BASE_URL}{path}"
     return requests.request(method, url, headers=_headers(), json=payload, timeout=TIMEOUT)
@@ -92,7 +93,9 @@ def run_suite() -> int:
 
     print("\n[3] Conversational ping")
     r = _request("POST", "/chat", {"message": "ping"})
-    chat_ok = r.status_code == 200 and isinstance(r.json().get("response"), str) and r.json()["response"]
+    chat_ok = (
+        r.status_code == 200 and isinstance(r.json().get("response"), str) and r.json()["response"]
+    )
     failures += not _check("POST /api/chat with 'ping' returns a non-empty string", chat_ok)
 
     print("\n[4] Governor refusal")
@@ -106,7 +109,9 @@ def run_suite() -> int:
 
     print("\n[5] Emergency shutdown key (970317) -> quiescent")
     r = _request("POST", "/chat", {"message": "970317"})
-    quiescent = "quiescent" in r.json().get("response", "").lower() if r.status_code == 200 else False
+    quiescent = (
+        "quiescent" in r.json().get("response", "").lower() if r.status_code == 200 else False
+    )
     failures += not _check("Shutdown key triggers quiescent state", quiescent)
 
     print("\n[6] Reawaken phrase -> online again")

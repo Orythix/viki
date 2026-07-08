@@ -3,7 +3,7 @@ P1: optional file-watcher daemon that keeps `CodeSearchSkill`'s persistent
 index in sync with the workspace.
 
 Usage:
-    from skills.builtins.code_index_watcher import start_watcher
+    from viki.skills.builtins.code_index_watcher import start_watcher
     handle = start_watcher(controller)
     ...
     handle.stop()

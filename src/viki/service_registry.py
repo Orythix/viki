@@ -108,7 +108,7 @@ class Container:
 
         def _make_learning_repository():
             try:
-                from infrastructure.database.sqlalchemy_learning_repository import (
+                from viki.infrastructure.database.sqlalchemy_learning_repository import (
                     SqlAlchemyLearningRepository,
                 )
 
@@ -123,7 +123,7 @@ class Container:
 
         def _make_agent_pool():
             try:
-                from infrastructure.swarm.local_agent_pool import LocalAgentPool
+                from viki.infrastructure.swarm.local_agent_pool import LocalAgentPool
 
                 return LocalAgentPool()
             except Exception as exc:
@@ -134,7 +134,7 @@ class Container:
 
         def _make_safety_service():
             try:
-                from application.services.safety_service import SafetyService
+                from viki.application.services.safety_service import SafetyService
 
                 return SafetyService(config=self.config.get("safety", {}))
             except Exception as exc:
@@ -145,7 +145,7 @@ class Container:
 
         def _make_swarm_orchestrator():
             try:
-                from application.services.swarm_orchestrator import SwarmOrchestrator
+                from viki.application.services.swarm_orchestrator import SwarmOrchestrator
 
                 pool = self.agent_pool()
                 return SwarmOrchestrator(agent_pool=pool)
@@ -157,7 +157,7 @@ class Container:
 
         def _make_forge_orchestrator():
             try:
-                from application.services.forge_orchestrator import ForgeOrchestrator
+                from viki.application.services.forge_orchestrator import ForgeOrchestrator
 
                 return ForgeOrchestrator(controller=None)
             except Exception as exc:
@@ -168,7 +168,7 @@ class Container:
 
         def _make_self_healing():
             try:
-                from application.services.fault_tolerance_service import SelfHealingService
+                from viki.application.services.fault_tolerance_service import SelfHealingService
 
                 return SelfHealingService(controller=None)
             except Exception as exc:
@@ -179,7 +179,7 @@ class Container:
 
         def _make_recall_use_case():
             try:
-                from application.use_cases.recall_memory import MemoryRecallUseCase
+                from viki.application.use_cases.recall_memory import MemoryRecallUseCase
 
                 return MemoryRecallUseCase(
                     learning_repo=self.learning_repository(),

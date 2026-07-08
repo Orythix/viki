@@ -17,16 +17,17 @@ Mitigations
 - Treat reports as triage hints; pair with RBAC, sandboxing, and human review.
 - Redact via ``secrets_redact`` before writing to audit storage.
 """
+
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from security.injection_detector import analyze_prompt
 from security.sanitizer import sanitize_prompt
 from security.testing_harness import run_memory_poisoning_check
 
 
-def adversarial_prompt_report(text: str, max_chars: int = 16_384) -> Dict[str, Any]:
+def adversarial_prompt_report(text: str, max_chars: int = 16_384) -> dict[str, Any]:
     raw = text or ""
     raw_len = len(raw)
     strip_raw = raw.strip()[:max_chars]

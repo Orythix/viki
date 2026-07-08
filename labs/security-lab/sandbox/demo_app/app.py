@@ -9,6 +9,7 @@ Mitigations learners should practice:
 - Content-Security-Policy
 - SameSite cookies if sessions added later
 """
+
 from __future__ import annotations
 
 from flask import Flask, request

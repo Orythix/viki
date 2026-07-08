@@ -6,9 +6,10 @@ Design notes (why this shape):
 - Returns httpx.Response so tests can assert status, json(), headers (flexible).
 - No hidden retries here — teach explicit retry policy in Week 6+ if needed.
 """
+
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 import httpx
 
@@ -20,7 +21,7 @@ class SecurityLabClient:
         self._settings = settings
         self._timeout = timeout
 
-    def _headers(self, extra: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+    def _headers(self, extra: dict[str, str] | None = None) -> dict[str, str]:
         h = {
             "X-Lab-API-Key": self._settings.api_key,
             "X-Lab-Role": self._settings.role,
@@ -30,12 +31,12 @@ class SecurityLabClient:
             h.update(extra)
         return h
 
-    def get(self, path: str, *, params: Optional[Dict[str, Any]] = None) -> httpx.Response:
+    def get(self, path: str, *, params: dict[str, Any] | None = None) -> httpx.Response:
         url = f"{self._settings.base_url}{path}"
         with httpx.Client(timeout=self._timeout) as client:
             return client.get(url, headers=self._headers(), params=params)
 
-    def post_json(self, path: str, body: Dict[str, Any]) -> httpx.Response:
+    def post_json(self, path: str, body: dict[str, Any]) -> httpx.Response:
         url = f"{self._settings.base_url}{path}"
         with httpx.Client(timeout=self._timeout) as client:
             return client.post(url, headers=self._headers(), json=body)

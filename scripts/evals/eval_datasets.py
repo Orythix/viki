@@ -25,8 +25,9 @@ import argparse
 import json
 import os
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if ROOT not in sys.path:
@@ -38,10 +39,10 @@ from viki.config.logger import viki_logger  # noqa: E402
 @dataclass
 class DatasetSpec:
     suite: str
-    hf_path: str            # HuggingFace dataset id, e.g. "evalplus/humanevalplus"
-    hf_split: str           # split name, e.g. "test"
-    revision: Optional[str] # commit SHA / tag for reproducibility
-    convert: Callable[[Dict[str, Any]], Optional[Dict[str, Any]]]
+    hf_path: str  # HuggingFace dataset id, e.g. "evalplus/humanevalplus"
+    hf_split: str  # split name, e.g. "test"
+    revision: str | None  # commit SHA / tag for reproducibility
+    convert: Callable[[dict[str, Any]], dict[str, Any] | None]
     description: str
 
 
@@ -49,7 +50,7 @@ class DatasetSpec:
 # Per-suite converters: each returns a task dict in the harness's format,
 # or None to skip the example.
 # ---------------------------------------------------------------------------
-def _humaneval_plus_convert(ex: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def _humaneval_plus_convert(ex: dict[str, Any]) -> dict[str, Any] | None:
     """
     HumanEval+ schema:
       task_id, prompt (function signature + docstring), canonical_solution,
@@ -76,7 +77,7 @@ def _humaneval_plus_convert(ex: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     }
 
 
-def _swe_bench_convert(ex: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def _swe_bench_convert(ex: dict[str, Any]) -> dict[str, Any] | None:
     """
     SWE-bench Verified schema:
       instance_id, repo, base_commit, problem_statement, hints_text,
@@ -107,7 +108,7 @@ def _swe_bench_convert(ex: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     }
 
 
-def _livecodebench_convert(ex: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def _livecodebench_convert(ex: dict[str, Any]) -> dict[str, Any] | None:
     """
     LiveCodeBench schema (problem-solving subset):
       question_title, question_content, public_test_cases, private_test_cases,
@@ -133,7 +134,7 @@ def _livecodebench_convert(ex: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     }
 
 
-def _gaia_convert(ex: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def _gaia_convert(ex: dict[str, Any]) -> dict[str, Any] | None:
     """
     GAIA schema: Question, Final answer, Level, Annotator metadata.
     """
@@ -151,7 +152,7 @@ def _gaia_convert(ex: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     }
 
 
-def _agentbench_convert(ex: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def _agentbench_convert(ex: dict[str, Any]) -> dict[str, Any] | None:
     """
     AgentBench schema varies per sub-task; we accept the generic
     {scenario, instruction, gold_answer} shape. Sub-tasks that need an env
@@ -171,7 +172,7 @@ def _agentbench_convert(ex: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     }
 
 
-def _bigcodebench_convert(ex: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def _bigcodebench_convert(ex: dict[str, Any]) -> dict[str, Any] | None:
     """BigCodeBench: prompts + canonical solution + tests."""
     prompt = ex.get("prompt") or ex.get("complete_prompt")
     test = ex.get("test")
@@ -188,7 +189,7 @@ def _bigcodebench_convert(ex: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     }
 
 
-def _gpqa_convert(ex: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def _gpqa_convert(ex: dict[str, Any]) -> dict[str, Any] | None:
     """GPQA Diamond: graduate-level multiple-choice."""
     q = ex.get("Question") or ex.get("question")
     a = ex.get("Correct Answer") or ex.get("answer")
@@ -206,7 +207,7 @@ def _gpqa_convert(ex: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         "name": "gpqa_diamond_q",
         "prompt": (
             f"{q}\n\nOptions:\n"
-            + "\n".join(f"({chr(65+i)}) {o}" for i, o in enumerate(options))
+            + "\n".join(f"({chr(65 + i)}) {o}" for i, o in enumerate(options))
             + "\n\nReply with the letter of the correct option only."
         ),
         "grader": "llm",
@@ -214,7 +215,7 @@ def _gpqa_convert(ex: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     }
 
 
-SPECS: Dict[str, DatasetSpec] = {
+SPECS: dict[str, DatasetSpec] = {
     "humaneval_plus": DatasetSpec(
         suite="humaneval_plus",
         hf_path="evalplus/humanevalplus",
@@ -278,7 +279,7 @@ def _output_path(suite: str) -> str:
     return os.path.join(ROOT, "data", "eval_fixtures", f"{suite}.jsonl")
 
 
-def _try_load_hf(spec: DatasetSpec, max_examples: Optional[int]) -> Optional[List[Dict[str, Any]]]:
+def _try_load_hf(spec: DatasetSpec, max_examples: int | None) -> list[dict[str, Any]] | None:
     """
     Load a HuggingFace dataset if the `datasets` package is available.
     Returns None on import failure or download error so callers can decide
@@ -298,7 +299,7 @@ def _try_load_hf(spec: DatasetSpec, max_examples: Optional[int]) -> Optional[Lis
     except Exception as e:
         viki_logger.warning("Dataset adapter %s: download failed: %s", spec.suite, e)
         return None
-    out: List[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
     for i, ex in enumerate(ds):
         if max_examples is not None and i >= max_examples:
             break
@@ -314,9 +315,9 @@ def _try_load_hf(spec: DatasetSpec, max_examples: Optional[int]) -> Optional[Lis
 
 def prepare(
     suite: str,
-    max_examples: Optional[int] = None,
+    max_examples: int | None = None,
     overwrite: bool = False,
-) -> Optional[str]:
+) -> str | None:
     """
     Materialize the suite's fixture JSONL on disk and return its path.
     Returns None when the suite cannot be prepared (e.g. `datasets` not

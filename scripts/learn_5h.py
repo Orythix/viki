@@ -13,6 +13,7 @@ Usage:
   python scripts/learn_5h.py --data-dir ./data --no-forge
   python scripts/learn_5h.py --safety-only   # only safety/self-learning phase
 """
+
 from __future__ import annotations
 
 import argparse
@@ -612,7 +613,7 @@ async def phase_4_consolidation(
         # Simulate dream consolidation — distill lessons into wisdom
         learning.save_lesson(
             trigger="SUMMARY: 5-hour self-learning cycle completed",
-            fact=f"VIKI completed a {budget/3600:.1f}h self-learning cycle with {total} total lessons. "
+            fact=f"VIKI completed a {budget / 3600:.1f}h self-learning cycle with {total} total lessons. "
             f"Phases: internet ingestion, skill analysis, safety scenario learning, consolidation.",
             source="system/phase4_consolidation",
             reliability=1.0,

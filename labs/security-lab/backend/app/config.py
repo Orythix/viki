@@ -6,6 +6,7 @@ Security notes:
 - OLLAMA_URL must point to localhost or lab-internal Docker network only.
 - TOOL_ALLOWLIST limits shell tool to explicit binaries (defense in depth; real isolation = Docker).
 """
+
 from __future__ import annotations
 
 from functools import lru_cache

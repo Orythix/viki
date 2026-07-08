@@ -14,6 +14,7 @@ Requires network (not air-gap). Search uses the same stack as viki (ddgs or duck
 Env:
   VIKI_DATA_DIR  — knowledge DB directory (default: ./data from settings or cwd ./data)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -21,7 +22,7 @@ import asyncio
 import os
 import sys
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
@@ -35,12 +36,12 @@ class _LearningBridge:
 
 
 async def _ingest_topics(
-    topics: List[str],
+    topics: list[str],
     data_dir: Path,
     delay_s: float,
 ) -> None:
-    from core.knowledge_ingestion import LearningModule  # noqa: E402
-    from skills.builtins.research_skill import ResearchSkill, HAS_DDG  # noqa: E402
+    from viki.core.knowledge_ingestion import LearningModule
+    from viki.skills.builtins.research_skill import HAS_DDG, ResearchSkill
 
     if not HAS_DDG:
         print(
@@ -73,12 +74,12 @@ async def _ingest_topics(
             await asyncio.sleep(delay_s)
 
 
-def _load_topics_from_file(path: Path) -> List[str]:
+def _load_topics_from_file(path: Path) -> list[str]:
     text = path.read_text(encoding="utf-8")
     return [ln.strip() for ln in text.splitlines() if ln.strip()]
 
 
-def _resolve_data_dir(cli: Optional[str]) -> Path:
+def _resolve_data_dir(cli: str | None) -> Path:
     if cli:
         p = Path(cli)
         return p if p.is_absolute() else (REPO_ROOT / p).resolve()
@@ -101,12 +102,21 @@ def _resolve_data_dir(cli: Optional[str]) -> Path:
 def main() -> int:
     p = argparse.ArgumentParser(description="Ingest DuckDuckGo search snippets as VIKI lessons.")
     p.add_argument("--file", "-f", type=Path, help="Text file: one search query per line")
-    p.add_argument("--topic", "-t", action="append", dest="topics", help="Search query (repeatable)")
-    p.add_argument("--data-dir", type=str, default=None, help="VIKI data directory (default: settings / VIKI_DATA_DIR)")
-    p.add_argument("--delay", type=float, default=2.0, help="Seconds between queries (rate courtesy)")
+    p.add_argument(
+        "--topic", "-t", action="append", dest="topics", help="Search query (repeatable)"
+    )
+    p.add_argument(
+        "--data-dir",
+        type=str,
+        default=None,
+        help="VIKI data directory (default: settings / VIKI_DATA_DIR)",
+    )
+    p.add_argument(
+        "--delay", type=float, default=2.0, help="Seconds between queries (rate courtesy)"
+    )
     args = p.parse_args()
 
-    topics: List[str] = list(args.topics or [])
+    topics: list[str] = list(args.topics or [])
     if args.file:
         if not args.file.is_file():
             print(f"ERROR: file not found: {args.file}", file=sys.stderr)
@@ -115,7 +125,7 @@ def main() -> int:
 
     # de-dupe preserving order
     seen = set()
-    uniq: List[str] = []
+    uniq: list[str] = []
     for t in topics:
         if t not in seen:
             seen.add(t)
@@ -130,7 +140,9 @@ def main() -> int:
     print(f"data_dir: {data_dir}")
     print(f"topics: {len(topics)}")
     asyncio.run(_ingest_topics(topics, data_dir, max(0.0, args.delay)))
-    print("Done. Reinforce lessons via chat/recall or use import with --reinforce; then run build_viki_model.py.")
+    print(
+        "Done. Reinforce lessons via chat/recall or use import with --reinforce; then run build_viki_model.py."
+    )
     return 0
 
 

@@ -450,18 +450,15 @@ class BasePublicSafetySkill(abc.ABC):
 
     @property
     @abc.abstractmethod
-    def name(self) -> str:
-        ...
+    def name(self) -> str: ...
 
     @property
     @abc.abstractmethod
-    def description(self) -> str:
-        ...
+    def description(self) -> str: ...
 
     @property
     @abc.abstractmethod
-    def capabilities(self) -> list[CapabilityDefinition]:
-        ...
+    def capabilities(self) -> list[CapabilityDefinition]: ...
 
     @property
     def version(self) -> str:
@@ -532,8 +529,7 @@ class BasePublicSafetySkill(abc.ABC):
         return self.safety.check(query_str, params)
 
     @abc.abstractmethod
-    async def _execute_impl(self, params: dict[str, Any]) -> Any:
-        ...
+    async def _execute_impl(self, params: dict[str, Any]) -> Any: ...
 
     def _assess_confidence(self, params: dict[str, Any], data: Any) -> ConfidenceScore:
         return ConfidenceScore(ConfidenceRating.MEDIUM, 0.5, "Default confidence assessment")

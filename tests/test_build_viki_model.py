@@ -139,7 +139,7 @@ class TestBuildVikiModel(unittest.TestCase):
 
         # Run training successfully
         with patch.dict(os.environ, {"VIKI_UNSLOTH_RUN_TRAIN": "1"}):
-            with patch("skills.creation.forge._unsloth_train_sync") as mock_train:
+            with patch("viki.skills.creation.forge._unsloth_train_sync") as mock_train:
                 mock_train.return_value = "LoRA: adapter saved to output"
                 with tempfile.TemporaryDirectory() as td:
                     rc = build_viki_model.strategy_lora(

@@ -5,6 +5,7 @@ Run:
   cd labs/security-lab/backend && set PYTHONPATH=.. && uvicorn app.main:app --port 8000
   cd labs/qa-automation && set QA_LIVE_API=1 && set QA_API_KEY=dev-lab-change-me && pytest tests/live -m smoke -v
 """
+
 from __future__ import annotations
 
 import pytest

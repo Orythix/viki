@@ -8,6 +8,7 @@ Use after clone or when refreshing operator + reference facts (profile, n8n, etc
   python scripts/seed_knowledge.py --reinforce   # access_count 2 for export thresholds
   python scripts/seed_knowledge.py --data-dir D:/VIKI/data
 """
+
 from __future__ import annotations
 
 import argparse

@@ -78,8 +78,7 @@ class TenantConnector(Protocol):
 class OpsPlanner(Protocol):
     """Planner interface: turns a request into a structured OpsPlan."""
 
-    async def plan(self, tenant_id: str, request: str) -> OpsPlan:
-        ...
+    async def plan(self, tenant_id: str, request: str) -> OpsPlan: ...
 
 
 class NoopOpsPlanner:

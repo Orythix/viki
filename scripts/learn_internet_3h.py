@@ -15,6 +15,7 @@ Usage:
   # Run for a short trial (e.g. 5 minutes) to test:
   python scripts/learn_internet_3h.py --duration-hours 0.08
 """
+
 from __future__ import annotations
 
 import argparse

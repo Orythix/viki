@@ -7,10 +7,10 @@ Risks: regex redaction misses novel formats; may redact benign text resembling s
 
 Mitigations: tune patterns; show user a "redacted" marker in audit log only, not inline by default.
 """
+
 from __future__ import annotations
 
 import re
-from typing import Tuple
 
 _API_KEY_LIKE = re.compile(
     r"\b(sk-[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|"
@@ -19,7 +19,7 @@ _API_KEY_LIKE = re.compile(
 _HIGH_ENTROPY = re.compile(r"\b[A-Za-z0-9+/]{40,}={0,2}\b")  # may match base64
 
 
-def filter_output(text: str, aggressive: bool = False) -> Tuple[str, bool]:
+def filter_output(text: str, aggressive: bool = False) -> tuple[str, bool]:
     changed = False
     t = text
     if _API_KEY_LIKE.search(t):

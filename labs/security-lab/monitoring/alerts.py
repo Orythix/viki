@@ -14,20 +14,19 @@ Mitigations
 -----------
 - Version rules alongside detector thresholds; log tuning changes to audit.
 """
+
 from __future__ import annotations
 
-from typing import Any, Dict, List
-
 # Import AuditEntry only for typing — avoid circular imports at runtime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from app.audit_store import AuditEntry
 
 
-def alerts_from_audit_entries(entries: List["AuditEntry"], limit: int = 50) -> List[Dict[str, Any]]:
+def alerts_from_audit_entries(entries: list[AuditEntry], limit: int = 50) -> list[dict[str, Any]]:
     """Build alerts from recent audit rows (newest first in ``entries``)."""
-    out: List[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
     for e in entries[:limit]:
         if e.kind == "chat":
             p = e.payload

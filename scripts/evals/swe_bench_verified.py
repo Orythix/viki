@@ -33,9 +33,7 @@ from scripts.evals.harness import (  # noqa: E402
 )
 
 SUITE = "swe_bench_verified"
-DEFAULT_DATASET = os.path.join(
-    "data", "eval_fixtures", f"{SUITE}.jsonl"
-)
+DEFAULT_DATASET = os.path.join("data", "eval_fixtures", f"{SUITE}.jsonl")
 
 
 async def main_async():

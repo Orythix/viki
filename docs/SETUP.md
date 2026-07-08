@@ -27,7 +27,9 @@
 
 3.  **Install Dependencies**:
     ```powershell
-    pip install -r requirements.txt
+    pip install -e .
+    # Optional: semantic embeddings + model training (large download)
+    pip install -e ".[ml]"
     ```
 
 4.  **Set Up Environment Variables**:

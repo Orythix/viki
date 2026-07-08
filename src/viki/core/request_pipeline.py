@@ -30,8 +30,7 @@ class RequestContext:
 class PreflightStage(Protocol):
     """Single async step; return a user-facing string to short-circuit, or None to continue."""
 
-    async def run(self, ctrl: Any, ctx: RequestContext) -> str | None:
-        ...
+    async def run(self, ctrl: Any, ctx: RequestContext) -> str | None: ...
 
 
 class _SuperAdminStage:

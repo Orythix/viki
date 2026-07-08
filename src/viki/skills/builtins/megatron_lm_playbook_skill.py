@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from viki.config.logger import viki_logger
+from viki.config.paths import get_playbooks_dir
 from viki.skills.base import BaseSkill
 
 
@@ -13,7 +14,7 @@ class MegatronLmPlaybookSkill(BaseSkill):
 
     def __init__(self, controller: Any | None = None) -> None:
         self._controller = controller
-        self._skills_root = Path(__file__).resolve().parent.parent / "playbooks" / "megatron_lm"
+        self._skills_root = get_playbooks_dir() / "megatron_lm"
         self._slug_to_path: dict[str, Path] = self._discover_skills()
         self._cache: dict[str, str] = {}
 
