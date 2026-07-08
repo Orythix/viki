@@ -10,6 +10,7 @@ Central map of **first-party** docs in this monorepo (engineering playbooks unde
 | [docs/SETUP.md](../docs/SETUP.md) | Install, env, first run |
 | [docs/VIKI_RUNBOOK.md](../docs/VIKI_RUNBOOK.md) | Operations, troubleshooting, RAG eval, boot evolution |
 | [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) | System design, data flow, frontier wiring |
+| [docs/ROADMAP.md](../docs/ROADMAP.md) | Restructure status, remaining engineering phases, future features |
 | [docs/DOCKER.md](../docs/DOCKER.md) | Container run |
 | [CONTRIBUTING.md](../CONTRIBUTING.md) | How to contribute |
 | [CHANGELOG.md](../CHANGELOG.md) | Version history |
