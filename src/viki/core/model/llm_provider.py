@@ -63,7 +63,7 @@ class LLMProvider(ABC):
         ) * self.cost_per_1k_out
         self.total_cost_usd += delta
         try:
-            from api.events import get_event_bus
+            from viki.api.events import get_event_bus
 
             get_event_bus().publish(
                 "usage",

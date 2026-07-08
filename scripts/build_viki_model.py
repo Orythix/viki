@@ -280,7 +280,7 @@ def strategy_lora(
         return 0
 
     try:
-        from skills.creation.forge import _unsloth_train_sync  # type: ignore
+        from viki.skills.creation.forge import _unsloth_train_sync  # type: ignore
     except Exception as e:
         fail(f"Cannot import LoRA trainer: {e!r}")
         return 4

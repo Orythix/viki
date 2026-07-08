@@ -135,7 +135,7 @@ class MissionControl:
         self._save_missions()
         viki_logger.info(f"Mission Control: New Directive queued -> {description}")
         try:
-            from api.events import get_event_bus
+            from viki.api.events import get_event_bus
 
             get_event_bus().publish("mission_created", mission.to_dict(), channel="missions")
         except Exception:
@@ -182,7 +182,7 @@ class MissionControl:
         mission.status = "active"
         mission.last_check = time.time()
         try:
-            from api.events import get_event_bus
+            from viki.api.events import get_event_bus
 
             get_event_bus().publish("mission_step", mission.to_dict(), channel="missions")
         except Exception:

@@ -155,7 +155,7 @@ async def search_memory(
                 results = [results[i] for i in ordered]
             # else keep original order on parse failure
         except Exception as e:
-            from config.logger import viki_logger
+            from viki.config.logger import viki_logger
 
             viki_logger.debug("Hybrid search rerank: %s", e)
 

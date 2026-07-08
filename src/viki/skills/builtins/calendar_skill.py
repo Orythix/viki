@@ -32,7 +32,7 @@ class CalendarSkill:
         data_dir = settings.get("system", {}).get("data_dir", "./data")
         token_path = os.path.join(data_dir, "google_calendar_token.json")
         try:
-            from integrations.google_calendar_client import get_calendar_service
+            from viki.integrations.google_calendar_client import get_calendar_service
 
             return get_calendar_service(path, token_path)
         except Exception as e:
@@ -57,7 +57,7 @@ class CalendarSkill:
             else "primary"
         )
         if service:
-            from integrations import google_calendar_client as gcal
+            from viki.integrations import google_calendar_client as gcal
 
             if action == "add":
                 if not title or not time_str:

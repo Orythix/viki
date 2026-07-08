@@ -2133,7 +2133,7 @@ class VIKIController:
         installed (0 if disabled).
         """
         try:
-            from integrations.mcp_client import attach_mcp_skills
+            from viki.integrations.mcp_client import attach_mcp_skills
         except Exception as e:
             viki_logger.debug("MCP wiring skipped: import failed: %s", e)
             return 0
@@ -2157,7 +2157,7 @@ class VIKIController:
 
     async def _attach_mcp_async(self, config_path: str | None = None) -> int:
         try:
-            from integrations.mcp_client import attach_mcp_skills
+            from viki.integrations.mcp_client import attach_mcp_skills
 
             installed = await attach_mcp_skills(self, config_path)
         except Exception as e:

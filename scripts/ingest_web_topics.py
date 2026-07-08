@@ -40,8 +40,8 @@ async def _ingest_topics(
     data_dir: Path,
     delay_s: float,
 ) -> None:
-    from core.knowledge_ingestion import LearningModule  # noqa: E402
-    from skills.builtins.research_skill import HAS_DDG, ResearchSkill  # noqa: E402
+    from viki.core.knowledge_ingestion import LearningModule
+    from viki.skills.builtins.research_skill import HAS_DDG, ResearchSkill
 
     if not HAS_DDG:
         print(

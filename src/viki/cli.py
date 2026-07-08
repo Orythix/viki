@@ -32,10 +32,6 @@ def _silence_transformers():
 
 load_dotenv()
 
-# Ensure project root is in path
-current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, current_dir)
-
 console = Console()
 
 # Optional: pyperclip for /paste support
@@ -1019,7 +1015,7 @@ async def main(workspace_path=None, query=None, dashboard=False, dashboard_port=
     async def _usage_listener():
         import json
 
-        from api.events import get_event_bus
+        from viki.api.events import get_event_bus
 
         bus = get_event_bus()
         sub = bus.subscribe(channels=["system"])

@@ -30,7 +30,7 @@ class EmailSkill:
         data_dir = settings.get("system", {}).get("data_dir", "./data")
         token_path = os.path.join(data_dir, "gmail_token.json")
         try:
-            from integrations.gmail_client import get_gmail_service
+            from viki.integrations.gmail_client import get_gmail_service
 
             return get_gmail_service(path, token_path)
         except Exception as e:
@@ -50,7 +50,9 @@ class EmailSkill:
                 if not recipient or not body:
                     return "ERROR: Recipient and body required for sending email."
                 return await asyncio.to_thread(
-                    __import__("integrations.gmail_client", fromlist=["gmail_send"]).gmail_send,
+                    __import__(
+                        "viki.integrations.gmail_client", fromlist=["gmail_send"]
+                    ).gmail_send,
                     service,
                     recipient,
                     subject or "",
@@ -58,13 +60,17 @@ class EmailSkill:
                 )
             if action == "read":
                 return await asyncio.to_thread(
-                    __import__("integrations.gmail_client", fromlist=["gmail_read"]).gmail_read,
+                    __import__(
+                        "viki.integrations.gmail_client", fromlist=["gmail_read"]
+                    ).gmail_read,
                     service,
                     10,
                 )
             if action == "summarize":
                 raw = await asyncio.to_thread(
-                    __import__("integrations.gmail_client", fromlist=["gmail_read"]).gmail_read,
+                    __import__(
+                        "viki.integrations.gmail_client", fromlist=["gmail_read"]
+                    ).gmail_read,
                     service,
                     20,
                 )
