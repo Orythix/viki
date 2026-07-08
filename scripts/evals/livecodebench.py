@@ -44,7 +44,6 @@ async def main_async():
     return await run_harness(cfg, controller)
 
 
-
 def main():
     asyncio.run(main_async())
 

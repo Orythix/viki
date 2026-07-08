@@ -18,5 +18,4 @@ class RequestProcessorPort(Protocol):
         on_think: Any = None,
         attachment_paths: list[str] | None = None,
         session_id: str | None = None,
-    ) -> str:
-        ...
+    ) -> str: ...

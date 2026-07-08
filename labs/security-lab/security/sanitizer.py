@@ -7,6 +7,7 @@ Risks: over-sanitization can break valid Unicode; under-sanitization allows bina
 
 Mitigations: explicit max length; allow printable Unicode; log truncation events.
 """
+
 from __future__ import annotations
 
 import logging

@@ -11,6 +11,7 @@ Requires lessons in data_dir (seed with scripts/seed_knowledge.py for the exampl
 Why: Substring gold labels are cheap to curate and catch major retrieval regressions
 before you invest in LLM-judge or human eval.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -54,7 +55,9 @@ def main() -> int:
     )
     p.add_argument(
         "--judge-model",
-        default=os.environ.get("OLLAMA_MODEL", os.environ.get("VIKI_FORGE_BASE_OLLAMA_MODEL", "llama3.2:latest")),
+        default=os.environ.get(
+            "OLLAMA_MODEL", os.environ.get("VIKI_FORGE_BASE_OLLAMA_MODEL", "llama3.2:latest")
+        ),
         help="Ollama model tag for --judge",
     )
     p.add_argument(

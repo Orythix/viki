@@ -75,8 +75,7 @@ class LLMProvider(ABC):
         return delta
 
     @abstractmethod
-    async def chat(self, messages: list[dict[str, str]], temperature: float = 0.7) -> str:
-        ...
+    async def chat(self, messages: list[dict[str, str]], temperature: float = 0.7) -> str: ...
 
     @abstractmethod
     async def chat_structured(
@@ -85,8 +84,7 @@ class LLMProvider(ABC):
         response_model: type[T],
         temperature: float = 0.0,
         image_path: str | None = None,
-    ) -> T:
-        ...
+    ) -> T: ...
 
     async def chat_stream(self, messages: list[dict[str, str]], temperature: float = 0.7):
         result = await self.chat(messages, temperature=temperature)
