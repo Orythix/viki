@@ -136,167 +136,26 @@ class PipelineMixin:
 
         self.memory.working.add_message("user", safe_input, session_id=session_id)
 
-        urls = re.findall(r'https?://[^\s<>"]+', safe_input)
-        url_context = ""
-        if urls:
-            try:
-                research_skill = self.skill_registry.get_skill("research")
-                if research_skill:
-                    url_content = await asyncio.wait_for(
-                        asyncio.gather(
-                            *[research_skill.execute({"url": u}) for u in urls[:2]],
-                            return_exceptions=True,
-                        ),
-                        timeout=35.0,
-                    )
-                    for i, res in enumerate(url_content):
-                        if isinstance(res, str) and res:
-                            url_context += f"\n{res}\n"
-                        elif isinstance(res, Exception):
-                            viki_logger.debug(
-                                f"URL fetch failed for {urls[i] if i < len(urls) else '?'}: {res}"
-                            )
-            except TimeoutError:
-                viki_logger.warning("URL fetch timed out (35s); continuing without page content.")
-            except Exception as e:
-                viki_logger.warning(f"URL fetch failed: {e}")
+        url_context = await self._fetch_url_content(safe_input)
 
-        self.is_agent_mode = user_input.strip().lower().startswith("/agent")
-        if self.is_agent_mode:
-            viki_logger.info("AGENT MODE ACTIVATED: Engaging autonomous engineering loop.")
-            user_input = re.sub(r"^/agent\s*", "", user_input, flags=re.IGNORECASE).strip()
-            if not user_input:
-                return "Agent Mode activated. Please provide a task (e.g., /agent implement feature X)."
-            safe_input = self.safety.validate_request(user_input)
-
-        self.is_plan_mode = user_input.strip().lower().startswith("/plan")
-        if self.is_plan_mode:
-            viki_logger.info("PLAN MODE ACTIVATED: Engaging senior architect loop.")
-            user_input = re.sub(r"^/plan\s*", "", user_input, flags=re.IGNORECASE).strip()
-            if not user_input:
-                return "Plan Mode activated. Please provide a request for architectural analysis or implementation strategy."
-            safe_input = self.safety.validate_request(user_input)
-
-        self.is_debug_mode = user_input.strip().lower().startswith("/debug")
-        if self.is_debug_mode:
-            viki_logger.info("DEBUG MODE ACTIVATED: Engaging diagnostic loop.")
-            user_input = re.sub(r"^/debug\s*", "", user_input, flags=re.IGNORECASE).strip()
-            if not user_input:
-                return "Debug Mode activated. Please provide an error message, log, or issue description to diagnose."
-            safe_input = self.safety.validate_request(user_input)
-
-        is_research = "/research" in user_input
-        if is_research:
-            viki_logger.info("Entering Research Mode: Exploratory & Verbose.")
-            budget["time"] = cast(float, budget["time"]) * 2
-
-        if user_input.strip().lower().startswith("/benchmark"):
-            return await command_handlers.handle_benchmark_command(self, user_input)
-
-        if "/scorecard" in user_input:
-            return await command_handlers.handle_scorecard_command(self)
-
-        if "/model" in user_input:
-            return await command_handlers.handle_model_command(self)
-
-        if "/evolve" in user_input:
-            return await command_handlers.handle_evolve_command(self)
-
-        if user_input.startswith("/approve"):
-            return await command_handlers.handle_approve_command(self, user_input)
-
-        if user_input.startswith(self.REJECT_TOKEN):
-            return await command_handlers.handle_reject_command(self, user_input)
-
-        if "/crystallize" in user_input:
-            return await command_handlers.handle_crystallize_command(self)
-
-        if user_input.startswith("/forge"):
-            return await command_handlers.handle_forge_command(self, user_input, session_id)
-
-        if "/dream" in user_input:
-            return await command_handlers.handle_dream_command(self)
-
-        if "/scan" in user_input:
-            return await command_handlers.handle_scan_command(self)
-
-        if user_input.strip().lower().startswith("/restore"):
-            return await command_handlers.handle_restore_command(self, user_input)
-
-        if user_input.strip().lower() in ("/undo", "/undo last"):
-            return await command_handlers.handle_undo_command(self)
-
-        if user_input.strip().lower().startswith("/save"):
-            return await command_handlers.handle_save_command(self, user_input, session_id)
-
-        if user_input.strip().lower().startswith("/load"):
-            return await command_handlers.handle_load_command(self, user_input, session_id)
-
-        if on_event:
-            on_event("status", "DELIBERATING")
+        cmd_result = await self._detect_and_handle_modes(
+            user_input, safe_input, task_type, budget, session_id, on_event
+        )
+        if isinstance(cmd_result, str):
+            return cmd_result
+        user_input, safe_input, task_type, budget = cmd_result
 
         workspace_dir = self.settings.get("system", {}).get(
             "workspace_dir", self.DEFAULT_WORKSPACE_DIR
         )
-
-        async def _fetch_memory_context() -> dict:
-            return await asyncio.to_thread(
-                self.memory.get_full_context,
-                safe_input,
-                narrative_wisdom=narrative_wisdom,
-                session_id=session_id,
-            )
-
-        async def _fetch_project_instructions() -> str:
-            project_instructions = ""
-            for name in ("VIKI.md", "VIKI_CONTEXT.md"):
-                p = os.path.join(workspace_dir, name)
-                if os.path.isfile(p):
-                    try:
-                        trunc_limit = 32768
-                        if task_type == "general" and not (
-                            self.is_agent_mode or self.is_plan_mode or self.is_debug_mode
-                        ):
-                            trunc_limit = 4096
-                            rag_context = await self.context_retriever.get_relevant_context(
-                                safe_input
-                            )
-                            if rag_context:
-                                project_instructions = (project_instructions or "") + rag_context
-
-                        project_instructions_raw = await asyncio.to_thread(
-                            self._read_text_truncated, p, trunc_limit
-                        )
-                        project_instructions = (
-                            project_instructions or ""
-                        ) + project_instructions_raw
-                        break
-                    except Exception as e:
-                        viki_logger.debug(f"Could not read {p}: {e}")
-            return project_instructions
-
-        async def _fetch_git_snapshot() -> str:
-            if not self.settings.get("system", {}).get("git_workspace_context"):
-                return ""
-            try:
-                return await asyncio.to_thread(get_git_workspace_snapshot, workspace_dir) or ""
-            except Exception as e:
-                viki_logger.debug("git_workspace_context: %s", e)
-                return ""
-
-        async def _fetch_relevant_failures() -> list:
-            return await asyncio.to_thread(self.learning.get_relevant_failures, safe_input, limit=3)
 
         (
             memory_context,
             project_instructions,
             git_snapshot,
             relevant_failures,
-        ) = await asyncio.gather(
-            _fetch_memory_context(),
-            _fetch_project_instructions(),
-            _fetch_git_snapshot(),
-            _fetch_relevant_failures(),
+        ) = await self._fetch_pipeline_context(
+            safe_input, narrative_wisdom, task_type, session_id, workspace_dir
         )
 
         memory_context["project_instructions"] = project_instructions
@@ -312,6 +171,52 @@ class PipelineMixin:
 
         world_understanding = self.world.get_understanding()
 
+        result = await self._route_cognitively(
+            safe_input, task_type, url_context, session_id,
+        )
+        if isinstance(result, str):
+            return result
+        cognitive_route, outcome, use_lite = result
+
+        return await self._dispatch_to_react_loop(
+            user_input, safe_input, session_id, on_event, on_think,
+            memory_context, url_context, world_understanding,
+            cognitive_route, use_lite, task_type, budget, outcome,
+        )
+
+    async def _fetch_url_content(self, safe_input: str) -> str:
+        urls = re.findall(r'https?://[^\s<>"]+', safe_input)
+        if not urls:
+            return ""
+        url_context = ""
+        try:
+            research_skill = self.skill_registry.get_skill("research")
+            if research_skill:
+                url_content = await asyncio.wait_for(
+                    asyncio.gather(
+                        *[research_skill.execute({"url": u}) for u in urls[:2]],
+                        return_exceptions=True,
+                    ),
+                    timeout=35.0,
+                )
+                for i, res in enumerate(url_content):
+                    if isinstance(res, str) and res:
+                        url_context += f"\n{res}\n"
+                    elif isinstance(res, Exception):
+                        viki_logger.debug(
+                            "URL fetch failed for %s: %s",
+                            urls[i] if i < len(urls) else "?",
+                            res,
+                        )
+        except TimeoutError:
+            viki_logger.warning("URL fetch timed out (35s); continuing without page content.")
+        except Exception as e:
+            viki_logger.warning("URL fetch failed: %s", e)
+        return url_context
+
+    async def _route_cognitively(
+        self, safe_input: str, task_type: str, url_context: str, session_id: str,
+    ) -> str | tuple:
         task_type = self._classify_task(safe_input)
         try:
             cognitive_route: CognitiveRoute | None = await self.cognitive_router.classify(
@@ -357,97 +262,212 @@ class PipelineMixin:
             )
             return cognitive_route.cached_response
 
+        return cognitive_route, outcome, use_lite
+
+    async def _dispatch_to_react_loop(
+        self, user_input: str, safe_input: str, session_id: str,
+        on_event, on_think, memory_context: dict, url_context: str,
+        world_understanding: str, cognitive_route, use_lite: bool,
+        task_type: str, budget: dict[str, Any], outcome,
+    ) -> str:
+        from viki.core.agent_constants import MAX_PLANNING_CYCLES, SAFE_FOLLOWUP_MESSAGES
+
+        lower_input = safe_input.lower().strip()
+        is_continuation = lower_input in SAFE_FOLLOWUP_MESSAGES or (
+            len(lower_input.split()) <= 4
+            and any(k in lower_input for k in SAFE_FOLLOWUP_MESSAGES)
+        )
+        task_type = self._classify_task(safe_input)
+
         mods = self.signals.get_modulation()
         signals_state = (
             f"Verbosity: {mods.get('verbosity', 'standard')}, "
             f"Planning: {mods.get('planning_depth', 'adaptive')}, "
             f"Safety: {mods.get('safety_bias', 'standard')}"
         )
-        viki_logger.debug(f"Behavior Modulation: {mods} | Outcome: {outcome.name}")
-
         agency_weights = self.evolution.get_agent_weightings()
 
-        lower_input = safe_input.lower().strip()
-        from viki.core.agent_constants import MAX_PLANNING_CYCLES, SAFE_FOLLOWUP_MESSAGES
-
-        is_continuation = lower_input in SAFE_FOLLOWUP_MESSAGES or (
-            len(lower_input.split()) <= 4 and any(k in lower_input for k in SAFE_FOLLOWUP_MESSAGES)
-        )
-
-        task_type = self._classify_task(safe_input)
-
         if is_continuation and self.world.state.active_goal:
-            viki_logger.info(
-                f"FSM: Continuation Intent Detected. Resuming goal: {self.world.state.active_goal[:50]}..."
-            )
-            if self.world.state.current_phase in ("EXECUTING", "TESTING", "DEBUGGING"):
-                viki_logger.debug(
-                    f"FSM: Maintaining execution state: {self.world.state.current_phase}"
-                )
-            else:
-                self.world.state.current_phase = "EXECUTING"
-                self.world.state.execution_started = True
-
-            if cognitive_route:
-                cognitive_route.outcome = JudgmentOutcome.SHALLOW
-                cognitive_route.use_lite_schema = True
-
+            self._resume_execution(cognitive_route)
         elif task_type == "coding":
-            if self.world.state.active_goal != safe_input and len(safe_input) > 10:
-                viki_logger.info(f"FSM: New Coding Goal: {safe_input[:50]}...")
-                self.world.state.active_goal = safe_input
-                self.world.state.planning_depth = 0
-                self.world.state.retry_count = 0
-                self.world.state.execution_started = False
-
-                if self.should_execute_directly(safe_input):
-                    viki_logger.info(
-                        "FSM: SUFFICIENT REQUIREMENTS. Bypassing planning; Locking EXECUTING state."
-                    )
-                    self.world.state.current_phase = "EXECUTING"
-                    self.world.state.execution_started = True
-                else:
-                    self.world.state.current_phase = "PLANNING"
-
-            if self.world.state.current_phase == "PLANNING":
-                self.world.state.planning_depth += 1
-                if self.world.state.planning_depth > MAX_PLANNING_CYCLES:
-                    viki_logger.warning(
-                        "FSM: MAX_PLANNING_CYCLES exceeded. Forcing EXECUTING state."
-                    )
-                    self.world.state.current_phase = "EXECUTING"
-                    self.world.state.execution_started = True
+            self._handle_coding_fsm(safe_input)
 
         if not self.world.state.current_phase:
             self.world.state.current_phase = "IDLE"
-
         viki_logger.info(
-            f"FSM State: {self.world.state.current_phase} | "
-            f"Goal: {self.world.state.active_goal[:30] if self.world.state.active_goal else 'None'}..."
+            "FSM State: %s | Goal: %s...",
+            self.world.state.current_phase,
+            self.world.state.active_goal[:30] if self.world.state.active_goal else "None",
         )
         self.world.save()
 
         from viki.core.react_loop import run_react_loop
 
         return await run_react_loop(
-            self,
-            user_input=user_input,
-            safe_input=safe_input,
-            session_id=session_id,
-            on_event=on_event,
-            on_think=on_think,
-            memory_context=memory_context,
-            url_context=url_context,
+            self, user_input=user_input, safe_input=safe_input,
+            session_id=session_id, on_event=on_event, on_think=on_think,
+            memory_context=memory_context, url_context=url_context,
             world_understanding=world_understanding,
-            cognitive_route=cognitive_route,
-            use_lite=use_lite,
-            signals_state=signals_state,
-            agency_weights=agency_weights,
-            project_instructions=project_instructions,
-            is_continuation=is_continuation,
-            task_type=task_type,
-            budget=budget,
-            outcome=outcome,
+            cognitive_route=cognitive_route, use_lite=use_lite,
+            signals_state=signals_state, agency_weights=agency_weights,
+            project_instructions=memory_context.get("project_instructions", ""),
+            is_continuation=is_continuation, task_type=task_type,
+            budget=budget, outcome=outcome,
+        )
+
+    def _resume_execution(self, cognitive_route) -> None:
+        viki_logger.info(
+            "FSM: Continuation Intent Detected. Resuming goal: %s...",
+            self.world.state.active_goal[:50] if self.world.state.active_goal else "None",
+        )
+        if self.world.state.current_phase in ("EXECUTING", "TESTING", "DEBUGGING"):
+            viki_logger.debug("FSM: Maintaining execution state: %s", self.world.state.current_phase)
+        else:
+            self.world.state.current_phase = "EXECUTING"
+            self.world.state.execution_started = True
+        if cognitive_route:
+            cognitive_route.outcome = JudgmentOutcome.SHALLOW
+            cognitive_route.use_lite_schema = True
+
+    def _handle_coding_fsm(self, safe_input: str) -> None:
+        from viki.core.agent_constants import MAX_PLANNING_CYCLES
+
+        if self.world.state.active_goal != safe_input and len(safe_input) > 10:
+            viki_logger.info("FSM: New Coding Goal: %s...", safe_input[:50])
+            self.world.state.active_goal = safe_input
+            self.world.state.planning_depth = 0
+            self.world.state.retry_count = 0
+            self.world.state.execution_started = False
+            if self.should_execute_directly(safe_input):
+                viki_logger.info("FSM: SUFFICIENT REQUIREMENTS. Bypassing planning; Locking EXECUTING state.")
+                self.world.state.current_phase = "EXECUTING"
+                self.world.state.execution_started = True
+            else:
+                self.world.state.current_phase = "PLANNING"
+        if self.world.state.current_phase == "PLANNING":
+            self.world.state.planning_depth += 1
+            if self.world.state.planning_depth > MAX_PLANNING_CYCLES:
+                viki_logger.warning("FSM: MAX_PLANNING_CYCLES exceeded. Forcing EXECUTING state.")
+                self.world.state.current_phase = "EXECUTING"
+                self.world.state.execution_started = True
+
+    async def _detect_and_handle_modes(
+        self, user_input: str, safe_input: str, task_type: str,
+        budget: dict[str, Any], session_id: str, on_event,
+    ) -> str | tuple[str, str, str, dict]:
+        self.is_agent_mode = user_input.strip().lower().startswith("/agent")
+        if self.is_agent_mode:
+            viki_logger.info("AGENT MODE ACTIVATED: Engaging autonomous engineering loop.")
+            user_input = re.sub(r"^/agent\s*", "", user_input, flags=re.IGNORECASE).strip()
+            if not user_input:
+                return "Agent Mode activated. Please provide a task (e.g., /agent implement feature X)."
+            safe_input = self.safety.validate_request(user_input)
+
+        self.is_plan_mode = user_input.strip().lower().startswith("/plan")
+        if self.is_plan_mode:
+            viki_logger.info("PLAN MODE ACTIVATED: Engaging senior architect loop.")
+            user_input = re.sub(r"^/plan\s*", "", user_input, flags=re.IGNORECASE).strip()
+            if not user_input:
+                return "Plan Mode activated. Please provide a request for architectural analysis or implementation strategy."
+            safe_input = self.safety.validate_request(user_input)
+
+        self.is_debug_mode = user_input.strip().lower().startswith("/debug")
+        if self.is_debug_mode:
+            viki_logger.info("DEBUG MODE ACTIVATED: Engaging diagnostic loop.")
+            user_input = re.sub(r"^/debug\s*", "", user_input, flags=re.IGNORECASE).strip()
+            if not user_input:
+                return "Debug Mode activated. Please provide an error message, log, or issue description to diagnose."
+            safe_input = self.safety.validate_request(user_input)
+
+        is_research = "/research" in user_input
+        if is_research:
+            viki_logger.info("Entering Research Mode: Exploratory & Verbose.")
+            budget["time"] = cast(float, budget["time"]) * 2
+
+        cmd_check = user_input.strip().lower()
+        if cmd_check.startswith("/benchmark"):
+            return await command_handlers.handle_benchmark_command(self, user_input)
+        if "/scorecard" in user_input:
+            return await command_handlers.handle_scorecard_command(self)
+        if "/model" in user_input:
+            return await command_handlers.handle_model_command(self)
+        if "/evolve" in user_input:
+            return await command_handlers.handle_evolve_command(self)
+        if user_input.startswith("/approve"):
+            return await command_handlers.handle_approve_command(self, user_input)
+        if user_input.startswith(self.REJECT_TOKEN):
+            return await command_handlers.handle_reject_command(self, user_input)
+        if "/crystallize" in user_input:
+            return await command_handlers.handle_crystallize_command(self)
+        if user_input.startswith("/forge"):
+            return await command_handlers.handle_forge_command(self, user_input, session_id)
+        if "/dream" in user_input:
+            return await command_handlers.handle_dream_command(self)
+        if "/scan" in user_input:
+            return await command_handlers.handle_scan_command(self)
+        if cmd_check.startswith("/restore"):
+            return await command_handlers.handle_restore_command(self, user_input)
+        if cmd_check in ("/undo", "/undo last"):
+            return await command_handlers.handle_undo_command(self)
+        if cmd_check.startswith("/save"):
+            return await command_handlers.handle_save_command(self, user_input, session_id)
+        if cmd_check.startswith("/load"):
+            return await command_handlers.handle_load_command(self, user_input, session_id)
+
+        if on_event:
+            on_event("status", "DELIBERATING")
+        return user_input, safe_input, task_type, budget
+
+    async def _fetch_pipeline_context(
+        self, safe_input: str, narrative_wisdom: str | None,
+        task_type: str, session_id: str, workspace_dir: str,
+    ) -> tuple[dict, str, str, list]:
+        async def _fetch_memory_context() -> dict:
+            return await asyncio.to_thread(
+                self.memory.get_full_context, safe_input,
+                narrative_wisdom=narrative_wisdom, session_id=session_id,
+            )
+
+        async def _fetch_project_instructions() -> str:
+            result = ""
+            for name in ("VIKI.md", "VIKI_CONTEXT.md"):
+                p = os.path.join(workspace_dir, name)
+                if not os.path.isfile(p):
+                    continue
+                try:
+                    trunc_limit = 32768
+                    if task_type == "general" and not (
+                        self.is_agent_mode or self.is_plan_mode or self.is_debug_mode
+                    ):
+                        trunc_limit = 4096
+                        rag_context = await self.context_retriever.get_relevant_context(safe_input)
+                        if rag_context:
+                            result = (result or "") + rag_context
+                    raw = await asyncio.to_thread(self._read_text_truncated, p, trunc_limit)
+                    result = (result or "") + raw
+                    break
+                except Exception as e:
+                    viki_logger.debug("Could not read %s: %s", p, e)
+            return result
+
+        async def _fetch_git_snapshot() -> str:
+            if not self.settings.get("system", {}).get("git_workspace_context"):
+                return ""
+            try:
+                snap = await asyncio.to_thread(get_git_workspace_snapshot, workspace_dir)
+                return snap or ""
+            except Exception as e:
+                viki_logger.debug("git_workspace_context: %s", e)
+                return ""
+
+        async def _fetch_relevant_failures() -> list:
+            return await asyncio.to_thread(
+                self.learning.get_relevant_failures, safe_input, limit=3
+            )
+
+        return await asyncio.gather(
+            _fetch_memory_context(), _fetch_project_instructions(),
+            _fetch_git_snapshot(), _fetch_relevant_failures(),
         )
 
     async def _process_reflex_outcome(
