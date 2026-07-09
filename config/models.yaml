@@ -23,7 +23,7 @@ models:
       api_key_env: OPENCODE_API_KEY
     mock:
       type: mock
-  default: oc-deepseek-flash
+  default: gemma4
   profiles:
     gemma4:
       provider: ollama
@@ -425,8 +425,11 @@ models:
         '
 
   routing:
-    prefer_local_models: false
+    prefer_local_models: true
     fallback_order:
+    - gemma4
+    - viki-evolved
+    - phi3-mini
     - oc-deepseek-flash
     - oc-deepseek
     - oc-gpt55
@@ -438,9 +441,6 @@ models:
     - nim-llama4
     - nim-llama-fast
     - nim-nemotron-nano
-    - gemma4
-    - viki-evolved
-    - phi3-mini
     - gpt-5
     - claude-sonnet
     task_routes:
