@@ -44,7 +44,7 @@ jobs:
       - name: Run tests
         run: uv run pytest tests/ -m "not nightly" --timeout=120 -q
       - name: Coverage
-        run: uv run pytest tests/ -m "not nightly" --cov=src/viki --cov-report=xml --cov-fail-under=25
+        run: uv run pytest tests/ -m "not nightly" --timeout=120 -q --cov=src/viki --cov-report=xml --cov-fail-under=40
       - name: Upload coverage
         uses: codecov/codecov-action@v4
         with:
