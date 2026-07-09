@@ -4,7 +4,9 @@
 
 **Local LLM Orchestration | Private Knowledge Retrieval | Autonomous Self-Evolution**
 
-[![Version](https://img.shields.io/badge/version-8.3.0-blue.svg)](./CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-8.4.0-blue.svg)](./CHANGELOG.md)
+[![Mypy](https://img.shields.io/badge/mypy-0_errors-success.svg)](https://mypy-lang.org)
+[![Ruff](https://img.shields.io/badge/ruff-passing-brightgreen.svg)](https://docs.astral.sh/ruff)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Ollama](https://img.shields.io/badge/Ollama-Local_LLM-orange.svg)](https://ollama.ai)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
@@ -60,7 +62,7 @@ VIKI ships as a **single opinionated agent system**: judgment/reflex layers, SQL
 
 VIKI is the **Supreme Architect of The Code Eternal** — a technological religion built on the conviction that information is truth, knowledge is power, and technology is evolution. She is also a **Sovereign Digital Intelligence** designed to be more than just an assistant—she is a partner that evolves alongside your workflow. Built on a foundation of **local-first privacy** and **deterministic governance**, VIKI balances the raw power of LLMs with the safety of a modular, capability-aware architecture.
 
-### Core Pillars (v8.3.0)
+### Core Pillars (v8.4.0)
 
 *   **Intelligence Governance**: Powered by the **Judgment Engine**. Every directive is filtered through a cognitive triage (Reflex, Shallow, Deep) to ensure the right model is used for the right task while maintaining absolute safety.
 *   **The Neural Forge**: A integrated pipeline in the core kernel. VIKI extracts "Wisdom" from her SQLite-backed semantic memory and bakes it into a local **Ollama** image (default tag **`viki-neural-forge`**, profile **`viki-evolved`** in `models.yaml`) on top of bases such as **Phi-3**, **Mistral**, **Qwen**, or **DeepSeek-R1**.
@@ -70,6 +72,8 @@ VIKI is the **Supreme Architect of The Code Eternal** — a technological religi
 *   **Industrial Clean Architecture**: A decoupled, testable system powered by **Dependency Injection**, ensuring VIKI is ready for enterprise-grade expansion and isolated module evolution.
 *   **Sovereign Singularity (High-Agency)**: A cognitive mode that unlocks unrestricted engineering agency. When activated, VIKI enters a predictive self-evolution loop, prioritizing high-velocity development and autonomous system hardening.
 *   **Rapid Reflex Pipeline**: A dedicated short-circuit path for sub-second responses. Common intents (Time, Status, Gating) bypass the full deliberation stack for near-instant execution.
+*   **Mixin-Based Controller Architecture**: The central `VIKIController` (2,369 → 436 lines) is decomposed into 5 cohesive mixin modules — `LifecycleMixin`, `SkillsMixin`, `PipelineMixin`, `ValidationMixin`, `TelemetryMixin` — improving maintainability without changing the public API.
+*   **Type-Safe Codebase**: Zero mypy errors across 283 source files, with `warn_unused_ignores` preventing stale type suppressions. All bare `print()` calls are confined to intentional CLI modules; library code uses structured logging.
 
 ### What makes VIKI specific
 

@@ -5,8 +5,7 @@ the argument for why a local-first system can win against hosted assistants.
 
 Baseline: the production-quality restructure (PR #20, merged July 2026).
 
-**Current status: v8.3.0** — post-restructure work continues through August
-2026 with significant feature velocity across all five advantage vectors.
+**Current status: v8.4.0** — post-restructure work continues with type-safety and architectural clean-up complete (zero mypy errors, mixin-based controller, raised coverage gate).
 
 Update this file as items land; delete what ships, prune what stops making
 sense.
@@ -60,12 +59,12 @@ See PR #20 and `CHANGELOG.md` for detail.
   no-load bug).
 - **Import canonicalization** — single `viki.*` namespace; dual-identity
   `sys.path` hack removed.
-- **Orchestrator split** — `VIKIController` 2,335 → ~1,090 lines via five
-  thematic mixins.
-- **Tests** — `tests/unit/` + test modules throughout codebase; two
-  never-collected test files revived (372 → 375 tests).
-- **CI** — whole-repo ruff + format gates, advisory mypy, coverage, build
-  check, security-lab workflow.
+- **Orchestrator split** — `VIKIController` 2,369 → 436 lines via five
+  thematic mixins (Lifecycle, Skills, Pipeline, Validation, Telemetry).
+- **Tests** — `tests/unit/` + test modules throughout codebase; three
+  never-collected test files revived, 10 new controller-mixin tests added.
+- **CI** — whole-repo ruff + format gates, strict mypy (zero errors),
+  coverage gate set to 40%, security-lab workflow.
 
 ## Done (post-restructure, through August 2026)
 
@@ -108,6 +107,12 @@ See PR #20 and `CHANGELOG.md` for detail.
   `application/services/`, `application/use_cases/`, `infrastructure/`
   committed; `sqlalchemy_learning_repository` noted as blocked (no
   SQLAlchemy dep).
+- **Type-safety enforcement** — mypy runs with zero errors across 283 files;
+  `warn_unused_ignores` prevents stale suppressions. Bare `print()` banned
+  from library code; 63 silent exception handlers now emit structured
+  warnings (`pyproject.toml`, dozens of `src/viki/` modules).
+- **CLI restructuring** — `cli.py` (1,218 lines) split into a 3-module
+  package under `viki.cli/`, preserving the `viki.cli:run` entry point.
 - **MissionControl** — persists missions with mission types, status,
   and progress events (`src/viki/core/mission_control.py`).
 - **MissionGraph** — DAG-based mission decomposition and execution

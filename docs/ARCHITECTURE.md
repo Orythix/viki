@@ -1,4 +1,4 @@
-# VIKI Architecture (v8.3.0 The Code Eternal)
+# VIKI Architecture (v8.4.0 The Code Eternal)
 
 ## Core Philosophy
 Following the **Industrial Restructuring**, VIKI follows a **Clean Architecture (Hexagonal)** and **Domain-Driven Design (DDD)** pattern:
@@ -18,9 +18,15 @@ Following the **Industrial Restructuring**, VIKI follows a **Clean Architecture 
 *   **Role**: Composition Root.
 *   **Function**: Manages the lifecycle and wiring of all application components. Uses `dependency-injector` to provide singleton services to the controller and presentation layers.
 
-### 2. The Controller (`viki/core/controller.py`)
+### 2. The Controller (`viki/core/`)
 *   **Role**: Application Coordinator.
 *   **Function**: Acts as the primary entry point for the "Think-Action-Learn" loop. Dependencies (Safety, Memory Recall, Model Router) are injected from the Container. It manages **Latency Budgeting** to maintain system responsiveness during high-complexity tasks.
+*   **Mixin Architecture** (v8.4.0): The `VIKIController` class (436 lines) inherits from 5 mixin modules under `viki/core/controller/`:
+    *   `LifecycleMixin` — `__init__`, `shutdown`, boot evolution, background tasks, config resolution
+    *   `SkillsMixin` — skill registration, lazy loading, MCP attachment, skill execution
+    *   `PipelineMixin` — `process_request`, reflex routing, inference, web research, ops planning
+    *   `ValidationMixin` — tool-contract parameter validation, JSON type matching, output compression
+    *   `TelemetryMixin` — session tracking, router usage snapshots, runtime health, sovereign status
 
 ### 3. Application Services (`viki/application/`)
 *   **Safety Service**: Encapsulates the safety envelope and action validation.

@@ -7,6 +7,26 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 ## [Unreleased]
 
 ### Added
+- **VIKIController decomposed into 5 mixin modules**: The 2,369-line god-object was split into `LifecycleMixin`, `SkillsMixin`, `PipelineMixin`, `ValidationMixin`, and `TelemetryMixin` under `src/viki/core/controller/`. Public API unchanged — `from viki.core.orchestrator import VIKIController` still works (`src/viki/core/orchestrator.py`).
+- **CLI package split**: `cli.py` (1,218 lines) moved to `viki.cli/` package with `cli_main.py`, `interface.py`, `loader.py` submodules. Entry point `viki = "viki.cli:run"` unchanged.
+- **Orchestration integration tests**: 10 new tests verifying mixin MRO, controller initialization, and method dispatch across all 5 mixins (`tests/test_orchestrator_controller.py`).
+
+### Changed
+- **Mypy: 197 → 0 errors**: All type errors fixed across `src/viki/` (274 source files). Enabled `warn_unused_ignores` and `warn_redundant_casts` to prevent stale `# type: ignore` comments. Fixed 2 pre-existing indentation bugs in `inference_providers.py` and `deliberation_layer.py` that had masked the codebase from type checking (`pyproject.toml`).
+- **Lint tightened**: `T201` (bare `print`) now enforced in all library code; allowlisted only in intentional CLI/entry-point modules. Ruff format consistency enforced across 275 files (`pyproject.toml`).
+- **Coverage gate raised**: `fail_under` moved from 25% to 40%. Current coverage: 44.43% (`pyproject.toml`).
+- **63 silent exception handlers now log**: Broad `except Exception: pass`/`continue` handlers across 24 modules now emit `logger.warning()`/`.exception()` before swallowing, making hidden failures observable. 83 benign handlers (ImportError for optional deps, `CancelledError`, `KeyboardInterrupt`, `JSONDecodeError` in parse loops) left as-is.
+
+### Fixed
+- **Syntax errors blocking mypy**: Two code defects — mis-indented `_call()` lambda in `inference_providers.py:189` and over-indented LLM call in `deliberation_layer.py:521` — were preventing mypy from analyzing the full codebase (`src/viki/core/inference_providers.py`, `src/viki/core/layers/deliberation_layer.py`).
+- **Unused `# type: ignore` comments**: Removed misplaced suppressions in `inference_providers.py` (comments were on `temperature=` line instead of `messages=` line, leaving the actual arg-type error un-suppressed).
+
+### Removed
+- **Stale files cleaned**: ~896 entries removed — 826 `.pyc` files, 45 `__pycache__` directories, `dist/` build artifacts, cache dirs (`.mypy_cache/`, `.pytest_cache/`, `.ruff_cache/`), `scratch/` debug scripts, `reports/` stale eval sample, `logs/` runtime logs, 8 `.fuse_hidden` crash leftovers, empty `FOCUS/` and `workspace/` dirs.
+
+## [8.3.0] - 2026-07-09
+
+### Added
 - **Persistent aiohttp session in LocalLLM**: Replaced per-request `aiohttp.ClientSession()` with a persistent `_session` across `chat()`, `chat_stream()`, `chat_with_tools()` — saves ~100-200ms TCP handshake overhead per LLM call (`src/viki/core/model/local_llm.py`).
 - **Semantic cache in ReAct loop**: Before every `cortex.process()` call on step 0, checks the semantic cache — bypasses LLM entirely on cache hit for repeated queries (`src/viki/core/react_loop.py`).
 - **Parallel preflight pipeline**: FeedbackCapture, Attachment, and SignalsReset stages now run concurrently via `asyncio.gather()` instead of sequentially, reducing preflight wall-clock time (`src/viki/core/request_pipeline.py`).
