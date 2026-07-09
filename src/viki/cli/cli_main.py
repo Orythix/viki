@@ -9,6 +9,34 @@ from rich.prompt import Confirm
 from viki.cli import loader as _lazy_mod
 from viki.cli.interface import SimpleInterface
 
+
+def _enable_windows_vt():
+    """Enable ANSI/VT processing on the native Windows console.
+
+    Without this, Rich can't detect VT support and falls back to its legacy
+    Windows renderer, which has a known bug that duplicates multi-column
+    panel content (e.g. the welcome/boundary dashboards) taller than one
+    screenful. Must run before the first `Console()` is constructed, since
+    Rich caches the legacy-Windows detection on first use.
+    """
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        enable_vt = 0x0004  # ENABLE_VIRTUAL_TERMINAL_PROCESSING
+        for std_handle in (-11, -12):  # STD_OUTPUT_HANDLE, STD_ERROR_HANDLE
+            handle = kernel32.GetStdHandle(std_handle)
+            mode = ctypes.c_uint32()
+            if handle and kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+                kernel32.SetConsoleMode(handle, mode.value | enable_vt)
+    except Exception:
+        pass
+
+
+_enable_windows_vt()
+
 console = Console()
 
 # Optional: pyperclip for /paste support
@@ -94,23 +122,18 @@ async def _run_single_query(controller, interface, query, on_event, streaming_st
         response = await controller.process_request(query, on_event=on_event)
 
         streaming_state["processing"] = False
-        if interface.status is not None:
-            interface.status.stop()
-            interface.status = None
+        interface.stop_thinking()
 
         elapsed = time.time() - start_t
-        if streaming_state["active"]:
-            interface.console.print("")
-            streaming_state["active"] = False
-            interface.console.print(f"\n[dim]   ({elapsed:.2f}s)[/]")
-        else:
-            interface.console.print(f"\n[dim]   ({elapsed:.2f}s)[/]")
+        if not streaming_state["active"]:
             interface.print_viki(response)
+        interface.console.print(f"\n[dim]   ({elapsed:.2f}s)[/]")
     except KeyboardInterrupt:
         pass
     except Exception as e:
         interface.print_error(str(e))
     finally:
+        interface.stop_thinking()
         interface.console.print("[yellow]Query completed. Shutting down...[/]")
         await _shutdown_controller(controller)
 
@@ -407,31 +430,25 @@ async def _run_interactive_loop(controller, interface, on_event, streaming_state
             response = await controller.process_request(user_input, on_event=on_event)
 
             streaming_state["processing"] = False
-            if interface.status is not None:
-                interface.status.stop()
-                interface.status = None
+            interface.stop_thinking()
+            was_streaming = streaming_state["active"]
+            streaming_state["active"] = False
 
             elapsed = time.time() - start_t
-
-            if streaming_state["active"]:
-                interface.console.print("")
-                streaming_state["active"] = False
-                in_fmt = interface.format_count(interface.session_usage["input"])
-                out_fmt = interface.format_count(interface.session_usage["output"])
-                interface.console.print(
-                    f"\n[dim]   ({elapsed:.2f}s | Tokens: [bold cyan]{in_fmt}[/] in, [bold cyan]{out_fmt}[/] out)[/]"
-                )
-            else:
-                in_fmt = interface.format_count(interface.session_usage["input"])
-                out_fmt = interface.format_count(interface.session_usage["output"])
-                interface.console.print(
-                    f"\n[dim]   ({elapsed:.2f}s | Tokens: [bold cyan]{in_fmt}[/] in, [bold cyan]{out_fmt}[/] out)[/]"
-                )
+            if not was_streaming:
                 interface.print_viki(response)
 
+            in_fmt = interface.format_count(interface.session_usage["input"])
+            out_fmt = interface.format_count(interface.session_usage["output"])
+            interface.console.print(
+                f"\n[dim]   ({elapsed:.2f}s | Tokens: [bold cyan]{in_fmt}[/] in, [bold cyan]{out_fmt}[/] out)[/]"
+            )
+
         except KeyboardInterrupt:
+            interface.stop_thinking()
             break
         except Exception as e:
+            interface.stop_thinking()
             interface.print_error(str(e))
 
 
@@ -536,59 +553,50 @@ async def main(workspace_path=None, query=None, dashboard=False, dashboard_port=
 
     def on_event(event_type, data):
         if event_type in ["thought", "action"]:
-            if not streaming_state.get("processing", False) or streaming_state.get("active", False):
+            if streaming_state.get("active"):
                 return
-
-            interface.last_thought = data
-            in_fmt = interface.format_count(interface.session_usage["input"])
-            out_fmt = interface.format_count(interface.session_usage["output"])
-            tokens_str = f" [bold cyan]({in_fmt} | {out_fmt})[/]"
-            if interface.status is None:
-                interface.status = interface.console.status(
-                    f"[dim]{data}...[/]{tokens_str}", spinner="dots"
-                )
-                interface.status.start()
-            else:
-                interface.status.update(f"[dim]{data}...[/]{tokens_str}")
-
+            interface.last_thought = str(data)[:80]
+            interface.start_thinking(interface.last_thought)
             if debug_state["active"]:
                 interface.console.print(f"[dim italic]{event_type}: {data}[/]")
 
         elif event_type == "usage":
-            # Direct usage event from orchestrator or other components
             interface.session_usage["input"] += data.get("input", 0)
             interface.session_usage["output"] += data.get("output", 0)
-            if interface.status:
-                in_fmt = interface.format_count(interface.session_usage["input"])
-                out_fmt = interface.format_count(interface.session_usage["output"])
-                tokens_str = f" [bold cyan]({in_fmt} | {out_fmt})[/]"
-                interface.status.update(f"[dim]{interface.last_thought}...[/]{tokens_str}")
 
         elif event_type == "status":
-            pass  # Ignored by design to prevent background loop spinners
+            msg = str(data)
+            if msg.startswith(("EXECUTING ", "REFLEX EXECUTING ", "THINKING ")):
+                pass  # rendered via the "tool_call" event / thinking spinner instead
+            elif debug_state["active"]:
+                interface.console.print(f"[dim]{msg}[/]")
+
+        elif event_type == "tool_call":
+            name = data.get("name", "tool")
+            interface.print_tool_call(name, data.get("params", {}))
+
+        elif event_type == "tool_result":
+            interface.print_tool_result(str(data))
 
         elif event_type == "partial":
-            if interface.status is not None:
-                interface.status.stop()
-                interface.status = None
             try:
+                interface.stop_thinking()
                 if not streaming_state["active"]:
-                    interface.console.print("\n", end="")
+                    interface.console.print()
                     streaming_state["active"] = True
-                    interface.console.print(str(data), end="")
+                interface.print_streaming_chunk(str(data))
             except Exception:
                 logging.getLogger(__name__).warning("failed to render streaming partial")
         elif event_type == "final":
-            if interface.status is not None:
-                interface.status.stop()
-                interface.status = None
+            interface.stop_thinking()
             if streaming_state["active"]:
-                interface.console.print("\n")
+                interface.console.print()
                 streaming_state["active"] = False
         elif event_type == "error":
-            if interface.status is not None:
-                interface.status.stop()
-                interface.status = None
+            interface.stop_thinking()
+            if streaming_state["active"]:
+                interface.console.print()
+                streaming_state["active"] = False
             interface.print_error(data)
 
     loop = asyncio.get_running_loop()
@@ -624,6 +632,11 @@ async def main(workspace_path=None, query=None, dashboard=False, dashboard_port=
 def run():
     """Synchronous entry point for the `viki` console script."""
     import argparse
+
+    if sys.platform == "win32":
+        for stream in (sys.stdout, sys.stderr):
+            if getattr(stream, "encoding", "").lower() != "utf-8":
+                stream.reconfigure(encoding="utf-8")
 
     parser = argparse.ArgumentParser(description="VIKI Sovereign Intelligence")
     parser.add_argument(

@@ -70,7 +70,10 @@ async def run_react_loop(
             if not controller.shadow_mode:
                 if on_event:
                     on_event("status", f"REFLEX EXECUTING {skill_name}")
+                    on_event("tool_call", {"name": skill_name, "params": params})
                 result, err, latency = await controller._execute_skill(skill_name, params, budget)
+                if on_event:
+                    on_event("tool_result", result if result and not err else err or "no result")
                 if not err and result is not None:
                     try:
                         controller.skill_registry.record_execution(skill_name, True, latency)
@@ -357,6 +360,7 @@ async def run_react_loop(
 
             if on_event:
                 on_event("status", f"EXECUTING {skill_name}")
+                on_event("tool_call", {"name": skill_name, "params": params})
             controller.history.take_snapshot(
                 "ACTION_START", f"Executing {skill_name}", {"params": params}
             )
@@ -385,6 +389,9 @@ async def run_react_loop(
                 )
 
             result, err, latency = await controller._execute_skill(skill_name, params, budget)
+
+            if on_event:
+                on_event("tool_result", result if result and not err else err or "no result")
 
             if not err and result is not None:
                 output_err = controller._validate_skill_output(skill_name, result)
