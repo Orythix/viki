@@ -23,7 +23,7 @@ models:
       api_key_env: OPENCODE_API_KEY
     mock:
       type: mock
-  default: gemma4
+  default: phi3-mini
   profiles:
     gemma4:
       provider: ollama
@@ -427,88 +427,72 @@ models:
   routing:
     prefer_local_models: true
     fallback_order:
+    - phi3-mini
     - gemma4
     - viki-evolved
-    - phi3-mini
     - oc-deepseek-flash
     - oc-deepseek
-    - oc-gpt55
-    - oc-qwen37
-    - oc-mimo
     - nim-nemotron
-    - nim-deepseek-r1
-    - nim-mistral-large
-    - nim-llama4
     - nim-llama-fast
-    - nim-nemotron-nano
     - gpt-5
     - claude-sonnet
     task_routes:
       coding:
-        primary: oc-deepseek-flash
+        primary: phi3-mini
         fallback:
-        - oc-deepseek
-        - oc-qwen37
-        - nim-nemotron
         - gemma4
+        - oc-deepseek-flash
+        - oc-deepseek
       reasoning:
-        primary: oc-deepseek
+        primary: gemma4
         fallback:
-        - oc-deepseek-flash
-        - oc-gpt55
-        - nim-deepseek-r1
-        - nim-nemotron
-        - gemma4
-      math:
-        primary: oc-deepseek
-        fallback:
-        - oc-deepseek-flash
-        - nim-deepseek-r1
-        - gemma4
-      training:
-        primary: oc-qwen37
-        fallback:
-        - viki-trainer
-      dataset_generation:
-        primary: oc-qwen37
-        fallback:
-        - viki-trainer
-      self_reflection:
-        primary: oc-mimo
-        fallback:
+        - phi3-mini
         - oc-deepseek
+        - oc-deepseek-flash
+      math:
+        primary: phi3-mini
+        fallback:
+        - gemma4
+        - oc-deepseek
+      training:
+        primary: viki-trainer
+        fallback:
+        - oc-qwen37
+      dataset_generation:
+        primary: viki-trainer
+        fallback:
+        - oc-qwen37
+      self_reflection:
+        primary: gemma4
+        fallback:
         - viki-trainer
-      fast:
-        primary: oc-deepseek-flash-fast
-        fallback:
-        - nim-nemotron-nano
-        - nim-llama-fast
-        - gemma4
-      writing:
-        primary: oc-deepseek-flash
-        fallback:
         - oc-mimo
-        - nim-mistral-large
+      fast:
+        primary: phi3-mini
+        fallback:
         - gemma4
+        - oc-deepseek-flash-fast
+      writing:
+        primary: gemma4
+        fallback:
+        - phi3-mini
+        - oc-deepseek-flash
       vision:
-        primary: nim-llama4
+        primary: gemma4
         fallback:
         - oc-deepseek-flash
       embedding:
         primary: nim-embed
       general:
-        primary: oc-deepseek-flash
+        primary: phi3-mini
         fallback:
-        - oc-mimo
-        - nim-llama-fast
         - gemma4
+        - oc-deepseek-flash
       planning:
-        primary: oc-deepseek-flash
+        primary: gemma4
         fallback:
-        - oc-gpt55
-        - oc-deepseek
-        - nim-nemotron
-        - gemma4
+        - phi3-mini
+        - oc-deepseek-flash
   memory:
     enabled: true
     backend: local
