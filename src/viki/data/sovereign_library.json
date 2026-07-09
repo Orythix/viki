@@ -2,103 +2,63 @@
   "cloud": [
     {
       "name": "aws_ec2_list",
-      "description": "List EC2 resources.",
-      "command": "aws ec2 list-instances"
-    },
-    {
-      "name": "aws_ec2_describe",
-      "description": "Describe EC2 resources.",
-      "command": "aws ec2 describe-instances"
+      "description": "List EC2 instances.",
+      "command": "aws ec2 describe-instances --query 'Reservations[].Instances[].[InstanceId,InstanceType,State.Name]' --output table"
     },
     {
       "name": "aws_s3_list",
-      "description": "List S3 resources.",
-      "command": "aws s3 list-s3"
-    },
-    {
-      "name": "aws_s3_describe",
-      "description": "Describe S3 resources.",
-      "command": "aws s3 describe-s3"
+      "description": "List S3 buckets.",
+      "command": "aws s3 ls"
     },
     {
       "name": "aws_lambda_list",
-      "description": "List LAMBDA resources.",
-      "command": "aws lambda list-lambda"
-    },
-    {
-      "name": "aws_lambda_describe",
-      "description": "Describe LAMBDA resources.",
-      "command": "aws lambda describe-lambda"
+      "description": "List Lambda functions.",
+      "command": "aws lambda list-functions --query 'Functions[].[FunctionName,Runtime]' --output table"
     },
     {
       "name": "aws_rds_list",
-      "description": "List RDS resources.",
-      "command": "aws rds list-rds"
+      "description": "List RDS instances.",
+      "command": "aws rds describe-db-instances --query 'DBInstances[].[DBInstanceIdentifier,DBInstanceClass,DBInstanceStatus]' --output table"
     },
     {
-      "name": "aws_rds_describe",
-      "description": "Describe RDS resources.",
-      "command": "aws rds describe-rds"
-    },
-    {
-      "name": "aws_iam_list",
-      "description": "List IAM resources.",
-      "command": "aws iam list-iam"
-    },
-    {
-      "name": "aws_iam_describe",
-      "description": "Describe IAM resources.",
-      "command": "aws iam describe-iam"
+      "name": "aws_iam_list_users",
+      "description": "List IAM users.",
+      "command": "aws iam list-users --query 'Users[].[UserName,UserId]' --output table"
     },
     {
       "name": "aws_dynamodb_list",
-      "description": "List DYNAMODB resources.",
-      "command": "aws dynamodb list-dynamodb"
-    },
-    {
-      "name": "aws_dynamodb_describe",
-      "description": "Describe DYNAMODB resources.",
-      "command": "aws dynamodb describe-dynamodb"
+      "description": "List DynamoDB tables.",
+      "command": "aws dynamodb list-tables --query 'TableNames[]' --output table"
     },
     {
       "name": "aws_sqs_list",
-      "description": "List SQS resources.",
-      "command": "aws sqs list-sqs"
-    },
-    {
-      "name": "aws_sqs_describe",
-      "description": "Describe SQS resources.",
-      "command": "aws sqs describe-sqs"
+      "description": "List SQS queues.",
+      "command": "aws sqs list-queues --query 'QueueUrls[]' --output table"
     },
     {
       "name": "aws_sns_list",
-      "description": "List SNS resources.",
-      "command": "aws sns list-sns"
+      "description": "List SNS topics.",
+      "command": "aws sns list-topics --query 'Topics[].[TopicArn]' --output table"
     },
     {
-      "name": "aws_sns_describe",
-      "description": "Describe SNS resources.",
-      "command": "aws sns describe-sns"
+      "name": "aws_cloudwatch_list_alarms",
+      "description": "List CloudWatch alarms.",
+      "command": "aws cloudwatch describe-alarms --query 'MetricAlarms[].[AlarmName,StateValue]' --output table"
     },
     {
-      "name": "aws_cloudwatch_list",
-      "description": "List CLOUDWATCH resources.",
-      "command": "aws cloudwatch list-cloudwatch"
+      "name": "aws_route53_list_zones",
+      "description": "List Route53 hosted zones.",
+      "command": "aws route53 list-hosted-zones --query 'HostedZones[].[Name,Id]' --output table"
     },
     {
-      "name": "aws_cloudwatch_describe",
-      "description": "Describe CLOUDWATCH resources.",
-      "command": "aws cloudwatch describe-cloudwatch"
+      "name": "aws_ecr_list",
+      "description": "List ECR repositories.",
+      "command": "aws ecr describe-repositories --query 'repositories[].[repositoryName,repositoryUri]' --output table"
     },
     {
-      "name": "aws_route53_list",
-      "description": "List ROUTE53 resources.",
-      "command": "aws route53 list-route53"
-    },
-    {
-      "name": "aws_route53_describe",
-      "description": "Describe ROUTE53 resources.",
-      "command": "aws route53 describe-route53"
+      "name": "aws_ecs_list_clusters",
+      "description": "List ECS clusters.",
+      "command": "aws ecs list-clusters --query 'clusterArns[]' --output table"
     },
     {
       "name": "docker_ps",
@@ -268,8 +228,65 @@
       "command": "go version"
     }
   ],
-  "data": [],
-  "media": [],
+  "data": [
+    {
+      "name": "csv_head",
+      "description": "Show first rows of a CSV.",
+      "command": "head -n 10 {path}"
+    },
+    {
+      "name": "csv_columns",
+      "description": "Show column names of a CSV.",
+      "command": "head -n 1 {path} | tr ',' '\\n' | cat -n"
+    },
+    {
+      "name": "csv_row_count",
+      "description": "Count rows in a CSV.",
+      "command": "wc -l < {path}"
+    },
+    {
+      "name": "json_pretty",
+      "description": "Pretty-print a JSON file.",
+      "command": "python -m json.tool {path}"
+    },
+    {
+      "name": "json_keys",
+      "description": "Extract top-level keys from JSON.",
+      "command": "python -c \"import json,sys; d=json.load(open('{path}')); [print(k) for k in (d if isinstance(d,dict) else d[0])]\""
+    },
+    {
+      "name": "sqlite_tables",
+      "description": "List tables in a SQLite DB.",
+      "command": "sqlite3 {path} '.tables'"
+    },
+    {
+      "name": "sqlite_schema",
+      "description": "Show schema of a SQLite DB.",
+      "command": "sqlite3 {path} '.schema'"
+    }
+  ],
+  "media": [
+    {
+      "name": "ffprobe_info",
+      "description": "Show media file metadata.",
+      "command": "ffprobe -v quiet -print_format json -show_format -show_streams {path}"
+    },
+    {
+      "name": "img_dimensions",
+      "description": "Get image dimensions.",
+      "command": "python -c \"from PIL import Image; img=Image.open('{path}'); print(f'{img.size[0]}x{img.size[1]} {img.mode} {img.format}')\""
+    },
+    {
+      "name": "mediainfo_summary",
+      "description": "Show media info summary.",
+      "command": "mediainfo {path} 2>/dev/null || ffprobe -v quiet -show_entries format=duration,size,bit_rate -of default=noprint_wrappers=1 {path}"
+    },
+    {
+      "name": "youtube_dl_info",
+      "description": "Get YouTube video info.",
+      "command": "yt-dlp --print title --print duration --print view_count {url} 2>/dev/null || echo 'yt-dlp not available'"
+    }
+  ],
   "security": [
     {
       "name": "net_ping_dns",
@@ -315,388 +332,53 @@
   "system": [
     {
       "name": "sys_disk_usage",
-      "description": "System utility: disk_usage.",
+      "description": "Show disk usage.",
       "command": "df -h"
     },
     {
       "name": "sys_mem_usage",
-      "description": "System utility: mem_usage.",
+      "description": "Show memory usage.",
       "command": "free -m"
     },
     {
       "name": "sys_cpu_info",
-      "description": "System utility: cpu_info.",
+      "description": "Show CPU info.",
       "command": "lscpu"
     },
     {
       "name": "sys_top_proc",
-      "description": "System utility: top_proc.",
+      "description": "Show top CPU processes.",
       "command": "ps aux --sort=-%cpu | head -n 10"
     },
     {
       "name": "sys_uptime",
-      "description": "System utility: uptime.",
+      "description": "Show system uptime.",
       "command": "uptime"
     },
     {
       "name": "sys_whoami",
-      "description": "System utility: whoami.",
+      "description": "Show current user.",
       "command": "whoami"
     },
     {
       "name": "sys_hostname",
-      "description": "System utility: hostname.",
+      "description": "Show hostname.",
       "command": "hostname"
     },
     {
       "name": "sys_ip_addr",
-      "description": "System utility: ip_addr.",
+      "description": "Show IP addresses.",
       "command": "ip addr"
     },
     {
       "name": "sys_netstat",
-      "description": "System utility: netstat.",
+      "description": "Show listening ports.",
       "command": "netstat -tuln"
     },
     {
       "name": "sys_env_vars",
-      "description": "System utility: env_vars.",
+      "description": "Show environment variables.",
       "command": "env"
-    },
-    {
-      "name": "sys_tick_10",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_11",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_12",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_13",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_14",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_15",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_16",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_17",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_18",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_19",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_20",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_21",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_22",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_23",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_24",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_25",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_26",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_27",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_28",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_29",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_30",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_31",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_32",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_33",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_34",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_35",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_36",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_37",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_38",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_39",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_40",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_41",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_42",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_43",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_44",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_45",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_46",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_47",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_48",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_49",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_50",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_51",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_52",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_53",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_54",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_55",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_56",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_57",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_58",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_59",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_60",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_61",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_62",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_63",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_64",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_65",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_66",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_67",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_68",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_69",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_70",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_71",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_72",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_73",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_74",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_75",
-      "description": "System pulse check.",
-      "command": "echo 1"
-    },
-    {
-      "name": "sys_tick_76",
-      "description": "System pulse check.",
-      "command": "echo 1"
     }
   ],
   "ai": [

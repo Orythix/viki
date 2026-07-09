@@ -22,9 +22,6 @@
 #       Authorization: Bearer ${MCP_BEARER_TOKEN}
 #     timeout: 45
 #
-servers: {}
-
-# Imported from everything-claude-code-main
 servers:
   jira:
     transport: stdio

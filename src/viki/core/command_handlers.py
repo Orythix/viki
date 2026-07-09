@@ -149,3 +149,117 @@ async def handle_load_command(controller: Any, user_input: str, session_id: str)
         return f"Loaded session '{name}' ({len(messages)} messages)."
     except Exception as e:
         return f"Load failed: {e}"
+
+
+async def handle_fork_command(controller: Any, user_input: str, session_id: str) -> str:
+    parts = user_input.strip().split(maxsplit=1)
+    name = parts[1].strip() if len(parts) > 1 else ""
+    if not name:
+        return "Usage: /fork <branch-name>  (e.g. /fork experiment-1)\nUse /branches to see all branches."
+    description = ""
+    if " " in name:
+        name, description = name.split(maxsplit=1)
+    bm = getattr(controller, "branch_manager", None)
+    if bm is None:
+        return "Branch manager not available."
+    return cast(str, bm.fork(name, controller, description=description, session_id=session_id))
+
+
+async def handle_switch_command(controller: Any, user_input: str) -> str:
+    parts = user_input.strip().split(maxsplit=1)
+    name = parts[1].strip() if len(parts) > 1 else ""
+    if not name:
+        return "Usage: /switch <branch-name>\nUse /branches to list branches."
+    bm = getattr(controller, "branch_manager", None)
+    if bm is None:
+        return "Branch manager not available."
+    return cast(str, bm.switch(name, controller))
+
+
+async def handle_branches_command(controller: Any) -> str:
+    bm = getattr(controller, "branch_manager", None)
+    if bm is None:
+        return "Branch manager not available."
+    current_sid = getattr(getattr(controller, "memory", None), "working", None)
+    if current_sid:
+        current_sid = getattr(current_sid, "default_session_id", None)
+    return cast(str, bm.format_branch_list(current_session_id=current_sid))
+
+
+async def handle_diff_command(controller: Any, user_input: str) -> str:
+    parts = user_input.strip().split(maxsplit=1)
+    name = parts[1].strip() if len(parts) > 1 else ""
+    if not name:
+        return "Usage: /diff <branch-name>\nCompare current conversation with a branch."
+    bm = getattr(controller, "branch_manager", None)
+    if bm is None:
+        return "Branch manager not available."
+    return cast(str, bm.diff(name, controller))
+
+
+async def handle_test_gen_command(controller: Any, user_input: str) -> str:
+    parts = user_input.strip().split(maxsplit=1)
+    rest = parts[1].strip() if len(parts) > 1 else ""
+    if not rest:
+        return "Usage: /test-gen <path> [--save] [--overview]\nExamples:\n  /test-gen src/viki/core/branch_manager.py\n  /test-gen src/viki/core/branch_manager.py --save\n  /test-gen src/viki/core/branch_manager.py --overview"
+    path = ""
+    save = False
+    overview = False
+    tokens = rest.split()
+    for t in tokens:
+        if t == "--save":
+            save = True
+        elif t == "--overview":
+            overview = True
+        elif not path:
+            path = t
+    if not path:
+        return "Error: path is required."
+    skill = controller.skill_registry.get_skill("test_gen")
+    if skill is None:
+        return "TestGenSkill not registered."
+    return cast("str", await skill.execute({"path": path, "save": save, "overview": overview}))
+
+
+async def handle_skills_command(controller: Any, user_input: str) -> str:
+    """Manage community skills via the registry index."""
+    from viki.skills.registry_public import SkillRegistryIndex
+
+    parts = user_input.strip().split(maxsplit=2)
+    action = parts[1].strip().lower() if len(parts) > 1 else ""
+    arg = parts[2].strip() if len(parts) > 2 else ""
+
+    data_dir = controller.settings.get("system", {}).get("data_dir", "./data")
+    registry = SkillRegistryIndex(data_dir=data_dir)
+
+    if action == "refresh":
+        count = await registry.refresh_index()
+        return f"Registry index refreshed: {count} packages found."
+
+    if action == "search":
+        if not arg:
+            return "Usage: /skills search <query>"
+        results = registry.search(arg)
+        if not results:
+            return f"No packages found for '{arg}'."
+        lines = [f"{'Name':20} {'Version':10} {'Description':40}", "-" * 72]
+        for pkg in results[:20]:
+            lines.append(f"{pkg.name:20} {pkg.version:10} {pkg.description[:40]:40}")
+        return "REGISTRY SEARCH RESULTS:\n" + "\n".join(lines)
+
+    if action == "install":
+        if not arg:
+            return "Usage: /skills install <package-name>"
+        result = await registry.install(arg)
+        return result
+
+    if action in ("list", "installed"):
+        installed = registry.list_installed()
+        if not installed:
+            return "No packages installed."
+        lines = [f"{'Name':20} {'Version':10} {'Path':40}", "-" * 72]
+        for pkg in installed:
+            lines.append(f"{pkg.name:20} {pkg.version:10} {pkg.install_path[:40]:40}")
+        return "INSTALLED PACKAGES:\n" + "\n".join(lines)
+
+    return "Usage: /skills <refresh|search|install|list> [args]"

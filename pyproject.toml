@@ -41,6 +41,7 @@ dependencies = [
     "watchdog>=3.0.0",
     # zoneinfo has no system tz database to fall back to on Windows
     "tzdata>=2024.1; sys_platform == 'win32'",
+    "prometheus-client>=0.19.0",
 ]
 
 [project.scripts]
@@ -70,6 +71,14 @@ ml = [
     "trl>=0.7.0",
     "datasets>=2.16.0",
 ]
+vecdb = [
+    "qdrant-client>=1.9.0",
+    "chromadb>=0.4.0",
+]
+vision = [
+    "Pillow>=10.0.0",
+    "pytesseract>=0.3.10",
+]
 dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
@@ -91,7 +100,7 @@ version = { attr = "viki._version.__version__" }
 [tool.ruff]
 line-length = 100
 target-version = "py310"
-extend-exclude = ["playbooks", "scripts"]
+extend-exclude = ["playbooks", "scripts", "*.html", "*.json"]
 
 [tool.ruff.lint]
 select = [

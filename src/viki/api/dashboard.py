@@ -21,6 +21,8 @@ from typing import Any
 
 from aiohttp import web
 
+from viki.api.metrics import setup_metrics
+from viki.api.ws import setup_ws_chat
 from viki.config.logger import viki_logger
 
 _STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
@@ -94,6 +96,8 @@ def create_dashboard_app(controller: Any) -> web.Application:
             web.post("/api/chat", chat),
         ]
     )
+    setup_metrics(app, controller)
+    setup_ws_chat(app, controller)
     return app
 
 

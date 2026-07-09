@@ -75,6 +75,37 @@ function addMsg(text, cls){
   return div;
 }
 
+let ws=null;
+let chatPending=null;
+
+function connectWs(){
+  const proto=location.protocol==='https:'?'wss:':'ws:';
+  ws=new WebSocket(proto+'//'+location.host+'/api/ws/chat');
+  ws.onopen=()=>console.log('WS chat connected');
+  ws.onclose=()=>{console.log('WS chat disconnected');setTimeout(connectWs,3000)};
+  ws.onerror=()=>{};
+  ws.onmessage=e=>{
+    try{
+      const m=JSON.parse(e.data);
+      if(m.type==='partial'){
+        if(chatPending) chatPending.textContent+=m.data;
+      }else if(m.type==='thought'||m.type==='status'){
+        // silently consume status updates
+      }else if(m.type==='done'){
+        if(chatPending) chatPending.className='msg viki';
+        chatPending=null;
+        $('send').disabled=false;
+        $('box').focus();
+      }else if(m.type==='error'){
+        if(chatPending){chatPending.textContent+='\nError: '+m.data;chatPending.className='msg err'}
+        chatPending=null;
+        $('send').disabled=false;
+      }
+    }catch(e){/*ignore*/}
+  };
+}
+connectWs();
+
 $('composer').addEventListener('submit', async e=>{
   e.preventDefault();
   const text=$('box').value.trim();
@@ -82,18 +113,24 @@ $('composer').addEventListener('submit', async e=>{
   $('box').value='';
   addMsg(text,'user');
   $('send').disabled=true;
-  const pending=addMsg('…','viki');
-  try{
-    const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
-    const data=await r.json();
-    pending.textContent = data.reply ?? ('Error: '+(data.error||r.status));
-    if(!data.reply) pending.className='msg err';
-  }catch(err){
-    pending.textContent='Request failed: '+err;
-    pending.className='msg err';
-  }finally{
-    $('send').disabled=false;
-    $('box').focus();
+  chatPending=addMsg('','viki');
+  if(ws&&ws.readyState===WebSocket.OPEN){
+    ws.send(JSON.stringify({text}));
+  }else{
+    // fallback to REST
+    try{
+      const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
+      const data=await r.json();
+      chatPending.textContent = data.reply ?? ('Error: '+(data.error||r.status));
+      if(!data.reply) chatPending.className='msg err';
+    }catch(err){
+      chatPending.textContent='Request failed: '+err;
+      chatPending.className='msg err';
+    }finally{
+      chatPending=null;
+      $('send').disabled=false;
+      $('box').focus();
+    }
   }
 });
 

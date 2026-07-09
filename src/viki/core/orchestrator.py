@@ -9,6 +9,7 @@ from viki.config.logger import viki_logger
 from viki.core.audio_gateway import VoiceModule
 from viki.core.autonomous_monitor import WatchdogModule, WellnessPulse
 from viki.core.biometric_service import BioModule
+from viki.core.branch_manager import BranchManager
 from viki.core.capabilities import CapabilityRegistry
 from viki.core.cognitive_loop import CognitiveRouter, RouterTelemetry
 from viki.core.config_watcher import ConfigWatcher
@@ -247,6 +248,7 @@ class VIKIController(
             self.settings.get("system", {}).get("workspace_dir", self.DEFAULT_WORKSPACE_DIR)
         )
         self.history = TimeTravelModule(data_dir)
+        self.branch_manager = BranchManager(os.path.join(data_dir, "branches.db"))
 
         try:
             from viki.core.usage_log import configure_session_usage_log

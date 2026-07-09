@@ -74,7 +74,7 @@ class SkillsMixin:
             full_modname = f"viki.skills.builtins.{modname}"
             if full_modname in registered_modules:
                 continue
-            if modname in ("code_index_watcher", "legacy_math"):
+            if modname in ("code_index_watcher", "computer_use"):
                 continue
             class_name = "".join(word.capitalize() for word in modname.split("_"))
             if not class_name.endswith("Skill") and class_name not in ("LSPSkill", "SFS"):
