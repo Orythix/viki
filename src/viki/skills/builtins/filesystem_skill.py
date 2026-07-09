@@ -1,3 +1,4 @@
+import asyncio
 import os
 from typing import Any, cast
 
@@ -91,12 +92,13 @@ class FileSystemSkill(BaseSkill):
 
         try:
             if action == "list_dir":
-                items = os.listdir(validated_path)
+                items = await asyncio.to_thread(os.listdir, validated_path)
                 return f"Contents of {validated_path}: {', '.join(items[:50])}"  # Limit output
 
             elif action == "read_file":
-                with open(validated_path, encoding="utf-8") as f:
-                    content = f.read(2048)  # Limit read size
+                content = await asyncio.to_thread(
+                    lambda: open(validated_path, encoding="utf-8").read(2048)
+                )
                 if self._controller:
                     self._controller.track_touched_item("touched_files", validated_path)
                 return content
@@ -108,8 +110,9 @@ class FileSystemSkill(BaseSkill):
                 # Additional length check to prevent abuse
                 if len(content) > 100000:  # 100KB limit
                     raise RuntimeError("Error: Content too large (max 100KB)")
-                with open(validated_path, "w", encoding="utf-8") as f:
-                    f.write(content)
+                await asyncio.to_thread(
+                    lambda: open(validated_path, "w", encoding="utf-8").write(content)
+                )
                 if self._controller:
                     self._controller.track_touched_item("touched_files", validated_path)
                 return f"File written successfully to {validated_path}"

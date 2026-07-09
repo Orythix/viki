@@ -8,6 +8,7 @@ mode with test-gated commits.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import time
 from dataclasses import dataclass, field
@@ -125,21 +126,27 @@ class EngineeringMode:
         try:
             import subprocess
 
-            branch = subprocess.run(
-                ["git", "-C", repo_path, "branch", "--show-current"],
-                capture_output=True,
-                text=True,
-                timeout=10,
+            branch = (
+                await asyncio.to_thread(
+                    subprocess.run,
+                    ["git", "-C", repo_path, "branch", "--show-current"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
             ).stdout.strip()
             lines.append(f"Branch: {branch}")
             assert self._session is not None
             self._session.branch = branch
 
-            status = subprocess.run(
-                ["git", "-C", repo_path, "status", "--short"],
-                capture_output=True,
-                text=True,
-                timeout=10,
+            status = (
+                await asyncio.to_thread(
+                    subprocess.run,
+                    ["git", "-C", repo_path, "status", "--short"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
             ).stdout.strip()
             if status:
                 lines.append(f"Changes:\n{status}")
@@ -182,7 +189,7 @@ class EngineeringMode:
 
         # Fallback: simple file listing
         matches = []
-        for root, dirs, files in os.walk(repo_path):
+        for root, dirs, files in await asyncio.to_thread(lambda: list(os.walk(repo_path))):
             dirs[:] = [
                 d
                 for d in dirs
@@ -216,13 +223,14 @@ class EngineeringMode:
                 ["go", "test", "./..."],
             ]:
                 try:
-                    result = subprocess.run(
-                        cmd,
-                        cwd=repo_path,
-                        capture_output=True,
-                        text=True,
-                        timeout=120,
-                    )
+                    result = await asyncio.to_thread(
+                            subprocess.run,
+                            cmd,
+                            cwd=repo_path,
+                            capture_output=True,
+                            text=True,
+                            timeout=120,
+                        )
                     if result.returncode == 0:
                         return True
                 except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -236,8 +244,9 @@ class EngineeringMode:
         try:
             import subprocess
 
-            subprocess.run(["git", "-C", repo_path, "add", "-A"], capture_output=True, timeout=10)
-            result = subprocess.run(
+            await asyncio.to_thread(subprocess.run, ["git", "-C", repo_path, "add", "-A"], capture_output=True, timeout=10)
+            result = await asyncio.to_thread(
+                subprocess.run,
                 ["git", "-C", repo_path, "commit", "-m", f"VIKI: {message[:100]}"],
                 capture_output=True,
                 text=True,

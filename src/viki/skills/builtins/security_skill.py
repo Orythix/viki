@@ -150,7 +150,7 @@ class SecuritySkill(BaseSkill):
         viki_logger.info(f"Security: Running nmap {' '.join(flags)} on {target}")
 
         # v27: Resolve nmap path (shutil.which for PATH, fallback to common Windows locations)
-        nmap_path = shutil.which("nmap")
+        nmap_path = await asyncio.to_thread(shutil.which, "nmap")
         if not nmap_path:
             # Check common Windows location
             windows_nmap = r"C:\Program Files (x86)\Nmap\nmap.exe"
@@ -188,19 +188,20 @@ class SecuritySkill(BaseSkill):
         }
 
         findings = []
-        for root, _, files in os.walk(path):
+        for root, _, files in await asyncio.to_thread(lambda: list(os.walk(path))):
             if any(d in root for d in (".git", "node_modules", "__pycache__")):
                 continue
             for f in files:
                 f_path = os.path.join(root, f)
                 try:
-                    with open(f_path, encoding="utf-8", errors="ignore") as file:
-                        content = file.read()
-                        for name, regex in patterns.items():
-                            matches = re.finditer(regex, content)
-                            for m in matches:
-                                line = content.count("\n", 0, m.start()) + 1
-                                findings.append(f"[!] Found {name} in {f_path}:{line}")
+                    content = await asyncio.to_thread(
+                        lambda: open(f_path, encoding="utf-8", errors="ignore").read()
+                    )
+                    for name, regex in patterns.items():
+                        matches = re.finditer(regex, content)
+                        for m in matches:
+                            line = content.count("\n", 0, m.start()) + 1
+                            findings.append(f"[!] Found {name} in {f_path}:{line}")
                 except Exception:
                     continue
 

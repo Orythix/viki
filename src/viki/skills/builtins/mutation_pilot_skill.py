@@ -71,7 +71,7 @@ class MutationPilotSkill(BaseSkill):
 
         try:
             if action == "mutate":
-                return self._generate_mutant(abs_path)
+                return await self._generate_mutant(abs_path)
             elif action == "benchmark":
                 if not test_cmd:
                     return "Error: 'test_command' is required for benchmark action."
@@ -86,9 +86,10 @@ class MutationPilotSkill(BaseSkill):
             viki_logger.error(f"MutationPilot Error: {e}")
             return f"Mutation Failed: {str(e)}"
 
-    def _generate_mutant(self, path: str) -> str:
-        with open(path, encoding="utf-8", errors="ignore") as f:
-            content = f.read()
+    async def _generate_mutant(self, path: str) -> str:
+        content = await asyncio.to_thread(
+            lambda: open(path, encoding="utf-8", errors="ignore").read()
+        )
 
         # Industrial mutations: swap operators, invert logic, or break returns
         mutations = [
@@ -143,12 +144,12 @@ class MutationPilotSkill(BaseSkill):
         return f"MUTANT_CREATED: {temp_path}\nDescription: {mutation_desc}"
 
     @staticmethod
-    def _purge_pycache(directory: str):
+    async def _purge_pycache(directory: str):
         """Remove all __pycache__ dirs under *directory* so Python reimports from source."""
-        for root, dirs, _ in os.walk(directory):
+        for root, dirs, _ in await asyncio.to_thread(lambda: list(os.walk(directory))):
             for d in dirs:
                 if d == "__pycache__":
-                    shutil.rmtree(os.path.join(root, d), ignore_errors=True)
+                    await asyncio.to_thread(shutil.rmtree, os.path.join(root, d), ignore_errors=True)
 
     async def _run_benchmark(self, path: str, test_command: str) -> str:
         target_dir = os.path.dirname(path)
@@ -157,7 +158,7 @@ class MutationPilotSkill(BaseSkill):
 
         # 1. Verify tests pass on ORIGINAL file
         viki_logger.info("MutationPilot: Verifying base state...")
-        self._purge_pycache(target_dir)
+        await self._purge_pycache(target_dir)
         base_proc = await asyncio.create_subprocess_shell(
             test_command,
             stdout=asyncio.subprocess.PIPE,
@@ -169,7 +170,7 @@ class MutationPilotSkill(BaseSkill):
             return "Error: Test suite fails on the ORIGINAL file. Fix tests before benchmarking."
 
         # 2. Generate mutant
-        mutant_info = self._generate_mutant(path)
+        mutant_info = await self._generate_mutant(path)
         if "MUTANT_CREATED" not in mutant_info:
             return mutant_info
 
@@ -177,9 +178,9 @@ class MutationPilotSkill(BaseSkill):
 
         # 3. Swap file and run tests
         backup_path = path + ".mutant_bak"
-        shutil.copy2(path, backup_path)
-        self._purge_pycache(target_dir)
-        shutil.copy(mutant_path, path)
+        await asyncio.to_thread(shutil.copy2, path, backup_path)
+        await self._purge_pycache(target_dir)
+        await asyncio.to_thread(shutil.copy, mutant_path, path)
 
         try:
             viki_logger.info(
@@ -204,9 +205,9 @@ class MutationPilotSkill(BaseSkill):
         finally:
             # Restore original
             if os.path.exists(backup_path):
-                shutil.move(backup_path, path)
+                await asyncio.to_thread(shutil.move, backup_path, path)
             if os.path.exists(mutant_path):
-                os.remove(mutant_path)
+                await asyncio.to_thread(os.remove, mutant_path)
 
     async def _run_heal(self, path: str, error_log: str, test_command: str | None = None) -> str:
         """Autonomous healing: Propose and apply a patch for a failing file."""
@@ -215,8 +216,9 @@ class MutationPilotSkill(BaseSkill):
 
         viki_logger.info(f"MutationPilot: Attempting to heal {os.path.basename(path)}...")
 
-        with open(path, encoding="utf-8", errors="ignore") as f:
-            content = f.read()
+        content = await asyncio.to_thread(
+            lambda: open(path, encoding="utf-8", errors="ignore").read()
+        )
 
         prompt = (
             f"I need to fix a bug in the following file: {path}\n\n"
@@ -248,10 +250,11 @@ class MutationPilotSkill(BaseSkill):
 
             # Apply the patch (with backup)
             backup_path = path + ".heal_bak"
-            shutil.copy2(path, backup_path)
+            await asyncio.to_thread(shutil.copy2, path, backup_path)
 
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(new_content)
+            await asyncio.to_thread(
+                lambda: open(path, "w", encoding="utf-8").write(new_content)
+            )
 
             # Verification
             if test_command:
@@ -262,11 +265,11 @@ class MutationPilotSkill(BaseSkill):
                 stdout, _ = await proc.communicate()
 
                 if proc.returncode == 0:
-                    os.remove(backup_path)
+                    await asyncio.to_thread(os.remove, backup_path)
                     return f"HEAL_SUCCESS: File {os.path.basename(path)} has been patched and verified."
                 else:
                     # Rollback
-                    shutil.move(backup_path, path)
+                    await asyncio.to_thread(shutil.move, backup_path, path)
                     return f"HEAL_PROPOSED_BUT_FAILED: The patch did not fix the tests. Test Output:\n{stdout.decode()[:400]}"
 
             return f"HEAL_APPLIED: File {os.path.basename(path)} updated. (No verification command provided)."

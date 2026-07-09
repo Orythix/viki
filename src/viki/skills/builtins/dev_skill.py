@@ -1,3 +1,4 @@
+import asyncio
 import os
 import shutil
 from typing import Any
@@ -102,20 +103,20 @@ class DevSkill(BaseSkill):
             if action == "patch_file":
                 if "target" not in params or "replacement" not in params:
                     return "Error: patch_file requires both 'target' and 'replacement'."
-                return self._patch_file(
+                return await self._patch_file(
                     path, params["target"], params["replacement"], params.get("occurrence")
                 )
 
             if action == "write_file":
                 if "content" not in params:
                     return "Error: write_file requires 'content'."
-                return self._write_file(path, params["content"])
+                return await self._write_file(path, params["content"])
 
             if action == "list_files":
                 return self._list_files(path)
 
             if action == "read_file":
-                return self._read_file(path)
+                return await self._read_file(path)
 
             if action == "move_file":
                 dest = params.get("destination")
@@ -124,10 +125,10 @@ class DevSkill(BaseSkill):
                 ok_dest, dest_or_err = validate_output_path(dest, controller=self._controller)
                 if not ok_dest:
                     return dest_or_err
-                return self._move_file(path, dest_or_err)
+                return await self._move_file(path, dest_or_err)
 
             if action == "delete_file":
-                return self._delete_file(path)
+                return await self._delete_file(path)
 
             if action == "create_dir":
                 return self._create_dir(path)
@@ -175,39 +176,43 @@ class DevSkill(BaseSkill):
         except Exception as e:
             return f"List Error: {e}"
 
-    def _read_file(self, path: str) -> str:
+    async def _read_file(self, path: str) -> str:
         try:
             if not os.path.exists(path):
                 return f"Error: File '{path}' not found."
-            with open(path, encoding="utf-8", errors="ignore") as f:
-                content = f.read()
+            content = await asyncio.to_thread(
+                lambda: open(path, encoding="utf-8", errors="ignore").read()
+            )
             if self._controller:
                 self._controller.track_touched_item("touched_files", path)
             return f"--- FILE: {path} ---\n{content}\n--- END FILE ---"
         except Exception as e:
             return f"Read Error: {e}"
 
-    def _write_file(self, path: str, content: str) -> str:
+    async def _write_file(self, path: str, content: str) -> str:
         try:
             # Ensure parent directory exists
             os.makedirs(os.path.dirname(path), exist_ok=True)
-            self._backup_file(path)
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(content.replace("\\n", "\n"))
+            await self._backup_file(path)
+            file_content = content.replace("\\n", "\n")
+            await asyncio.to_thread(
+                lambda: open(path, "w", encoding="utf-8").write(file_content)
+            )
             if self._controller:
                 self._controller.track_touched_item("touched_files", path)
             return f"Successfully wrote to {path}."
         except Exception as e:
             return f"Write Error: {e}"
 
-    def _patch_file(
+    async def _patch_file(
         self, path: str, target: str, replacement: str, occurrence: int | None = None
     ) -> str:
         try:
             if not os.path.exists(path):
                 return f"Error: File '{path}' not found."
-            with open(path, encoding="utf-8", errors="ignore") as f:
-                content = f.read()
+            content = await asyncio.to_thread(
+                lambda: open(path, encoding="utf-8", errors="ignore").read()
+            )
 
             target = target.replace("\\n", "\n")
             replacement = replacement.replace("\\n", "\n")
@@ -227,9 +232,10 @@ class DevSkill(BaseSkill):
             else:
                 new_content = content.replace(target, replacement)
 
-            self._backup_file(path)
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(new_content)
+            await self._backup_file(path)
+            await asyncio.to_thread(
+                lambda: open(path, "w", encoding="utf-8").write(new_content)
+            )
             if self._controller:
                 self._controller.track_touched_item("touched_files", path)
             return (
@@ -238,24 +244,24 @@ class DevSkill(BaseSkill):
         except Exception as e:
             raise RuntimeError(f"Patch Error: {e}")
 
-    def _move_file(self, src: str, dest: str) -> str:
+    async def _move_file(self, src: str, dest: str) -> str:
         try:
             if not os.path.exists(src):
                 return f"Error: Source '{src}' not found."
             os.makedirs(os.path.dirname(dest), exist_ok=True)
-            shutil.move(src, dest)
+            await asyncio.to_thread(shutil.move, src, dest)
             return f"Successfully moved {src} to {dest}."
         except Exception as e:
             raise RuntimeError(f"Move Error: {e}")
 
-    def _delete_file(self, path: str) -> str:
+    async def _delete_file(self, path: str) -> str:
         try:
             if not os.path.exists(path):
                 return f"Error: Path '{path}' not found."
             if os.path.isdir(path):
-                shutil.rmtree(path)
+                await asyncio.to_thread(shutil.rmtree, path)
             else:
-                os.remove(path)
+                await asyncio.to_thread(os.remove, path)
             return f"Successfully deleted {path}."
         except Exception as e:
             raise RuntimeError(f"Delete Error: {e}")
@@ -284,14 +290,14 @@ class DevSkill(BaseSkill):
                 results.append(f"Failed: {p_path} blocked: {path_or_err}")
                 continue
 
-            res = self._patch_file(path_or_err, p_target, p_replacement, p_occ)
+            res = await self._patch_file(path_or_err, p_target, p_replacement, p_occ)
             results.append(f"{p_path}: {res}")
 
         return "Multi-patch Report:\n" + "\n".join(results)
 
-    def _backup_file(self, path: str):
+    async def _backup_file(self, path: str):
         if os.path.exists(path) and os.path.isfile(path):
             try:
-                shutil.copy2(path, path + ".bak")
+                await asyncio.to_thread(shutil.copy2, path, path + ".bak")
             except Exception:
                 pass

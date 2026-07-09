@@ -7,6 +7,7 @@ index.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import os
@@ -66,7 +67,7 @@ class SkillRegistryIndex:
                     if resp.status == 200:
                         data = await resp.json()
                         self._index = [RegistryPackage(**pkg) for pkg in data.get("packages", [])]
-                        self._save_index()
+                        await self._save_index()
                         viki_logger.info(
                             "RegistryIndex: refreshed %d packages from %s", len(self._index), url
                         )
@@ -78,11 +79,11 @@ class SkillRegistryIndex:
 
         # Try urllib fallback
         try:
-            with urllib.request.urlopen(url, timeout=15) as resp:
-                data = json.loads(resp.read().decode())
-                self._index = [RegistryPackage(**pkg) for pkg in data.get("packages", [])]
-                self._save_index()
-                return len(self._index)
+            resp = await asyncio.to_thread(urllib.request.urlopen, url, timeout=15)
+            data = json.loads(resp.read().decode())
+            self._index = [RegistryPackage(**pkg) for pkg in data.get("packages", [])]
+            await self._save_index()
+            return len(self._index)
         except Exception as e:
             viki_logger.error("RegistryIndex: fallback refresh failed: %s", e)
         return 0
@@ -130,8 +131,8 @@ class SkillRegistryIndex:
                         return f"Download failed: HTTP {resp.status}"
                     content = await resp.read()
         except ImportError:
-            with urllib.request.urlopen(pkg.download_url, timeout=30) as resp:
-                content = resp.read()
+            resp = await asyncio.to_thread(urllib.request.urlopen, pkg.download_url, timeout=30)
+            content = resp.read()
 
         # Verify hash
         if pkg.sha256:
@@ -142,8 +143,9 @@ class SkillRegistryIndex:
         # Extract based on package type
         if pkg.download_url.endswith(".py"):
             install_file = target + ".py"
-            with open(install_file, "wb") as f:
-                f.write(content)
+            await asyncio.to_thread(
+                lambda: open(install_file, "wb").write(content)
+            )
             pkg.install_path = install_file
         elif pkg.download_url.endswith(".zip") or pkg.download_url.endswith(".tar.gz"):
             import tarfile
@@ -155,11 +157,13 @@ class SkillRegistryIndex:
             tmp.close()
             os.makedirs(target, exist_ok=True)
             if pkg.download_url.endswith(".zip"):
-                with zipfile.ZipFile(tmp.name, "r") as zf:
-                    zf.extractall(target)
+                await asyncio.to_thread(
+                    lambda: zipfile.ZipFile(tmp.name, "r").extractall(target)
+                )
             else:
-                with tarfile.open(tmp.name, "r:gz") as tf:
-                    tf.extractall(target)
+                await asyncio.to_thread(
+                    lambda: tarfile.open(tmp.name, "r:gz").extractall(target)
+                )
             os.unlink(tmp.name)
             pkg.install_path = target
 
@@ -187,7 +191,7 @@ class SkillRegistryIndex:
     def list_installed(self) -> list[RegistryPackage]:
         return list(self._installed.values())
 
-    def _save_index(self) -> None:
+    async def _save_index(self) -> None:
         try:
             data = [
                 {
@@ -204,8 +208,9 @@ class SkillRegistryIndex:
                 }
                 for p in self._index
             ]
-            with open(self._index_path, "w") as f:
-                json.dump(data, f, indent=2)
+            await asyncio.to_thread(
+                lambda: open(self._index_path, "w").write(json.dumps(data, indent=2))
+            )
         except Exception as e:
             viki_logger.error("RegistryIndex: save index failed: %s", e)
 
