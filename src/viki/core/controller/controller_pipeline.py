@@ -144,6 +144,14 @@ class PipelineMixin:
         if isinstance(cmd_result, str):
             return cmd_result
         user_input, safe_input, task_type, budget = cmd_result
+        url_context = await self._fetch_url_content(safe_input)
+
+        cmd_result = await self._detect_and_handle_modes(
+            user_input, safe_input, task_type, budget, session_id, on_event
+        )
+        if isinstance(cmd_result, str):
+            return cmd_result
+        user_input, safe_input, task_type, budget = cmd_result
 
         workspace_dir = self.settings.get("system", {}).get(
             "workspace_dir", self.DEFAULT_WORKSPACE_DIR
