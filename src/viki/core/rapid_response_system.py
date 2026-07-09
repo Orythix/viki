@@ -215,7 +215,7 @@ class ReflexBrain:
                 if "{tod}" in choice:
                     choice = choice.format(tod=tod or "day")
             except Exception:
-                pass
+                viki_logger.warning("failed to format reflex response choice")
             return choice
         return None
 
@@ -334,8 +334,8 @@ class ReflexBrain:
                 params: dict[str, Any] = {}
                 groups = match.groupdict()
                 for k, v in params_template.items():
-                    val = v.format(**groups)
-                    if val.isdigit():
+                    val: str | int = v.format(**groups)
+                    if isinstance(val, str) and val.isdigit():
                         val = int(val)
                     params[k] = val
                 return ActionCall(skill_name=skill_name, parameters=params)

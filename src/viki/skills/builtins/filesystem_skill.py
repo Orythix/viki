@@ -1,5 +1,5 @@
 import os
-from typing import Any
+from typing import Any, cast
 
 from viki.core.utils.path_sandbox import BLOCKED_PATHS, get_allowed_roots
 from viki.skills.base import BaseSkill
@@ -102,7 +102,7 @@ class FileSystemSkill(BaseSkill):
                 return content
 
             elif action == "write_file":
-                content = params.get("content")
+                content = cast("str", params.get("content"))
                 if not content:
                     raise RuntimeError("Error: No content provided.")
                 # Additional length check to prevent abuse

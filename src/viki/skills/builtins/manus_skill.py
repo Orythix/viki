@@ -63,6 +63,8 @@ class ManusSkill(BaseSkill):
 
     async def execute(self, params: dict[str, Any]) -> str:
         task = params.get("task")
+        if not isinstance(task, str):
+            return "Error: 'task' (str) is required."
         skill_file = params.get("skill_file")
         runtime = params.get("runtime", "python")
 
@@ -71,9 +73,10 @@ class ManusSkill(BaseSkill):
         # 1. Read SKILL.md if provided
         workflow_script = ""
         if skill_file:
-            workflow_script = self._read_skill_md(skill_file)
-            if not workflow_script:
+            read = self._read_skill_md(skill_file)
+            if read is None:
                 return f"Error: Could not read or parse skill file '{skill_file}'."
+            workflow_script = read
         else:
             # Generate a script based on the task
             task_comment = "\n".join([f"# {line}" for line in task.splitlines()])

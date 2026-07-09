@@ -1,19 +1,9 @@
-"""
-LiveCodeBench runner. Same shape as HumanEval+ — each task carries a hidden
-test case that ExecutionEvaluator runs against the candidate.
-"""
+"""Backward-compatible stub — delegates to ``viki.eval.benchmarks``."""
 
-from __future__ import annotations
-
-import asyncio
-import os
 import sys
+import warnings
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
-
-from scripts.evals.harness import (  # noqa: E402
+from viki.eval.benchmarks.harness import (
     HarnessConfig,
     build_controller,
     default_results_root,
@@ -22,7 +12,12 @@ from scripts.evals.harness import (  # noqa: E402
 )
 
 SUITE = "livecodebench"
+
+import os
 DEFAULT_DATASET = os.path.join("data", "eval_fixtures", f"{SUITE}.jsonl")
+
+
+import asyncio
 
 
 async def main_async():
@@ -35,7 +30,7 @@ async def main_async():
         results_root=default_results_root(args),
         limit=args.limit,
         air_gap=args.air_gap,
-        use_llm_judge=False,  # always execution-graded
+        use_llm_judge=False,
         persona="dev",
         timeout=args.timeout,
         concurrency=args.concurrency,

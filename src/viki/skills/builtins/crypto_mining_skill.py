@@ -89,6 +89,8 @@ class CryptoMiningSkill(BaseSkill):
 
             elif action == "manage_miner":
                 miner_action = params.get("miner_action")
+                if not isinstance(miner_action, str):
+                    return "Error: miner_action (str) is required for manage_miner."
                 config = params.get("config", {})
                 return await self._manage_miner(miner_action, config)
 

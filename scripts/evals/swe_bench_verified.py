@@ -1,30 +1,9 @@
-"""
-SWE-bench Verified runner.
+"""Backward-compatible stub — delegates to ``viki.eval.benchmarks``."""
 
-Tasks file format (JSONL): one object per task with at least:
-  {
-    "id": "...",
-    "prompt": "<problem statement>",
-    "test_code": "<python test asserting candidate behavior>",
-    "expected_outcome": "...",  # optional, for keyword fallback
-    "grader": "execution"
-  }
-
-Real datasets can be downloaded via the official SWE-bench tooling and
-converted to the above JSONL shape.
-"""
-
-from __future__ import annotations
-
-import asyncio
-import os
 import sys
+import warnings
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
-
-from scripts.evals.harness import (  # noqa: E402
+from viki.eval.benchmarks.harness import (
     HarnessConfig,
     build_controller,
     default_results_root,
@@ -33,7 +12,12 @@ from scripts.evals.harness import (  # noqa: E402
 )
 
 SUITE = "swe_bench_verified"
+
+import os
 DEFAULT_DATASET = os.path.join("data", "eval_fixtures", f"{SUITE}.jsonl")
+
+
+import asyncio
 
 
 async def main_async():

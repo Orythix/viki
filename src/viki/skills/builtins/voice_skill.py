@@ -18,7 +18,7 @@ class VoiceSkill(BaseSkill):
         self._description = "Speak text out loud (pyttsx3 or ElevenLabs when configured)."
         self.voice_module = voice_module
         self._controller = controller
-        self.engine = None
+        self.engine: Any = None
         try:
             self.engine = pyttsx3.init()
             self.engine.setProperty("rate", 170)

@@ -1,4 +1,5 @@
 import hashlib
+import importlib as _il
 import json
 import os
 import re
@@ -7,6 +8,8 @@ import time
 from typing import Any, cast
 
 from viki.config.logger import viki_logger
+
+_HAS_CONTRADICTION = _il.util.find_spec("viki.core.contradiction") is not None
 
 try:
     import numpy as np
@@ -332,6 +335,22 @@ class LearningModule:
                     (lid, str(subj), str(pred), str(obj)),
                 )
 
+        # Contradiction detection: check new lesson against existing ones
+        if _HAS_CONTRADICTION:
+            try:
+                self._check_contradictions(lesson_str, lid)
+            except Exception as e:
+                viki_logger.debug("Contradiction check failed: %s", e)
+
+        # Knowledge graph: auto-extract entities from lesson text
+        try:
+            from viki.core.knowledge_graph import KnowledgeGraph
+
+            kg = KnowledgeGraph(learning_module=self)
+            kg.extract_and_save_relationships(lid, lesson_str)
+        except Exception as e:
+            viki_logger.debug("Knowledge graph extraction failed: %s", e)
+
         self.conn.commit()
         self.mark_vector_dirty()
 
@@ -539,6 +558,45 @@ class LearningModule:
     def mark_vector_dirty(self) -> None:
         """Invalidate the vector index after a write so the next query rebuilds."""
         self._vector_backend_dirty = True
+
+    def _check_contradictions(self, lesson_text: str, lesson_id: str) -> list[dict[str, Any]]:
+        """Check a new lesson against existing ones for contradictions."""
+        if not _HAS_CONTRADICTION:
+            return []
+        cur = self.conn.cursor()
+        cur.execute(
+            "SELECT id, text_representation FROM lessons WHERE id != ? ORDER BY last_accessed DESC LIMIT 200",
+            (lesson_id,),
+        )
+        conflicts: list[dict[str, Any]] = []
+        for row in cur.fetchall():
+            existing_text = row["text_representation"]
+            if not existing_text:
+                continue
+            result = self._run_heuristic_contradiction(existing_text, lesson_text)
+            if result and result >= 0.7:
+                conflicts.append(
+                    {
+                        "existing_id": row["id"],
+                        "existing_text": existing_text,
+                        "new_text": lesson_text,
+                        "confidence": result,
+                    }
+                )
+        if conflicts:
+            viki_logger.info(
+                "Contradiction detection: %d potential conflict(s) for lesson '%s'",
+                len(conflicts),
+                lesson_text[:60],
+            )
+        return conflicts
+
+    @staticmethod
+    def _run_heuristic_contradiction(existing: str, new_text: str) -> float:
+        """Quick heuristic contradiction check without LLM."""
+        from viki.core.contradiction import heuristic_contradiction_score
+
+        return heuristic_contradiction_score(existing, new_text)
 
     def _lexical_rank_lessons(self, rows, context: str, limit: int) -> list[str]:
         """

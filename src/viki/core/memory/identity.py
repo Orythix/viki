@@ -1,4 +1,5 @@
 import os
+import sqlite3
 import time
 from typing import Any
 
@@ -21,7 +22,8 @@ class NarrativeIdentity:
         self._init_db()
 
     def _init_db(self):
-        self.conn = get_connection(self.db_path)
+        self.conn: sqlite3.Connection | None = get_connection(self.db_path)
+        assert self.conn is not None
         cur = self.conn.cursor()
 
         # Identity Store: Key-Value style for flexible anchoring
@@ -75,6 +77,7 @@ class NarrativeIdentity:
             self.update_anchor(key, val, cat)
 
     def update_anchor(self, key: str, value: str, category: str, significance: float = 1.0):
+        assert self.conn is not None
         self.conn.execute(
             """INSERT OR REPLACE INTO identity_anchors (key, value, category, last_updated, significance)
             VALUES (?, ?, ?, ?, ?)""",
@@ -84,6 +87,7 @@ class NarrativeIdentity:
         viki_logger.info(f"Identity Anchor Updated: {key}")
 
     def get_anchors(self, category: str | None = None) -> list[dict[str, Any]]:
+        assert self.conn is not None
         cur = self.conn.cursor()
         if category:
             cur.execute("SELECT * FROM identity_anchors WHERE category = ?", (category,))

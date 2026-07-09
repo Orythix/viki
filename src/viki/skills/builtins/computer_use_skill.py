@@ -158,7 +158,7 @@ class ComputerUseSkill(BaseSkill):
         if self._pyautogui is not None:
             return self._pyautogui
         try:
-            import pyautogui  # type: ignore
+            import pyautogui
 
             pyautogui.FAILSAFE = True
             self._pyautogui = pyautogui
@@ -351,9 +351,9 @@ class ComputerUseSkill(BaseSkill):
         if not model_path or not os.path.isfile(model_path):
             return None
         try:
-            import numpy as np  # type: ignore
-            import onnxruntime as ort  # type: ignore
-            from PIL import Image  # type: ignore
+            import numpy as np
+            import onnxruntime as ort
+            from PIL import Image
         except Exception:
             return None
         try:
@@ -397,11 +397,11 @@ class ComputerUseSkill(BaseSkill):
 
     def _try_omniparser(self, path: str) -> list[UIElement] | None:
         try:
-            import omniparser  # type: ignore
+            import omniparser
         except Exception:
             return None
         try:
-            res = omniparser.parse(path)  # type: ignore
+            res = omniparser.parse(path)
             out: list[UIElement] = []
             for r in res.get("elements", []):
                 out.append(
@@ -420,11 +420,11 @@ class ComputerUseSkill(BaseSkill):
 
     def _try_set_of_marks(self, path: str) -> list[UIElement] | None:
         try:
-            import set_of_marks  # type: ignore
+            import set_of_marks
         except Exception:
             return None
         try:
-            res = set_of_marks.detect(path)  # type: ignore
+            res = set_of_marks.detect(path)
             return [
                 UIElement(
                     label=str(r.get("label", "elem")),

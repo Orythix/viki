@@ -256,7 +256,7 @@ class TeacherDistillation:
 def trl_dpo_available() -> bool:
     """Check whether the heavy training stack can be imported."""
     try:
-        import torch  # type: ignore
+        import torch
 
         __import__("trl")
         return bool(torch.cuda.is_available())
@@ -284,16 +284,17 @@ def run_dpo_training(
         return f"Error: dataset not found at {dataset_path}"
 
     try:
-        import torch  # type: ignore
-        from datasets import load_dataset  # type: ignore
-        from trl import DPOConfig, DPOTrainer  # type: ignore
+        import torch
+        from datasets import load_dataset
+        from trl import DPOConfig, DPOTrainer
 
         try:
-            from trl import ORPOConfig, ORPOTrainer  # type: ignore
+            from trl import ORPOConfig, ORPOTrainer
+
+            _orpo_available = True
         except Exception:
-            ORPOTrainer = None
-            ORPOConfig = None
-        from unsloth import FastLanguageModel  # type: ignore
+            _orpo_available = False
+        from unsloth import FastLanguageModel
     except Exception as e:
         return (
             f"PreferenceForge: missing dependency ({e!r}). "
@@ -329,7 +330,7 @@ def run_dpo_training(
     ds = load_dataset("json", data_files=dataset_path, split="train")
 
     if method == "dpo":
-        cfg = DPOConfig(
+        cfg: Any = DPOConfig(
             output_dir=output_dir,
             per_device_train_batch_size=1,
             gradient_accumulation_steps=2,
@@ -340,11 +341,12 @@ def run_dpo_training(
             logging_steps=1,
             report_to="none",
         )
-        trainer = DPOTrainer(
+        trainer_cls: Any = DPOTrainer
+        trainer = trainer_cls(
             model=model, ref_model=None, args=cfg, tokenizer=tokenizer, train_dataset=ds
         )
     else:
-        if ORPOTrainer is None or ORPOConfig is None:
+        if not _orpo_available:
             return "PreferenceForge: ORPO trainer unavailable; upgrade trl >= 0.9.0."
         cfg = ORPOConfig(
             output_dir=output_dir,
@@ -357,7 +359,8 @@ def run_dpo_training(
             logging_steps=1,
             report_to="none",
         )
-        trainer = ORPOTrainer(model=model, args=cfg, tokenizer=tokenizer, train_dataset=ds)
+        trainer_cls_2: Any = ORPOTrainer
+        trainer = trainer_cls_2(model=model, args=cfg, tokenizer=tokenizer, train_dataset=ds)
 
     trainer.train()
     model.save_pretrained(output_dir)

@@ -21,6 +21,7 @@ class APILLM(LLMProvider):
 
     def __init__(self, config: dict[str, Any]):
         super().__init__(config)
+        self.client: Any = None
         self.provider_type = config.get("provider", "openai")
         api_key = os.getenv(self.config.get("api_key_env", "OPENAI_API_KEY"))
 
@@ -74,7 +75,7 @@ class APILLM(LLMProvider):
 
     async def chat(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         temperature: float = 0.7,
         image_path: str | None = None,
     ) -> str:
@@ -115,7 +116,7 @@ class APILLM(LLMProvider):
                         getattr(usage, "completion_tokens", 0) or 0,
                     )
             except Exception:
-                pass
+                viki_logger.warning("failed to record token usage for %s", self.model_name)
             success = True
             return cast("str", response.choices[0].message.content)
         except Exception as e:
@@ -127,11 +128,11 @@ class APILLM(LLMProvider):
 
                 emit_llm_inference(self, time.perf_counter() - t0, success, "chat")
             except Exception:
-                pass
+                viki_logger.warning("failed to emit LLM inference usage for %s", self.model_name)
 
     async def chat_structured(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         response_model: type[T],
         temperature: float = 0.0,
         image_path: str | None = None,
@@ -174,7 +175,7 @@ class APILLM(LLMProvider):
                         getattr(usage, "completion_tokens", 0) or 0,
                     )
             except Exception:
-                pass
+                viki_logger.warning("failed to record token usage for %s", self.model_name)
             success = True
             return out
         finally:
@@ -183,9 +184,9 @@ class APILLM(LLMProvider):
 
                 emit_llm_inference(self, time.perf_counter() - t0, success, "chat_structured")
             except Exception:
-                pass
+                viki_logger.warning("failed to emit LLM inference usage for %s", self.model_name)
 
-    async def chat_stream(self, messages: list[dict[str, str]], temperature: float = 0.7):
+    async def chat_stream(self, messages: list[dict[str, Any]], temperature: float = 0.7):
         if not self.available or self.client is None:
             yield f"Error: Model '{self.model_name}' is unavailable."
             return

@@ -85,7 +85,9 @@ class SubprocessSandbox(_BaseSandbox):
                 )
                 return SandboxResult(self.backend, proc.returncode, proc.stdout, proc.stderr)
             except subprocess.TimeoutExpired as e:
-                return SandboxResult(self.backend, 124, e.stdout or "", "timed out", timed_out=True)
+                return SandboxResult(
+                    self.backend, 124, str(e.stdout or ""), "timed out", timed_out=True
+                )
             except Exception as e:
                 return SandboxResult(self.backend, 1, "", str(e))
 
@@ -168,7 +170,9 @@ class DockerSandbox(_BaseSandbox):
                 )
                 return SandboxResult(self.backend, proc.returncode, proc.stdout, proc.stderr)
             except subprocess.TimeoutExpired as e:
-                return SandboxResult(self.backend, 124, e.stdout or "", "timed out", timed_out=True)
+                return SandboxResult(
+                    self.backend, 124, str(e.stdout or ""), "timed out", timed_out=True
+                )
             except Exception as e:
                 return SandboxResult(self.backend, 1, "", str(e))
 

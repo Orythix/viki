@@ -28,7 +28,7 @@ class LayerTiming:
     def get_slowest(self) -> tuple[str, float]:
         if not self.current_cycle:
             return ("None", 0.0)
-        name = max(self.current_cycle, key=self.current_cycle.get)
+        name = max(self.current_cycle, key=lambda k: self.current_cycle[k])
         return (name, self.current_cycle[name])
 
     def reset_cycle(self):

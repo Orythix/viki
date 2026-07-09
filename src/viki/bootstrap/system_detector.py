@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import platform
 import re
@@ -93,7 +94,7 @@ def _detect_os() -> tuple[OSType, str, str]:
                         elif line.startswith("VERSION_ID="):
                             os_version = line.split("=", 1)[1].strip('"')
             except OSError:
-                pass
+                logging.getLogger(__name__).warning("failed to read os-release: %s", path)
         return OSType.LINUX, os_name, os_version
     elif system == "darwin":
         return OSType.MACOS, f"macOS {platform.mac_ver()[0]}", platform.mac_ver()[0]
@@ -122,7 +123,7 @@ def _detect_cpu() -> tuple[str, int, int]:
                             cpu_model = line.split(":", 1)[1].strip()
                             break
             except OSError:
-                pass
+                logging.getLogger(__name__).warning("failed to read /proc/cpuinfo")
         elif sys.platform == "darwin":
             result = subprocess.run(
                 ["sysctl", "-n", "machdep.cpu.brand_string"],
@@ -132,7 +133,7 @@ def _detect_cpu() -> tuple[str, int, int]:
             )
             cpu_model = result.stdout.strip()
     except Exception:
-        pass
+        logging.getLogger(__name__).exception("cpu model detection failed")
 
     cores = os.cpu_count() or 0
     try:
@@ -153,9 +154,9 @@ def _detect_cpu() -> tuple[str, int, int]:
                     threads = sum(1 for line in f if line.startswith("processor"))
                     return cpu_model, cores, threads
             except OSError:
-                pass
+                logging.getLogger(__name__).warning("failed to read /proc/cpuinfo for thread count")
     except Exception:
-        pass
+        logging.getLogger(__name__).exception("cpu thread detection failed")
     return cpu_model, cores, cores
 
 
@@ -180,7 +181,7 @@ def _detect_ram() -> int:
                             kb = int(line.split()[1])
                             return kb // 1024
             except OSError:
-                pass
+                logging.getLogger(__name__).warning("failed to read /proc/meminfo")
         elif sys.platform == "darwin":
             result = subprocess.run(
                 ["sysctl", "-n", "hw.memsize"],
@@ -191,7 +192,7 @@ def _detect_ram() -> int:
             if result.stdout.strip():
                 return int(result.stdout.strip()) // (1024 * 1024)
     except Exception:
-        pass
+        logging.getLogger(__name__).exception("ram detection failed")
     # Fallback: try psutil
     try:
         import psutil
@@ -222,13 +223,14 @@ def _detect_storage() -> tuple[int, int]:
             total = stat.f_frsize * stat.f_blocks // (1024 * 1024)
             return free, total
     except Exception:
-        pass
+        logging.getLogger(__name__).exception("storage detection failed")
     try:
         import shutil
 
         total, used, free = shutil.disk_usage(os.getcwd())
         return free // (1024 * 1024), total // (1024 * 1024)
     except Exception:
+        logging.getLogger(__name__).exception("storage fallback detection failed")
         return 0, 0
 
 
@@ -265,7 +267,7 @@ def _detect_gpu() -> list[GPUInfo]:
             if gpus:
                 return gpus
     except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
-        pass
+        logging.getLogger(__name__).warning("nvidia-smi GPU detection failed")
 
     # Method 2: torch
     try:
@@ -288,7 +290,7 @@ def _detect_gpu() -> list[GPUInfo]:
             if gpus:
                 return gpus
     except (ImportError, Exception):
-        pass
+        logging.getLogger(__name__).warning("torch GPU detection failed")
 
     # Method 3: Windows WMI
     if sys.platform == "win32":
@@ -324,7 +326,7 @@ def _detect_gpu() -> list[GPUInfo]:
             if gpus:
                 return gpus
         except Exception:
-            pass
+            logging.getLogger(__name__).warning("WMI GPU detection failed")
 
     # Method 4: Linux lspci
     if sys.platform == "linux":
@@ -347,7 +349,7 @@ def _detect_gpu() -> list[GPUInfo]:
                         vendor = GPUVendor.INTEL
                     gpus.append(GPUInfo(model=gpu_name, vendor=vendor))
         except Exception:
-            pass
+            logging.getLogger(__name__).warning("lspci GPU detection failed")
 
     # Method 5: macOS
     if sys.platform == "darwin":
@@ -372,7 +374,7 @@ def _detect_gpu() -> list[GPUInfo]:
             if gpus:
                 return gpus
         except Exception:
-            pass
+            logging.getLogger(__name__).warning("system_profiler GPU detection failed")
 
     return gpus
 
@@ -413,7 +415,7 @@ def _check_admin() -> bool:
         if sys.platform == "win32":
             import ctypes
 
-            return ctypes.windll.shell32.IsUserAnAdmin() != 0
+            return bool(ctypes.windll.shell32.IsUserAnAdmin() != 0)
         else:
             return os.geteuid() == 0
     except Exception:
@@ -430,12 +432,12 @@ def _check_container() -> bool:
             if any(s in content for s in ("docker", "kube", "containerd")):
                 return True
     except OSError:
-        pass
+        logging.getLogger(__name__).warning("failed to read /proc/1/cgroup")
     try:
         if os.path.exists("/.dockerenv"):
             return True
     except Exception:
-        pass
+        logging.getLogger(__name__).exception("container check failed")
     return False
 
 
@@ -481,9 +483,9 @@ def _recommend_hardware_profile(info: SystemInfo) -> HardwareProfile:
             profile.can_run_14b = True
 
     # Finetuning capability
-    profile.can_finetune = (
+    profile.can_finetune = bool(
         profile.vram_tier in ("high", "ultra")
-        and primary_gpu
+        and isinstance(primary_gpu, GPUInfo)
         and primary_gpu.vendor == GPUVendor.NVIDIA
     )
 

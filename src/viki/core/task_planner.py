@@ -97,7 +97,10 @@ class TaskGraph:
         for t in self.tasks:
             if t.status != TaskStatus.PENDING:
                 continue
-            if all(self.by_id(d) and self.by_id(d).status == TaskStatus.DONE for d in t.depends_on):
+            if all(
+                (dep := self.by_id(d)) is not None and dep.status == TaskStatus.DONE
+                for d in t.depends_on
+            ):
                 out.append(t)
         return out
 

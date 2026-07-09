@@ -119,7 +119,10 @@ class SystemControlSkill(BaseSkill):
         # Support legacy params directly (no 'action' key)
         if not action:
             if "app_name" in params or "name" in params:
-                return await self._open_app(params.get("app_name") or params.get("name"))
+                name = params.get("app_name") or params.get("name")
+                if isinstance(name, str):
+                    return await self._open_app(name)
+                return "Error: app name must be a string."
             if "url" in params:
                 return self._open_url(params["url"])
             if "text" in params:

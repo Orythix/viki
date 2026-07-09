@@ -10,6 +10,7 @@ Configure from VIKIController via ``system.session_usage_log`` and ``configure_s
 from __future__ import annotations
 
 import json
+import logging
 import os
 import threading
 import time
@@ -51,7 +52,7 @@ def _append(entry: dict[str, Any]) -> None:
             with open(path, "a", encoding="utf-8") as f:
                 f.write(line)
     except OSError:
-        pass
+        logging.getLogger(__name__).warning("failed to write usage ledger entry")
 
 
 def emit_llm_inference(

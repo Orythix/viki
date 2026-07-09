@@ -35,8 +35,8 @@ def start_watcher(controller, debounce_ms: int = 500) -> Any:
     Returns a handle with a `.stop()` method.
     """
     try:
-        from watchdog.events import FileSystemEventHandler  # type: ignore
-        from watchdog.observers import Observer  # type: ignore
+        from watchdog.events import FileSystemEventHandler
+        from watchdog.observers import Observer
     except Exception as e:
         viki_logger.debug("code_index_watcher: watchdog not installed (%s); watcher disabled.", e)
         return _NoopHandle()

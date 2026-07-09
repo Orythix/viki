@@ -145,8 +145,8 @@ class MCPClient:
             return False
 
     async def _connect_stdio(self, spec: MCPServerSpec) -> bool:
-        from mcp import ClientSession  # type: ignore
-        from mcp.client.stdio import StdioServerParameters, stdio_client  # type: ignore
+        from mcp import ClientSession
+        from mcp.client.stdio import StdioServerParameters, stdio_client
 
         params = StdioServerParameters(
             command=spec.command[0],
@@ -173,8 +173,8 @@ class MCPClient:
 
     async def _connect_streamable_http(self, spec: MCPServerSpec) -> bool:
         import httpx
-        from mcp import ClientSession  # type: ignore
-        from mcp.client.streamable_http import streamable_http_client  # type: ignore
+        from mcp import ClientSession
+        from mcp.client.streamable_http import streamable_http_client
 
         read_timeout = max(float(spec.timeout_s) * 2, 120.0)
         to = httpx.Timeout(float(spec.timeout_s), read=read_timeout)
@@ -200,8 +200,8 @@ class MCPClient:
         return True
 
     async def _connect_sse(self, spec: MCPServerSpec) -> bool:
-        from mcp import ClientSession  # type: ignore
-        from mcp.client.sse import sse_client  # type: ignore
+        from mcp import ClientSession
+        from mcp.client.sse import sse_client
 
         headers = dict(spec.headers) if spec.headers else None
         sse_read = max(60.0, float(spec.timeout_s) * 3)

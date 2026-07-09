@@ -498,7 +498,7 @@ class CodeSearchSkill(BaseSkill):
         self, path: str, source: str, lang: str
     ) -> tuple[list[CodeChunk], list[SymbolEntry]] | None:
         try:
-            import tree_sitter_languages  # type: ignore
+            import tree_sitter_languages
 
             parser = tree_sitter_languages.get_parser(lang)
             tree = parser.parse(source.encode("utf-8"))
@@ -633,6 +633,8 @@ class CodeSearchSkill(BaseSkill):
         return self._lexical_rank(query, top_k)
 
     def _semantic_rank(self, query: str, top_k: int) -> list[CodeChunk]:
+        if self._encoder is None:
+            return []
         try:
             import numpy as np
 

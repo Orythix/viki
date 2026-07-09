@@ -13,7 +13,7 @@ class Capability:
     linked_skills: list[str] = field(default_factory=list)  # Skills that implement this capability
 
     # Ratelimiting / Domain whitelisting metadata
-    meta: dict[str, any] = field(default_factory=dict)
+    meta: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

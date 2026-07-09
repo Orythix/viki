@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import enum
 import json
+import logging
 import os
 import time
 import uuid
@@ -80,9 +81,9 @@ class PublicSafetyMemory:
         for entry in self._short_term:
             if entry.id == memory_id and not entry.is_expired():
                 return entry
-        entry = self._working.get(memory_id)
-        if entry and not entry.is_expired():
-            return entry
+        working_entry = self._working.get(memory_id)
+        if working_entry and not working_entry.is_expired():
+            return working_entry
         for entry in self._long_term:
             if entry.id == memory_id:
                 return entry
@@ -171,7 +172,7 @@ class PublicSafetyMemory:
                     entry_data["type"] = MemoryType(entry_data["type"])
                     self._cases.setdefault(case_id, []).append(MemoryEntry(**entry_data))
         except Exception:
-            pass
+            logging.getLogger(__name__).warning("failed to load public safety memory")
 
     def _save(self):
         if not self._storage_path:
@@ -189,4 +190,4 @@ class PublicSafetyMemory:
             with open(path, "w") as f:
                 json.dump(data, f, indent=2)
         except Exception:
-            pass
+            logging.getLogger(__name__).warning("failed to save public safety memory")

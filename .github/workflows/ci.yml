@@ -2,9 +2,13 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
+    tags: ["v*"]
   pull_request:
     branches: [main]
+
+env:
+  PYTHON_VERSION: "3.11"
 
 jobs:
   lint:
@@ -13,32 +17,15 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-      - name: Install ruff
-        run: |
-          python -m pip install --upgrade pip
-          pip install ruff
-      - name: Lint
-        run: ruff check .
-      - name: Format check
-        run: ruff format --check .
-
-  typecheck:
-    # Advisory while type annotations are backfilled; flip to blocking
-    # by removing continue-on-error once mypy is clean.
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-      - name: Type check with mypy
-        run: mypy --config-file=pyproject.toml
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install dev dependencies
+        run: pip install ruff mypy
+      - name: Ruff check
+        run: ruff check src/viki/
+      - name: Ruff format check
+        run: ruff format --check src/viki/
+      - name: Mypy check
+        run: mypy src/viki/
 
   test:
     runs-on: ubuntu-latest
@@ -50,22 +37,38 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-      - name: Run tests with coverage
-        run: python -m pytest tests/ -q --tb=short --cov --cov-report=term
+      - name: Install uv
+        run: pip install uv
+      - name: Install project
+        run: uv sync --group dev
+      - name: Run tests
+        run: uv run pytest tests/ -m "not nightly" --timeout=120 -q
+      - name: Coverage
+        run: uv run pytest tests/ -m "not nightly" --cov=src/viki --cov-report=xml --cov-fail-under=25
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
 
-  build:
+  audit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-      - name: Build sdist and wheel
-        run: |
-          python -m pip install --upgrade pip build twine
-          python -m build
-          twine check dist/*
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install pip-audit
+        run: pip install pip-audit
+      - name: Audit dependencies
+        run: pip-audit --strict --requirement pyproject.toml
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build full image
+        run: docker build -t viki:latest .
+      - name: Build slim image
+        run: docker build --target=slim -t viki:slim .
+      - name: Smoke test slim image
+        run: docker run --rm viki:slim viki --version

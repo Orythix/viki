@@ -76,10 +76,12 @@ class DeliberationLayer(CortexLayer):
             "do not invoke shell, filesystem, or other execution tools unless the user explicitly asked you to run something.\n"
             f"{skills_context}\n{url_info}\n{awareness}\n{react_note}\n"
             "RESPONSE DISCIPLINE:\n"
-            "1. CONCISE & DIRECT: Provide the answer immediately. Minimize preamble (e.g., avoid 'Based on my search...', 'I have found...').\n"
+            "1. CONCISE & DIRECT: Provide the answer immediately. No preambles like 'Sure!', 'I'd be happy to help', 'Based on my search...', 'I have found...'.\n"
             "2. NO MONOLOGUES: Never describe your internal steps or tool usage history in the 'final_response'.\n"
             "3. SUBSTANTIVE: Ensure 'final_response' contains the actual answer, not just 'Done' or 'Tool executed'.\n"
             "4. TOOL SYNTHESIS: When using research, synthesize facts into a coherent answer. Do not list snippets verbatim.\n"
+            "5. STRUCTURED MARKDOWN: Use ## headings for sections, - bullets for items/alternatives, ```lang for code. Prefer scannable formatting.\n"
+            "6. LEAD WITH OUTPUT: If the user asks for code, output the code block first, then explain. If the user asks a question, answer in the first sentence.\n"
         )
 
     async def _logic(self, context: dict[str, Any]) -> VIKIResponse:  # NOSONAR
@@ -102,11 +104,16 @@ class DeliberationLayer(CortexLayer):
             and not action_results
             and getattr(model, "chat_stream", None) is not None
         ):
+            # Pure conversation doesn't need world/signals context, so those don't
+            # block streaming; project instructions and URL content still do.
+            is_conversational = context.get("intent_type") == "conversation"
             fast_path_ok = (
                 not context.get("project_instructions")
-                and not context.get("world_context")
                 and not context.get("url_context")
-                and not context.get("signals_context")
+                and (
+                    is_conversational
+                    or (not context.get("world_context") and not context.get("signals_context"))
+                )
             )
             if fast_path_ok:
                 streamed = await self._streamed_conversational_reply(model, context, on_event)
@@ -179,7 +186,9 @@ class DeliberationLayer(CortexLayer):
             raw_input = context.get("raw_input", "")
             skip_escalation = context.get("skip_escalation", False)
 
-            triggered_names = self.skill_registry.get_relevant_skill_names(intent, raw_input)
+            # Cap the full-manifest block: each manifest carries description +
+            # instructions + JSON schema, so an uncapped list dominates the prompt.
+            triggered_names = self.skill_registry.get_relevant_skill_names(intent, raw_input)[:6]
 
             skills_context = "\n\n" + self.skill_registry.get_context_description(
                 mode="metadata", skip_escalation=skip_escalation
@@ -235,30 +244,49 @@ class DeliberationLayer(CortexLayer):
         semantic = "\n".join([f"- {s}" for s in context.get("semantic_knowledge", [])])
         wisdom = context.get("narrative_wisdom", "")
 
-        failure_context = ""
+        failure_lines_text = ""
         if hasattr(self, "skill_registry") and self.skill_registry:
             raw_input = context.get("raw_input", "")
             if raw_input:
                 relevant_failures = context.get("relevant_failures", [])
                 if relevant_failures:
-                    failure_lines = [
+                    failure_lines_text = "\n".join(
                         f"- PAST FAILURE: When user said '{f['context'][:100]}', "
                         f"action '{f['action']}' failed with: {f['error'][:100]}"
                         for f in relevant_failures[:3]
-                    ]
-                    failure_context = (
-                        "\nRELEVANT PAST FAILURES (Learn from these):\n"
-                        + "\n".join(failure_lines)
-                        + "\n"
                     )
 
+        # Budgeted assembly: rank memory sources and fit them into a fixed
+        # token budget instead of concatenating everything (smaller prompts =
+        # faster prefill and less noise for the model).
+        from viki.core.context_assembler import BudgetedContextAssembler, ContextSource
+
+        assembler = BudgetedContextAssembler(max_tokens=3500, reserve_system_tokens=0)
+
+        def _add_memory_source(name: str, content: str, priority: float) -> None:
+            content = (content or "").strip()
+            if content:
+                assembler.add_source(
+                    ContextSource(
+                        name=name,
+                        content=content,
+                        priority=priority,
+                        token_cost=max(1, len(content) // 4),
+                        category="memory",
+                    )
+                )
+
+        _add_memory_source("RELEVANT PAST FAILURES (Learn from these)", failure_lines_text, 0.95)
+        _add_memory_source("IDENTITY", identity_store, 0.9)
+        _add_memory_source("CONSOLIDATED WISDOM (Semantic Narrative Insights)", wisdom, 0.8)
+        _add_memory_source("SEMANTIC / CONCEPTUAL MEMORY (Abstracted Patterns)", semantic, 0.75)
+        _add_memory_source("EPISODIC MEMORY (Recalled Shared Experiences)", episodic, 0.7)
+        _add_memory_source("EVOLUTION LOG", evolution_log, 0.4)
+
+        memory_body = assembler.assemble()
         memory_block = (
-            f"\n--- HIERARCHICAL MEMORY STACK ---\n"
-            f"{identity_store}\n{evolution_log}\n\n"
-            f"CONSOLIDATED WISDOM (Semantic Narrative Insights):\n{wisdom if wisdom else 'Initial interactions.'}\n\n"
-            f"SEMANTIC / CONCEPTUAL MEMORY (Abstracted Patterns):\n{semantic if semantic else 'None'}\n\n"
-            f"EPISODIC MEMORY (Recalled Shared Experiences):\n{episodic if episodic else 'None'}\n"
-            f"{failure_context}"
+            "\n--- HIERARCHICAL MEMORY STACK ---\n"
+            f"{memory_body if memory_body else 'Initial interactions.'}\n"
         )
 
         ensemble_trace = None
@@ -351,7 +379,7 @@ class DeliberationLayer(CortexLayer):
         )
 
         try:
-            messages = prompt.build()
+            messages = cast("list[dict[str, Any]]", prompt.build())
 
             image_path = None
             if action_results:
@@ -488,14 +516,12 @@ class DeliberationLayer(CortexLayer):
                     prompt.add_context(
                         f"\nAVAILABLE TOOLS (JSON Schema):\n{tool_schemas}\nTo use a tool, output the 'action' field in your JSON response."
                     )
-                    messages = prompt.build()
+            messages = cast("list[dict[str, Any]]", prompt.build())
 
-                llm_start = time.time()
-                viki_resp = await model.chat_structured(
-                    messages, VIKIResponse, image_path=image_path
-                )
-                llm_latency = time.time() - llm_start
-                model.record_performance(llm_latency, success=True)
+            llm_start = time.time()
+            viki_resp = await model.chat_structured(messages, VIKIResponse, image_path=image_path)
+            llm_latency = time.time() - llm_start
+            model.record_performance(llm_latency, success=True)
 
             if ensemble_trace and isinstance(ensemble_trace, dict):
                 viki_resp.ensemble_trace = ensemble_trace
@@ -527,7 +553,7 @@ class DeliberationLayer(CortexLayer):
                 improved, _ = await critique.refine(
                     raw_input,
                     viki_resp.final_response,
-                    max_iterations=2,
+                    max_iterations=1,
                     score_threshold=0.8,
                 )
                 if improved and improved != viki_resp.final_response:

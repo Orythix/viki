@@ -118,16 +118,17 @@ class LSPSession:
         try:
             await self._notify("exit", {})
         except Exception:
-            pass
+            viki_logger.warning("LSP %s: failed to send exit notification", self.spec.name)
         if self.proc and self.proc.returncode is None:
             try:
                 self.proc.terminate()
                 await asyncio.wait_for(self.proc.wait(), timeout=2)
             except Exception:
+                viki_logger.warning("LSP %s: failed to terminate process", self.spec.name)
                 try:
                     self.proc.kill()
                 except Exception:
-                    pass
+                    viki_logger.warning("LSP %s: failed to kill process", self.spec.name)
         if self._reader_task:
             self._reader_task.cancel()
 
@@ -160,7 +161,7 @@ class LSPSession:
             try:
                 await self.proc.stdin.drain()
             except Exception:
-                pass
+                viki_logger.warning("LSP %s: failed to drain stdin", self.spec.name)
 
     async def _read_loop(self) -> None:
         try:
@@ -378,7 +379,7 @@ class LSPBridge:
             try:
                 await sess.stop()
             except Exception:
-                pass
+                viki_logger.warning("failed to stop LSP session during shutdown")
         self.sessions.clear()
 
 

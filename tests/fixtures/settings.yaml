@@ -1,0 +1,6 @@
+system:
+  data_dir: "./data"
+  workspace_dir: "."
+  low_resource_mode: true
+  air_gap: true
+models_config: "models.yaml"

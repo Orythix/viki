@@ -32,8 +32,8 @@ def _ensure_win32() -> bool:
     if not _WIN32_AVAILABLE:
         return False
     try:
-        import win32con  # type: ignore
-        import win32gui  # type: ignore
+        import win32con
+        import win32gui
 
         _win32gui = win32gui
         _win32con = win32con

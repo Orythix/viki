@@ -76,7 +76,7 @@ class AwsConsoleSkill(BaseSkill):
             return "Error: only read-only operations (list_/describe_/get_) are allowed."
 
         try:
-            import boto3  # type: ignore
+            import boto3
         except Exception:
             return "Error: boto3 not installed; pip install boto3 to enable aws_console."
 

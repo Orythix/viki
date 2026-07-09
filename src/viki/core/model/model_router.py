@@ -60,7 +60,7 @@ class ModelRouter:
                 if breaker.is_open():
                     return False
             except Exception:
-                pass
+                viki_logger.warning("budget circuit-breaker check failed; allowing model")
         return True
 
     def _model_on_cooldown(self, model_name: str) -> bool:

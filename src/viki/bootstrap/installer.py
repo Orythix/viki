@@ -7,7 +7,7 @@ import os
 from rich.console import Console
 from rich.prompt import Prompt
 
-from viki.bootstrap.dependency_manager import DependencyManager
+from viki.bootstrap.dependency_manager import DependencyManager, DepStatus
 from viki.bootstrap.model_manager import ModelInfo, ModelManager
 from viki.bootstrap.screens import (
     confirm_step,
@@ -160,7 +160,7 @@ class FirstRunOrchestrator:
             self.console.print(f"  Installing [bold]{dep.name}[/]...")
             success = await self.dep_manager._install_one(dep)
             if success:
-                dep.status = "ok"
+                dep.status = DepStatus.OK
                 self.console.print(f"  [green]✓ {dep.name} installed[/]")
             else:
                 self.console.print(f"  [red]✗ Failed to install {dep.name}[/]")

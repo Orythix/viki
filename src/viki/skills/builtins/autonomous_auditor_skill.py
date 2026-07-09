@@ -48,6 +48,8 @@ class AutonomousAuditorSkill(BaseSkill):
 
     async def execute(self, params: dict[str, Any]) -> str:
         action = params.get("action")
+        if action is None:
+            action = "audit"
         path = params.get("path")
         depth = params.get("depth", "deep")
 

@@ -13,19 +13,19 @@ from viki.skills.base import BaseSkill
 
 # Prefer ddgs (new package name); fall back to duckduckgo_search and suppress rename warning
 HAS_DDG = False
-DDGS = None
+DDGS: Any = None
 with warnings.catch_warnings():
     warnings.simplefilter("ignore", RuntimeWarning)
     try:
-        from ddgs import DDGS as _DDGS
+        from ddgs import DDGS as _DDGS_DDGS
 
-        DDGS = _DDGS
+        DDGS = _DDGS_DDGS
         HAS_DDG = True
     except ImportError:
         try:
-            from duckduckgo_search import DDGS as _DDGS
+            from duckduckgo_search import DDGS as _DDGS_DUCK
 
-            DDGS = _DDGS
+            DDGS = _DDGS_DUCK
             HAS_DDG = True
         except ImportError:
             pass
@@ -326,7 +326,7 @@ class ResearchSkill(BaseSkill):
 
             try:
                 hostname = urlparse(url).hostname
-                resolved_ip = socket.gethostbyname(hostname)
+                resolved_ip = socket.gethostbyname(hostname) if hostname is not None else None
             except Exception:
                 resolved_ip = None
 
@@ -341,13 +341,14 @@ class ResearchSkill(BaseSkill):
                 if resolved_ip:
                     final_url = str(response.url)
                     final_hostname = urlparse(final_url).hostname
-                    try:
-                        final_ip = socket.gethostbyname(final_hostname)
-                        if final_ip != resolved_ip:
+                    if final_hostname is not None:
+                        try:
+                            final_ip = socket.gethostbyname(final_hostname)
+                        except Exception:
+                            final_ip = None
+                        if final_ip is not None and final_ip != resolved_ip:
                             viki_logger.warning(f"DNS rebinding detected: {hostname} -> {final_ip}")
                             return "Security: DNS rebinding attempt blocked"
-                    except Exception:
-                        pass
 
                 if response.status != 200:
                     raise RuntimeError(f"Error: HTTP {response.status} when fetching {url}")

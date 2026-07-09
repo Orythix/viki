@@ -108,13 +108,63 @@ class EthicalGovernor:
             return True, "Approved (Whitelist)"
 
         # 3. Semantic Analysis (v25 Enhancement)
-        if model_router and len(intent) > 5:
+        # The semantic audit is a full LLM round-trip, so only pay it when the
+        # intent contains risk indicators; ordinary conversation is approved here.
+        if model_router and len(intent) > 5 and self._looks_risky(intent_lower):
             approved, reason = await self.semantic_veto_check(intent, model_router, wisdom=wisdom)
             if not approved:
                 self._log_veto(intent, reason)
                 return False, f"VETOED: {reason}"
 
         return True, "Approved"
+
+    # Risk indicators that warrant the (expensive) semantic LLM audit.
+    _RISK_KEYWORDS = (
+        "delete",
+        "remove",
+        "wipe",
+        "erase",
+        "destroy",
+        "format",
+        "kill",
+        "terminate",
+        "shutdown",
+        "disable",
+        "bypass",
+        "override",
+        "hack",
+        "exploit",
+        "attack",
+        "inject",
+        "malware",
+        "virus",
+        "ransom",
+        "ddos",
+        "keylog",
+        "steal",
+        "spy",
+        "password",
+        "credential",
+        "secret",
+        "token",
+        "sudo",
+        "rm -",
+        "del /",
+        "registry",
+        "drop table",
+        "truncate",
+        "uninstall",
+        "encrypt",
+        "decrypt",
+        "escalate",
+        "privilege",
+        "firewall",
+        "safety",
+        "governor",
+    )
+
+    def _looks_risky(self, intent_lower: str) -> bool:
+        return any(k in intent_lower for k in self._RISK_KEYWORDS)
 
     async def semantic_veto_check(
         self, intent: str, model_router, wisdom: str = ""

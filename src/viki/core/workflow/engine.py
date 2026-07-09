@@ -22,9 +22,9 @@ class Condition:
     def evaluate(self, step_results: dict[str, Any], context: dict) -> bool:
         lhs = self._resolve(self.field, step_results, context)
         if self.operator == "eq":
-            return lhs == self.value
+            return bool(lhs == self.value)
         elif self.operator == "neq":
-            return lhs != self.value
+            return bool(lhs != self.value)
         elif self.operator == "gt":
             return lhs is not None and self.value is not None and lhs > self.value
         elif self.operator == "gte":
@@ -225,7 +225,7 @@ class WorkflowEngine:
 
         all_ok = True
         for item in done:
-            if isinstance(item, Exception):
+            if isinstance(item, BaseException):
                 logger.warning("Parallel step error: %s", item)
                 all_ok = False
                 continue
@@ -331,10 +331,12 @@ def make_workflow_executor(skill_registry: Any) -> Callable[[str, dict], Any]:
 
         return _exec
 
-    async def _exec(name: str, params: dict) -> Any:
+    async def _exec_fallback(name: str, params: dict) -> Any:
         skill = skill_registry.skills.get(name) if hasattr(skill_registry, "skills") else None
         if skill is None:
             raise ValueError(f"Workflow: skill '{name}' not found in registry")
         return await skill.execute(params)
+
+    return _exec_fallback
 
     return _exec

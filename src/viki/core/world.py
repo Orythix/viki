@@ -241,7 +241,11 @@ class WorldModel:
 
     def get_active_mission(self) -> dict[str, Any] | None:
         """Returns the current active mission if one exists."""
-        if self.state.active_goal and self.state.current_phase.upper() != "COMPLETE":
+        if (
+            self.state.active_goal
+            and self.state.current_phase is not None
+            and self.state.current_phase.upper() != "COMPLETE"
+        ):
             return {
                 "goal": self.state.active_goal,
                 "project": self.state.active_project,

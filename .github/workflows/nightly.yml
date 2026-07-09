@@ -1,0 +1,46 @@
+name: Nightly Eval
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: |
+          pip install uv
+          uv sync --group dev
+
+      # Deterministic smoke tier: always runs, proves the harness end-to-end
+      # and produces a capability-index artifact even without model access.
+      - name: Harness smoke (MockLLM)
+        run: uv run viki-eval --mock --no-llm-judge --limit 5 --results-dir data/eval_results_smoke
+
+      # Real-model tier: only when the OpenCode key is configured as a repo secret.
+      # This is the run that actually measures model quality over time.
+      - name: Nightly eval (OpenCode DeepSeek V4 Flash)
+        if: env.OPENCODE_API_KEY != ''
+        run: uv run viki-eval --no-llm-judge --limit 10 --concurrency 2 --timeout 120
+        continue-on-error: true
+
+      - name: Upload capability index and results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results-${{ github.run_id }}
+          path: |
+            data/eval_results/capability_index.json
+            data/eval_results/**/*.jsonl
+            data/eval_results_smoke/capability_index.json
+          retention-days: 90
+          if-no-files-found: warn

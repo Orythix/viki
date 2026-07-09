@@ -18,6 +18,7 @@ from __future__ import annotations
 import contextlib
 import contextvars
 import json
+import logging
 import os
 import sqlite3
 import threading
@@ -56,16 +57,16 @@ def init_tracing(service_name: str = "viki", export_to_stdout: bool = True) -> N
         return
     _OTEL_INITIALIZED = True
     try:
-        from opentelemetry import trace  # type: ignore
-        from opentelemetry.sdk.resources import Resource  # type: ignore
-        from opentelemetry.sdk.trace import TracerProvider  # type: ignore
+        from opentelemetry import trace
+        from opentelemetry.sdk.resources import Resource
+        from opentelemetry.sdk.trace import TracerProvider
     except Exception:
         _OTEL_TRACER = None
         return
 
     provider = TracerProvider(resource=Resource.create({"service.name": service_name}))
     try:
-        from opentelemetry.sdk.trace.export import (  # type: ignore
+        from opentelemetry.sdk.trace.export import (
             BatchSpanProcessor,
             ConsoleSpanExporter,
         )
@@ -73,21 +74,21 @@ def init_tracing(service_name: str = "viki", export_to_stdout: bool = True) -> N
         if export_to_stdout:
             provider.add_span_processor(BatchSpanProcessor(ConsoleSpanExporter()))
     except Exception:
-        pass
+        logging.getLogger(__name__).warning("OTel stdout exporter setup failed")
 
     otlp_endpoint = (os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT") or "").strip()
     if otlp_endpoint:
         try:
-            from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (  # type: ignore
+            from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
                 OTLPSpanExporter,
             )
-            from opentelemetry.sdk.trace.export import BatchSpanProcessor  # type: ignore
+            from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
             provider.add_span_processor(
                 BatchSpanProcessor(OTLPSpanExporter(endpoint=otlp_endpoint, insecure=True))
             )
         except Exception:
-            pass
+            logging.getLogger(__name__).warning("OTel OTLP exporter setup failed")
 
     trace.set_tracer_provider(provider)
     _OTEL_TRACER = trace.get_tracer(service_name)
@@ -145,12 +146,12 @@ def start_span(
                 for ev in info.get("events", []):
                     span.add_event(ev.get("name", "event"), attributes=ev.get("attributes") or {})
             except Exception:
-                pass
+                logging.getLogger(__name__).warning("failed to set span attributes")
         if span_cm is not None:
             try:
                 span_cm.__exit__(None, None, None)
             except Exception:
-                pass
+                logging.getLogger(__name__).warning("failed to close span")
         _record_local_span(info)
         _persist_span(info)
         _CURRENT_SPAN_ID.reset(span_token)
@@ -233,7 +234,7 @@ def _persist_span(info: dict[str, Any]) -> None:
             )
             _TRACE_DB.commit()
     except Exception:
-        pass
+        logging.getLogger(__name__).warning("failed to persist span")
 
 
 def get_local_spans(limit: int = 100) -> list[dict[str, Any]]:
@@ -272,7 +273,7 @@ def get_persistent_traces(limit: int = 50) -> list[dict[str, Any]]:
                 try:
                     attrs = json.loads(row[4] or "{}")
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).warning("failed to parse span attributes json")
                 spans.append(
                     {
                         "trace_id": row[0],
@@ -310,6 +311,6 @@ def close_persistent_traces() -> None:
             try:
                 _TRACE_DB.close()
             except Exception:
-                pass
+                logging.getLogger(__name__).warning("failed to close trace db")
             _TRACE_DB = None
             _TRACE_DB_PATH = None

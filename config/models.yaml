@@ -23,7 +23,7 @@ models:
       api_key_env: OPENCODE_API_KEY
     mock:
       type: mock
-  default: nim-nemotron
+  default: oc-deepseek-flash
   profiles:
     gemma4:
       provider: ollama
@@ -154,8 +154,29 @@ models:
       supports_streaming: true
       cost_per_1k_in: 0.0004
       cost_per_1k_out: 0.0012
-      description: 'PRIMARY — NVIDIA NIM Nemotron Super 49B. Default model for all
-        VIKI operations via NVIDIA free cloud inference.
+      description: 'FALLBACK — NVIDIA NIM Nemotron Super 49B. Backup cloud model;
+        primary is OpenCode DeepSeek V4 Flash (oc-deepseek-flash).
+
+        '
+
+    nim-qwen-coder:
+      provider: nvidia_nim
+      model_name: qwen/qwen2.5-coder-32b-instruct
+      priority: 95
+      tier: heavy
+      timeout_seconds: 180
+      max_context_tokens: 32768
+      capabilities:
+      - coding
+      - reasoning
+      - analysis
+      - tool_use
+      supports_streaming: true
+      cost_per_1k_in: 0.0002
+      cost_per_1k_out: 0.0002
+      description: 'NVIDIA NIM — Qwen2.5 Coder 32B. Heavy-tier target: the router
+        prefers this profile when the judgment engine escalates to DEEP (complex
+        coding/reasoning), while fast/standard traffic stays on Nemotron.
 
         '
 
@@ -277,9 +298,55 @@ models:
         '
 
     # --- OpenCode model profiles ---------------------------------------
+    oc-deepseek-flash:
+      provider: opencode_zen
+      model_name: deepseek-v4-flash-free
+      priority: 110
+      timeout_seconds: 120
+      max_context_tokens: 131072
+      capabilities:
+      - chat
+      - reasoning
+      - coding
+      - tool_use
+      - analysis
+      - planning
+      - general
+      - chatter
+      - sovereign
+      - memory
+      - autonomous_planning
+      supports_streaming: true
+      cost_per_1k_in: 0.0
+      cost_per_1k_out: 0.0
+      description: 'PRIMARY — OpenCode DeepSeek V4 Flash (free). Default model for
+        all VIKI operations via OpenCode Zen.
+
+        '
+
+    oc-deepseek-flash-fast:
+      provider: opencode_zen
+      model_name: deepseek-v4-flash-free
+      priority: 96
+      tier: fast
+      timeout_seconds: 30
+      max_context_tokens: 131072
+      capabilities:
+      - chat
+      - fast_response
+      - general
+      - chatter
+      supports_streaming: true
+      cost_per_1k_in: 0.0
+      cost_per_1k_out: 0.0
+      description: 'OpenCode DeepSeek V4 Flash (free) — fast-tier alias for reflex
+        and lightweight tasks (short timeout).
+
+        '
+
     oc-gpt55:
       provider: opencode_zen
-      model_name: opencode/gpt-5.5
+      model_name: gpt-5.5
       priority: 94
       timeout_seconds: 120
       max_context_tokens: 131072
@@ -301,7 +368,7 @@ models:
 
     oc-qwen37:
       provider: opencode_go
-      model_name: qwen/qwen3.7-plus
+      model_name: qwen3.7-plus
       priority: 91
       timeout_seconds: 120
       max_context_tokens: 131072
@@ -321,8 +388,9 @@ models:
 
     oc-deepseek:
       provider: opencode_go
-      model_name: deepseek/deepseek-v4-pro
-      priority: 93
+      model_name: deepseek-v4-pro
+      priority: 97
+      tier: heavy
       timeout_seconds: 180
       max_context_tokens: 131072
       capabilities:
@@ -340,7 +408,7 @@ models:
 
     oc-mimo:
       provider: opencode_go
-      model_name: mimo/mimo-v2.5
+      model_name: mimo-v2.5
       priority: 87
       timeout_seconds: 90
       max_context_tokens: 32768
@@ -359,13 +427,14 @@ models:
   routing:
     prefer_local_models: false
     fallback_order:
-    - nim-nemotron
+    - oc-deepseek-flash
     - oc-deepseek
-    - nim-deepseek-r1
     - oc-gpt55
-    - nim-mistral-large
-    - oc-mimo
     - oc-qwen37
+    - oc-mimo
+    - nim-nemotron
+    - nim-deepseek-r1
+    - nim-mistral-large
     - nim-llama4
     - nim-llama-fast
     - nim-nemotron-nano
@@ -376,25 +445,25 @@ models:
     - claude-sonnet
     task_routes:
       coding:
-        primary: nim-nemotron
+        primary: oc-deepseek-flash
         fallback:
+        - oc-deepseek
         - oc-qwen37
-        - nim-mistral-large
-        - nim-deepseek-r1
+        - nim-nemotron
         - gemma4
       reasoning:
-        primary: nim-deepseek-r1
+        primary: oc-deepseek
         fallback:
-        - oc-deepseek
-        - nim-nemotron
+        - oc-deepseek-flash
         - oc-gpt55
-        - nim-mistral-large
+        - nim-deepseek-r1
+        - nim-nemotron
         - gemma4
       math:
-        primary: nim-deepseek-r1
+        primary: oc-deepseek
         fallback:
-        - oc-deepseek
-        - nim-nemotron
+        - oc-deepseek-flash
+        - nim-deepseek-r1
         - gemma4
       training:
         primary: oc-qwen37
@@ -410,34 +479,35 @@ models:
         - oc-deepseek
         - viki-trainer
       fast:
-        primary: nim-nemotron-nano
+        primary: oc-deepseek-flash-fast
         fallback:
+        - nim-nemotron-nano
         - nim-llama-fast
         - gemma4
       writing:
-        primary: nim-mistral-large
+        primary: oc-deepseek-flash
         fallback:
         - oc-mimo
-        - nim-nemotron
+        - nim-mistral-large
         - gemma4
       vision:
         primary: nim-llama4
         fallback:
-        - nim-nemotron
+        - oc-deepseek-flash
       embedding:
         primary: nim-embed
       general:
-        primary: nim-nemotron
+        primary: oc-deepseek-flash
         fallback:
         - oc-mimo
         - nim-llama-fast
         - gemma4
       planning:
-        primary: nim-nemotron
+        primary: oc-deepseek-flash
         fallback:
         - oc-gpt55
         - oc-deepseek
-        - nim-deepseek-r1
+        - nim-nemotron
         - gemma4
   memory:
     enabled: true

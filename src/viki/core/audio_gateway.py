@@ -106,14 +106,16 @@ class VoiceModule:
                 # Sample 0.5s of audio to gauge noise floor
                 # We do this in a thread to avoid blocking the loop
                 duration = 0.5
-                recording = await asyncio.to_thread(
-                    lambda dur=duration: sd_mod.rec(
+
+                def _record(dur: float) -> Any:
+                    return sd_mod.rec(
                         int(dur * self.sampling_rate),
                         samplerate=self.sampling_rate,
                         channels=1,
                         blocking=True,
                     )
-                )
+
+                recording = await asyncio.to_thread(_record, duration)
                 sd_mod.wait()
 
                 # Calculate RMS (Root Mean Square) Amplitude

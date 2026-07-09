@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from pydantic import BaseModel
 
@@ -163,7 +163,7 @@ class SelfCritique:
         try:
             improved = await self._llm.chat(messages)
             self._cache[key] = (time.monotonic(), improved)
-            return improved
+            return cast("str", improved)
         except Exception as e:
             logger.warning("SelfCritique.improve failed: %s", e)
             return solution

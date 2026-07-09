@@ -70,8 +70,11 @@ class PlanEditSkill(BaseSkill):
             skill = registry.get_skill("code_search")
             if not skill:
                 return "code_search skill unavailable"
-            return await skill.execute(
-                {"action": "search", "query": task.parameters.get("query") or goal, "top_k": 5}
+            return cast(
+                "str",
+                await skill.execute(
+                    {"action": "search", "query": task.parameters.get("query") or goal, "top_k": 5}
+                ),
             )
 
         async def _do_read(task) -> str:

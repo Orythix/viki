@@ -3,7 +3,7 @@ Obsidian vault skill: search, read, create, refactor notes. Config: obsidian.vau
 """
 
 import os
-from typing import Any, cast
+from typing import Any
 
 from viki.skills.base import BaseSkill
 
@@ -84,8 +84,8 @@ class ObsidianSkill(BaseSkill):
             if not os.path.isfile(full):
                 return f"Note not found: {path}"
             try:
-                with open(full, encoding="utf-8", errors="ignore") as f:
-                    return cast("str", f.read()[:8000])
+                with open(full, encoding="utf-8", errors="ignore") as fh:
+                    return fh.read()[:8000]
             except Exception as e:
                 return f"Read error: {e}"
 
@@ -99,8 +99,8 @@ class ObsidianSkill(BaseSkill):
             full = os.path.join(vault, path)
             try:
                 os.makedirs(os.path.dirname(full) or ".", exist_ok=True)
-                with open(full, "w", encoding="utf-8") as f:
-                    f.write(content)
+                with open(full, "w", encoding="utf-8") as fh:
+                    fh.write(content)
                 return f"Created note: {path}"
             except Exception as e:
                 return f"Create error: {e}"

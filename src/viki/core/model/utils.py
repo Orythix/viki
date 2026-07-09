@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import urllib.request
 from typing import Any
@@ -97,5 +98,5 @@ def ollama_model_exists(base_url: str, model_name: str) -> bool:
             if m.get("name") == model_name or m.get("model") == model_name:
                 return True
     except Exception:
-        pass
+        logging.getLogger(__name__).warning("ollama_model_exists check failed")
     return False

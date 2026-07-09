@@ -1,6 +1,7 @@
 import asyncio
 import sys
 import time
+from typing import Any
 
 from viki.config.logger import viki_logger
 
@@ -61,9 +62,9 @@ class BioModule:
         self.experimental = self.backend == "stub"
         self.is_running = False
         self._thread = None
-        self.cap = None
+        self.cap: Any = None
         self._monitor_task: asyncio.Task | None = None
-        self._deepface = None
+        self._deepface: Any = None
         self._deepface_load_failed = False
 
     async def start(self):
@@ -146,7 +147,7 @@ class BioModule:
             return self.current_emotion
         if self._deepface is None:
             try:
-                from deepface import DeepFace  # type: ignore
+                from deepface import DeepFace
 
                 self._deepface = DeepFace
             except Exception as e:

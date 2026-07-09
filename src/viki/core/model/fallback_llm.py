@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from typing import Any
 
@@ -30,7 +31,7 @@ class FallbackLLM(LLMProvider):
 
                 emit_llm_inference(self, time.perf_counter() - t0, success, "chat")
             except Exception:
-                pass
+                logging.getLogger(__name__).warning("failed to emit fallback LLM inference usage")
 
     async def chat_structured(
         self,
@@ -51,4 +52,4 @@ class FallbackLLM(LLMProvider):
 
                 emit_llm_inference(self, time.perf_counter() - t0, success, "chat_structured")
             except Exception:
-                pass
+                logging.getLogger(__name__).warning("failed to emit fallback LLM inference usage")

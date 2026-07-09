@@ -39,7 +39,7 @@ class SuperAdminLayer:
                 with open(self.config_path) as f:
                     self.config = yaml.safe_load(f)
         except Exception:
-            pass
+            viki_logger.warning("failed to load super-admin config")
 
     def check_command(self, user_input: str) -> bool:
         if self.shutdown_triggered:

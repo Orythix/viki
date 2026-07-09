@@ -7,7 +7,8 @@ and VIKIController integration into one cohesive system.
 from __future__ import annotations
 
 import os
-from typing import Any
+from collections.abc import Callable
+from typing import Any, cast
 
 from viki.skills.public_safety.agents import (
     AgentCoordinator,
@@ -97,7 +98,8 @@ class PublicSafetyOrchestrator:
 
         # --- Initialize skills ---
         self.skills: dict[str, BasePublicSafetySkill] = {
-            name: cls() for name, cls in _SKILL_REGISTRY.items()
+            name: cast("Callable[..., BasePublicSafetySkill]", cls)()
+            for name, cls in _SKILL_REGISTRY.items()
         }
         self._wire_auto_learning_to_skills()
 
@@ -157,9 +159,11 @@ class PublicSafetyOrchestrator:
         from viki.core.model.local_llm import LocalLLM
 
         client = LocalLLM(
-            base_url=self.config.llm_host,
-            model_name=self.config.model,
-            temperature=self.config.temperature,
+            {
+                "base_url": self.config.llm_host,
+                "model_name": self.config.model,
+                "temperature": self.config.temperature,
+            }
         )
         bridge = PublicSafetyNLBridge(
             llm_client=client,
@@ -247,7 +251,7 @@ class PublicSafetyOrchestrator:
         Registers all skills in the controller's skill registry and
         connects the auto-learning engine to the controller's LearningModule.
         """
-        connected = {"skills": [], "learning": False}
+        connected: dict[str, Any] = {"skills": [], "learning": False}
 
         if hasattr(controller, "skill_registry"):
             reg = controller.skill_registry

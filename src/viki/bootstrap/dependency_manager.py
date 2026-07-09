@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -224,7 +225,7 @@ class DependencyManager:
             )
             vc_ok = result.returncode == 0
         except Exception:
-            pass
+            logging.getLogger(__name__).warning("vc_redist check failed")
 
         return [
             DependencyResult(

@@ -68,7 +68,12 @@ class LocalLLM(LLMProvider):
         except Exception:
             return False
 
-    async def chat_stream(self, messages: list[dict[str, str]], temperature: float = 0.7):
+    async def chat_stream(
+        self,
+        messages: list[dict[str, Any]],
+        temperature: float = 0.7,
+        tools: list[dict[str, Any]] | None = None,
+    ):
         data = {
             "model": self.model_name,
             "messages": messages,
@@ -76,6 +81,8 @@ class LocalLLM(LLMProvider):
             "think": self._ollama_enable_thinking,
             "options": self._ollama_options_merged(temperature),
         }
+        if tools:
+            data["tools"] = tools
         try:
             async with self._get_session().post(f"{self.base_url}/api/chat", json=data) as resp:
                 if resp.status == 404:
@@ -104,13 +111,15 @@ class LocalLLM(LLMProvider):
 
     async def chat(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         temperature: float = 0.7,
-        format: str | None = None,
+        format: str | dict[str, Any] | None = None,
         image_path: str | None = None,
         tools: list[dict[str, Any]] | None = None,
         response_format: dict | None = None,
     ) -> str:
+        # `format` accepts "json" (generic JSON mode) or a JSON-schema dict —
+        # Ollama ≥0.5 constrains decoding to the schema (grammar decoding).
         t0 = time.perf_counter()
         success = False
         try:
@@ -170,7 +179,7 @@ class LocalLLM(LLMProvider):
 
                 emit_llm_inference(self, time.perf_counter() - t0, success, "chat")
             except Exception:
-                pass
+                viki_logger.warning("failed to emit LLM inference usage for %s", self.model_name)
 
     async def chat_with_tools(
         self, messages: list[dict[str, str]], tools: list[dict[str, Any]], temperature: float = 0.0
@@ -214,7 +223,7 @@ class LocalLLM(LLMProvider):
 
                 emit_llm_inference(self, time.perf_counter() - t0, success, "chat_with_tools")
             except Exception:
-                pass
+                viki_logger.warning("failed to emit LLM inference usage for %s", self.model_name)
 
     def _compact_json_output_guide(self, response_model: type[T]) -> str:
         if response_model == VIKIResponse:
@@ -333,14 +342,26 @@ class LocalLLM(LLMProvider):
         guide = self._compact_json_output_guide(response_model)
         msgs.append({"role": "system", "content": guide})
         json_schema = response_model.model_json_schema()
+        # Grammar-constrained decoding: pass the schema itself as `format` so
+        # the server restricts tokens to schema-valid JSON (no parse-retry).
         content = await self.chat(
             msgs,
             temperature=temperature,
-            format="json",
+            format=json_schema,
             image_path=image_path,
-            response_format={"type": "json_schema", "json_schema": json_schema},
         )
         content = (content if isinstance(content, str) else str(content or "")).strip()
+        if content.startswith(("Ollama Error", "Error")):
+            # Older Ollama servers reject a schema-valued `format`; fall back
+            # to generic JSON mode with the schema as an advisory hint.
+            content = await self.chat(
+                msgs,
+                temperature=temperature,
+                format="json",
+                image_path=image_path,
+                response_format={"type": "json_schema", "json_schema": json_schema},
+            )
+            content = (content if isinstance(content, str) else str(content or "")).strip()
 
         try:
             data = self._parse_structured_json_heuristics(content)
@@ -428,12 +449,12 @@ class LocalLLM(LLMProvider):
                 if isinstance(val, dict):
                     return val
             except Exception:
-                pass
+                viki_logger.warning("ast fallback parse failed for local_llm")
             if "'" in content and '"' not in content[:10]:
                 try:
                     return cast("dict[Any, Any]", json.loads(content.replace("'", '"')))
                 except Exception:
-                    pass
+                    viki_logger.warning("quote-replacement parse fallback failed for local_llm")
             raise
 
     def _structured_fallback(self, response_model: type[T], content: str, err: Exception) -> T:

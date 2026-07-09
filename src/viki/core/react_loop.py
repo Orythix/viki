@@ -77,7 +77,7 @@ async def run_react_loop(
                         controller.signals.update_signal("confidence", 0.05)
                         controller.world.track_app_usage(skill_name)
                     except Exception:
-                        pass
+                        viki_logger.warning("failed to record reflex skill execution")
                     controller._last_response_meta_by_session[session_id] = {
                         "cognitive_route": cognitive_route.as_dict(),
                         "subtasks": [
@@ -99,7 +99,7 @@ async def run_react_loop(
                     try:
                         controller.reflex.report_failure(safe_input)
                     except Exception:
-                        pass
+                        viki_logger.warning("failed to report reflex failure")
                     controller.skill_registry.record_execution(skill_name, False, 0.0)
                     viki_logger.info(
                         "Reflex action %s failed (%s); falling through to cortex.", skill_name, err
@@ -225,6 +225,8 @@ async def run_react_loop(
                         is_singularity_mode=controller.is_singularity_mode,
                         execution_started=controller.world.state.execution_started,
                     )
+
+            assert viki_resp is not None
 
             if task_type == "coding" and viki_resp:
                 if viki_resp.intent_type == "clarification":
@@ -480,7 +482,8 @@ async def run_react_loop(
             break
 
         controller.last_interaction_time = time.time()
-        llm_response = viki_resp.final_response
+        assert viki_resp is not None
+        llm_response = viki_resp.final_response or ""
         if not llm_response or llm_response.lower().strip() in PLACEHOLDERS:
             llm_response = "Intelligence stack synchronized. Directive processed."
 
@@ -529,6 +532,9 @@ async def run_react_loop(
         and viki_resp
         and cognitive_route
         and cognitive_route.source != "cache"
+        # Only cache pure-text answers: replaying a response whose turn ran
+        # tools would claim side effects that never re-executed.
+        and not action_results
     ):
         try:
             resp_data = (

@@ -143,11 +143,14 @@ class CognitiveRouter:
             reflex_response, reflex_action = self._run_reflex(user_input)
             judgment = await self.judgment.evaluate(user_input, context, history=history)
 
-            route = self._route_from_reflex(
+            reflex_route = self._route_from_reflex(
                 reflex_action, reflex_response, judgment, skill_registry
             )
-            if route is None:
+            if reflex_route is not None:
+                route = reflex_route
+            else:
                 route = self._route_from_judgment(judgment)
+            assert route is not None
 
             self._finalize(route, t0)
             span_info["attributes"]["route.outcome"] = route.outcome.value
@@ -266,10 +269,40 @@ class CognitiveRouter:
             route.judgment.reason,
         )
 
+    # Queries whose answers change with time must never be served from cache.
+    _TIME_SENSITIVE_WORDS = frozenset(
+        {
+            "time",
+            "date",
+            "today",
+            "tomorrow",
+            "yesterday",
+            "now",
+            "weather",
+            "news",
+            "latest",
+            "current",
+            "currently",
+            "price",
+            "stock",
+            "score",
+            "schedule",
+        }
+    )
+
     def store_response(self, user_input: str, response: Any):
-        """Store a completed response in the semantic cache."""
-        if self.cache:
-            self.cache.store(user_input, response)
+        """Store a completed response in the semantic cache (tool-free answers only)."""
+        if not self.cache:
+            return
+        words = {w.strip(".,!?'\"").lower() for w in user_input.split()}
+        if words & self._TIME_SENSITIVE_WORDS:
+            return
+        # Responses that carried an action describe side effects that a cache
+        # replay would falsely claim to have re-executed.
+        action = response.get("action") if isinstance(response, dict) else None
+        if isinstance(action, dict) and (action.get("skill_name") or action.get("command")):
+            return
+        self.cache.store(user_input, response)
 
 
 class RouterTelemetry:

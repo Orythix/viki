@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import Any, cast
 
 from viki.config.logger import viki_logger
 from viki.core.schema import VIKIResponse
@@ -69,7 +69,7 @@ class ConsciousnessStack:
         on_think=None,
     ) -> VIKIResponse:
         start_time = time.time()
-        data = user_input
+        data: str | dict[str, Any] | VIKIResponse = user_input
 
         self.layer_timing.reset_cycle()
 
@@ -143,10 +143,9 @@ class ConsciousnessStack:
                             },
                         )
                     elif layer_name == "Deliberation" and isinstance(data, VIKIResponse):
+                        metadata = getattr(data, "metadata", None)
                         model_name = (
-                            getattr(data, "metadata", None).get("model", "unknown")
-                            if getattr(data, "metadata", None)
-                            else "unknown"
+                            metadata.get("model", "unknown") if metadata is not None else "unknown"
                         )
                         on_think(
                             "deliberation",
@@ -180,7 +179,7 @@ class ConsciousnessStack:
         for name, duration in self.layer_timing.current_cycle.items():
             viki_logger.debug(f"  Layer '{name}': {duration:.3f}s")
 
-        return data
+        return cast(VIKIResponse, data)
 
     def get_reflex_candidates(self) -> list[dict[str, Any]]:
         return self.pattern_tracker.get_reflex_candidates()

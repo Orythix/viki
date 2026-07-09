@@ -167,7 +167,7 @@ class InterpretationLayer(CortexLayer):
         numbers = re.findall(r"\b\d+\.?\d*\b", data)
         quoted_strings = re.findall(r'"([^"]*)"', data) + re.findall(r"'([^']*)'", data)
 
-        resolved_entities = {"paths": []}
+        resolved_entities: dict[str, Any] = {"paths": []}
         if hasattr(self, "world_model") and self.world_model:
             for path, purpose in self.world_model.state.semantic_paths.items():
                 if (

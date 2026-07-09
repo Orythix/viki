@@ -1,29 +1,9 @@
-"""
-HumanEval+ runner.
+"""Backward-compatible stub — delegates to ``viki.eval.benchmarks``."""
 
-Each task in JSONL:
-  {
-    "id": "HumanEval/0",
-    "prompt": "<function signature + docstring>",
-    "test_code": "<def check(candidate): assert ...>",
-    "grader": "execution"
-  }
-
-The candidate is the agent's answer text; ExecutionEvaluator extracts a fenced
-Python code block, runs it in a fresh subprocess, then exec's the test.
-"""
-
-from __future__ import annotations
-
-import asyncio
-import os
 import sys
+import warnings
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
-
-from scripts.evals.harness import (  # noqa: E402
+from viki.eval.benchmarks.harness import (
     HarnessConfig,
     build_controller,
     default_results_root,
@@ -32,7 +12,12 @@ from scripts.evals.harness import (  # noqa: E402
 )
 
 SUITE = "humaneval_plus"
+
+import os
 DEFAULT_DATASET = os.path.join("data", "eval_fixtures", f"{SUITE}.jsonl")
+
+
+import asyncio
 
 
 async def main_async():

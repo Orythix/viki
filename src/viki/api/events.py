@@ -14,7 +14,7 @@ from typing import Any
 class EventSubscription:
     def __init__(self, channels: list[str] | None = None):
         self.id = str(uuid.uuid4())
-        self.queue = asyncio.Queue()
+        self.queue: asyncio.Queue[str] = asyncio.Queue()
         self.channels = set(channels) if channels else None
 
     def matches(self, channel: str) -> bool:

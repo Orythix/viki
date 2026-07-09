@@ -34,7 +34,7 @@ class TestQuietBackground:
         """_start_background_tasks should skip wellness/dream when quiet."""
         monkeypatch.setenv("VIKI_QUIET_BACKGROUND", "true")
 
-        from viki.cli import _start_background_tasks
+        from viki.cli.cli_main import _start_background_tasks
 
         controller = MagicMock()
         controller.low_resource_mode = False
@@ -73,7 +73,7 @@ class TestQuietBackground:
         """low_resource_mode should disable wellness/dream tasks."""
         monkeypatch.delenv("VIKI_QUIET_BACKGROUND", raising=False)
 
-        from viki.cli import _start_background_tasks
+        from viki.cli.cli_main import _start_background_tasks
 
         controller = MagicMock()
         controller.low_resource_mode = True

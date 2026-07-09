@@ -20,7 +20,7 @@ class ContinuousLearner:
         self.controller = controller
         self.training_schedule = "weekly"  # daily, weekly, monthly
         self.min_lessons_for_training = 100
-        self.last_training_time = 0
+        self.last_training_time: float = 0
         self.training_enabled = True
         # Phase 5: eval-gated promotion configuration.
         sys_cfg = (
@@ -475,7 +475,7 @@ class ContinuousLearner:
                 cfg_path = os.path.abspath(cfg_path)
             if os.path.isfile(cfg_path):
                 try:
-                    import yaml  # type: ignore
+                    import yaml
 
                     with open(cfg_path, encoding="utf-8") as f:
                         data = yaml.safe_load(f) or {}

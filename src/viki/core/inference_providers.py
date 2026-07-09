@@ -99,7 +99,7 @@ class GeminiLLM(LLMProvider):
             self.unavailable_reason = "Gemini API key missing or invalid; expected GOOGLE_API_KEY."
             return
         try:
-            from google import genai  # type: ignore
+            from google import genai
 
             self._client = genai.Client(api_key=api_key)
             self._genai = genai
@@ -181,7 +181,7 @@ class GeminiLLM(LLMProvider):
         # Use instructor's Gemini integration when available; otherwise fall back to
         # a JSON-mode prompt and tolerant parsing.
         try:
-            import instructor  # type: ignore
+            import instructor
 
             if hasattr(instructor, "from_genai"):
                 client = instructor.from_genai(self._client)
@@ -263,7 +263,7 @@ class GroqLLM(LLMProvider):
             self._client = None
             return
         try:
-            from openai import AsyncOpenAI  # type: ignore
+            from openai import AsyncOpenAI
 
             self._client = AsyncOpenAI(
                 api_key=api_key,
@@ -282,7 +282,9 @@ class GroqLLM(LLMProvider):
             return f"Error: Model '{self.model_name}' is unavailable."
         try:
             response = await self._client.chat.completions.create(
-                model=self.model_name, messages=messages, temperature=temperature
+                model=self.model_name,
+                messages=messages,  # type: ignore[arg-type]
+                temperature=temperature,
             )
             try:
                 usage = getattr(response, "usage", None)
@@ -305,12 +307,12 @@ class GroqLLM(LLMProvider):
         image_path: str | None = None,
     ) -> T:
         try:
-            import instructor  # type: ignore
+            import instructor
 
-            client = instructor.from_openai(self._client, mode=instructor.Mode.JSON)
+            client = instructor.from_openai(self._client, mode=instructor.Mode.JSON)  # type: ignore[arg-type]
             result: T = await client.chat.completions.create(
                 model=self.model_name,
-                messages=messages,
+                messages=messages,  # type: ignore[arg-type]
                 response_model=response_model,
                 temperature=temperature,
             )
@@ -327,11 +329,11 @@ class GroqLLM(LLMProvider):
         try:
             stream = await self._client.chat.completions.create(
                 model=self.model_name,
-                messages=messages,
+                messages=messages,  # type: ignore[arg-type]
                 temperature=temperature,
                 stream=True,
             )
-            async for chunk in stream:
+            async for chunk in stream:  # type: ignore[union-attr]
                 delta: str | None = None
                 try:
                     delta = chunk.choices[0].delta.content if chunk.choices else None
@@ -359,7 +361,7 @@ class MistralLLM(LLMProvider):
             self._client = None
             return
         try:
-            from openai import AsyncOpenAI  # type: ignore
+            from openai import AsyncOpenAI
 
             self._client = AsyncOpenAI(
                 api_key=api_key,
@@ -378,7 +380,9 @@ class MistralLLM(LLMProvider):
             return f"Error: Model '{self.model_name}' is unavailable."
         try:
             response = await self._client.chat.completions.create(
-                model=self.model_name, messages=messages, temperature=temperature
+                model=self.model_name,
+                messages=messages,  # type: ignore[arg-type]
+                temperature=temperature,
             )
             try:
                 usage = getattr(response, "usage", None)
@@ -401,12 +405,12 @@ class MistralLLM(LLMProvider):
         image_path: str | None = None,
     ) -> T:
         try:
-            import instructor  # type: ignore
+            import instructor
 
-            client = instructor.from_openai(self._client, mode=instructor.Mode.JSON)
+            client = instructor.from_openai(self._client, mode=instructor.Mode.JSON)  # type: ignore[arg-type]
             result: T = await client.chat.completions.create(
                 model=self.model_name,
-                messages=messages,
+                messages=messages,  # type: ignore[arg-type]
                 response_model=response_model,
                 temperature=temperature,
             )
@@ -423,11 +427,11 @@ class MistralLLM(LLMProvider):
         try:
             stream = await self._client.chat.completions.create(
                 model=self.model_name,
-                messages=messages,
+                messages=messages,  # type: ignore[arg-type]
                 temperature=temperature,
                 stream=True,
             )
-            async for chunk in stream:
+            async for chunk in stream:  # type: ignore[union-attr]
                 try:
                     delta = chunk.choices[0].delta.content if chunk.choices else None
                 except Exception:
@@ -470,7 +474,7 @@ class NvidiaLLM(LLMProvider):
             return
 
         try:
-            from openai import AsyncOpenAI  # type: ignore
+            from openai import AsyncOpenAI
 
             base_url = self.config.get("base_url", self._NIM_BASE_URL)
             self._client = AsyncOpenAI(api_key=api_key, base_url=base_url)
@@ -597,7 +601,7 @@ class NvidiaLLM(LLMProvider):
         t0 = time.perf_counter()
         success = False
         try:
-            import instructor  # type: ignore
+            import instructor
 
             client = instructor.from_openai(self._client, mode=instructor.Mode.JSON)
             kwargs: dict[str, Any] = {
@@ -701,7 +705,7 @@ class OpenCodeLLM(LLMProvider):
             return
 
         try:
-            from openai import AsyncOpenAI  # type: ignore
+            from openai import AsyncOpenAI
 
             base_url = self.config.get("base_url", self._OC_BASE_URL)
             self._client = AsyncOpenAI(
@@ -784,7 +788,7 @@ class OpenCodeLLM(LLMProvider):
         t0 = time.perf_counter()
         success = False
         try:
-            import instructor  # type: ignore
+            import instructor
 
             client = instructor.from_openai(self._client, mode=instructor.Mode.JSON)
             result = await client.chat.completions.create(
@@ -853,7 +857,7 @@ class BedrockLLM(LLMProvider):
         self.provider_name = "bedrock"
         self.region = config.get("region", os.getenv("AWS_REGION", "us-east-1"))
         try:
-            import boto3  # type: ignore
+            import boto3
 
             self._boto3 = boto3
             self._client = boto3.client("bedrock-runtime", region_name=self.region)

@@ -10,7 +10,7 @@ from viki.config.logger import viki_logger
 try:
     import numpy as np
 except ImportError:
-    np = None
+    np = cast(Any, None)
 
 
 class SemanticCache:
@@ -19,9 +19,15 @@ class SemanticCache:
     Stores query-response pairs and performs similarity lookups.
     """
 
-    def __init__(self, data_dir: str, threshold: float = 0.96):
+    # Entries older than this are treated as misses so stale answers age out.
+    DEFAULT_TTL_SECONDS = 7 * 24 * 3600.0
+
+    def __init__(
+        self, data_dir: str, threshold: float = 0.94, ttl_seconds: float = DEFAULT_TTL_SECONDS
+    ):
         self.data_dir = data_dir
         self.threshold = threshold
+        self.ttl_seconds = ttl_seconds
         self.db_path = os.path.join(self.data_dir, "viki_cache.db")
         os.makedirs(self.data_dir, exist_ok=True)
         self._init_db()
@@ -77,9 +83,10 @@ class SemanticCache:
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
 
+        cutoff = time.time() - self.ttl_seconds
         cur.execute(
-            "SELECT response_json, query_text FROM semantic_cache WHERE query_hash = ?",
-            (query_hash,),
+            "SELECT response_json, query_text FROM semantic_cache WHERE query_hash = ? AND timestamp >= ?",
+            (query_hash, cutoff),
         )
         row = cur.fetchone()
         if row:
@@ -100,13 +107,15 @@ class SemanticCache:
 
         # Fetch all candidates (limit to recent or high-hit for speed in large cache)
         cur.execute(
-            "SELECT query_hash, query_text, response_json, embedding FROM semantic_cache ORDER BY timestamp DESC LIMIT 1000"
+            "SELECT query_hash, query_text, response_json, embedding FROM semantic_cache "
+            "WHERE timestamp >= ? ORDER BY timestamp DESC LIMIT 1000",
+            (cutoff,),
         )
         candidates = cur.fetchall()
 
-        best_hash = None
+        best_hash: str | None = None
         best_score = -1.0
-        best_response = None
+        best_response: str | None = None
 
         q_vec = np.array(query_emb) if np is not None else query_emb
 
@@ -145,6 +154,8 @@ class SemanticCache:
             viki_logger.info(
                 f"SemanticCache: Semantic HIT (score={best_score:.3f}) for '{query[:30]}...'"
             )
+            assert best_hash is not None
+            assert best_response is not None
             self._record_hit(conn, best_hash)
             conn.close()
             return cast("dict[str, Any] | None", json.loads(best_response))

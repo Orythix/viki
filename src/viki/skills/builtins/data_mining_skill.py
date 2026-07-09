@@ -58,16 +58,16 @@ class DataMiningSkill(BaseSkill):
             if action == "scrape_topic":
                 topic = params.get("topic")
                 limit = params.get("limit", 5)
-                return await self._scrape_and_mine(topic, limit)
+                return await self._scrape_and_mine(cast("str", topic), limit)
 
             elif action == "discover_patterns":
                 path = params.get("data_path")
-                return await self._discover_patterns(path)
+                return await self._discover_patterns(cast("str", path))
 
             elif action == "extract_entities":
                 text = params.get("text")
                 types = params.get("entity_types", ["entities"])
-                return await self._extract_entities(text, types)
+                return await self._extract_entities(cast("str", text), types)
 
             return f"Error: Unknown action '{action}'"
         except Exception as e:

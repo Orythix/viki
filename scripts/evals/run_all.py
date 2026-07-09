@@ -1,27 +1,22 @@
-"""
-Run every available eval suite back-to-back, then print the Capability Index.
-"""
+"""Backward-compatible stub — delegates to ``viki.eval.benchmarks``."""
 
-from __future__ import annotations
+import sys
+import warnings
 
-import argparse
 import asyncio
+import argparse
 import json
 import os
-import sys
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
-
-from scripts.evals import eval_datasets  # noqa: E402
-from scripts.evals.harness import (  # noqa: E402
+from viki.eval.benchmarks import eval_datasets, prepare
+from viki.eval.benchmarks.harness import (
     HarnessConfig,
     build_controller,
     default_results_root,
+    make_arg_parser,
     run_harness,
 )
-from viki.core.capability_index import CapabilityIndex  # noqa: E402
+from viki.core.capability_index import CapabilityIndex
 
 SUITES = [
     "humaneval_plus",
@@ -56,7 +51,7 @@ async def main_async():
     if args.prepare_datasets:
         for s in SUITES:
             try:
-                eval_datasets.prepare(s, max_examples=args.limit)
+                prepare(s, max_examples=args.limit)
             except Exception as e:
                 print(f"  prepare {s}: {e}")
 

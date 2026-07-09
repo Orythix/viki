@@ -1,6 +1,7 @@
 import ast
 import math
 import operator
+from collections.abc import Callable
 from typing import Any
 
 from viki.skills.base import BaseSkill
@@ -10,7 +11,7 @@ class SafeMathEvaluator(ast.NodeVisitor):
     """Safe evaluator for mathematical expressions using AST parsing."""
 
     # Allowed operators
-    operators = {
+    operators: dict[type, Callable[..., Any]] = {
         ast.Add: operator.add,
         ast.Sub: operator.sub,
         ast.Mult: operator.mul,
@@ -23,7 +24,7 @@ class SafeMathEvaluator(ast.NodeVisitor):
     }
 
     # Allowed functions from math module
-    functions = {
+    functions: dict[str, Any] = {
         "sin": math.sin,
         "cos": math.cos,
         "tan": math.tan,

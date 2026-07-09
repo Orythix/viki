@@ -7,6 +7,7 @@ and enables continuous improvement without manual updates.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sqlite3
 import time
@@ -265,7 +266,7 @@ class AutoLearningEngine:
                     source=f"viki_safety/{threat_type}",
                 )
             except Exception:
-                pass
+                logging.getLogger(__name__).warning("failed to record threat lesson")
 
         if evidence_patterns:
             for pattern in evidence_patterns:
@@ -351,7 +352,7 @@ class AutoLearningEngine:
             self._db_conn.execute(sql, params)
             self._db_conn.commit()
         except Exception:
-            pass
+            logging.getLogger(__name__).warning("auto_learning db execute failed")
 
     def _save_pattern(self, pattern: LearnedPattern):
         self._db_execute(
@@ -389,7 +390,7 @@ class AutoLearningEngine:
                     source=row[9],
                 )
         except Exception:
-            pass
+            logging.getLogger(__name__).warning("failed to load learned patterns")
 
         try:
             rows = self._db_conn.execute(
@@ -411,13 +412,13 @@ class AutoLearningEngine:
                     )
                 )
         except Exception:
-            pass
+            logging.getLogger(__name__).warning("failed to load threat memories")
 
     def close(self):
         try:
             self._db_conn.close()
         except Exception:
-            pass
+            logging.getLogger(__name__).warning("failed to close auto_learning db")
 
 
 # Global singleton for easy access across the safety system

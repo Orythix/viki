@@ -542,4 +542,4 @@ class BasePublicSafetySkill(abc.ABC):
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
         if not getattr(cls, "name", None):
-            cls.name = cls.__name__
+            setattr(cls, "name", cls.__name__)  # noqa: B010

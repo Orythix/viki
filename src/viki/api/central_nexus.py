@@ -13,7 +13,7 @@ class MessagingNexus:
 
     def __init__(self, request_processor: RequestProcessorPort):
         self._request_processor = request_processor
-        self.queue = asyncio.PriorityQueue()
+        self.queue: asyncio.PriorityQueue[tuple[int, dict[str, Any]]] = asyncio.PriorityQueue()
         self.active = False
         self.active_tasks: set[Any] = set()
 

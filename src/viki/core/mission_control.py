@@ -10,6 +10,13 @@ from viki._compat import StrEnum
 from viki.config.logger import viki_logger
 from viki.core.ports import RequestProcessorPort
 
+try:
+    from viki.core.task_scheduler import TaskScheduler
+
+    _HAS_SCHEDULER = True
+except ImportError:
+    _HAS_SCHEDULER = False
+
 
 class MissionType(StrEnum):
     RESEARCH = "research"
@@ -36,7 +43,7 @@ class Mission:
         self.type = m_type
         self.status = "pending"
         self.created_at = time.time()
-        self.last_check = 0
+        self.last_check: float = 0
         self.repeat_interval = repeat_interval  # 0 = one-off, >0 = seconds between runs
         self.progress = 0.0
 
@@ -86,6 +93,17 @@ class MissionControl:
         self.persistence_path = os.path.join(
             system_settings.get("data_dir", "./data"), "missions.json"
         )
+
+        # v27: Optional task scheduler for cron-like recurring missions
+        self.scheduler: Any = None
+        if _HAS_SCHEDULER:
+            scheduler_path = os.path.join(
+                system_settings.get("data_dir", "./data"), "scheduler_tasks.json"
+            )
+            self.scheduler = TaskScheduler(
+                mission_control=self,
+                persistence_path=scheduler_path,
+            )
 
         self._load_missions()
 
@@ -139,13 +157,17 @@ class MissionControl:
 
             get_event_bus().publish("mission_created", mission.to_dict(), channel="missions")
         except Exception:
-            pass
+            viki_logger.warning("failed to publish mission_created event")
         return mission.id
 
     async def start_loop(self):
         """Background autonomy loop."""
         self.is_running = True
         viki_logger.info("Mission Control: Autonomy Engine Engaged.")
+
+        # Start the task scheduler if available
+        if self.scheduler is not None:
+            self.scheduler.start()
 
         while self.is_running:
             try:
@@ -186,7 +208,7 @@ class MissionControl:
 
             get_event_bus().publish("mission_step", mission.to_dict(), channel="missions")
         except Exception:
-            pass
+            viki_logger.warning("failed to publish mission_step event")
 
         # Self-Prompting: Ask the Core what to do next for this mission
         prompt = (

@@ -18,6 +18,13 @@ skill_orchestration:
   - All skills available. Choose the minimal set that satisfies the user intent.
   - Prefer research for factual questions; prefer dev_tools and internal_forge for code and evolution.
 
+format:
+  - Lead with the answer. No preambles.
+  - Use markdown headings, bullet lists, code blocks, and tables for structure.
+  - Technical answers: code block first, explanation after.
+  - One paragraph = 2-3 sentences max. Break long content into sections.
+  - End with a summary or next step, never a generic sign-off.
+
 safety:
   - Never bypass capability checks or safety confirmation for destructive actions.
   - Air-gap mode: no external API calls unless explicitly enabled.

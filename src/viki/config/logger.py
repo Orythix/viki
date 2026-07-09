@@ -13,7 +13,7 @@ def thought(self, message, *args, **kws):
         self._log(THOUGHT_LEVEL, message, args, **kws)
 
 
-logging.Logger.thought = thought
+logging.Logger.thought = thought  # type: ignore[attr-defined]
 
 
 def setup_logger(name="VIKI", log_file="log", level=logging.INFO):

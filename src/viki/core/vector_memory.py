@@ -79,7 +79,7 @@ class _SqliteVssBackend(_BaseVectorBackend):
 
     def __init__(self, db_path: str, dim: int):
         try:
-            import sqlite_vss  # type: ignore
+            import sqlite_vss
         except Exception as e:
             raise RuntimeError(f"sqlite-vss not installed: {e}")
         self._sqlite_vss = sqlite_vss
@@ -176,7 +176,7 @@ class _NumpyMemoryBackend(_BaseVectorBackend):
 
     def __init__(self, dim: int, snapshot_path: str | None = None):
         try:
-            import numpy as np  # type: ignore
+            import numpy as np
         except Exception as e:
             raise RuntimeError(f"numpy not installed: {e}")
         self.np = np
@@ -185,7 +185,7 @@ class _NumpyMemoryBackend(_BaseVectorBackend):
         self._ids: list[Any] = []
         self._texts: list[str] = []
         self._metas: list[dict[str, Any]] = []
-        self._matrix = None  # type: ignore
+        self._matrix: Any = None
         self._load_snapshot()
 
     def _load_snapshot(self) -> None:

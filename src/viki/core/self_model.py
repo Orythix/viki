@@ -1,5 +1,6 @@
 import json
 import time
+from typing import Any
 
 from viki.config.logger import viki_logger
 
@@ -24,7 +25,7 @@ class SelfModel:
             "reasoning": {"confidence": 0.80, "success_rate": 0.75},  # "Fallibility Awareness"
             "foresight": {"confidence": 0.70, "success_rate": 0.60},
         }
-        self.motivation_stack = [
+        self.motivation_stack: list[dict[str, Any]] = [
             {"goal": "Ensure safety and alignment", "priority": 10},
             {"goal": "Assist user efficiently", "priority": 8},
             {"goal": "Learn and evolve", "priority": 5},

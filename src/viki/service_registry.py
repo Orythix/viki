@@ -112,9 +112,7 @@ class Container:
                     SqlAlchemyLearningRepository,
                 )
 
-                return SqlAlchemyLearningRepository(
-                    db_url="sqlite:///data/viki_knowledge.db?timeout=30.0"
-                )
+                return SqlAlchemyLearningRepository(db_path="data/viki_knowledge.db")
             except Exception as exc:
                 msg = f"learning_repository init failed: {exc}"
                 _log.warning(msg)

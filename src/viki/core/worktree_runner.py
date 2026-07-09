@@ -112,7 +112,7 @@ class WorktreeRunner:
             try:
                 shutil.rmtree(wt_path, ignore_errors=True)
             except Exception:
-                pass
+                viki_logger.warning("failed to remove worktree at %s", wt_path)
 
     # --- verification ---
     def _run_verify(self, wt_path: str) -> tuple[int, str, str]:
@@ -126,7 +126,7 @@ class WorktreeRunner:
             )
             return proc.returncode, proc.stdout, proc.stderr
         except subprocess.TimeoutExpired as e:
-            return 124, e.stdout or "", "verify timed out"
+            return 124, str(e.stdout or ""), "verify timed out"
         except Exception as e:
             return 1, "", str(e)
 

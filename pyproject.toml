@@ -1,6 +1,6 @@
 [project]
 name = "viki-sdi"
-version = "8.3.0"
+dynamic = ["version"]
 description = "VIKI - Virtual Intelligence Knowledge Integrator: an open-source autonomous AI assistant"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -45,6 +45,12 @@ dependencies = [
 
 [project.scripts]
 viki = "viki.cli:run"
+viki-forge = "viki.entry_points:forge_main"
+viki-eval = "viki.entry_points:eval_main"
+viki-ingest = "viki.entry_points:ingest_main"
+viki-mcp = "viki.integrations.mcp_server:main"
+
+[project.entry-points."viki.skills"]
 
 [project.urls]
 Homepage = "https://github.com/Orythix/viki"
@@ -54,8 +60,6 @@ Changelog = "https://github.com/Orythix/viki/blob/main/CHANGELOG.md"
 Issues = "https://github.com/Orythix/viki/issues"
 
 [project.optional-dependencies]
-# Semantic embeddings, reranking, and model training (forge/LoRA/DPO).
-# Without this extra, VIKI falls back to keyword search and disables training skills.
 ml = [
     "sentence-transformers>=2.2.0",
     "huggingface-hub>=0.20.0",
@@ -73,6 +77,7 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.7.0",
     "pre-commit>=3.6.0",
+    "pip-audit>=2.7.0",
     "types-requests>=2.31.0",
     "types-PyYAML>=6.0.0",
 ]
@@ -80,11 +85,13 @@ dev = [
 [tool.setuptools.package-data]
 viki = ["api/static/*.html", "data/sovereign_library.json"]
 
+[tool.setuptools.dynamic]
+version = { attr = "viki._version.__version__" }
+
 [tool.ruff]
 line-length = 100
 target-version = "py310"
-# playbooks/ is vendored content (docs plus example snippets), not project code
-extend-exclude = ["playbooks"]
+extend-exclude = ["playbooks", "scripts"]
 
 [tool.ruff.lint]
 select = [
@@ -100,13 +107,14 @@ select = [
     "T20", # flake8-print
 ]
 ignore = [
-    "E501",  # line too long (handled by formatter)
-    "B008",  # function calls in default arguments (intentional in some cases)
-    "T201",  # print statements (used for debug)
-    "TRY003", # avoid bare except (too many to fix now)
-    "BLE001", # blind except Exception (legacy codebase, 500+ occurrences)
+    "E501",
+    "B008",
+    "BLE001",
 ]
-per-file-ignores = { "tests/*" = ["S101", "T201", "E402"], "src/viki/skills/**" = ["T201", "E701", "E402", "E741", "B904", "B008"], "src/viki/evolution_engine.py" = ["E402"], "src/viki/core/vector_memory.py" = ["B904"], "src/viki/core/inference_gateway.py" = ["B904"], "src/viki/core/autonomous_monitor.py" = ["E741"], "src/viki/core/continuous_learning.py" = ["E741"], "src/viki/ops/tenant_ops.py" = ["E741"], "src/viki/application/**" = ["E741"] }
+# `print()` is allowed only in modules that emit user-facing console output
+# (CLI and standalone entry-point scripts). All other library code must use
+# the logging framework so failures stay observable.
+per-file-ignores = { "tests/*" = ["S101", "T201", "E402"], "src/viki/skills/**" = ["T201", "E701", "E402", "E741", "B904", "B008"], "src/viki/cli/cli_main.py" = ["T201"], "src/viki/entry_points.py" = ["T201"], "src/viki/core/credential_manager.py" = ["T201"], "src/viki/bootstrap/dependency_manager.py" = ["T201"], "src/viki/eval/benchmarks/eval_datasets.py" = ["T201"], "src/viki/evolution_engine.py" = ["E402"], "src/viki/core/vector_memory.py" = ["B904"], "src/viki/core/inference_gateway.py" = ["B904"], "src/viki/core/autonomous_monitor.py" = ["E741"], "src/viki/core/continuous_learning.py" = ["E741"], "src/viki/ops/tenant_ops.py" = ["E741"], "src/viki/application/**" = ["E741"] }
 
 [tool.ruff.format]
 quote-style = "double"
@@ -117,6 +125,8 @@ skip-magic-trailing-comma = false
 python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
 check_untyped_defs = true
@@ -137,24 +147,37 @@ exclude = [
 module = "viki.*"
 ignore_missing_imports = true
 
+# Mixin modules reference `self.*` attributes initialized in the base class.
+# These `attr-defined` / `no-any-return` errors are false positives — the
+# attributes exist at runtime via the mixin MRO composition in VIKIController.
+[[tool.mypy.overrides]]
+module = "viki.core.controller.*"
+disable_error_code = ["attr-defined", "no-any-return"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 asyncio_mode = "auto"
-addopts = "-v --tb=short"
+addopts = "-v --tb=short -p no:cacheprovider"
 filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::PendingDeprecationWarning",
 ]
+markers = [
+    "slow: tests that take >10s",
+    "manual: tests that require manual setup",
+    "nightly: tests in the nightly eval suite",
+    "integration: tests that need external services",
+]
 
 [tool.coverage.run]
 source = ["src/viki"]
-omit = ["tests/*", "*/playbooks/**"]
+omit = ["tests/*", "*/playbooks/**", "scripts/*"]
 
 [tool.coverage.report]
-fail_under = 20
+fail_under = 40
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",
@@ -167,5 +190,9 @@ exclude_lines = [
 directory = "coverage_html"
 
 [build-system]
-requires = ["setuptools>=68.0", "wheel"]
+requires = ["setuptools>=68.0", "wheel", "setuptools-scm>=8.0"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+write_to = "src/viki/_version.py"
+fallback_version = "8.3.0"

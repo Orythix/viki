@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from typing import Any, TypeVar
 
@@ -48,7 +49,7 @@ class LLMProvider(ABC):
 
             emit_model_feedback(self, latency, success)
         except Exception:
-            pass
+            logging.getLogger(__name__).warning("failed to emit model feedback")
 
     def estimate_cost_usd(self, prompt_tokens: int, completion_tokens: int = 256) -> float:
         return (prompt_tokens / 1000.0) * self.cost_per_1k_in + (
@@ -71,7 +72,7 @@ class LLMProvider(ABC):
                 channel="system",
             )
         except Exception:
-            pass
+            logging.getLogger(__name__).warning("failed to publish usage event")
         return delta
 
     @abstractmethod

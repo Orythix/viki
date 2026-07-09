@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
 import uuid
@@ -85,7 +86,7 @@ class AuditStore:
             try:
                 cb(event)
             except Exception:
-                pass
+                logging.getLogger(__name__).warning("audit callback raised")
         if self._storage_path:
             self._save()
 
@@ -172,7 +173,7 @@ class AuditStore:
                 entry["severity"] = AuditSeverity(entry["severity"])
                 self._events.append(AuditEvent(**entry))
         except Exception:
-            pass
+            logging.getLogger(__name__).warning("failed to load audit events")
 
     def _save(self):
         if not self._storage_path:
@@ -182,7 +183,7 @@ class AuditStore:
             with open(path, "w") as f:
                 json.dump([e.to_dict() for e in self._events], f, indent=2)
         except Exception:
-            pass
+            logging.getLogger(__name__).warning("failed to save audit events")
 
 
 class AuditContextManager:
@@ -218,6 +219,7 @@ class AuditContextManager:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         elapsed = (time.time() - self._start_time) * 1000
+        assert self.event is not None
         if exc_type is not None:
             self.event.severity = AuditSeverity.ERROR
             self.event.result = {

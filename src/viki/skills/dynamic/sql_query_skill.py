@@ -67,8 +67,8 @@ def _run_postgres(
     params: dict[str, Any], query: str, limit: int, offset: int
 ) -> tuple[list[dict[str, Any]], int]:
     try:
-        import psycopg  # type: ignore
-        from psycopg.rows import dict_row  # type: ignore
+        import psycopg
+        from psycopg.rows import dict_row
     except Exception as e:
         raise RuntimeError(f"postgres engine requires `psycopg` (pip install psycopg[binary]): {e}")
     conninfo = params.get("dsn") or _build_pg_conninfo(params)
@@ -98,8 +98,8 @@ def _run_mysql(
     params: dict[str, Any], query: str, limit: int, offset: int
 ) -> tuple[list[dict[str, Any]], int]:
     try:
-        import pymysql  # type: ignore
-        import pymysql.cursors  # type: ignore
+        import pymysql
+        import pymysql.cursors
     except Exception as e:
         raise RuntimeError(f"mysql engine requires `pymysql` (pip install pymysql): {e}")
     conn = pymysql.connect(

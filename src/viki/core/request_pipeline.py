@@ -504,7 +504,7 @@ class RequestPipeline:
                 for r in results:
                     if isinstance(r, Exception):
                         viki_logger.debug("Parallel preflight stage failed: %s", r)
-                    elif r is not None:
+                    elif isinstance(r, str):
                         return r
         return None
 

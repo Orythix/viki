@@ -55,7 +55,7 @@ class NarrativeMemory:
         return self._encoder
 
     def _init_db(self):
-        self.conn = get_connection(self.db_path)
+        self.conn: Any = get_connection(self.db_path)
         cur = self.conn.cursor()
 
         # Episodic Memory Schema (Context -> Intent -> Action -> Outcome)
@@ -179,27 +179,55 @@ class NarrativeMemory:
 
             import torch
 
-            hits = util.semantic_search(query_emb, torch.tensor(corpus_embs), top_k=limit)
+            # Over-retrieve so the second-stage reranker has real candidates,
+            # then cut back to `limit` (mirrors the semantic-lesson path).
+            fetch_k = min(max(limit * 4, limit), len(corpus_rows))
+            hits = util.semantic_search(query_emb, torch.tensor(corpus_embs), top_k=fetch_k)
 
-            results = []
+            candidates = []
             for hit in hits[0]:
                 idx = hit["corpus_id"]
-                row = corpus_rows[idx]
-                results.append(
+                row = corpus_rows[int(idx)]
+                candidates.append(
                     {
+                        "id": row["id"],
                         "intent": row["intent"],
                         "action": row["action"],
                         "outcome": row["outcome"],
                         "relevance": hit["score"],
                     }
                 )
+
+            results = self._rerank_episodes(current_intent, candidates, limit)
+            for episode in results:
                 # Reinforce memory
-                self._touch_memory(row["id"])
+                self._touch_memory(episode.pop("id"))
 
             return results
         except Exception as e:
             viki_logger.error(f"Context Retrieval Failed: {e}")
             return cast("list[dict[str, Any]]", self._get_recent_episodes(limit))
+
+    @staticmethod
+    def _rerank_episodes(
+        query: str, candidates: list[dict[str, Any]], limit: int
+    ) -> list[dict[str, Any]]:
+        """Second-stage rerank of episode candidates (cross-encoder or lexical)."""
+        if len(candidates) <= limit:
+            return candidates[:limit]
+        try:
+            from viki.core.reranker import get_reranker
+
+            texts = [
+                f"{c.get('intent', '')} | {c.get('action', '')} | {c.get('outcome', '')}"
+                for c in candidates
+            ]
+            by_text = dict(zip(texts, candidates, strict=False))
+            ranked = get_reranker().rerank(query, texts, top_k=limit)
+            return [by_text[t] for t in ranked if t in by_text]
+        except Exception as e:
+            viki_logger.debug("Episode reranker failed; using retrieval order: %s", e)
+            return candidates[:limit]
 
     def _get_recent_episodes(self, limit: int):
         cur = self.conn.cursor()

@@ -3,8 +3,9 @@ import os
 import time
 from collections.abc import Callable
 
-from watchdog.events import FileModifiedEvent, FileSystemEventHandler
+from watchdog.events import DirModifiedEvent, FileModifiedEvent, FileSystemEventHandler
 from watchdog.observers import Observer
+from watchdog.observers.api import BaseObserver
 
 _log = logging.getLogger("config_watcher")
 
@@ -16,7 +17,7 @@ class _ConfigReloadHandler(FileSystemEventHandler):
         self._watched = watched
         self._debounce: float = 0.0
 
-    def on_modified(self, event: FileModifiedEvent) -> None:
+    def on_modified(self, event: FileModifiedEvent | DirModifiedEvent) -> None:
         if event.is_directory:
             return
         path = os.path.normpath(event.src_path)
@@ -45,7 +46,7 @@ class ConfigWatcher:
 
     def __init__(self, callback: Callable[[str], None]) -> None:
         self._callback = callback
-        self._observer: Observer | None = None
+        self._observer: BaseObserver | None = None
 
     def start(self, *paths: str) -> None:
         watched: set[str] = set()

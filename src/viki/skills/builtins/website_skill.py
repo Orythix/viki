@@ -5,7 +5,7 @@ Manus-style "delivers websites".
 
 import os
 import re
-from typing import Any
+from typing import Any, cast
 
 from viki.core.utils.path_sandbox import validate_output_path
 from viki.skills.base import BaseSkill
@@ -123,7 +123,7 @@ class WebsiteSkill(BaseSkill):
             return f"Scaffold '{template}' created in {output_dir} (index, style.css)."
 
         # create_site
-        pages = params.get("pages") or params.get("page_list")
+        pages = cast("list[dict[str, str]]", params.get("pages") or params.get("page_list"))
         if not pages or not isinstance(pages, list):
             return "Provide pages= (list of {path, title, content_md}). Or use action=scaffold with template=minimal|landing|doc."
         os.makedirs(output_dir, exist_ok=True)

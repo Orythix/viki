@@ -70,7 +70,7 @@ class MetaCognitionLayer(CortexLayer):
                     f"Deliberation took {delib_time:.1f}s — consider SHALLOW for simple requests"
                 )
 
-        if has_action and confidence >= 0.6 and self.pattern_tracker:
+        if response.action is not None and confidence >= 0.6 and self.pattern_tracker:
             raw_input = getattr(response, "_raw_input", "")
             if not raw_input and isinstance(response, VIKIResponse):
                 raw_input = response.__dict__.get("_raw_input", "")

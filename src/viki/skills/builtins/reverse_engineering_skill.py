@@ -64,7 +64,7 @@ class ReverseEngineeringSkill(BaseSkill):
         if not os.path.exists(abs_path):
             return f"Error: File '{path}' not found."
 
-        if shutil.which(action) is None:
+        if action is None or shutil.which(action) is None:
             return f"Error: Tool '{action}' is not installed on this system."
 
         try:

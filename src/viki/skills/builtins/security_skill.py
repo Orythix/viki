@@ -71,6 +71,8 @@ class SecuritySkill(BaseSkill):
     async def execute(self, params: dict[str, Any]) -> str:
         action = params.get("action")
         target = params.get("target") or params.get("url")
+        if not isinstance(target, str):
+            target = ""
 
         if action in ("net_scan", "deep_recon", "web_audit", "sniffer") and not target:
             return f"Error: Action '{action}' requires 'target'."

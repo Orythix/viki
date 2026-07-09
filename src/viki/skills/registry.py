@@ -10,6 +10,13 @@ from typing import Any, cast
 from viki.config.logger import viki_logger
 from viki.skills.base import BaseSkill
 
+try:
+    from importlib.metadata import entry_points
+
+    _HAS_ENTRY_POINTS = True
+except ImportError:
+    _HAS_ENTRY_POINTS = False
+
 
 @dataclass
 class SkillCircuitBreaker:
@@ -84,6 +91,9 @@ class SkillRegistry:
         if os.path.exists(dynamic_dir):
             self.discover_skills(dynamic_dir)
 
+        # v27: Discover third-party skills via entry points
+        self.discover_entry_point_skills()
+
     def register_skill(self, skill: BaseSkill):
         """Register a new skill instance."""
         if skill.name in self.skills:
@@ -93,7 +103,7 @@ class SkillRegistry:
 
     def get_skill(self, name: str) -> BaseSkill:
         """Retrieve a skill by name."""
-        return self.skills.get(name)
+        return cast("BaseSkill", self.skills.get(name))
 
     def list_skills(self) -> list[str]:
         """List all registered skill names."""
@@ -194,16 +204,15 @@ class SkillRegistry:
             return "\n".join(lines)
 
     def get_relevant_skill_names(self, intent: str, user_input: str) -> list[str]:
-        """Find skill names relevant to the current intent and input."""
-        relevant = set(self.intent_map.get(intent, []))
+        """Find skill names relevant to the current intent and input.
 
-        # Also check for direct name mentions in input
+        Skills the user named explicitly come first so downstream caps on the
+        (expensive) full-manifest block keep the most relevant entries.
+        """
         input_lower = user_input.lower()
-        for name in self.skills:
-            if name in input_lower:
-                relevant.add(name)
-
-        return list(relevant)
+        mentioned = [name for name in self.skills if name in input_lower]
+        by_intent = [n for n in self.intent_map.get(intent, []) if n not in mentioned]
+        return mentioned + by_intent
 
     def _load_metrics(self):
         if os.path.exists(self.data_path):
@@ -273,6 +282,35 @@ class SkillRegistry:
 
         # Clean up path
         sys.path.pop(0)
+
+    def discover_entry_point_skills(self) -> None:
+        """Discover and register skills from ``viki.skills`` entry points."""
+        if not _HAS_ENTRY_POINTS:
+            return
+        try:
+            eps = entry_points(group="viki.skills")
+            for ep in eps:
+                if ep.name in self.skills:
+                    viki_logger.debug(
+                        "Entry-point skill '%s' already registered, skipping", ep.name
+                    )
+                    continue
+                try:
+                    skill_cls = ep.load()
+                    if (
+                        inspect.isclass(skill_cls)
+                        and issubclass(skill_cls, BaseSkill)
+                        and skill_cls is not BaseSkill
+                    ):
+                        instance = skill_cls()
+                        self.register_skill(instance)
+                        viki_logger.info(
+                            "Registered entry-point skill: '%s' from %s", ep.name, ep.module
+                        )
+                except Exception as e:
+                    viki_logger.error("Failed to load entry-point skill '%s': %s", ep.name, e)
+        except Exception as e:
+            viki_logger.debug("Entry-point skill discovery failed: %s", e)
 
     async def execute_skill(self, name: str, params: dict) -> Any:
         """Execute a skill by name with params. Raises ValueError if not found."""

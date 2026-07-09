@@ -140,7 +140,8 @@ def _unsloth_train_sync(
         optim="adamw_8bit",
         report_to="none",
     )
-    trainer = SFTTrainer(
+    trainer_cls: Any = SFTTrainer
+    trainer = trainer_cls(
         model=model,
         tokenizer=tokenizer,
         train_dataset=ds,

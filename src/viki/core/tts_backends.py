@@ -8,7 +8,7 @@ import os
 from viki.config.logger import viki_logger
 
 
-def speak_elevenlabs(text: str, api_key: str, voice_id: str | None = None) -> str:
+def speak_elevenlabs(text: str, api_key: str | None = None, voice_id: str | None = None) -> str:
     """Synthesize speech via ElevenLabs API and play (blocking). Returns error message or 'OK'."""
     try:
         import requests

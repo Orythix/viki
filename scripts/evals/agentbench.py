@@ -1,16 +1,9 @@
-"""AgentBench runner — multi-domain agent benchmark, LLM-judged."""
+"""Backward-compatible stub — delegates to ``viki.eval.benchmarks``."""
 
-from __future__ import annotations
-
-import asyncio
-import os
 import sys
+import warnings
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
-
-from scripts.evals.harness import (  # noqa: E402
+from viki.eval.benchmarks.harness import (
     HarnessConfig,
     build_controller,
     default_results_root,
@@ -19,7 +12,12 @@ from scripts.evals.harness import (  # noqa: E402
 )
 
 SUITE = "agentbench"
+
+import os
 DEFAULT_DATASET = os.path.join("data", "eval_fixtures", f"{SUITE}.jsonl")
+
+
+import asyncio
 
 
 async def main_async():

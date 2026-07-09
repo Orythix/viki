@@ -1,4 +1,5 @@
 import asyncio
+import os
 import re
 from typing import Any
 
@@ -239,30 +240,49 @@ class ShellSkill(BaseSkill):
             self._controller.track_touched_item("executed_commands", cmd_name)
 
         try:
-            # Construct the shell invocation
-            if shell_type == "powershell":
-                # -NoProfile ensures faster startup
-                full_cmd = ["powershell", "-NoProfile", "-Command", command]
-            else:
-                # cmd /c
-                full_cmd = ["cmd", "/c", command]
+            # Run via SkillSandbox for resource-constrained execution
+            try:
+                from viki.skills.sandbox import SandboxConfig, SkillSandbox
 
-            # Run strictly with capture
-            process = await asyncio.create_subprocess_exec(
-                *full_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-            )
+                sandbox = SkillSandbox(
+                    SandboxConfig(
+                        max_cpu_seconds=30.0,
+                        max_duration_seconds=60.0,
+                        allowed_paths=[os.getcwd()],
+                    )
+                )
+                if shell_type == "powershell":
+                    full_cmd = ["powershell", "-NoProfile", "-Command", command]
+                else:
+                    full_cmd = ["cmd", "/c", command]
+                result = await sandbox.run(full_cmd)
+                if result.success:
+                    return result.output if result.output else "(Command executed with no output)"
+                if result.violation:
+                    return f"Sandbox Violation ({result.violation}): {result.violation_detail}"
+                raise RuntimeError(result.error or f"Command failed (exit {result.return_code})")
+            except ImportError:
+                # Fallback: direct subprocess if SkillSandbox unavailable
+                if shell_type == "powershell":
+                    full_cmd = ["powershell", "-NoProfile", "-Command", command]
+                else:
+                    full_cmd = ["cmd", "/c", command]
 
-            stdout, stderr = await process.communicate()
-
-            output = stdout.decode("utf-8", errors="replace").strip()
-            error = stderr.decode("utf-8", errors="replace").strip()
-
-            if process.returncode != 0:
-                raise RuntimeError(
-                    f"Command Failed (Exit Code {process.returncode}):\n{error}\n{output}"
+                process = await asyncio.create_subprocess_exec(
+                    *full_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
                 )
 
-            return output if output else "(Command executed with no output)"
+                stdout, stderr = await process.communicate()
+
+                output = stdout.decode("utf-8", errors="replace").strip()
+                error = stderr.decode("utf-8", errors="replace").strip()
+
+                if process.returncode != 0:
+                    raise RuntimeError(
+                        f"Command Failed (Exit Code {process.returncode}):\n{error}\n{output}"
+                    )
+
+                return output if output else "(Command executed with no output)"
 
         except Exception as e:
             viki_logger.error(f"Shell execution error: {e}")

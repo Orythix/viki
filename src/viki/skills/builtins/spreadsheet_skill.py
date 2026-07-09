@@ -108,9 +108,9 @@ class SpreadsheetSkill(BaseSkill):
                     return "data= is empty."
                 keys = list(data[0].keys())
                 with open(path, "w", newline="", encoding="utf-8") as f:
-                    w = csv.DictWriter(f, fieldnames=keys)
-                    w.writeheader()
-                    w.writerows(data)
+                    dw = csv.DictWriter(f, fieldnames=keys)
+                    dw.writeheader()
+                    dw.writerows(data)
             else:
                 from openpyxl import Workbook
 

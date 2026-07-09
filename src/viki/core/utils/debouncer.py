@@ -5,6 +5,7 @@ Debouncer utility for reducing file I/O operations.
 import asyncio
 import time
 from collections.abc import Callable
+from typing import Any
 
 
 class Debouncer:
@@ -22,8 +23,8 @@ class Debouncer:
         self.delay = delay
         self.max_delay = max_delay
         self.last_call = 0.0
-        self.first_pending = None
-        self.pending_task = None
+        self.first_pending: float | None = None
+        self.pending_task: asyncio.Task[Any] | None = None
         self.is_dirty = False
 
     def mark_dirty(self):
@@ -107,7 +108,7 @@ class SyncDebouncer:
         self.delay = delay
         self.max_delay = max_delay
         self.last_call = 0.0
-        self.first_pending = None
+        self.first_pending: float | None = None
         self.is_dirty = False
 
     def mark_dirty(self):

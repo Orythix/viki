@@ -66,11 +66,12 @@ system:
   security_scan_requests: false
 
   # When true, run internal specialist ensemble (critic/explorer/aligner) for complex intents. Set true for better quality.
-  use_ensemble: true
+  # Disabled for latency: the ensemble adds ~2 serial LLM round-trips (agents + synthesizer) before the main answer.
+  use_ensemble: false
 
   # Ollama (local): when true, API sends think=true — enables chain-of-thought reasoning traces for higher quality responses.
   # Set false for max speed. Per-profile override: set ollama_enable_thinking on a models.yaml profile. Env: VIKI_OLLAMA_THINK.
-  ollama_enable_thinking: true
+  ollama_enable_thinking: false
 
   # Optional Ollama generate options merged into every local request (temperature is still set per call).
   # Baseline for all profiles. Per-profile ollama_options in models.yaml override specific keys.
