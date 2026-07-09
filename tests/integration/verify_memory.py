@@ -48,6 +48,9 @@ async def test_hierarchy():
     full_ctx = memory.get_full_context("memory system")
     print(f"Recalled Episodes: {len(full_ctx['episodic'])}")
     print(f"Working Trace Length: {len(full_ctx['working'])}")
+    assert len(full_ctx["episodic"]) >= 1, "Expected at least 1 recalled episode"
+    assert len(full_ctx["working"]) >= 2, "Expected at least 2 working messages"
+    assert full_ctx["identity"], "Identity grounding should not be empty"
     print(f"Identity Grounding: {full_ctx['identity'][:100]}...")
 
     print("\nHIERARCHY VERIFIED: ALL LAYERS OPERATIONAL.")

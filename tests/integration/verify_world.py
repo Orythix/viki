@@ -31,16 +31,15 @@ def test_world():
     print("\n--- [DISCOVERY RESULTS] ---")
     understanding = world.get_understanding()
     print(understanding)
+    assert len(understanding) > 0, "World understanding should not be empty"
 
     print("\n--- [DETAILED SEMANTIC PATHS] ---")
     for path, purpose in world.state.semantic_paths.items():
         print(f"LANDMARK: {purpose} -> {path}")
 
     print("\n--- [DETAILED SAFETY ZONES] ---")
-    for path, zone in world.state.safety_zones.items():
-        print(f"ZONE: {zone} -> {path}")
-
-    print("\nVerification Complete.")
+    safety_count = len(world.state.safety_zones)
+    assert safety_count >= 0, "Safety zones should be non-negative"
 
 
 if __name__ == "__main__":

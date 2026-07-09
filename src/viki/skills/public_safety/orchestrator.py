@@ -54,14 +54,6 @@ _SKILL_REGISTRY = {
     "viki_safety": VIKISafetyAgent,
 }
 
-_AGENT_REGISTRY = {
-    "investigation": InvestigationAgent,
-    "cybersecurity": CybersecurityAgent,
-    "government": GovernmentAgent,
-    "emergency": EmergencyAgent,
-    "research": ResearchAgent,
-    "viki_safety": SafetyAgent,
-}
 from viki.skills.public_safety.config import SafetyConfig
 from viki.skills.public_safety.memory import MemoryEntry, MemoryType, PublicSafetyMemory
 from viki.skills.public_safety.nl_bridge import PublicSafetyNLBridge

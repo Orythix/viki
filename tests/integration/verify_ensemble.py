@@ -22,7 +22,10 @@ viki_logger.setLevel(logging.INFO)
 async def test_ensemble():
     print("--- Initializing VIKI Deliberation Ensemble ---")
     models_config = os.path.join("viki", "config", "models.yaml")
-    router = ModelRouter(models_config)
+    try:
+        router = ModelRouter(models_config)
+    except Exception as e:
+        pytest.skip(f"ModelRouter init failed (API key?): {e}")
 
     layer = DeliberationLayer(router)
 
@@ -39,12 +42,9 @@ async def test_ensemble():
     print("\n--- TEST 1: COMPLEX CODING TASK ---")
     resp1 = await layer.process(context_coding)
 
-    if resp1.ensemble_trace:
-        print("SUCCESS: Ensemble trace found.")
-        for agent, perspective in resp1.ensemble_trace.items():
-            print(f"  [{agent.upper()}]: {perspective[:100]}...")
-    else:
-        print("FAILURE: No ensemble trace triggered for complex coding task.")
+    assert resp1.ensemble_trace, "No ensemble trace triggered for complex coding task."
+    for agent, perspective in resp1.ensemble_trace.items():
+        print(f"  [{agent.upper()}]: {perspective[:100]}...")
 
     context_simple = {
         "raw_input": "What time is it?",
@@ -57,10 +57,9 @@ async def test_ensemble():
     print("\n--- TEST 2: SIMPLE CONVERSATION ---")
     resp2 = await layer.process(context_simple)
 
-    if not getattr(resp2, "ensemble_trace", None):
-        print("SUCCESS: Ensemble bypassed for simple task.")
-    else:
-        print("FAILURE: Ensemble triggered unnecessarily.")
+    assert not getattr(resp2, "ensemble_trace", None), (
+        "Ensemble triggered unnecessarily for simple task."
+    )
 
     print("\n[VERIFICATION COMPLETE]")
 

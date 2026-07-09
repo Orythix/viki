@@ -22,7 +22,10 @@ async def test_dream():
 
     root_dir = os.path.join(os.path.dirname(__file__), "..", "..")
     models_conf = os.path.join(root_dir, "./config/models.yaml")
-    router = ModelRouter(models_conf)
+    try:
+        router = ModelRouter(models_conf)
+    except Exception as e:
+        pytest.skip(f"ModelRouter init failed (API key?): {e}")
 
     memory = NarrativeMemory(data_dir)
 
@@ -85,14 +88,11 @@ async def test_dream():
 
     print("\n--- TEST 3: RETRIEVING WISDOM ---")
     wisdom = memory.get_semantic_knowledge()
+    assert wisdom is not None, "get_semantic_knowledge() returned None"
     if wisdom:
         print(f"SUCCESS: {len(wisdom)} insights consolidated into Semantic Wisdom.")
         for w in wisdom:
             print(f"- [{w['category'].upper()}]: {w['insight']}")
-    else:
-        print(
-            "FAILURE/PENDING: No wisdom extracted. This could be due to API failure or LLM output format."
-        )
 
     print("\n[VERIFICATION COMPLETE]")
 

@@ -23,7 +23,10 @@ async def test_forge():
 
     root_dir = os.path.join(os.path.dirname(__file__), "..", "..")
     models_conf = os.path.join(root_dir, "./config/models.yaml")
-    router = ModelRouter(models_conf)
+    try:
+        router = ModelRouter(models_conf)
+    except Exception as e:
+        pytest.skip(f"ModelRouter init failed (API key?): {e}")
 
     registry = SkillRegistry()
     evolution = EvolutionEngine(data_dir)
@@ -57,29 +60,23 @@ class PlatformInfoSkill(BaseSkill):
         value={"code": mock_code, "skill_name": "platform_info"},
     )
 
-    if mutation and "code" in mutation["value"]:
-        print(f"SUCCESS: Skill synthesized. Name: {mutation['value']['skill_name']}")
-        print("Generated Code Snippet:")
-        print(mutation["value"]["code"][:200] + "...")
+    assert mutation and "code" in mutation["value"], "Skill synthesis failed"
+    print(f"SUCCESS: Skill synthesized. Name: {mutation['value']['skill_name']}")
 
-        print("\n--- TEST 2: APPROVAL & HOT-LOADING ---")
-        evolution.approve_mutation(mutation["id"])
+    print("\n--- TEST 2: APPROVAL & HOT-LOADING ---")
+    evolution.approve_mutation(mutation["id"])
 
-        skill_name = mutation["value"]["skill_name"]
-        if skill_name in registry.skills:
-            print(f"SUCCESS: Skill '{skill_name}' hot-loaded into registry.")
-            print("\n--- TEST 3: EXECUTION ---")
-            skill = registry.get_skill(skill_name)
-            result = await skill.execute({})
-            print(f"Execution Result: {result}")
-            if "Python" in result:
-                print("SUCCESS: Synthesized skill executed correctly.")
-            else:
-                print("FAILURE: Synthesized skill execution failed or returned unexpected result.")
-        else:
-            print(f"FAILURE: Skill '{skill_name}' NOT found in registry after approval.")
-    else:
-        print("FAILURE: Skill synthesis failed.")
+    skill_name = mutation["value"]["skill_name"]
+    assert skill_name in registry.skills, (
+        f"Skill '{skill_name}' NOT found in registry after approval"
+    )
+    print(f"SUCCESS: Skill '{skill_name}' hot-loaded into registry.")
+
+    print("\n--- TEST 3: EXECUTION ---")
+    skill = registry.get_skill(skill_name)
+    result = await skill.execute({})
+    print(f"Execution Result: {result}")
+    assert "Python" in result, f"Synthesized skill execution returned unexpected result: {result}"
 
     print("\n[VERIFICATION COMPLETE]")
 

@@ -30,6 +30,7 @@ async def test_evolution():
 
     pending = engine.get_pending_proposals()
     print(f"Pending Proposals: {len(pending)}")
+    assert len(pending) == 1, f"Expected 1 pending proposal, got {len(pending)}"
 
     print("\n--- TEST 2: SIMULATE SUCCESS STREAK ---")
     engine.record_success("what_time")
@@ -39,8 +40,7 @@ async def test_evolution():
 
     applied = engine.get_active_mutations("reflex")
     print(f"Applied Reflex Mutations: {len(applied)}")
-    if applied:
-        print(f"Applied: {applied[0]['description']}")
+    assert len(applied) >= 1, "Reflex mutation should have been auto-applied after 3 successes"
 
     print("\n--- TEST 3: PROPOSE PRIORITY WEIGHTING ---")
     engine.propose_mutation(
@@ -53,13 +53,14 @@ async def test_evolution():
     print(f"Weights before manual approval: {weights}")
 
     pending = engine.get_pending_proposals()
-    if pending:
-        m_id = pending[0]["id"]
-        print(f"Approving {m_id} manually...")
-        engine.approve_mutation(m_id)
+    assert len(pending) == 1, f"Expected 1 pending priority proposal, got {len(pending)}"
+    m_id = pending[0]["id"]
+    print(f"Approving {m_id} manually...")
+    engine.approve_mutation(m_id)
 
-        new_weights = engine.get_agent_weightings()
-        print(f"Weights after approval: {new_weights}")
+    new_weights = engine.get_agent_weightings()
+    print(f"Weights after approval: {new_weights}")
+    assert new_weights != weights, "Agent weightings should change after approval"
 
     print("\n[VERIFICATION COMPLETE]")
 

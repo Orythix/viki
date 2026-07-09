@@ -344,7 +344,8 @@ class ModelManager:
     async def list_installed(self) -> list[dict[str, Any]]:
         """List models already pulled in Ollama."""
         try:
-            result = subprocess.run(
+            result = await asyncio.to_thread(
+                subprocess.run,
                 ["ollama", "list"],
                 capture_output=True,
                 text=True,
@@ -407,7 +408,8 @@ class ModelManager:
     async def verify(self, model_id: str) -> tuple[bool, str]:
         """Verify a model is correctly installed."""
         try:
-            result = subprocess.run(
+            result = await asyncio.to_thread(
+                subprocess.run,
                 ["ollama", "list"],
                 capture_output=True,
                 text=True,

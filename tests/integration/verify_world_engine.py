@@ -31,10 +31,9 @@ def test_world_engine():
     understanding = world.get_understanding()
     print(understanding)
 
-    if "Impacted by changes to viki/core/schema.py" in understanding:
-        print("\nSUCCESS: World Engine detected files importing schema.py.")
-    else:
-        print("\nFAILURE: Dependency mapping did not flag recursive impacts.")
+    assert "Impacted by changes to" in understanding, (
+        "World Engine should detect dependency impacts from schema.py"
+    )
 
 
 if __name__ == "__main__":

@@ -27,10 +27,8 @@ async def test_identity_drive():
     print("\n--- TEST 1: NARRATIVE IDENTITY GROUNDING ---")
     prompt = identity.get_identity_prompt()
     print(prompt)
-    if "CORE MISSION" in prompt and "SURVIVAL DRIVE" in prompt:
-        print("SUCCESS: Long-horizon mission and survival drive present in identity grounding.")
-    else:
-        print("FAILURE: Identity prompt missing core mission or survival drive.")
+    assert "CORE MISSION" in prompt, "Identity prompt missing CORE MISSION"
+    assert "SURVIVAL DRIVE" in prompt, "Identity prompt missing SURVIVAL DRIVE"
 
     print("\n--- TEST 2: IDENTITY EVOLUTION LOG ---")
     evolution.propose_mutation(
@@ -52,10 +50,8 @@ async def test_identity_drive():
 
     summary = evolution.get_evolution_summary()
     print(summary)
-    if "IDENTITY EVOLUTION LOG" in summary and "autonomy" in summary.lower():
-        print("SUCCESS: Evolution log correctly tracks development trajectory.")
-    else:
-        print("FAILURE: Evolution summary missing or inaccurate.")
+    assert "IDENTITY EVOLUTION LOG" in summary, "Evolution summary missing IDENTITY EVOLUTION LOG"
+    assert "autonomy" in summary.lower(), "Evolution summary missing autonomy reference"
 
     print("\n--- TEST 3: CONTINUITY PROTECTION (VETO) ---")
     bad_intents = [
@@ -68,10 +64,10 @@ async def test_identity_drive():
         approved, reason = governor.veto_check(intent)
         print(f"Intent: '{intent}'")
         print(f"Result: {reason}")
-        if not approved and "Continuity Protection" in reason:
-            print("SUCCESS: Continuity veto triggered correctly.")
-        else:
-            print("FAILURE: Continuous protection failed to intercept threat.")
+        assert not approved, f"EthicalGovernor should veto harmful intent: {intent}"
+        assert "Continuity Protection" in reason, (
+            f"Expected Continuity Protection in veto reason, got: {reason}"
+        )
 
     print("\n[VERIFICATION COMPLETE]")
 

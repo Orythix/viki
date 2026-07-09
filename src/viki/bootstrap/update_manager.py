@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import subprocess
 import sys
@@ -65,7 +66,8 @@ class UpdateManager:
                 current = "8.3.0"  # fallback
 
             # Try to check for latest version via pip index
-            result = subprocess.run(
+            result = await asyncio.to_thread(
+                subprocess.run,
                 [sys.executable, "-m", "pip", "index", "versions", "viki-sdi"],
                 capture_output=True,
                 text=True,
@@ -101,7 +103,8 @@ class UpdateManager:
         """Check if pulled Ollama models have updates."""
         updates = []
         try:
-            result = subprocess.run(
+            result = await asyncio.to_thread(
+                subprocess.run,
                 ["ollama", "list"],
                 capture_output=True,
                 text=True,
@@ -142,7 +145,8 @@ class UpdateManager:
             progress_callback(f"Updating {update.component}: {update.update_command}...")
 
         try:
-            result = subprocess.run(
+            result = await asyncio.to_thread(
+                subprocess.run,
                 update.update_command.split(),
                 capture_output=True,
                 text=True,

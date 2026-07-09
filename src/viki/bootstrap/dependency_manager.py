@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import subprocess
 import sys
@@ -71,7 +72,9 @@ class DependencyManager:
 
     async def _run(self, cmd: list[str], timeout: int = 30) -> subprocess.CompletedProcess:
         try:
-            return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+            return await asyncio.to_thread(
+                subprocess.run, cmd, capture_output=True, text=True, timeout=timeout
+            )
         except FileNotFoundError:
             result = subprocess.CompletedProcess(cmd, -1, "", "")
             result.stdout = ""
@@ -217,7 +220,8 @@ class DependencyManager:
         # Quick check: look for vcruntime140.dll
         vc_ok = False
         try:
-            result = subprocess.run(
+            result = await asyncio.to_thread(
+                subprocess.run,
                 ["where", "vcruntime140.dll"],
                 capture_output=True,
                 text=True,
@@ -344,7 +348,8 @@ class DependencyManager:
         """Install Ollama based on platform."""
         if sys.platform == "win32":
             try:
-                subprocess.run(
+                await asyncio.to_thread(
+                    subprocess.run,
                     [
                         "powershell",
                         "-Command",
@@ -354,7 +359,8 @@ class DependencyManager:
                     text=True,
                     timeout=60,
                 )
-                result = subprocess.run(
+                result = await asyncio.to_thread(
+                    subprocess.run,
                     ["$env:TEMP\\OllamaSetup.exe", "/S"],
                     capture_output=True,
                     text=True,
@@ -367,7 +373,8 @@ class DependencyManager:
         else:
             # Linux/macOS — use the official install script
             try:
-                result = subprocess.run(
+                result = await asyncio.to_thread(
+                    subprocess.run,
                     ["sh", "-c", "curl -fsSL https://ollama.com/install.sh | sh"],
                     capture_output=True,
                     text=True,

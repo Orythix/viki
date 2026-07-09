@@ -8,14 +8,8 @@ Enforcing Sovereign Execution-First Logic & Anti-Loop Gating.
 # =========================================================
 
 DEFAULT_AGENT_MAX_STEPS = 50
-MAX_SPEC_PHASES = 0
-MAX_DISCOVERY_PHASES = 0
-MAX_IDEA_REFINE_LOOPS = 0
 MAX_PLANNING_CYCLES = 1
 MAX_CLARIFICATION_REQUESTS = 1
-MAX_EXECUTION_RETRIES = 3
-
-EXECUTION_CONFIDENCE_THRESHOLD = 0.65
 
 # =========================================================
 # 2. FINITE STATE MACHINE (FSM) ENFORCEMENT
@@ -254,16 +248,8 @@ CORE OPERATING POLICIES:
 """
 
 # =========================================================
-# 11. ANTI-LOOP & KEYWORD REGISTRY
+# 11. KEYWORD REGISTRY
 # =========================================================
-
-ANTI_LOOP_POLICY = """
-[ANTI-LOOP GATING]
-If MAX_PLANNING_CYCLES (1) is reached, the system MUST force EXECUTING state.
-Any subsequent attempts to return to PLANNING or DISCOVERY without significant
-progress or new user input are to be treated as an orchestration failure and
-automatically overridden by the Sovereign Executor.
-"""
 
 CODING_KEYWORDS = [
     "code",

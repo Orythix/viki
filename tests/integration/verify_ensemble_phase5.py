@@ -55,11 +55,7 @@ async def test_ensemble_phase5():
     ensemble = EnsembleEngine(router)
 
     print(f"Agents loaded: {list(ensemble.agents.keys())}")
-
-    if "architect" in ensemble.agents:
-        print("SUCCESS: 'Architect' agent is present.")
-    else:
-        print("FAILURE: 'Architect' agent missing.")
+    assert "architect" in ensemble.agents, "'Architect' agent missing from ensemble"
 
     print("\n[Test 2] Running Ensemble Debate for Coding Task...")
     context = {"narrative_identity": "I am VIKI.", "conversation_history": []}
@@ -71,10 +67,7 @@ async def test_ensemble_phase5():
     for agent, perspective in results.items():
         print(f"\n[{agent.upper()}]: {perspective[:100]}...")
 
-    if "architect" in results:
-        print("\nSUCCESS: Architect perspective generated.")
-    else:
-        print("\nFAILURE: Architect did not participate.")
+    assert "architect" in results, "Architect did not participate in ensemble debate"
 
 
 if __name__ == "__main__":
