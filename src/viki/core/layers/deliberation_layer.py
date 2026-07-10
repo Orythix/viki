@@ -626,6 +626,7 @@ class DeliberationLayer(CortexLayer):
                         continue
                     if isinstance(chunk, str) and chunk.startswith("Error"):
                         viki_logger.warning(f"Streaming reported error: {chunk}")
+                        model.record_performance(time.time() - llm_start, success=False)
                         return None
                     chunks.append(chunk)
                     try:
@@ -634,6 +635,7 @@ class DeliberationLayer(CortexLayer):
                         viki_logger.debug(f"on_event partial dispatch failed: {e}")
             except Exception as e:
                 viki_logger.warning(f"Streaming fast-path errored: {e}")
+                model.record_performance(time.time() - llm_start, success=False)
                 return None
 
             text = "".join(chunks).strip()

@@ -48,7 +48,7 @@ system:
   #   - continuous-learning loop is disabled,
   #   - mission control still runs only on explicit /missions.
   # Override at runtime with VIKI_LOW_RESOURCE=1.
-  low_resource_mode: false
+  low_resource_mode: true
 
   # When true, OpenAI/Anthropic API profiles are never selected; use Ollama (models.yaml) only.
   # Set false and configure real keys when you want cloud models. Env: VIKI_LOCAL_LLM_ONLY=true|false.

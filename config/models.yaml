@@ -21,6 +21,10 @@ models:
       type: opencode
       base_url: https://opencode.ai/zen/go/v1
       api_key_env: OPENCODE_API_KEY
+    lmstudio:
+      type: api
+      base_url: http://localhost:1234/v1
+      api_key_env: LMSTUDIO_API_KEY
     mock:
       type: mock
   default: phi3-mini
@@ -44,6 +48,60 @@ models:
         num_predict: 2048
         num_ctx: 8192
       description: 'Local Ollama fallback (offline / air-gap only). Primary is now NVIDIA NIM.
+
+        '
+    qwen3-8b:
+      provider: ollama
+      model_name: qwen3:8b
+      priority: 25
+      timeout_seconds: 90
+      max_context_tokens: 40960
+      capabilities:
+      - chat
+      - reasoning
+      - coding
+      - tool_use
+      - general
+      - writing
+      - planning
+      - self_reflection
+      supports_native_tools: true
+      supports_streaming: true
+      local_first: true
+      ollama_enable_thinking: false
+      ollama_options:
+        num_predict: 2048
+        num_ctx: 8192
+      description: 'Local Ollama — Qwen3 8B. Fits fully in 8GB VRAM (measured 100%
+        GPU, no CPU spillover) on this hardware, making it the fastest capable local
+        option. Thinking mode disabled to avoid spending tokens on chain-of-thought.
+
+        '
+    lmstudio-qwen3:
+      provider: lmstudio
+      model_name: qwen/qwen3.5-9b
+      priority: 22
+      timeout_seconds: 90
+      max_context_tokens: 72192
+      capabilities:
+      - chat
+      - reasoning
+      - coding
+      - tool_use
+      - general
+      - writing
+      - planning
+      - self_reflection
+      supports_native_tools: true
+      supports_streaming: true
+      local_first: true
+      description: 'Local LM Studio — Qwen3.5 9B. Extra local fallback alongside
+        the Ollama profiles, in case LM Studio is running and Ollama is not (or
+        vice versa). Priority set below qwen3-8b: LM Studio''s per-request
+        thinking-mode suppression (chat_template_kwargs.enable_thinking) was
+        measured to be unreliable, so responses can occasionally run long. Only
+        used when it actually has a matching capability — never forced for tasks
+        it cannot serve (e.g. vision, which this profile does not list).
 
         '
     viki-evolved:
@@ -428,6 +486,8 @@ models:
     prefer_local_models: true
     fallback_order:
     - phi3-mini
+    - qwen3-8b
+    - lmstudio-qwen3
     - gemma4
     - viki-evolved
     - oc-deepseek-flash
@@ -440,18 +500,24 @@ models:
       coding:
         primary: phi3-mini
         fallback:
+        - qwen3-8b
+        - lmstudio-qwen3
         - gemma4
         - oc-deepseek-flash
         - oc-deepseek
       reasoning:
-        primary: gemma4
+        primary: qwen3-8b
         fallback:
+        - lmstudio-qwen3
+        - gemma4
         - phi3-mini
         - oc-deepseek
         - oc-deepseek-flash
       math:
         primary: phi3-mini
         fallback:
+        - qwen3-8b
+        - lmstudio-qwen3
         - gemma4
         - oc-deepseek
       training:
@@ -463,18 +529,24 @@ models:
         fallback:
         - oc-qwen37
       self_reflection:
-        primary: gemma4
+        primary: qwen3-8b
         fallback:
+        - lmstudio-qwen3
+        - gemma4
         - viki-trainer
         - oc-mimo
       fast:
         primary: phi3-mini
         fallback:
+        - qwen3-8b
+        - lmstudio-qwen3
         - gemma4
         - oc-deepseek-flash-fast
       writing:
-        primary: gemma4
+        primary: qwen3-8b
         fallback:
+        - lmstudio-qwen3
+        - gemma4
         - phi3-mini
         - oc-deepseek-flash
       vision:
@@ -486,11 +558,15 @@ models:
       general:
         primary: phi3-mini
         fallback:
+        - qwen3-8b
+        - lmstudio-qwen3
         - gemma4
         - oc-deepseek-flash
       planning:
-        primary: gemma4
+        primary: qwen3-8b
         fallback:
+        - lmstudio-qwen3
+        - gemma4
         - phi3-mini
         - oc-deepseek-flash
   memory:

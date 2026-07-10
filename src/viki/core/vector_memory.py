@@ -238,6 +238,47 @@ class _NumpyMemoryBackend(_BaseVectorBackend):
                 self._matrix = self.np.vstack([self._matrix, emb.reshape(1, -1)])
         self._save_snapshot()
 
+    def upsert_many(self, rows) -> int:
+        """Batched upsert: one matrix stack and one snapshot write for the whole
+        batch, instead of the base class's per-row loop (which here would mean
+        an O(n^2) vstack/list-scan and a full JSON snapshot rewrite per row —
+        catastrophic once the lesson count reaches the thousands)."""
+        rows = list(rows)
+        if not rows:
+            return 0
+        id_to_idx = {id_: i for i, id_ in enumerate(self._ids)}
+        new_ids: list[Any] = []
+        new_texts: list[str] = []
+        new_metas: list[dict[str, Any]] = []
+        new_embs: list[Any] = []
+        n = 0
+        for _id, emb, txt, meta in rows:
+            emb_arr = self.np.asarray(emb, dtype=self.np.float32)
+            if emb_arr.shape[0] != self.dim:
+                continue
+            idx = id_to_idx.get(_id)
+            if idx is not None:
+                self._matrix[idx] = emb_arr
+                self._texts[idx] = txt
+                self._metas[idx] = meta or {}
+            else:
+                id_to_idx[_id] = len(self._ids) + len(new_ids)
+                new_ids.append(_id)
+                new_texts.append(txt)
+                new_metas.append(meta or {})
+                new_embs.append(emb_arr)
+            n += 1
+        if new_embs:
+            stacked = self.np.vstack(new_embs)
+            self._matrix = (
+                stacked if self._matrix is None else self.np.vstack([self._matrix, stacked])
+            )
+            self._ids.extend(new_ids)
+            self._texts.extend(new_texts)
+            self._metas.extend(new_metas)
+        self._save_snapshot()
+        return n
+
     def delete(self, id):
         if id not in self._ids:
             return

@@ -33,6 +33,10 @@ class LocalLLM(LLMProvider):
         self._ollama_enable_thinking = bool(config.get("ollama_enable_thinking", False))
         _oo = config.get("ollama_options")
         self._ollama_options: dict[str, Any] = dict(_oo) if isinstance(_oo, dict) else {}
+        # Ollama's default keep_alive is 5 minutes; without this, any gap longer than
+        # that (or a switch to a different local model) evicts the model and the next
+        # call pays a full reload (tens of seconds for multi-GB weights).
+        self._keep_alive = os.environ.get("VIKI_OLLAMA_KEEP_ALIVE", "30m")
         self._session: aiohttp.ClientSession | None = None
         if not ollama_model_exists(self.base_url, self.model_name):
             self.available = False
@@ -80,6 +84,7 @@ class LocalLLM(LLMProvider):
             "stream": True,
             "think": self._ollama_enable_thinking,
             "options": self._ollama_options_merged(temperature),
+            "keep_alive": self._keep_alive,
         }
         if tools:
             data["tools"] = tools
@@ -129,6 +134,7 @@ class LocalLLM(LLMProvider):
                 "stream": False,
                 "think": self._ollama_enable_thinking,
                 "options": self._ollama_options_merged(temperature),
+                "keep_alive": self._keep_alive,
             }
             if format:
                 data["format"] = format
@@ -193,6 +199,7 @@ class LocalLLM(LLMProvider):
             "think": self._ollama_enable_thinking,
             "options": self._ollama_options_merged(temperature),
             "tools": tools,
+            "keep_alive": self._keep_alive,
         }
         try:
             async with self._get_session().post(f"{self.base_url}/api/chat", json=data) as resp:

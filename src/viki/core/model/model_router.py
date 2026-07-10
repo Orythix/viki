@@ -37,6 +37,7 @@ class ModelRouter:
         self._budget_config: dict[str, Any] = {}
         self._system_settings = system_settings
         self._model_cooldowns: dict[str, dict[str, Any]] = {}
+        self.prefer_local_models = False
         self._load_config(config_path)
 
     def _model_allowed(self, model: LLMProvider) -> bool:
@@ -62,6 +63,24 @@ class ModelRouter:
             except Exception:
                 viki_logger.warning("budget circuit-breaker check failed; allowing model")
         return True
+
+    @staticmethod
+    def _is_local(model: LLMProvider) -> bool:
+        try:
+            return not model.is_cloud()
+        except Exception:
+            return not isinstance(model, APILLM)
+
+    def _recent_failure_penalty(self, model: LLMProvider, priority: float) -> float:
+        """Penalize a model's score in proportion to its recent error rate,
+        scaled by its own priority so a single failure on a high-priority model
+        (which would otherwise always win the score) is enough to make the
+        router try something else next time, instead of hammering the same
+        failing/rate-limited model every retry."""
+        if model.call_count <= 0:
+            return 0.0
+        error_rate = model.error_count / model.call_count
+        return error_rate * (priority + 50.0)
 
     def _model_on_cooldown(self, model_name: str) -> bool:
         entry = self._model_cooldowns.get(model_name)
@@ -110,6 +129,9 @@ class ModelRouter:
             profiles = config.get("models", {}).get("profiles", {})
             default_profile = config.get("models", {}).get("default", "mock-model")
             self._budget_config = dict(config.get("models", {}).get("budget", {}) or {})
+            self.prefer_local_models = bool(
+                config.get("models", {}).get("routing", {}).get("prefer_local_models", False)
+            )
 
             if self.budget is None and self._budget_config:
                 try:
@@ -158,6 +180,41 @@ class ModelRouter:
             self.default_model = FallbackLLM({"model_name": "fallback-mock"})
         return self.default_model
 
+    def _best_candidate(
+        self,
+        capabilities: list[str] | None,
+        tier: str,
+        *,
+        local_only: bool = False,
+    ) -> LLMProvider | None:
+        best_candidate = None
+        best_score = -1.0
+        for model in self.models.values():
+            if not self._model_allowed(model):
+                continue
+            if local_only and not self._is_local(model):
+                continue
+            model_caps = model.config.get("capabilities", [])
+            model_tier = model.config.get("tier", "standard").lower()
+            matched_caps = sum(1 for cap in (capabilities or []) if cap in model_caps)
+            if local_only and capabilities and matched_caps == 0:
+                # Don't force a local pick that can't actually serve this
+                # capability (e.g. vision) — let the caller fall through to
+                # the full (local + cloud) pool instead.
+                continue
+            priority = model.config.get("priority", 2)
+            score = (matched_caps * priority) + (model.trust_score * 0.5)
+            if model_tier == tier.lower():
+                score += 10.0
+            is_fast = "fast_response" in (capabilities or []) or tier == "fast"
+            if is_fast and model.avg_latency > 0:
+                score -= model.avg_latency / 10.0
+            score -= self._recent_failure_penalty(model, priority)
+            if score > best_score:
+                best_score = score
+                best_candidate = model
+        return cast("LLMProvider | None", best_candidate)
+
     def get_model(
         self, capabilities: list[str] | None = None, tier: str = "standard"
     ) -> LLMProvider:
@@ -168,30 +225,14 @@ class ModelRouter:
             fb = self._first_allowed_model()
             return fb or default
 
-        best_candidate = None
-        best_score = -1
-        for model in self.models.values():
-            if not self._model_allowed(model):
-                continue
-            model_caps = model.config.get("capabilities", [])
-            model_tier = model.config.get("tier", "standard").lower()
-            matched_caps = sum(1 for cap in (capabilities or []) if cap in model_caps)
-            priority = model.config.get("priority", 2)
-            score = (matched_caps * priority) + (model.trust_score * 0.5)
-            if model_tier == tier.lower():
-                score += 10.0
-            is_fast = "fast_response" in (capabilities or []) or tier == "fast"
-            if is_fast and model.avg_latency > 0:
-                score -= model.avg_latency / 10.0
-            if model.call_count > 10:
-                error_rate = model.error_count / model.call_count
-                score -= error_rate * 5.0
-            if score > best_score:
-                best_score = score
-                best_candidate = model
+        if self.prefer_local_models:
+            local_candidate = self._best_candidate(capabilities, tier, local_only=True)
+            if local_candidate is not None:
+                return local_candidate
 
+        best_candidate = self._best_candidate(capabilities, tier)
         if best_candidate:
-            return cast("LLMProvider", best_candidate)
+            return best_candidate
         default = self._require_default_model()
         if self._model_allowed(default):
             return default
@@ -228,7 +269,8 @@ class ModelRouter:
     def get_failover_chain(
         self, capabilities: list[str] | None = None, max_models: int = 4
     ) -> list[LLMProvider]:
-        scored: list[tuple] = []
+        local_scored: list[tuple] = []
+        cloud_scored: list[tuple] = []
         for model in self.models.values():
             if not self._model_allowed(model):
                 continue
@@ -236,12 +278,22 @@ class ModelRouter:
             matched = sum(1 for cap in (capabilities or []) if cap in model_caps)
             priority = model.config.get("priority", 2)
             score = (matched * priority) + (model.trust_score * 0.5)
-            if model.call_count > 10:
-                error_rate = model.error_count / model.call_count
-                score -= error_rate * 5.0
-            scored.append((score, model))
-        scored.sort(key=lambda x: -x[0])
-        return [m for _, m in scored[:max_models]]
+            score -= self._recent_failure_penalty(model, priority)
+            is_local = self._is_local(model)
+            if is_local and (not capabilities or matched > 0):
+                local_scored.append((score, model))
+            else:
+                cloud_scored.append((score, model))
+        local_scored.sort(key=lambda x: -x[0])
+        cloud_scored.sort(key=lambda x: -x[0])
+        # Local-capable models first when prefer_local_models is set; cloud used
+        # only once local options are exhausted (or never wanted, tier depending).
+        combined = (
+            local_scored + cloud_scored
+            if self.prefer_local_models
+            else (sorted(local_scored + cloud_scored, key=lambda x: -x[0]))
+        )
+        return [m for _, m in combined[:max_models]]
 
     @staticmethod
     def _looks_like_error(text: Any) -> bool:

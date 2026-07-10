@@ -542,6 +542,9 @@ async def run_react_loop(
         # Only cache pure-text answers: replaying a response whose turn ran
         # tools would claim side effects that never re-executed.
         and not action_results
+        # confidence=0.0 is the deliberation layer's dedicated failure sentinel
+        # (set only on its exception path) — never cache an error as an answer.
+        and getattr(getattr(viki_resp, "final_thought", None), "confidence", 1.0) > 0.0
     ):
         try:
             resp_data = (

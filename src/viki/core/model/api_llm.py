@@ -22,6 +22,11 @@ class APILLM(LLMProvider):
     def __init__(self, config: dict[str, Any]):
         super().__init__(config)
         self.client: Any = None
+        # Plain (non-instructor) client for unstructured chat()/chat_stream():
+        # instructor's wrapped `create()` requires a `response_model` on every
+        # call, so it can't be reused for the plain-text path.
+        self._raw_client: Any = None
+        self.base_url: str | None = None
         self.provider_type = config.get("provider", "openai")
         api_key = os.getenv(self.config.get("api_key_env", "OPENAI_API_KEY"))
 
@@ -36,6 +41,7 @@ class APILLM(LLMProvider):
                         f"Anthropic API key missing or invalid ({self.config.get('api_key_env', 'ANTHROPIC_API_KEY')}). "
                         "Expected a key starting with sk-ant-. Remove placeholder values or use local Ollama profiles."
                     )
+                self._raw_client = AsyncAnthropic(api_key=api_key)
                 self.client = instructor.from_anthropic(
                     AsyncAnthropic(api_key=api_key), mode=instructor.Mode.ANTHROPIC_JSON
                 )
@@ -43,6 +49,7 @@ class APILLM(LLMProvider):
                 from openai import AsyncOpenAI
 
                 base_url = self.config.get("base_url", "https://api.openai.com/v1")
+                self.base_url = base_url
                 uses_official_openai = "api.openai.com" in (base_url or "")
                 if uses_official_openai and not looks_like_openai_secret(api_key):
                     raise ValueError(
@@ -53,6 +60,7 @@ class APILLM(LLMProvider):
                 if not api_key and not uses_official_openai:
                     api_key = "not-needed"
 
+                self._raw_client = AsyncOpenAI(api_key=api_key or "not-needed", base_url=base_url)
                 self.client = instructor.from_openai(
                     AsyncOpenAI(api_key=api_key or "not-needed", base_url=base_url),
                     mode=instructor.Mode.JSON,
@@ -63,6 +71,7 @@ class APILLM(LLMProvider):
                 f"optional API dependency missing or broken: {e}"
             )
             self.client = None
+            self._raw_client = None
             self.available = False
             self.unavailable_reason = f"optional dependency missing or broken: {e}"
         except Exception as e:
@@ -70,8 +79,23 @@ class APILLM(LLMProvider):
                 f"Model '{self.model_name}' (provider: {self.provider_type}) disabled: {e}"
             )
             self.client = None
+            self._raw_client = None
             self.available = False
             self.unavailable_reason = str(e)
+
+    def is_cloud(self) -> bool:
+        """A profile pointed at a local OpenAI-compatible server (e.g. LM Studio,
+        text-generation-webui, vLLM) is not a cloud call — budget tracking,
+        air_gap, and local_llm_only exclusions shouldn't apply to it."""
+        host = (self.base_url or "").lower()
+        if not host:
+            return True
+        return not (
+            "127.0.0.1" in host
+            or "localhost" in host
+            or "0.0.0.0" in host
+            or host.startswith("http://host.docker.internal")
+        )
 
     async def chat(
         self,
@@ -103,7 +127,7 @@ class APILLM(LLMProvider):
                         ]
                         break
 
-            response = await self.client.chat.completions.create(
+            response = await self._raw_client.chat.completions.create(
                 model=self.model_name,
                 messages=messages,
                 temperature=temperature,
@@ -187,11 +211,11 @@ class APILLM(LLMProvider):
                 viki_logger.warning("failed to emit LLM inference usage for %s", self.model_name)
 
     async def chat_stream(self, messages: list[dict[str, Any]], temperature: float = 0.7):
-        if not self.available or self.client is None:
+        if not self.available or self._raw_client is None:
             yield f"Error: Model '{self.model_name}' is unavailable."
             return
         try:
-            stream = await self.client.chat.completions.create(
+            stream = await self._raw_client.chat.completions.create(
                 model=self.model_name,
                 messages=messages,
                 temperature=temperature,
