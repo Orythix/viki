@@ -279,6 +279,9 @@ async def _run_interactive_loop(controller, interface, on_event, streaming_state
                     "  [green]/train[/]    — Trigger Neural Forge to evolve VIKI (bake memories into model)"
                 )
                 interface.console.print(
+                    "  [green]/train-lora[/] [tag] — Real LoRA fine-tune on accumulated lessons (needs torch/peft/trl)"
+                )
+                interface.console.print(
                     "  [green]/shadow[/]   — Toggle shadow mode (simulate vs real execution)"
                 )
                 interface.console.print("  [green]/debug[/]    — Toggle debug logging")
@@ -316,7 +319,7 @@ async def _run_interactive_loop(controller, interface, on_event, streaming_state
 
             if user_input.lower() == "/train":
                 interface.console.print("[bold blue]Initiating Neural Forge Evolution...[/]")
-                from evolution_engine import main_forge
+                from viki.evolution_engine import main_forge
 
                 success = await main_forge()
                 if success:
@@ -327,6 +330,25 @@ async def _run_interactive_loop(controller, interface, on_event, streaming_state
                     interface.console.print(
                         "[bold red]Evolution failed. Check logs for details.[/]"
                     )
+                continue
+
+            if user_input.lower().startswith("/train-lora"):
+                if not hasattr(controller, "forge_orchestrator"):
+                    interface.console.print("[bold red]Forge orchestrator is not available.[/]")
+                    continue
+                parts = user_input.split(maxsplit=1)
+                target_tag = (
+                    parts[1].strip() if len(parts) > 1 and parts[1].strip() else "viki-lora"
+                )
+                interface.console.print(
+                    f"[bold blue]Initiating LoRA fine-tune → '{target_tag}' "
+                    "(exporting lessons, then training; this can take a while)...[/]"
+                )
+                result = await controller.forge_orchestrator.bake_lora(target_tag=target_tag)
+                if result.startswith("Forge LoRA Success"):
+                    interface.console.print(f"[bold green]{result}[/]")
+                else:
+                    interface.console.print(f"[bold red]{result}[/]")
                 continue
 
             if user_input.lower() == "/boundary":

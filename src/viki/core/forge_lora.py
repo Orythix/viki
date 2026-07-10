@@ -126,9 +126,16 @@ class LoraDatasetExporter:
 
 
 def ml_stack_available() -> tuple[bool, str]:
-    """Check whether the optional fine-tuning stack is importable."""
+    """Check whether the optional fine-tuning stack is importable.
+
+    Import order matters here: on some Windows installs, importing ``peft``
+    (or ``trl``) before ``datasets`` triggers a native DLL conflict (pyarrow
+    vs. torch's bundled OpenMP runtime) that segfaults the whole process
+    instead of raising ImportError. ``datasets`` must load first — this
+    mirrors the working order used by ``LoraTrainer.train``.
+    """
     missing = []
-    for mod in ("torch", "transformers", "peft", "trl", "datasets"):
+    for mod in ("torch", "datasets", "peft", "transformers", "trl"):
         try:
             __import__(mod)
         except ImportError:
@@ -170,15 +177,24 @@ class LoraTrainer:
         t0 = time.time()
         os.makedirs(cfg.output_dir, exist_ok=True)
 
-        viki_logger.info("Forge LoRA: loading base model '%s'...", cfg.base_model)
+        # Decide the training device ourselves instead of device_map="auto":
+        # accelerate's auto-offload path wraps forward() in a functools.partial
+        # for any layers it puts on the meta device, which crashes trl's
+        # chunked-CE patch (`_patch_chunked_ce_lm_head` expects a bound method).
+        # A single explicit device sidesteps that entirely.
+        free_bytes = 0
+        if torch.cuda.is_available():
+            free_bytes, _total = torch.cuda.mem_get_info()
+        use_cuda = free_bytes > 9 * 1024**3  # headroom for weights + LoRA overhead
+        device = "cuda" if use_cuda else "cpu"
+        dtype = torch.bfloat16 if use_cuda else torch.float32
+
+        viki_logger.info("Forge LoRA: loading base model '%s' on %s...", cfg.base_model, device)
         tokenizer = AutoTokenizer.from_pretrained(cfg.base_model)
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
-        model = AutoModelForCausalLM.from_pretrained(
-            cfg.base_model,
-            torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
-            device_map="auto" if torch.cuda.is_available() else None,
-        )
+        model = AutoModelForCausalLM.from_pretrained(cfg.base_model, dtype=dtype)
+        model.to(device)
 
         dataset = load_dataset("json", data_files=dataset_path, split="train")
 
@@ -199,7 +215,7 @@ class LoraTrainer:
             logging_steps=10,
             save_strategy="epoch",
             report_to=[],
-            use_cpu=not torch.cuda.is_available(),
+            use_cpu=not use_cuda,
         )
         trainer = SFTTrainer(
             model=model,

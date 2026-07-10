@@ -28,6 +28,7 @@ class SimpleInterface:
                         "/help",
                         "/skills",
                         "/train",
+                        "/train-lora",
                         "/shadow",
                         "/debug",
                         "/credentials",
