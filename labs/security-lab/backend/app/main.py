@@ -89,7 +89,7 @@ def startup() -> None:
     _agent = AgentCore(
         settings, _memory, tools, sandbox_hosts=["sandbox-demo", "localhost", "127.0.0.1"]
     )
-    logger.info("lab_started", extra={"extra_fields": {"ollama": settings.ollama_url}})
+    logger.info("lab_started", extra={"extra_fields": {"lmstudio": settings.lmstudio_url}})
 
 
 def require_api_key(request: Request) -> None:

@@ -1,5 +1,5 @@
 """
-Agent orchestration: security pipeline → Ollama chat → optional tool loop (educational).
+Agent orchestration: security pipeline → LM Studio chat → optional tool loop (educational).
 
 This is a minimal reference implementation for a local lab, not a full agent framework.
 """
@@ -71,7 +71,7 @@ class AgentCore:
         self._memory.append(session_id, "user", clean)
         messages = self._build_messages(session_id)
 
-        text, tokens_in, tokens_out = await self._ollama_chat(messages)
+        text, tokens_in, tokens_out = await self._lmstudio_chat(messages)
         # naive tool parse (educational)
         tool_meta: dict[str, Any] | None = None
         m = _TOOL_CALL.search(text)
@@ -106,12 +106,11 @@ class AgentCore:
             rows.append({"role": msg.role, "content": msg.content})
         return rows
 
-    async def _ollama_chat(self, messages: list[dict[str, str]]) -> tuple[str, int, int]:
-        url = f"{self._settings.ollama_url.rstrip('/')}/api/chat"
+    async def _lmstudio_chat(self, messages: list[dict[str, str]]) -> tuple[str, int, int]:
+        url = f"{self._settings.lmstudio_url.rstrip('/')}/v1/chat/completions"
         payload = {
-            "model": self._settings.ollama_model,
+            "model": self._settings.lmstudio_model,
             "messages": messages,
-            "stream": False,
         }
         try:
             async with httpx.AsyncClient(timeout=120.0) as client:
@@ -119,18 +118,15 @@ class AgentCore:
                 r.raise_for_status()
                 data = r.json()
         except Exception as e:
-            logger.exception("ollama_error")
-            return f"[Ollama unavailable: {e}]", 0, 0
+            logger.exception("lmstudio_error")
+            return f"[LM Studio unavailable: {e}]", 0, 0
 
-        msg = data.get("message") or {}
-        content = msg.get("content") or ""
-        # token counts if present
-        ti = int(
-            data.get("prompt_eval_count")
-            or data.get("eval_count")
-            or len(json.dumps(messages)) // 4
-        )
-        to = int(data.get("eval_count") or len(content) // 4)
+        # OpenAI-compatible response: choices[0].message.content
+        choices = data.get("choices") or []
+        content = (choices[0].get("message") or {}).get("content") if choices else ""
+        usage = data.get("usage") or {}
+        ti = int(usage.get("prompt_tokens") or len(json.dumps(messages)) // 4)
+        to = int(usage.get("completion_tokens") or len(content) // 4)
         return content, ti, to
 
     async def run_tool(

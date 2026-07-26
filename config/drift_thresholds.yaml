@@ -1,5 +1,5 @@
 # Model Drift Monitoring Thresholds for VIKI
-# These values determine when a model's output is considered statistically divergent 
+# These values determine when a model's output is considered statistically divergent
 # from its established baseline performance.
 
 metrics:

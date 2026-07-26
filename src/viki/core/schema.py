@@ -60,7 +60,9 @@ class VIKIResponse(BaseModel):
 
     _raw_input: str = PrivateAttr(default="")
 
-    final_thought: ThoughtObject
+    final_thought: ThoughtObject | None = Field(
+        None, description="The final thought process leading to the response."
+    )
     action: ActionCall | None = Field(None)
     final_response: str | None = Field(None)
     internal_metacognition: str | None = Field(None)

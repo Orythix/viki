@@ -3,7 +3,7 @@ Application configuration.
 
 Security notes:
 - LAB_API_KEY must be set in any shared or long-lived deployment (use secrets manager in real env).
-- OLLAMA_URL must point to localhost or lab-internal Docker network only.
+- LMSTUDIO_URL must point to localhost or lab-internal Docker network only.
 - TOOL_ALLOWLIST limits shell tool to explicit binaries (defense in depth; real isolation = Docker).
 """
 
@@ -27,8 +27,8 @@ class Settings(BaseSettings):
     lab_api_key: str = Field(default="dev-lab-change-me", alias="LAB_API_KEY")
     database_url: str = Field(default="sqlite:///./data/lab_audit.db", alias="DATABASE_URL")
 
-    ollama_url: str = Field(default="http://host.docker.internal:11434", alias="OLLAMA_URL")
-    ollama_model: str = Field(default="llama3.2:latest", alias="OLLAMA_MODEL")
+    lmstudio_url: str = Field(default="http://host.docker.internal:1234", alias="LMSTUDIO_URL")
+    lmstudio_model: str = Field(default="google/gemma-4-e4b", alias="LMSTUDIO_MODEL")
 
     rate_limit_per_minute: int = Field(default=60, ge=1, alias="RATE_LIMIT_PER_MINUTE")
     max_prompt_chars: int = Field(default=16_384, ge=256)

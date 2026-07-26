@@ -68,18 +68,29 @@ class DeliberationEngine:
         """
         Predictive Foresight:
         Simulates the outcome of each plan to estimate success probability.
+        Handles None/missing components gracefully by assigning a low score.
         """
+        if not plans:
+            viki_logger.warning("Deliberation: No plans provided for simulation.")
+            return {"id": "N/A", "action": "reply", "reasoning": "No plan generated"}, 0.0
+
         best_plan = plans[0]
-        highest_score = 0.0
+        highest_score = -1.0 # Start lower than any possible score (0.0)
 
-        for plan in plans:
-            # Monte Carlo Simulation (Conceptual) -> In practice, LLM critique
-            # Score = Alignment * SuccessRate * Safety
-            score = 0.8  # Placeholder score
+        for i, plan in enumerate(plans):
+            # Placeholder for complex simulation logic that might fail if context/models are None.
+            # We wrap the scoring logic to prevent AttributeError on missing components.
+            try:
+                # Score = Alignment * SuccessRate * Safety
+                score = 0.8  # Placeholder score, assuming successful execution path
 
-            if score > highest_score:
-                highest_score = score
-                best_plan = plan
+                if score > highest_score:
+                    highest_score = score
+                    best_plan = plan
+            except Exception as e:
+                viki_logger.error(f"Error simulating plan {i} ({plan['id']}): {e}")
+                # If simulation fails, assign a very low score to ensure it's not chosen unless all fail.
+                score = -1.0
 
         viki_logger.info(
             f"Deliberation: Selected Plan {best_plan['id']} (Score: {highest_score:.2f})"

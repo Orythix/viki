@@ -1,12 +1,18 @@
 import json
-from typing import List, Dict, Any
+import os
+import re
+from typing import Any
+
+from viki.config.logger import viki_logger
+
 
 class DataSchemaManager:
     """
-    Handles the serialization and persistence of synthetic data into formats 
+    Handles the serialization and persistence of synthetic data into formats
     required by modern fine-tuning frameworks (SFT/DPO).
     """
-    def save_synthetic_data(self, data_list: List[Dict[str, Any]], format_type: str) -> None:
+
+    def save_synthetic_data(self, data_list: list[dict[str, Any]], format_type: str) -> None:
         """
         Writes the list of structured interaction dictionaries to a JSONL file.
 
@@ -15,34 +21,43 @@ class DataSchemaManager:
             format_type: Specifies the output format ("SFT" or "DPO").
         """
         if not data_list:
-            print("No data provided to save.")
+            viki_logger.warning("No data provided to save.")
             return
 
-        filename = f"synthetic_training_data_{format_type}_{json.dumps(data_list[0]['prompt'])[:20]}.jsonl"
-        output_path = "data/" + filename # Saving it in the data directory for visibility
+        # The first prompt is used as a discriminator, but it is free text — strip
+        # anything that is not filename-safe or the open() below fails on Windows.
+        slug = re.sub(r"[^A-Za-z0-9_-]+", "_", str(data_list[0].get("prompt", "")))[:20].strip("_")
+        filename = f"synthetic_training_data_{format_type}_{slug}.jsonl"
+        output_path = os.path.join("data", filename)  # In the data directory for visibility
+        os.makedirs("data", exist_ok=True)
 
-        print(f"Saving {len(data_list)} records to {output_path} using {format_type} format.")
+        viki_logger.info(
+            "Saving %d records to %s using %s format.", len(data_list), output_path, format_type
+        )
 
-        with open(output_path, 'w', encoding='utf-8') as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             for record in data_list:
                 if format_type == "DPO":
                     # DPO requires a specific structure for chosen/rejected pairs
                     record_to_write = {
                         "prompt": record["prompt"],
                         "chosen_response": record.get("chosen_response", ""),
-                        "rejected_response": record.get("rejected_response", "")
+                        "rejected_response": record.get("rejected_response", ""),
                     }
                 elif format_type == "SFT":
                     # SFT requires a simple prompt/completion pair
                     record_to_write = {
                         "prompt": record["prompt"],
-                        "completion": record.get("chosen_response", "") # Using chosen as the ideal completion
+                        "completion": record.get(
+                            "chosen_response", ""
+                        ),  # Using chosen as the ideal completion
                     }
                 else:
                     continue
 
-                f.write(json.dumps(record_to_write) + '\n')
-        
-        print(f"Successfully wrote {len(data_list)} records to disk.")
+                f.write(json.dumps(record_to_write) + "\n")
+
+        viki_logger.info("Successfully wrote %d records to disk.", len(data_list))
+
 
 # ...existing code...

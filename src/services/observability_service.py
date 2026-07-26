@@ -1,35 +1,55 @@
+import json
 import time
-from typing import Dict, Any, Callable, List
+from typing import Any
+
+from viki.config.logger import viki_logger
+
 # Placeholder imports for actual tracing libraries (e.g., opentelemetry)
 # from viki.core.tracing import get_tracer
 
+
 class ObservabilityService:
     """
-    Centralized service responsible for instrumenting and reporting metrics 
+    Centralized service responsible for instrumenting and reporting metrics
     and traces across the entire VIKI system lifecycle.
     """
-    def __init__(self):
-        print("ObservabilityService initialized: Ready to capture telemetry.")
 
-    def start_span(self, operation_name: str, parent_context: Dict[str, Any] = None) -> Dict[str, Any]:
+    def __init__(self):
+        viki_logger.info("ObservabilityService initialized: Ready to capture telemetry.")
+
+    def start_span(
+        self, operation_name: str, parent_context: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """Simulates starting a new trace span."""
         # In reality, this would initialize an OpenTelemetry Span object.
         trace_id = f"trace_{int(time.time() * 1000)}"
-        print(f"[TRACE START] {operation_name} | Trace ID: {trace_id}")
-        return {"trace_id": trace_id, "start_time": time.time()}
+        viki_logger.info("[TRACE START] %s | Trace ID: %s", operation_name, trace_id)
+        return {
+            "trace_id": trace_id,
+            "operation": operation_name,
+            "parent_context": parent_context,
+            "start_time": time.time(),
+        }
 
-    def end_span(self, span_context: Dict[str, Any], status: str = "SUCCESS", duration: float = 0.0):
+    def end_span(
+        self, span_context: dict[str, Any], status: str = "SUCCESS", duration: float = 0.0
+    ):
         """Simulates ending a trace span and reporting metrics."""
         # In reality, this would record the span's end time and attributes.
-        print(f"[TRACE END] Span finished for {span_context['operation']} | Status: {status} | Duration: {duration:.4f}s")
+        viki_logger.info(
+            "[TRACE END] Span finished for %s | Status: %s | Duration: %.4fs",
+            span_context.get("operation", "<unknown>"),
+            status,
+            duration,
+        )
 
-    def record_metric(self, metric_name: str, value: float, tags: Dict[str, Any] = None):
+    def record_metric(self, metric_name: str, value: float, tags: dict[str, Any] | None = None):
         """Records a specific performance or business metric (e.g., latency, success rate)."""
         tags_str = ", ".join([f"{k}:{v}" for k, v in (tags or {}).items()])
-        print(f"[METRIC] Recorded '{metric_name}' = {value:.4f} with tags: {{{tags_str}}}")
+        viki_logger.info(
+            "[METRIC] Recorded '%s' = %.4f with tags: {%s}", metric_name, value, tags_str
+        )
 
-    def log_event(self, event_type: str, details: Dict[str, Any]):
+    def log_event(self, event_type: str, details: dict[str, Any]):
         """Logs a high-level business or system event for auditing."""
-        print(f"[EVENT LOG] Type: {event_type} | Details: {json.dumps(details)}")
-
-# ...existing code...
+        viki_logger.info("[EVENT LOG] Type: %s | Details: %s", event_type, json.dumps(details))

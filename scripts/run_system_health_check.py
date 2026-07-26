@@ -1,14 +1,17 @@
-import time
-from typing import List, Dict, Any
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 # Import all necessary services for the full system health check
-from src.services.observability_service import ObservabilityService
-from src.services.baseline_manager import BaselineManager
-from src.services.drift_monitor_service import DriftMonitorService
-from src.services.retraining_orchestrator import RetrainingOrchestrator
+from src.services.baseline_manager import BaselineManager  # noqa: E402
+from src.services.drift_monitor_service import DriftMonitorService  # noqa: E402
+from src.services.observability_service import ObservabilityService  # noqa: E402
+from src.services.retraining_orchestrator import RetrainingOrchestrator  # noqa: E402
 
 def run_system_health_check():
     """
-    Simulates a full system health check, running the Observability and 
+    Simulates a full system health check, running the Observability and
     Model Drift Monitoring cycle to ensure all components are communicating correctly.
     This simulates the periodic background job that keeps VIKI operational.
     """

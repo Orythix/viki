@@ -1,10 +1,12 @@
-import json
-from typing import List, Dict, Any
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 # Import all necessary components from the newly created services
-from src.knowledge_ingestion.KnowledgeIngestor import KnowledgeIngestor
-from src.services.log_analyzer import UsageLogAnalyzer
-from src.services.synthetic_data_generator import SyntheticDataGenerator
-from src.infrastructure.graph_db.neo4j_client import Neo4jClient
+from src.services.log_analyzer import UsageLogAnalyzer  # noqa: E402
+from src.services.observability_service import ObservabilityService  # noqa: E402
+from src.services.synthetic_data_generator import SyntheticDataGenerator  # noqa: E402
 
 def run_sdgl():
     """

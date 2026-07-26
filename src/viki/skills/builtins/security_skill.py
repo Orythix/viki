@@ -11,6 +11,12 @@ from viki.config.logger import viki_logger
 from viki.skills.base import BaseSkill
 
 
+def _read_text(file_path: str) -> str:
+    """Read a file as text, tolerating undecodable bytes. Runs off the event loop."""
+    with open(file_path, encoding="utf-8", errors="ignore") as fh:
+        return fh.read()
+
+
 class SecuritySkill(BaseSkill):
     """
     Ethical Hacking & Network Security Skill.
@@ -194,9 +200,7 @@ class SecuritySkill(BaseSkill):
             for f in files:
                 f_path = os.path.join(root, f)
                 try:
-                    content = await asyncio.to_thread(
-                        lambda: open(f_path, encoding="utf-8", errors="ignore").read()
-                    )
+                    content = await asyncio.to_thread(_read_text, f_path)
                     for name, regex in patterns.items():
                         matches = re.finditer(regex, content)
                         for m in matches:

@@ -1,7 +1,10 @@
 system:
   log_level: "INFO"
-  data_dir: "./data"
-  workspace_dir: "./workspace"
+  # Scratch dirs, never the live ./data and ./workspace: pointing tests at the
+  # real store both corrupts developer data and deadlocks on Windows when a
+  # VIKI instance already holds the sqlite locks. Matched by .gitignore.
+  data_dir: "./tests/data_singularity"
+  workspace_dir: "./tests/data_singularity/workspace"
   security_scan_requests: false
 
 models_config: "test_models.yaml"

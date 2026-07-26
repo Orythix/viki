@@ -1,5 +1,5 @@
 import hashlib
-import importlib as _il
+import importlib.util as _il_util
 import json
 import os
 import re
@@ -9,7 +9,7 @@ from typing import Any, cast
 
 from viki.config.logger import viki_logger
 
-_HAS_CONTRADICTION = _il.util.find_spec("viki.core.contradiction") is not None
+_HAS_CONTRADICTION = _il_util.find_spec("viki.core.contradiction") is not None
 
 try:
     import numpy as np

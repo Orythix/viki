@@ -394,7 +394,7 @@ class VIKIController(
         else:
             viki_logger.debug("Startup pulse suppressed by low_resource_mode.")
 
-        # Background Ollama pre-warm
+        # Background model pre-warm
         prewarm_enabled = (
             self.settings.get("system", {}).get("prewarm_default_model", True)
             and not getattr(self, "low_resource_mode", False)
@@ -403,9 +403,9 @@ class VIKIController(
         if prewarm_enabled:
             try:
                 asyncio.get_running_loop()
-                self._create_tracked_task(self._prewarm_default_model(), "ollama_prewarm")
+                self._create_tracked_task(self._prewarm_default_model(), "model_prewarm")
             except RuntimeError:
-                viki_logger.debug("Sync Mode: Ollama prewarm deferred (no running loop).")
+                viki_logger.debug("Sync Mode: Model prewarm deferred (no running loop).")
 
         # --- ORYTHIX COGNITIVE ARCHITECTURE (v22 Evolution) ---
         self.governor = EthicalGovernor()

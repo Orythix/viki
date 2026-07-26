@@ -48,6 +48,11 @@ def _init_metrics() -> None:
     global _llm_inferences_total, _errors_total, _uptime_gauge
     global _websocket_connections
 
+    # Collectors live in a process-wide registry, so creating them twice raises
+    # DuplicateTimeseries.  Multiple apps in one process share the same metrics.
+    if _metrics_enabled:
+        return
+
     try:
         from prometheus_client import Counter, Gauge, Histogram
     except ImportError:
