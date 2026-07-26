@@ -27,6 +27,7 @@ class APILLM(LLMProvider):
         # call, so it can't be reused for the plain-text path.
         self._raw_client: Any = None
         self.base_url: str | None = None
+        self._instructor_unsupported: bool = False
         self.provider_type = config.get("provider", "openai")
         api_key = os.getenv(self.config.get("api_key_env", "OPENAI_API_KEY"))
 
@@ -186,6 +187,8 @@ class APILLM(LLMProvider):
                         break
 
             try:
+                if self._instructor_unsupported:
+                    raise ValueError("skip_instructor")
                 out, completion = await self.client.chat.completions.create_with_completion(
                     model=self.model_name,
                     messages=messages,
@@ -194,12 +197,19 @@ class APILLM(LLMProvider):
                 )
             except Exception as instructor_err:
                 err_str = str(instructor_err).lower()
-                if "response_format" in err_str or "json_schema" in err_str or "json_object" in err_str:
-                    viki_logger.warning(
-                        "Instructor structured output not supported by %s, falling back to prompt-based JSON: %s",
-                        self.model_name,
-                        instructor_err,
-                    )
+                if (
+                    self._instructor_unsupported
+                    or "response_format" in err_str
+                    or "json_schema" in err_str
+                    or "json_object" in err_str
+                    or "skip_instructor" in err_str
+                ):
+                    if not self._instructor_unsupported:
+                        self._instructor_unsupported = True
+                        viki_logger.info(
+                            "Instructor structured output not supported by %s; using prompt-based fallback",
+                            self.model_name,
+                        )
                     out = await self._prompt_based_structured(messages, response_model, temperature)
                 else:
                     raise
