@@ -121,6 +121,7 @@ def run_local_judge(
         # OpenAI-compatible response: choices[0].message.content
         choices = data.get("choices") or []
         msg = (choices[0].get("message") or {}).get("content") if choices else ""
+        msg = msg or ""
         parsed = _parse_judge_json(msg)
         rel = float(parsed.get("relevance", 0))
         rel = max(0.0, min(1.0, rel))
