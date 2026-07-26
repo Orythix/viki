@@ -224,13 +224,13 @@ class EngineeringMode:
             ]:
                 try:
                     result = await asyncio.to_thread(
-                            subprocess.run,
-                            cmd,
-                            cwd=repo_path,
-                            capture_output=True,
-                            text=True,
-                            timeout=120,
-                        )
+                        subprocess.run,
+                        cmd,
+                        cwd=repo_path,
+                        capture_output=True,
+                        text=True,
+                        timeout=120,
+                    )
                     if result.returncode == 0:
                         return True
                 except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -244,7 +244,12 @@ class EngineeringMode:
         try:
             import subprocess
 
-            await asyncio.to_thread(subprocess.run, ["git", "-C", repo_path, "add", "-A"], capture_output=True, timeout=10)
+            await asyncio.to_thread(
+                subprocess.run,
+                ["git", "-C", repo_path, "add", "-A"],
+                capture_output=True,
+                timeout=10,
+            )
             result = await asyncio.to_thread(
                 subprocess.run,
                 ["git", "-C", repo_path, "commit", "-m", f"VIKI: {message[:100]}"],

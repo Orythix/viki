@@ -91,7 +91,7 @@ class LocalLLM(LLMProvider):
                     line = raw.decode("utf-8", errors="ignore").strip()
                     if not line or not line.startswith("data: "):
                         continue
-                    payload_str = line[len("data: "):]
+                    payload_str = line[len("data: ") :]
                     if payload_str.strip() == "[DONE]":
                         return
                     try:

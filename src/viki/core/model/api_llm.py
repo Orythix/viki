@@ -258,10 +258,18 @@ class APILLM(LLMProvider):
             try:
                 data = ast.literal_eval(raw)
             except Exception:
-                viki_logger.warning("Prompt-based structured parse failed for %s", response_model.__name__)
+                viki_logger.warning(
+                    "Prompt-based structured parse failed for %s", response_model.__name__
+                )
                 return TypeAdapter(response_model).validate_python(
-                    {"final_thought": {"intent_summary": "error", "primary_strategy": "parse failure", "confidence": 0.0},
-                     "final_response": raw[:4000] if len(raw) > 4000 else raw}
+                    {
+                        "final_thought": {
+                            "intent_summary": "error",
+                            "primary_strategy": "parse failure",
+                            "confidence": 0.0,
+                        },
+                        "final_response": raw[:4000] if len(raw) > 4000 else raw,
+                    }
                 )
         return response_model.model_validate_json(_json.dumps(data))
 

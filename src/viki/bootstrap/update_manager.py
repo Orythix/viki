@@ -105,6 +105,7 @@ class UpdateManager:
         try:
             import json
             import urllib.request
+
             req = urllib.request.Request(
                 "http://127.0.0.1:1234/v1/models",
                 headers={"Accept": "application/json"},

@@ -149,7 +149,9 @@ class MutationPilotSkill(BaseSkill):
         for root, dirs, _ in await asyncio.to_thread(lambda: list(os.walk(directory))):
             for d in dirs:
                 if d == "__pycache__":
-                    await asyncio.to_thread(shutil.rmtree, os.path.join(root, d), ignore_errors=True)
+                    await asyncio.to_thread(
+                        shutil.rmtree, os.path.join(root, d), ignore_errors=True
+                    )
 
     async def _run_benchmark(self, path: str, test_command: str) -> str:
         target_dir = os.path.dirname(path)
@@ -252,9 +254,7 @@ class MutationPilotSkill(BaseSkill):
             backup_path = path + ".heal_bak"
             await asyncio.to_thread(shutil.copy2, path, backup_path)
 
-            await asyncio.to_thread(
-                lambda: open(path, "w", encoding="utf-8").write(new_content)
-            )
+            await asyncio.to_thread(lambda: open(path, "w", encoding="utf-8").write(new_content))
 
             # Verification
             if test_command:

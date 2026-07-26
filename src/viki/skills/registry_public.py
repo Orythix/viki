@@ -143,9 +143,7 @@ class SkillRegistryIndex:
         # Extract based on package type
         if pkg.download_url.endswith(".py"):
             install_file = target + ".py"
-            await asyncio.to_thread(
-                lambda: open(install_file, "wb").write(content)
-            )
+            await asyncio.to_thread(lambda: open(install_file, "wb").write(content))
             pkg.install_path = install_file
         elif pkg.download_url.endswith(".zip") or pkg.download_url.endswith(".tar.gz"):
             import tarfile
@@ -157,13 +155,9 @@ class SkillRegistryIndex:
             tmp.close()
             os.makedirs(target, exist_ok=True)
             if pkg.download_url.endswith(".zip"):
-                await asyncio.to_thread(
-                    lambda: zipfile.ZipFile(tmp.name, "r").extractall(target)
-                )
+                await asyncio.to_thread(lambda: zipfile.ZipFile(tmp.name, "r").extractall(target))
             else:
-                await asyncio.to_thread(
-                    lambda: tarfile.open(tmp.name, "r:gz").extractall(target)
-                )
+                await asyncio.to_thread(lambda: tarfile.open(tmp.name, "r:gz").extractall(target))
             os.unlink(tmp.name)
             pkg.install_path = target
 

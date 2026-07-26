@@ -75,7 +75,7 @@ class DeliberationEngine:
             return {"id": "N/A", "action": "reply", "reasoning": "No plan generated"}, 0.0
 
         best_plan = plans[0]
-        highest_score = -1.0 # Start lower than any possible score (0.0)
+        highest_score = -1.0  # Start lower than any possible score (0.0)
 
         for i, plan in enumerate(plans):
             # Placeholder for complex simulation logic that might fail if context/models are None.

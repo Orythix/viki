@@ -341,7 +341,9 @@ class ModelForgeSkill(BaseSkill):
         try:
             # LM Studio doesn't support programmatic model creation from Modelfiles.
             # Save the Modelfile as a reference for the user to apply in LM Studio.
-            viki_logger.info(f"Forge: Modelfile ready ({len(lessons)} facts). User should apply system prompt in LM Studio.")
+            viki_logger.info(
+                f"Forge: Modelfile ready ({len(lessons)} facts). User should apply system prompt in LM Studio."
+            )
             return (
                 f"Self-Evolution Complete. Integrated {len(lessons)} insights into forge config.\n"
                 f"Modelfile saved at: {modelfile_path}\n"

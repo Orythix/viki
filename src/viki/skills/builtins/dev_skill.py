@@ -195,9 +195,7 @@ class DevSkill(BaseSkill):
             os.makedirs(os.path.dirname(path), exist_ok=True)
             await self._backup_file(path)
             file_content = content.replace("\\n", "\n")
-            await asyncio.to_thread(
-                lambda: open(path, "w", encoding="utf-8").write(file_content)
-            )
+            await asyncio.to_thread(lambda: open(path, "w", encoding="utf-8").write(file_content))
             if self._controller:
                 self._controller.track_touched_item("touched_files", path)
             return f"Successfully wrote to {path}."
@@ -233,9 +231,7 @@ class DevSkill(BaseSkill):
                 new_content = content.replace(target, replacement)
 
             await self._backup_file(path)
-            await asyncio.to_thread(
-                lambda: open(path, "w", encoding="utf-8").write(new_content)
-            )
+            await asyncio.to_thread(lambda: open(path, "w", encoding="utf-8").write(new_content))
             if self._controller:
                 self._controller.track_touched_item("touched_files", path)
             return (
