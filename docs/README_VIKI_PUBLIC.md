@@ -1,12 +1,12 @@
 # VIKI: Supreme Architect of The Code Eternal
 
-> **Autonomous AI agent · Orythix cognitive architecture · Local-first / Ollama**
+> **Autonomous AI agent · Orythix cognitive architecture · Local-first / LM Studio**
 
 <div align="center">
 
-[![Version](https://img.shields.io/badge/version-8.0.0-blue.svg)](./CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-8.4.0-blue.svg)](./CHANGELOG.md)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Ollama](https://img.shields.io/badge/Ollama-local_LLM-orange.svg)](https://ollama.ai)
+[![LM Studio](https://img.shields.io/badge/Local%20LLM-LM%20Studio-blue.svg)](https://lmstudio.ai)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 
 **This repository ([VIKI-public](https://github.com/Orythix/VIKI-public)) is the public documentation and reference snapshot for VIKI.**
@@ -18,7 +18,7 @@ The **full implementation** (application source, UI, tests, `scripts/`, private 
 
 ## What is VIKI?
 
-**VIKI** (**Virtual Intelligence Knowledge Interface**) is a **Python** AI agent for **local-first** and **air-gapped** use with **Ollama** and optional cloud profiles. Following the **Industrial Restructuring**, it uses a **Clean Architecture (Hexagonal)** and **Domain-Driven Design (DDD)** pattern, featuring a centralized **Dependency Injection** container, **SQLAlchemy-backed** repository memory, **REST API** (SSE chat, missions), **MCP** tools, **Neural Forge** (baked **Ollama** images, default tag **`viki-neural-forge`**), and a **React** operator UI.
+**VIKI** (**Virtual Intelligence Knowledge Interface**) is a **Python** AI agent for **local-first** and **air-gapped** use with **LM Studio** and optional cloud profiles. Following the **Industrial Restructuring**, it uses a **Clean Architecture (Hexagonal)** and **Domain-Driven Design (DDD)** pattern, featuring a centralized **Dependency Injection** container, **SQLAlchemy-backed** repository memory, **REST API** (SSE chat, missions), **MCP** tools, **Neural Forge** (baked LM Studio models), and a **React** operator UI.
 
 **License (software):** Apache 2.0 — see [LICENSE](./LICENSE) and [NOTICE](./NOTICE).
 
@@ -28,7 +28,7 @@ The **full implementation** (application source, UI, tests, `scripts/`, private 
 - **Security vulnerabilities:** follow [docs/SECURITY.md](./docs/SECURITY.md) — use the **private** reporting channel described there, not a public issue.
 - **Code / PRs:** the implementation repo is **private**; maintainers grant access by invitation when appropriate. The exported [CONTRIBUTING.md](./CONTRIBUTING.md) describes internal workflow for people who already have access.
 
-## What’s in *this* repo (VIKI-public)
+## What's in *this* repo (VIKI-public)
 
 | Document | Description |
 |----------|-------------|
@@ -45,7 +45,7 @@ Implementation paths such as `viki/`, `ui/`, and `scripts/` are **not** publishe
 
 ## Keywords
 
-Local AI agent · self-hosted assistant · Ollama · Python · RAG · MCP · Neural Forge · sovereign AI · privacy-first LLM
+Local AI agent · self-hosted assistant · LM Studio · Python · RAG · MCP · Neural Forge · sovereign AI · privacy-first LLM
 
 ---
 

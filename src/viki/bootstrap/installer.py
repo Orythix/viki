@@ -194,13 +194,13 @@ class FirstRunOrchestrator:
             self.console,
             "Download Models",
             f"Download {len(self.models_to_download)} recommended model(s)?",
-            f"Estimated size: {total_disk / 1024:.1f} GB\nNetwork usage: One-time download from Ollama registry",
+            f"Estimated size: {total_disk / 1024:.1f} GB\nLoad models in LM Studio",
         )
 
         if not proceed:
             self.models_to_download = []
             self.console.print(
-                "[yellow]Skipping model download. You can pull models later with 'ollama pull <model>'.[/]"
+                "[yellow]Skipping model download. Load models in LM Studio later.[/]"
             )
 
         return True
@@ -275,11 +275,11 @@ system:
     role: "{owner_role}"
 
 models:
-  default: {"gemma4:12b" if self.profile and self.profile.can_run_14b else "phi3:mini"}
+  default: lmstudio-gemma4e4b
   providers:
-    ollama:
-      type: local
-      base_url: http://localhost:11434
+    lmstudio:
+      type: api
+      base_url: http://localhost:1234/v1
 """
             with open(settings_path, "w") as f:
                 f.write(settings)

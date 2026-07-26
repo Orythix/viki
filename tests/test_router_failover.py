@@ -185,7 +185,7 @@ class TestBudget(unittest.TestCase):
 
     def test_local_calls_always_allowed(self):
         budget = LLMBudget({"daily_usd_cap": 0.0})
-        allowed, _ = budget.can_spend("ollama", 1.0, is_cloud=False)
+        allowed, _ = budget.can_spend("lmstudio", 1.0, is_cloud=False)
         self.assertTrue(allowed)
 
     def test_explicit_cloud_required(self):

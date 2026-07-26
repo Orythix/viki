@@ -1,6 +1,6 @@
 """Neural Forge LoRA pipeline: real fine-tuning on accumulated lessons.
 
-Upgrades the Forge from Modelfile prompt-baking to actual parameter-level
+Upgrades the Forge from prompt-baking to actual parameter-level
 learning. Three stages, each usable independently:
 
 1. ``LoraDatasetExporter`` — turns the SQLite lessons store into a
@@ -8,7 +8,7 @@ learning. Three stages, each usable independently:
 2. ``LoraTrainer`` — runs LoRA fine-tuning via peft/trl. The heavy ML stack
    (torch, transformers, peft, trl, datasets) is imported lazily; on machines
    without it the trainer reports clearly instead of crashing.
-3. ``write_adapter_modelfile`` — emits an Ollama Modelfile that loads the
+3. ``write_adapter_modelfile`` — emits a reference Modelfile that loads the
    trained adapter on top of the base model.
 """
 
@@ -244,9 +244,9 @@ def write_adapter_modelfile(
     path: str,
     system_prompt: str = _DEFAULT_SYSTEM_PROMPT,
 ) -> str:
-    """Write an Ollama Modelfile that loads the LoRA adapter.
+    """Write a Modelfile that loads the LoRA adapter (reference for LM Studio).
 
-    ``base_model_tag`` is the Ollama tag (e.g. ``phi3:mini``); ``adapter_dir``
+    ``base_model_tag`` is the model id (e.g. ``google/gemma-4-e4b``); ``adapter_dir``
     is the directory produced by :class:`LoraTrainer`.
     """
     content = (

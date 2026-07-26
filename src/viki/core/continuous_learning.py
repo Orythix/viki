@@ -3,14 +3,13 @@ Continuous Learning Pipeline
 Manages automated model improvement cycles.
 """
 
-import asyncio
 import json
 import os
 import time
 from typing import Any, cast
 
 from viki.config.logger import viki_logger
-from viki.core.forge_config import resolve_forge_output_ollama_tag
+from viki.core.forge_config import resolve_forge_output_tag
 
 
 class ContinuousLearner:
@@ -115,7 +114,7 @@ class ContinuousLearner:
 
             # 3. Validate new model (if successfully created)
             if "SUCCESS" in result.upper() or "COMPLETE" in result.upper():
-                new_model_name = resolve_forge_output_ollama_tag(self.controller.settings)
+                new_model_name = resolve_forge_output_tag(self.controller.settings)
                 viki_logger.info(f"ContinuousLearner: Validating {new_model_name}...")
 
                 is_valid = await self._validate_model(new_model_name)
@@ -150,16 +149,20 @@ class ContinuousLearner:
 
     async def _validate_model(self, model_name: str) -> bool:
         """Validate model with quick tests."""
-        # Check if model exists in Ollama
+        # Check if model is loaded in LM Studio
         try:
-            import subprocess
+            import json
+            import urllib.request
 
-            result = await asyncio.to_thread(
-                subprocess.run, ["ollama", "list"], capture_output=True, text=True, timeout=10
+            req = urllib.request.Request(
+                "http://127.0.0.1:1234/v1/models",
+                headers={"Accept": "application/json"},
             )
-
-            if model_name not in result.stdout:
-                viki_logger.warning(f"Model {model_name} not found in Ollama")
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            model_ids = [m.get("id", "") for m in data.get("data", [])]
+            if model_name not in model_ids:
+                viki_logger.warning(f"Model {model_name} not found in LM Studio")
                 return False
 
             # Use A/B testing framework for validation

@@ -3,7 +3,6 @@ import os
 from typing import Any, cast
 
 from viki.config.logger import viki_logger
-from viki.core.forge_config import resolve_forge_output_ollama_tag
 from viki.skills.base import BaseSkill
 
 
@@ -19,19 +18,19 @@ def _safe_profile_model_name(profiles: dict, key: str) -> str | None:
     return None
 
 
-def _resolve_forge_base_ollama_model(controller: Any) -> str:
+def _resolve_forge_base_model(controller: Any) -> str:
     """
-    Ollama image tag for Modelfile `FROM` (must exist on host: `ollama list`).
-    Priority: VIKI_FORGE_BASE_OLLAMA_MODEL -> settings.system.forge_base_ollama_model
-    -> default profile's model_name if not a viki-* artifact -> qwen35/gemma4 profile -> llama3:latest.
+    LM Studio model name for prompt-bake base.
+    Priority: VIKI_FORGE_BASE_LMSTUDIO_MODEL -> settings.system.forge_base_model
+    -> default profile's model_name if not a viki-* artifact -> lmstudio-gemma4e4b profile -> google/gemma-4-e4b.
     """
-    b = _strip_env("VIKI_FORGE_BASE_OLLAMA_MODEL")
+    b = _strip_env("VIKI_FORGE_BASE_LMSTUDIO_MODEL")
     if b:
         return b
     sys_cfg = (
         (controller.settings.get("system") or {}) if getattr(controller, "settings", None) else {}
     )
-    b = (sys_cfg.get("forge_base_ollama_model") or "").strip()
+    b = (sys_cfg.get("forge_base_model") or "").strip()
     if b:
         return b
     models = (controller.models_config or {}).get("models", {})
@@ -41,11 +40,7 @@ def _resolve_forge_base_ollama_model(controller: Any) -> str:
         m = _safe_profile_model_name(profiles, fk)
         if m:
             return m
-    for alt in ("viki-trainer", "qwen35", "gemma4"):
-        m = _safe_profile_model_name(profiles, alt)
-        if m:
-            return m
-    return "llama3:latest"
+    return "google/gemma-4-e4b"
 
 
 def _write_modelfile_to_disk(path: str, content: str) -> None:
@@ -243,15 +238,15 @@ class ModelForgeSkill(BaseSkill):
                 return await self._execute_preference_training(params, method="dpo")
             if uns:
                 return await self._execute_unsloth_training(params)
-            return await self._build_ollama_model(params)
+            return await self._build_forge_model(params)
 
         if strategy == "lora":
             if not uns:
                 return "Error: LoRA training requested but Unsloth/CUDA not available."
             return await self._execute_unsloth_training(params)
 
-        if strategy in ("prompt_bake", "modelfile", "ollama"):
-            return await self._build_ollama_model(params)
+        if strategy in ("prompt_bake", "modelfile"):
+            return await self._build_forge_model(params)
 
         return f"Error: unknown forge strategy {strategy!r}. Use auto|dpo|orpo|lora|prompt_bake."
 
@@ -296,14 +291,14 @@ class ModelForgeSkill(BaseSkill):
             viki_logger.exception("Preference training failed")
             return f"PreferenceForge: {e!s}. {summary}"
 
-    async def _build_ollama_model(self, params: dict[str, Any]) -> str:
+    async def _build_forge_model(self, params: dict[str, Any]) -> str:
         """
-        Refactoring Strategy:
-        Instead of weight updates, we rebuild the Ollama model definition
-        by injecting high-value consolidated memories into the System Prompt layer.
+        Knowledge Injection via prompt-bake.
+        Instead of weight updates, we rebuild the model system prompt
+        by injecting high-value consolidated memories.
         This effectively 'bakes' knowledge into the model runtime.
         """
-        viki_logger.info("Forge: Initiating Ollama Model Rebuild (Knowledge Injection)...")
+        viki_logger.info("Forge: Initiating Knowledge Injection (prompt-bake)...")
 
         env_val = os.environ.get("VIKI_LESSON_EXPORT_MIN_ACCESS")
         if env_val is not None:
@@ -325,8 +320,8 @@ class ModelForgeSkill(BaseSkill):
 
         knowledge_block = "\n".join([f"- {l}" for l in lessons[-50:]])
 
-        base_model = _resolve_forge_base_ollama_model(self.controller)
-        viki_logger.info(f"Forge: Modelfile FROM {base_model}")
+        base_model = _resolve_forge_base_model(self.controller)
+        viki_logger.info(f"Forge: base model {base_model}")
 
         modelfile_content = (
             f"FROM {base_model}\n"
@@ -336,7 +331,6 @@ class ModelForgeSkill(BaseSkill):
             f"{knowledge_block}\n"
             f'"""\n'
             f"PARAMETER temperature 0.6\n"
-            f'PARAMETER stop "<|eot_id|>"\n'
         )
 
         data_dir = self.controller.settings.get("system", {}).get("data_dir", "./data")
@@ -345,23 +339,15 @@ class ModelForgeSkill(BaseSkill):
         viki_logger.info(f"Forge: Modelfile written ({len(lessons)} facts) -> {modelfile_path}")
 
         try:
-            out_tag = resolve_forge_output_ollama_tag(self.controller.settings)
-            cmd = ["ollama", "create", out_tag, "-f", modelfile_path]
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+            # LM Studio doesn't support programmatic model creation from Modelfiles.
+            # Save the Modelfile as a reference for the user to apply in LM Studio.
+            viki_logger.info(f"Forge: Modelfile ready ({len(lessons)} facts). User should apply system prompt in LM Studio.")
+            return (
+                f"Self-Evolution Complete. Integrated {len(lessons)} insights into forge config.\n"
+                f"Modelfile saved at: {modelfile_path}\n"
+                f"To apply: Open LM Studio -> Load your model -> Settings -> System Prompt -> paste the SYSTEM block from the Modelfile.\n"
+                f"Or use the Modelfile at: {modelfile_path}"
             )
-            _, stderr = await process.communicate()
-
-            if process.returncode == 0:
-                viki_logger.info(f"Forge SUCCESS: {out_tag} model updated.")
-                return (
-                    f"Self-Evolution Complete. Integrated {len(lessons)} insights into Ollama model '{out_tag}'. "
-                    f"Set models.default to 'viki-evolved' in viki/config/models.yaml (or keep using qwen35). "
-                    f"Verify: ollama run {out_tag}"
-                )
-            return f"Forge Failed: {stderr.decode()}"
 
         except Exception as e:
             return f"Forge Critical Error: {str(e)}"

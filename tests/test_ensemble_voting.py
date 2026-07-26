@@ -26,7 +26,7 @@ class _StubProvider(LLMProvider):
         self.calls: list[list[dict[str, str]]] = []
 
     def is_cloud(self) -> bool:
-        return self.provider_name not in ("local", "ollama", "mock")
+        return self.provider_name not in ("local", "lmstudio", "mock")
 
     async def chat(self, messages, temperature=0.7):
         self.calls.append(messages)

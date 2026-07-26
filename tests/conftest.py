@@ -59,29 +59,29 @@ sovereign:
 def test_models_path(temp_data_dir):
     """Create a minimal models.yaml for testing."""
     models_content = """
-default_model: "gemma4:12b"
+default_model: "lmstudio-gemma4e4b"
 fallback_order:
-  - "gemma4:12b"
-  - "phi3:mini"
+  - "lmstudio-gemma4e4b"
+  - "lmstudio-qwen3"
 
 model_profiles:
-  gemma4:12b:
-    provider: "ollama"
-    model_name: "gemma4:12b"
+  lmstudio-gemma4e4b:
+    provider: "lmstudio"
+    model_name: "google/gemma-4-e4b"
     temperature: 0.7
     capabilities: ["reasoning", "coding", "general"]
-  phi3:mini:
-    provider: "ollama"
-    model_name: "phi3:mini"
+  lmstudio-qwen3:
+    provider: "lmstudio"
+    model_name: "qwen/qwen3.5-9b"
     temperature: 0.5
     capabilities: ["fast_response"]
 
 task_routes:
   general:
-    primary: "gemma4:12b"
-    fallback: "phi3:mini"
+    primary: "lmstudio-gemma4e4b"
+    fallback: "lmstudio-qwen3"
   reasoning:
-    primary: "gemma4:12b"
+    primary: "lmstudio-gemma4e4b"
     fallback: "phi3:mini"
   coding:
     primary: "gemma4:12b"

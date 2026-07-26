@@ -8,7 +8,6 @@ import logging
 import os
 import re
 import sqlite3
-import subprocess
 import time
 from typing import cast
 
@@ -214,17 +213,11 @@ def _bake_model(settings_path: str, nickname: str, occupation: str, more_info: s
             with open(modelfile_path, "w", encoding="utf-8") as f:
                 f.write(modelfile_content)
 
-            # Run ollama create
-            result = subprocess.run(
-                ["ollama", "create", "viki-evolved", "-f", modelfile_path],
-                capture_output=True,
-                text=True,
+            # LM Studio doesn't support programmatic model creation from Modelfiles.
+            # Save the Modelfile for the user to apply in LM Studio.
+            console.print(
+                f"[dim]   - Modelfile saved at: {modelfile_path}[/]\n"
+                f"[dim]   - To apply: Open LM Studio -> Load model -> Settings -> System Prompt -> paste from Modelfile[/]"
             )
-
-            if result.returncode == 0:
-                console.print("[dim]   - Model 'viki-evolved' baked successfully.[/]")
-            else:
-                logger.error(f"Ollama create failed: {result.stderr}")
-                console.print(f"[red]   - Model bake failed: {result.stderr}[/]")
     except Exception as e:
         logger.error(f"Model bake failed: {e}")

@@ -10,15 +10,15 @@ from viki.eval.benchmarks import (
     run_harness,
 )
 from viki.eval.rag_eval import GoldRow, RagEvalReport, evaluate_rag_retrieval, load_gold_jsonl
-from viki.eval.rag_judge import enrich_report_with_ollama_judge, run_ollama_judge
+from viki.eval.rag_judge import enrich_report_with_local_judge, run_local_judge
 
 __all__ = [
     "GoldRow",
     "RagEvalReport",
     "evaluate_rag_retrieval",
     "load_gold_jsonl",
-    "enrich_report_with_ollama_judge",
-    "run_ollama_judge",
+    "enrich_report_with_local_judge",
+    "run_local_judge",
     "HarnessConfig",
     "DatasetSpec",
     "build_controller",

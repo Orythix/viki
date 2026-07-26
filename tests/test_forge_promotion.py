@@ -160,7 +160,7 @@ class TestPromotionGate(unittest.TestCase):
         self.assertIsNotNone(score, "capability index should compute, not silently fail")
         self.assertGreaterEqual(score, 0.0)
 
-    def test_raw_ollama_tag_retargets_viki_evolved_profile(self):
+    def test_raw_model_tag_retargets_viki_evolved_profile(self):
         controller = _stub_controller(self.data_dir)
         controller.models_config = {
             "models": {

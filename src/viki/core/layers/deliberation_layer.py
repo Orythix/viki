@@ -441,7 +441,7 @@ class DeliberationLayer(CortexLayer):
                     isinstance(msg_content, str)
                     and raw_msg.get("role") == "assistant"
                     and (
-                        "ollama error" in msg_lower
+                        "lm studio error" in msg_lower
                         or "not found" in msg_lower
                         or ("model" in msg_lower and "not found" in msg_lower)
                         or ("invalid json" in msg_lower)

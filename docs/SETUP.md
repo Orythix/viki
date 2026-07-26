@@ -1,17 +1,13 @@
-# Setting Up VIKI (v8.3.0 The Code Eternal)
+# Setting Up VIKI (v8.4.0 The Code Eternal)
 
-## 📦 Prerequisites
+## Prerequisites
 
 1.  **Python 3.11+**: Ensure you have Python installed and added to PATH.
-2.  **Ollama**: Install from [ollama.ai](https://ollama.ai) and pull the core models:
-    ```bash
-    ollama pull phi3
-    ollama pull deepseek-r1
-    ```
+2.  **LM Studio**: Install from [lmstudio.ai](https://lmstudio.ai) and load a model (default: `google/gemma-4-e4b`). The local inference server listens on `http://127.0.0.1:1234`.
 3.  **Visual Studio Build Tools** (Windows Only): Required for compiling `unsloth` dependencies if you plan to use `forge` for LoRA training.
 4.  **rank_bm25**: Required for Hybrid Memory Search. Automatically installed via `pip install -e .`.
 
-## 🛠️ Environment Configuration
+## Environment Configuration
 
 1.  **Clone the Repository**:
     ```powershell
@@ -50,7 +46,7 @@
     ```
     **Security**: Generate strong values; never commit them. See [viki/SECURITY_docs/SETUP.md](viki/SECURITY_docs/SETUP.md) for details.
 
-## 🚀 Running VIKI
+## Running VIKI
 
 To start the **Sovereign Intelligence Core** (CLI):
 
@@ -62,10 +58,10 @@ VIKI will initialize her **Nexus** and begin listening on all channels.
 
 ### Troubleshooting (Windows)
 
-- **`videoio(MSMF): can't grab frame` after each message**: The BioModule webcam sensor is **off by default** (`system.bio_webcam_enabled: false` in `viki/config/settings.yaml`). If you still see this on an older build, upgrade to the current tree or set `VIKI_BIO_WEBCAM=0` in `.env`. Enable only with a working camera: `VIKI_BIO_WEBCAM=1` or `bio_webcam_enabled: true`.
+- **`videoio(MSMF): can't grab frame` after each message**: The BioModule webcam sensor is **off by default** (`system.bio_webcam_enabled: false` in `config/settings.yaml`). If you still see this on an older build, upgrade to the current tree or set `VIKI_BIO_WEBCAM=0` in `.env`. Enable only with a working camera: `VIKI_BIO_WEBCAM=1` or `bio_webcam_enabled: true`.
 - **Hugging Face `HF_TOKEN` / rate limits**: Optional; set `HF_TOKEN` in the environment if you download many models from the Hub.
 
-## 🧪 Testing
+## Testing
 
 To verify key systems:
 
@@ -74,7 +70,7 @@ To verify key systems:
 3.  **Visual Test**: Ask "What's on my screen right now?"
 4.  **Evolution Test**: Type `/evolve` to trigger a dry run of the Neural Forge.
 
-## 🌐 VIKI Personas
+## VIKI Personas
 
 VIKI supports multiple **personas** — behavioral profiles that shape interaction style:
 
@@ -85,9 +81,9 @@ VIKI supports multiple **personas** — behavioral profiles that shape interacti
 
 All personas inherit The Code Eternal identity and core directives. Personas are defined in `config/personas/*.yaml`.
 
-### Baking lessons into a local Ollama model (Neural Forge)
+### Baking lessons into a local LM Studio model (Neural Forge)
 
-After you have **lessons** in `data/` and a **base** model pulled (`ollama pull …`), run from repo root: `python scripts/build_viki_model.py`. That creates an Ollama image whose default tag is **`viki-neural-forge`** (set `system.forge_output_ollama_tag` or `VIKI_FORGE_OUTPUT_OLLAMA_MODEL` to change it). Wire it up via profile **`viki-evolved`** in `viki/config/models.yaml` (`model_name` must match `ollama list`). Full steps: [README.md — Build your VIKI model](README.md#build-your-viki-model).
+After you have **lessons** in `data/` and a **base** model loaded in LM Studio (e.g. `google/gemma-4-e4b`), run from repo root: `python scripts/build_viki_model.py`. That creates a Modelfile at `data/Modelfile.viki_evolved` with a baked-in system prompt. Load the base model in LM Studio and paste the system prompt from the Modelfile into the System Prompt field. Full steps: [README.md — Build your VIKI model](README.md#build-your-viki-model).
 
 ## Related folders in this repo
 
@@ -101,4 +97,4 @@ Full map: [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md).
 
 ---
 
-*Runbook version: aligned with VIKI v8.3.0 (The Code Eternal). Update this file when default ports, flags, or critical architecture patterns change.*
+*Runbook version: aligned with VIKI v8.4.0 (The Code Eternal). Update this file when default ports, flags, or critical architecture patterns change.*

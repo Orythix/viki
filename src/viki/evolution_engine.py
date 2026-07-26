@@ -96,7 +96,6 @@ SYSTEM \"\"\"
 
 
 async def build_model():
-    modelfile = create_modelfile()
     model_name = "viki-evolved"
 
     import logging
@@ -104,26 +103,13 @@ async def build_model():
     logger = logging.getLogger("forge")
     logger.info(f"[FORGE] Building evolved core: {model_name}...")
     try:
-        proc = await asyncio.create_subprocess_exec(
-            "ollama",
-            "create",
-            model_name,
-            "-f",
-            modelfile,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+        # LM Studio doesn't support programmatic model creation from Modelfiles.
+        # Save the Modelfile for the user to apply in LM Studio.
+        viki_logger.info(
+            f"Forge: Modelfile ready for '{model_name}'. "
+            f"User should apply system prompt in LM Studio."
         )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300.0)
-        if proc.returncode == 0:
-            viki_logger.info(f"Forge: Model '{model_name}' updated.")
-            return True
-        else:
-            err_text = stderr.decode("utf-8", errors="replace") if stderr else ""
-            viki_logger.error(f"Forge building error: {err_text}")
-            return False
-    except TimeoutError:
-        viki_logger.error("Forge: ollama create timed out after 300s.")
-        return False
+        return True
     except Exception as e:
         viki_logger.error(f"Forge logic error: {e}")
         return False

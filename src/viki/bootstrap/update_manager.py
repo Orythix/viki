@@ -100,36 +100,30 @@ class UpdateManager:
             return None
 
     async def _check_model_updates(self) -> list[UpdateInfo]:
-        """Check if pulled Ollama models have updates."""
+        """Check if loaded LM Studio models have updates."""
         updates = []
         try:
-            result = await asyncio.to_thread(
-                subprocess.run,
-                ["ollama", "list"],
-                capture_output=True,
-                text=True,
-                timeout=15,
+            import json
+            import urllib.request
+            req = urllib.request.Request(
+                "http://127.0.0.1:1234/v1/models",
+                headers={"Accept": "application/json"},
             )
-            if result.returncode != 0:
-                return []
-
-            for line in result.stdout.strip().splitlines()[1:]:
-                parts = line.split()
-                if len(parts) >= 2:
-                    model_name = parts[0]
-                    # Check if there's a newer version
-                    # (Ollama doesn't have a clean "check update" API,
-                    # so we check by attempting pull which idempotently updates)
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            for m in data.get("data", []):
+                model_name = m.get("id", "")
+                if model_name:
                     updates.append(
                         UpdateInfo(
                             component=f"model:{model_name}",
                             current_version="local",
                             available_version="latest",
-                            update_available=True,
-                            update_command=f"ollama pull {model_name}",
+                            update_available=False,
+                            update_command=f"Load updated model in LM Studio: {model_name}",
                         )
                     )
-        except (FileNotFoundError, subprocess.TimeoutExpired, Exception) as e:
+        except Exception as e:
             viki_logger.debug(f"Failed to check model updates: {e}")
 
         return updates

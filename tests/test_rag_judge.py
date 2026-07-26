@@ -1,11 +1,11 @@
-"""Tests for optional Ollama RAG judge (parsing + report enrichment)."""
+"""Tests for optional local LLM RAG judge (parsing + report enrichment)."""
 
 from __future__ import annotations
 
 from unittest.mock import patch
 
 from viki.eval.rag_eval import GoldRow, QueryResult, RagEvalReport
-from viki.eval.rag_judge import _parse_judge_json, enrich_report_with_ollama_judge, run_ollama_judge
+from viki.eval.rag_judge import _parse_judge_json, enrich_report_with_local_judge, run_local_judge
 
 
 def test_parse_judge_json_plain():
@@ -59,11 +59,11 @@ def test_enrich_report_mocked():
         },
     )()
 
-    with patch("viki.eval.rag_judge.run_ollama_judge", return_value=fake):
-        enrich_report_with_ollama_judge(
+    with patch("viki.eval.rag_judge.run_local_judge", return_value=fake):
+        enrich_report_with_local_judge(
             report,
             gold,
-            ollama_url="http://127.0.0.1:11434",
+            base_url="http://127.0.0.1:1234",
             model="dummy",
             timeout_s=1.0,
         )
@@ -75,8 +75,8 @@ def test_enrich_report_mocked():
     assert "judge" in report.meta
 
 
-def test_run_ollama_judge_parse_only():
-    mock_resp = b'{"message":{"content":"{\\"relevance\\":0.5,\\"covers_expected\\":true,\\"rationale\\":\\"fine\\"}"}}\n'
+def test_run_local_judge_parse_only():
+    mock_resp = b'{"choices":[{"message":{"content":"{\\"relevance\\":0.5,\\"covers_expected\\":true,\\"rationale\\":\\"fine\\"}"}}]}\n'
 
     class FakeResp:
         def read(self):
@@ -92,11 +92,11 @@ def test_run_ollama_judge_parse_only():
         return FakeResp()
 
     with patch("urllib.request.urlopen", fake_urlopen):
-        jr = run_ollama_judge(
+        jr = run_local_judge(
             query="hello",
             retrieved=["a"],
             expected_phrases=["x"],
-            ollama_url="http://127.0.0.1:11434",
+            base_url="http://127.0.0.1:1234",
             model="m",
             timeout_s=5.0,
         )

@@ -1,10 +1,10 @@
 """
-Optional LLM-as-judge for RAG retrieval (local Ollama).
+Optional LLM-as-judge for RAG retrieval (local LM Studio).
 
 Why: substring gold checks miss semantic relevance; a small local model can score
 whether retrieved chunks *support* answering the query and *mention* expected concepts.
 
-Security: sends query + retrieved text to Ollama on localhost (or your URL only).
+Security: sends query + retrieved text to LM Studio on localhost (or your URL only).
 Do not point at untrusted remotes with sensitive corpus text.
 
 Default: off — keeps CI and quick eval runs fast and deterministic.
@@ -71,18 +71,19 @@ def _parse_judge_json(text: str) -> dict[str, Any]:
     raise ValueError("model did not return valid JSON")
 
 
-def run_ollama_judge(
+def run_local_judge(
     *,
     query: str,
     retrieved: Sequence[str],
     expected_phrases: Sequence[str],
-    ollama_url: str,
+    base_url: str,
     model: str,
     timeout_s: float = 60.0,
     max_context_chars: int = 6000,
 ) -> JudgeResult:
     """
-    Ask Ollama (chat API) to score retrieval quality. Returns structured JudgeResult.
+    Ask local LLM (OpenAI-compatible /v1/chat/completions) to score retrieval quality.
+    Returns structured JudgeResult.
     """
     t0 = time.perf_counter()
     ctx = _build_context_snippet(retrieved, max_total=max_context_chars)
@@ -96,15 +97,14 @@ def run_ollama_judge(
     )
     user = f"USER QUERY:\n{query}\n\nEXPECTED CONCEPTS (gold hints):\n{hints}\n\nRETRIEVED PASSAGES:\n{ctx}\n"
 
-    url = ollama_url.rstrip("/") + "/api/chat"
+    url = base_url.rstrip("/") + "/v1/chat/completions"
     payload = {
         "model": model,
         "messages": [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ],
-        "stream": False,
-        "options": {"temperature": 0.1},
+        "temperature": 0.1,
     }
     raw = ""
     try:
@@ -118,7 +118,9 @@ def run_ollama_judge(
         with urllib.request.urlopen(req, timeout=timeout_s) as resp:
             raw = resp.read().decode("utf-8", errors="replace")
         data = json.loads(raw)
-        msg = (data.get("message") or {}).get("content") or ""
+        # OpenAI-compatible response: choices[0].message.content
+        choices = data.get("choices") or []
+        msg = (choices[0].get("message") or {}).get("content") if choices else ""
         parsed = _parse_judge_json(msg)
         rel = float(parsed.get("relevance", 0))
         rel = max(0.0, min(1.0, rel))
@@ -154,11 +156,11 @@ def run_ollama_judge(
         return JudgeResult(0.0, False, "", raw[:500], ms, error=err)
 
 
-def enrich_report_with_ollama_judge(
+def enrich_report_with_local_judge(
     report: RagEvalReport,
     gold_rows: Sequence[GoldRow],
     *,
-    ollama_url: str,
+    base_url: str,
     model: str,
     timeout_s: float = 60.0,
     max_context_chars: int = 6000,
@@ -176,11 +178,11 @@ def enrich_report_with_ollama_judge(
         expected: list[str] = []
         if g:
             expected = list(g.must_contain_any) + list(g.must_contain_all)
-        jr = run_ollama_judge(
+        jr = run_local_judge(
             query=q.query,
             retrieved=q.retrieved,
             expected_phrases=expected,
-            ollama_url=ollama_url,
+            base_url=base_url,
             model=model,
             timeout_s=timeout_s,
             max_context_chars=max_context_chars,
@@ -203,7 +205,7 @@ def enrich_report_with_ollama_judge(
     )
     report.meta = dict(report.meta)
     report.meta["judge"] = {
-        "ollama_url": ollama_url,
+        "base_url": base_url,
         "model": model,
         "queries_judged": n,
         "judge_errors": errors,

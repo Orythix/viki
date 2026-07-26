@@ -36,7 +36,6 @@ def _looks_like_gemini_secret(key: str | None) -> bool:
         return False
     s = str(key).strip()
     if s.lower() in (
-        "ollama",
         "none",
         "dummy",
         "placeholder",
@@ -54,7 +53,6 @@ def _looks_like_groq_secret(key: str | None) -> bool:
         return False
     s = str(key).strip()
     if s.lower() in (
-        "ollama",
         "none",
         "dummy",
         "placeholder",
@@ -71,7 +69,6 @@ def _looks_like_mistral_secret(key: str | None) -> bool:
         return False
     s = str(key).strip()
     if s.lower() in (
-        "ollama",
         "none",
         "dummy",
         "placeholder",

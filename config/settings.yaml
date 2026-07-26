@@ -1,7 +1,7 @@
 # User-specific config: use .env (copy from .env.example) instead of editing this file.
-# Env overrides: VIKI_DATA_DIR, VIKI_WORKSPACE_DIR, VIKI_PERSONA, VIKI_SHADOW_MODE, VIKI_AIR_GAP, VIKI_LOCAL_LLM_ONLY,
-#   VIKI_FORGE_BASE_OLLAMA_MODEL, VIKI_FORGE_OUTPUT_OLLAMA_MODEL (Ollama tag for prompt-bake output; default viki-neural-forge),
-#   VIKI_OLLAMA_THINK (1/true enables Ollama reasoning trace; default off for speed + cleaner UX),
+  # Env overrides: VIKI_DATA_DIR, VIKI_WORKSPACE_DIR, VIKI_PERSONA, VIKI_SHADOW_MODE, VIKI_AIR_GAP, VIKI_LOCAL_LLM_ONLY,
+  # VIKI_LMSTUDIO_URL (LM Studio base URL; default http://localhost:1234/v1),
+  # VIKI_FORGE_BASE_LMSTUDIO_MODEL, VIKI_FORGE_OUTPUT_LMSTUDIO_MODEL (LM Studio model name for prompt-bake output; default viki-neural-forge),
 #   VIKI_EMBED_GPU (1/true for CUDA sentence-transformers), VIKI_UNSLOTH_RUN_TRAIN (LoRA),
 #   VIKI_GIT_CONTEXT (1/true appends git snapshot to project context).
 #   VIKI_SESSION_USAGE_LOG (1/true/false) — append JSONL usage events under data_dir (usage_session.jsonl).
@@ -50,9 +50,9 @@ system:
   # Override at runtime with VIKI_LOW_RESOURCE=1.
   low_resource_mode: true
 
-  # When true, OpenAI/Anthropic API profiles are never selected; use Ollama (models.yaml) only.
+  # When true, OpenAI/Anthropic API profiles are never selected; use LM Studio (models.yaml) only.
   # Set false and configure real keys when you want cloud models. Env: VIKI_LOCAL_LLM_ONLY=true|false.
-  # NIM integration: set to false — NVIDIA NIM is now the primary provider.
+  # LM Studio integration: set to false — LM Studio is the primary local provider.
   local_llm_only: false
 
   # Max reasoning steps per request. Lower = less LLM churn, fewer tokens per task.
@@ -69,40 +69,18 @@ system:
   # Disabled for latency: the ensemble adds ~2 serial LLM round-trips (agents + synthesizer) before the main answer.
   use_ensemble: false
 
-  # Ollama (local): when true, API sends think=true — enables chain-of-thought reasoning traces for higher quality responses.
-  # Set false for max speed. Per-profile override: set ollama_enable_thinking on a models.yaml profile. Env: VIKI_OLLAMA_THINK.
-  ollama_enable_thinking: false
 
-  # Optional Ollama generate options merged into every local request (temperature is still set per call).
-  # Baseline for all profiles. Per-profile ollama_options in models.yaml override specific keys.
-  # Override with env VIKI_OLLAMA_OPTIONS_JSON.
-  ollama_options: { num_predict: 4096, num_ctx: 16384, top_k: 40, top_p: 0.95, repeat_penalty: 1.1 }
-
-  # When true, run a quick web research pulse at startup. Set false to avoid competing with first user request.
-  startup_research: false
-
-  # When true, if the reply looks uncertain or model confidence is low, run a web search and
-  # rewrite the answer using snippets. Disabled when air_gap or shadow_mode is on, or when the research
-  # skill is not registered. Override with env VIKI_AUTO_WEB_RESEARCH.
-  # Enabled for better answer quality — low_resource_mode will still gate it at runtime.
-  auto_web_research_when_uncertain: true
-
-  # Minimum access_count for export_training_dataset (LoRA JSONL). Lower to 1 to export single-hit lessons.
-  # Env: VIKI_LESSON_EXPORT_MIN_ACCESS.
-  lesson_export_min_access_count: 2
-
-  # When true, fire a 1-token Ollama "ping" at boot to load the default model into RAM/VRAM.
-  # Disabled — primary model is now NVIDIA NIM (cloud), no local Ollama prewarm needed.
+  # Disabled — primary model is now LM Studio (local), no prewarm needed.
   prewarm_default_model: false
 
   # At startup, log warnings if critical skills (email, calendar, research) are misconfigured.
   skill_health_check: true
 
-  # Ollama tag for Neural Forge Modelfile `FROM` line (e.g. qwen3.6:latest). Override with VIKI_FORGE_BASE_OLLAMA_MODEL.
-  forge_base_ollama_model: "qwen3.6:latest"
+  # LM Studio model for Neural Forge prompt-bake (e.g. google/gemma-4-e4b). Override with VIKI_FORGE_BASE_LMSTUDIO_MODEL.
+  forge_base_model: "google/gemma-4-e4b"
 
-  # Ollama image name created by prompt-bake / internal_forge (ollama create). Override with VIKI_FORGE_OUTPUT_OLLAMA_MODEL.
-  forge_output_ollama_tag: "viki-neural-forge"
+  # LM Studio model name created by prompt-bake / internal_forge. Override with VIKI_FORGE_OUTPUT_LMSTUDIO_MODEL.
+  forge_output_tag: "viki-neural-forge"
 
   # When true, BioModule opens the default webcam (OpenCV). Default false avoids Windows MSMF errors without a camera.
   bio_webcam_enabled: false
@@ -142,7 +120,7 @@ forge:
   capability_index_min_tasks: 5           # minimum eval tasks for promotion gate
   capability_index_bootstrap_iters: 100   # bootstrap iterations for confidence intervals
 
-  # Background evolution after boot (VIKI running): web snippets -> lessons -> Ollama Modelfile prompt-bake.
+  # Background evolution after boot (VIKI running): web snippets -> lessons -> prompt-bake.
   # Does not increase the base GGUF size; it grows the SYSTEM knowledge block and SQLite lessons.
   # Off by default (network + CPU). Env: VIKI_BACKGROUND_EVOLUTION_AT_BOOT=true
   background_evolution_at_boot: true

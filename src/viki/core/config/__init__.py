@@ -14,8 +14,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 
 class LLMConfig(BaseModel):
-    model: str = "gemma4:12b"
-    host: str = "http://127.0.0.1:11434"
+    model: str = "google/gemma-4-e4b"
+    host: str = "http://127.0.0.1:1234"
     temperature: float = 0.7
     max_steps: int = 10
 
@@ -63,7 +63,7 @@ class DataConfig(BaseModel):
 
 _FLAT_TO_SUB: dict[str, tuple[str, str]] = {
     "model": ("llm", "model"),
-    "ollama_host": ("llm", "host"),
+    "lmstudio_url": ("llm", "host"),
     "temperature": ("llm", "temperature"),
     "max_steps": ("llm", "max_steps"),
     "memory_max_turns": ("memory", "max_turns"),
@@ -131,7 +131,7 @@ class V2Config(BaseModel):
         return self.llm.model
 
     @property
-    def ollama_host(self) -> str:
+    def lmstudio_url(self) -> str:
         return self.llm.host
 
     @property
@@ -271,7 +271,7 @@ def _load_dotenv(base_dir: Path | None = None) -> dict[str, str]:
 
 _ENV_MAP: dict[str, tuple[str, str]] = {
     "VIKI_MODEL": ("llm", "model"),
-    "OLLAMA_HOST": ("llm", "host"),
+    "LMSTUDIO_URL": ("llm", "host"),
     "VIKI_DATA_DIR": ("data", "dir"),
     "VIKI_LOG_LEVEL": ("ui", "log_level"),
     "VIKI_MCP_CONFIG": ("tools", "mcp_config_path"),
@@ -302,7 +302,7 @@ def _load_env() -> dict[str, Any]:
 def parse_cli_overrides(args: list[str] | None = None) -> tuple[dict[str, Any], argparse.Namespace]:
     parser = argparse.ArgumentParser(description="VIKI", add_help=False)
     parser.add_argument("--model", help="LLM model name")
-    parser.add_argument("--ollama-host", help="Ollama server URL")
+    parser.add_argument("--lmstudio-url", help="LM Studio server URL")
     parser.add_argument("--temperature", type=float, help="LLM temperature")
     parser.add_argument("--max-steps", type=int, help="Max ReAct steps")
     parser.add_argument("--data-dir", help="Data directory")
@@ -324,7 +324,7 @@ def parse_cli_overrides(args: list[str] | None = None) -> tuple[dict[str, Any], 
     overrides: dict[str, Any] = {}
     mapping: dict[str, str] = {
         "model": "model",
-        "ollama_host": "ollama_host",
+        "lmstudio_url": "lmstudio_url",
         "temperature": "temperature",
         "max_steps": "max_steps",
         "data_dir": "data_dir",

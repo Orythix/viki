@@ -17,7 +17,7 @@ if REPO_ROOT not in sys.path:
 
 from viki.core.llm import LocalLLM  # noqa: E402
 
-from viki.core.forge_config import DEFAULT_FORGE_OUTPUT_OLLAMA_TAG  # noqa: E402
+from viki.core.forge_config import DEFAULT_FORGE_OUTPUT_TAG  # noqa: E402
 from viki.core.knowledge_ingestion import LearningModule  # noqa: E402
 from viki.skills.builtins.research_skill import ResearchSkill  # noqa: E402
 
@@ -70,13 +70,13 @@ def _build_components(settings_path: str):
     providers = models_root.get("providers", {})
 
     profile = profiles.get(default_profile_name, {})
-    provider_name = profile.get("provider", "ollama")
+    provider_name = profile.get("provider", "lmstudio")
     provider = providers.get(provider_name, {})
 
     local_config = {
         "type": provider.get("type", "local"),
-        "base_url": provider.get("base_url", "http://127.0.0.1:11434"),
-        "model_name": profile.get("model_name", DEFAULT_FORGE_OUTPUT_OLLAMA_TAG),
+        "base_url": provider.get("base_url", "http://127.0.0.1:1234"),
+        "model_name": profile.get("model_name", DEFAULT_FORGE_OUTPUT_TAG),
     }
 
     learning = LearningModule(data_dir=data_dir)

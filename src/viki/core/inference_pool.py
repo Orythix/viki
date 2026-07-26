@@ -169,11 +169,7 @@ class InferencePool:
         try:
             import aiohttp
 
-            url = (
-                f"{node.url.rstrip('/')}/api/tags"
-                if "ollama" in node.url.lower()
-                else f"{node.url.rstrip('/')}/v1/models"
-            )
+            url = f"{node.url.rstrip('/')}/v1/models"
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, timeout=5) as resp:
                     node.is_available = resp.status == 200

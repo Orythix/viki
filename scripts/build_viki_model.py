@@ -4,18 +4,18 @@ Build a VIKI model from learned lessons.
 This is a thin, dependency-light orchestrator on top of the existing Neural
 Forge pipeline (see viki/skills/creation/forge.py + viki/core/preference_forge.py):
 
-  1. Pre-flight checks   -- Ollama daemon, base model, lesson count
+  1. Pre-flight checks   -- LM Studio server, base model, lesson count
   2. Dataset export      -- viki/core/learning.py:export_training_dataset (min access_count: --min-count, settings, VIKI_LESSON_EXPORT_MIN_ACCESS)
   3. Build               -- prompt-bake (default) | lora | dpo | orpo
-  4. Verify              -- ollama show <tag>
+  4. Verify              -- LM Studio /v1/models
   5. (optional) Promote  -- patch viki/config/models.yaml -> models.default
 
 Strategies:
 
     prompt_bake (default, CPU-only)
         Writes data/Modelfile.viki_evolved with FROM <base> + a SYSTEM block
-        carrying the top reinforced lessons, then runs `ollama create`.
-        Produces an Ollama tag (default: viki-neural-forge; see settings / VIKI_FORGE_OUTPUT_OLLAMA_MODEL).
+        carrying the top reinforced lessons. Load the model in LM Studio.
+        Produces a model (default: viki-neural-forge; see settings / VIKI_FORGE_OUTPUT_TAG).
 
     lora (CUDA required)
         Runs Unsloth + TRL 4-bit LoRA SFT on the exported JSONL.
@@ -26,7 +26,7 @@ Strategies:
 
 Examples (PowerShell):
 
-    # Default: CPU prompt-bake using qwen3.6:latest as the base
+    # Default: CPU prompt-bake using qwen3.6 as the base
     python scripts/build_viki_model.py
 
     # Build and promote viki-evolved as the default profile
@@ -45,10 +45,13 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import os
 import shutil
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -58,7 +61,7 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 
 import yaml  # noqa: E402
 
-from viki.core.forge_config import resolve_forge_output_ollama_tag  # noqa: E402
+from viki.core.forge_config import resolve_forge_output_tag  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Console helpers
@@ -106,11 +109,11 @@ def load_settings() -> dict[str, Any]:
 def resolve_base_model(cli_value: str | None, settings: dict[str, Any]) -> str:
     if cli_value:
         return cli_value.strip()
-    env = (os.environ.get("VIKI_FORGE_BASE_OLLAMA_MODEL") or "").strip()
+    env = (os.environ.get("VIKI_FORGE_BASE_MODEL") or "").strip()
     if env:
         return env
     sysconf = settings.get("system") or {}
-    return (sysconf.get("forge_base_ollama_model") or "qwen3.6:latest").strip()
+    return (sysconf.get("forge_base_model") or "qwen3.6:latest").strip()
 
 
 def resolve_data_dir(cli_value: str | None, settings: dict[str, Any]) -> Path:
@@ -130,59 +133,50 @@ def resolve_data_dir(cli_value: str | None, settings: dict[str, Any]) -> Path:
 
 
 # ---------------------------------------------------------------------------
-# Ollama interaction
+# LM Studio interaction
 # ---------------------------------------------------------------------------
 
 
-def _run(cmd: list[str], capture: bool = True, timeout: int = 60) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        cmd,
-        capture_output=capture,
-        text=True,
-        timeout=timeout,
-        check=False,
-    )
+def _lmstudio_base_url() -> str:
+    """Origin of the LM Studio server, without any ``/v1`` suffix."""
+    url = os.environ.get("LMSTUDIO_URL", "http://127.0.0.1:1234").rstrip("/")
+    if url.endswith("/v1"):
+        url = url[: -len("/v1")]
+    return url
 
 
-def ollama_available() -> tuple[bool, str]:
-    if shutil.which("ollama") is None:
-        return False, "`ollama` is not on PATH. Install from https://ollama.com/download."
+def _lmstudio_model_ids() -> list[str]:
+    """Model ids served by LM Studio via its OpenAI-compatible ``/v1/models``.
+
+    Raises ``OSError`` if the server is unreachable so callers can tell
+    "not running" apart from "running but model missing".
+    """
+    with urllib.request.urlopen(f"{_lmstudio_base_url()}/v1/models", timeout=5) as resp:
+        if resp.status != 200:
+            raise OSError(f"LM Studio returned HTTP {resp.status}")
+        payload = json.loads(resp.read().decode("utf-8"))
+    return [m.get("id", "") for m in payload.get("data", [])]
+
+
+def lmstudio_available() -> tuple[bool, str]:
+    base = _lmstudio_base_url()
     try:
-        r = _run(["ollama", "list"], timeout=10)
-    except Exception as e:
-        return False, f"`ollama list` raised: {e!r}"
-    if r.returncode != 0:
-        return (
-            False,
-            f"Ollama daemon not reachable. Start it with `ollama serve`. stderr={r.stderr.strip()}",
+        ids = _lmstudio_model_ids()
+    except (OSError, urllib.error.URLError, ValueError) as e:
+        return False, (
+            f"LM Studio not reachable at {base} ({e}). Start its local server "
+            f"(or set LMSTUDIO_URL) and load a model."
         )
-    return True, r.stdout
+    return True, f"LM Studio reachable at {base}; {len(ids)} model(s) loaded."
 
 
-def ollama_has_model(tag: str) -> bool:
+def lmstudio_has_model(tag: str) -> bool:
     try:
-        r = _run(["ollama", "list"], timeout=10)
-    except Exception:
+        ids = _lmstudio_model_ids()
+    except (OSError, urllib.error.URLError, ValueError):
         return False
-    if r.returncode != 0:
-        return False
-    needle = tag.split(":")[0]
-    for line in r.stdout.splitlines()[1:]:
-        first = line.split()[0] if line.strip() else ""
-        if first == tag or first.split(":")[0] == needle:
-            return True
-    return False
-
-
-def ollama_create(tag: str, modelfile_path: Path) -> tuple[bool, str]:
-    r = _run(["ollama", "create", tag, "-f", str(modelfile_path)], timeout=900)
-    out = (r.stdout or "") + (r.stderr or "")
-    return r.returncode == 0, out.strip()
-
-
-def ollama_show(tag: str) -> str:
-    r = _run(["ollama", "show", tag], timeout=15)
-    return (r.stdout or r.stderr).strip()
+    needle = tag.split("/")[-1].split(":")[0]
+    return any(tag == mid or needle in mid for mid in ids)
 
 
 # ---------------------------------------------------------------------------
@@ -248,16 +242,12 @@ def strategy_prompt_bake(
     ok(f"Modelfile written -> {modelfile_path}")
 
     if dry_run:
-        warn("--dry-run: skipping `ollama create`.")
+        warn("--dry-run: skipping model load step.")
         return 0
 
-    info(f"Running: ollama create {tag} -f {modelfile_path.name}")
-    success, out = ollama_create(tag, modelfile_path)
-    if not success:
-        fail("ollama create failed:")
-        print(out)
-        return 3
-    ok(f"Ollama image '{tag}' built.")
+    info("Load the base model in LM Studio, then apply the Modelfile system prompt.")
+    info(f"Modelfile: {modelfile_path}")
+    ok("Prompt-bake Modelfile ready for LM Studio.")
     return 0
 
 
@@ -431,10 +421,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--name",
         default=None,
-        help="Output Ollama tag (prompt_bake). Default: forge_output_ollama_tag / VIKI_FORGE_OUTPUT_OLLAMA_MODEL / viki-neural-forge.",
+        help="Output model tag (prompt_bake). Default: forge_output_tag / VIKI_FORGE_OUTPUT_TAG / viki-neural-forge.",
     )
     p.add_argument(
-        "--base", default=None, help="Base Ollama model (FROM line). Defaults to settings/env."
+        "--base", default=None, help="Base model (FROM line). Defaults to settings/env."
     )
     p.add_argument("--steps", type=int, default=60, help="Training steps (lora/dpo/orpo).")
     p.add_argument(
@@ -449,7 +439,7 @@ def parse_args() -> argparse.Namespace:
         "--set-default", action="store_true", help="Patch models.yaml -> default: viki-evolved."
     )
     p.add_argument(
-        "--dry-run", action="store_true", help="Run all checks but skip ollama create / training."
+        "--dry-run", action="store_true", help="Run all checks but skip model load / training."
     )
     return p.parse_args()
 
@@ -462,7 +452,7 @@ def main() -> int:
     settings = load_settings()
     data_dir = resolve_data_dir(args.data_dir, settings)
     base_model = resolve_base_model(args.base, settings)
-    forge_tag = (args.name or "").strip() or resolve_forge_output_ollama_tag(settings)
+    forge_tag = (args.name or "").strip() or resolve_forge_output_tag(settings)
 
     info(f"strategy   : {args.strategy}")
     info(f"data dir   : {data_dir}")
@@ -474,17 +464,17 @@ def main() -> int:
 
     step(1, total_steps, "Pre-flight checks")
     if args.strategy == "prompt_bake" or args.set_default:
-        avail, out = ollama_available()
+        avail, out = lmstudio_available()
         if not avail:
             fail(out)
             return 1
-        ok("Ollama daemon reachable.")
-        if not ollama_has_model(base_model):
-            fail(f"Base model '{base_model}' not found locally. Run: ollama pull {base_model}")
+        ok("LM Studio reachable.")
+        if not lmstudio_has_model(base_model):
+            fail(f"Base model '{base_model}' not found. Load it in LM Studio first.")
             return 1
         ok(f"Base model present: {base_model}")
     else:
-        info("Skipping Ollama check for GPU strategy (training stack only).")
+        info("Skipping LM Studio check for GPU strategy (training stack only).")
 
     try:
         from viki.core.knowledge_ingestion import LearningModule  # type: ignore
@@ -548,12 +538,15 @@ def main() -> int:
 
     step(4, total_steps, "Verify build")
     if args.strategy == "prompt_bake" and not args.dry_run:
-        details = ollama_show(forge_tag)
-        if details and "Error" not in details.split("\n", 1)[0]:
-            print(_c("90", details[:600]))
-            ok(f"Verified: ollama tag '{forge_tag}' exists.")
-        else:
-            warn("Could not verify Ollama tag (see output above).")
+        try:
+            ids = _lmstudio_model_ids()
+            if any(forge_tag in mid for mid in ids):
+                print(_c("90", f"Models loaded: {', '.join(ids[:5])}"))
+                ok(f"Verified: model '{forge_tag}' found in LM Studio.")
+            else:
+                warn(f"Model '{forge_tag}' not detected in LM Studio. Load it manually.")
+        except Exception as e:
+            warn(f"Could not verify LM Studio models: {e}")
     else:
         info("Verification only applies to prompt_bake builds.")
 
@@ -564,14 +557,15 @@ def main() -> int:
     print(_c("1;32", "\nDone."))
     print(_c("90", "Next steps:"))
     if args.strategy == "prompt_bake":
-        print(f"  - Try it directly: ollama run {forge_tag}")
+        print(f"  - Load the model in LM Studio and apply the Modelfile system prompt.")
+        print(f"  - Modelfile: {data_dir / 'Modelfile.viki_evolved'}")
         if not args.set_default:
             print("  - To use it as VIKI's default, edit viki/config/models.yaml:")
             print("       default: viki-evolved")
             print("    or rerun with --set-default.")
     elif args.strategy == "lora":
         print(f"  - Adapter at: {data_dir / 'viki-lora-adapter'}")
-        print("  - Convert to GGUF and create an Ollama Modelfile with `ADAPTER` to serve it.")
+        print("  - Convert to GGUF and load in LM Studio.")
     else:
         print(f"  - Adapter at: {data_dir / f'viki-{args.strategy}-adapter'}")
     return 0

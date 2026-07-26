@@ -5,7 +5,7 @@ See also the repo-wide index [docs/DOCUMENTATION.md](../../docs/DOCUMENTATION.md
 ## Prerequisites
 
 - Docker + Docker Compose
-- Local [Ollama](https://ollama.com) with a pulled model (e.g. `ollama pull llama3.2`)
+- LM Studio running with a loaded model (default: `google/gemma-4-e4b`)
 - Optional: Node 20+ for React dev server
 
 ## Docker Compose (API + sandbox)
@@ -18,7 +18,7 @@ docker compose up --build
 ```
 
 - API: `http://127.0.0.1:8000/health`
-- Ollama from container: set `OLLAMA_URL=http://host.docker.internal:11434` (default in compose).
+- LM Studio from container: set `LMSTUDIO_URL=http://host.docker.internal:1234/v1` (default in compose).
 
 ## Backend (local Python)
 

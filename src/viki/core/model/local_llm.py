@@ -1,4 +1,4 @@
-"""Ollama provider with Async support and JSON mode."""
+"""LM Studio provider — OpenAI-compatible local inference."""
 
 from __future__ import annotations
 
@@ -16,36 +16,29 @@ from viki.config.logger import viki_logger
 from viki.core.schema import ThoughtObject, VIKIResponse, VIKIResponseLite
 
 from .llm_provider import LLMProvider
-from .utils import ollama_model_exists
 
 T = Any
 
 
 class LocalLLM(LLMProvider):
-    """Ollama provider with Async support and JSON mode."""
+    """LM Studio provider using OpenAI-compatible /v1/chat/completions."""
 
     def __init__(self, config: dict[str, Any]):
         super().__init__(config)
-        env_url = (os.environ.get("OLLAMA_HOST") or "").strip().rstrip("/")
-        self.base_url = env_url or self.config.get("base_url", "http://127.0.0.1:11434").rstrip("/")
+        env_url = (os.environ.get("VIKI_LMSTUDIO_URL") or "").strip().rstrip("/")
+        self.base_url = env_url or self.config.get("base_url", "http://127.0.0.1:1234").rstrip("/")
         if "localhost" in self.base_url:
             self.base_url = self.base_url.replace("localhost", "127.0.0.1")
-        self._ollama_enable_thinking = bool(config.get("ollama_enable_thinking", False))
-        _oo = config.get("ollama_options")
-        self._ollama_options: dict[str, Any] = dict(_oo) if isinstance(_oo, dict) else {}
-        # Ollama's default keep_alive is 5 minutes; without this, any gap longer than
-        # that (or a switch to a different local model) evicts the model and the next
-        # call pays a full reload (tens of seconds for multi-GB weights).
-        self._keep_alive = os.environ.get("VIKI_OLLAMA_KEEP_ALIVE", "30m")
+        # LM Studio doesn't use keep_alive or Ollama-specific options
         self._session: aiohttp.ClientSession | None = None
-        if not ollama_model_exists(self.base_url, self.model_name):
+        if not _lmstudio_model_available(self.base_url, self.model_name):
             self.available = False
             self.unavailable_reason = (
-                f"Ollama model '{self.model_name}' not found. "
-                f"Run: ollama pull {self.model_name.split(':')[0]}"
+                f"LM Studio model '{self.model_name}' not found at {self.base_url}. "
+                "Load a model in LM Studio and ensure it is running."
             )
             viki_logger.warning(
-                "Model '%s' (provider: ollama) disabled: %s",
+                "Model '%s' (provider: lmstudio) disabled: %s",
                 self.model_name,
                 self.unavailable_reason,
             )
@@ -54,11 +47,6 @@ class LocalLLM(LLMProvider):
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=300))
         return self._session
-
-    def _ollama_options_merged(self, temperature: float) -> dict[str, Any]:
-        o: dict[str, Any] = {"temperature": float(temperature)}
-        o.update(self._ollama_options)
-        return o
 
     def is_cloud(self) -> bool:
         try:
@@ -78,41 +66,44 @@ class LocalLLM(LLMProvider):
         temperature: float = 0.7,
         tools: list[dict[str, Any]] | None = None,
     ):
-        data = {
+        data: dict[str, Any] = {
             "model": self.model_name,
             "messages": messages,
             "stream": True,
-            "think": self._ollama_enable_thinking,
-            "options": self._ollama_options_merged(temperature),
-            "keep_alive": self._keep_alive,
+            "temperature": temperature,
         }
         if tools:
             data["tools"] = tools
         try:
-            async with self._get_session().post(f"{self.base_url}/api/chat", json=data) as resp:
+            async with self._get_session().post(
+                f"{self.base_url}/v1/chat/completions", json=data
+            ) as resp:
                 if resp.status == 404:
                     yield f"Error: Model '{self.model_name}' not found."
+                    return
+                if resp.status != 200:
+                    body = await resp.text()
+                    yield f"Error: LM Studio returned {resp.status}: {body[:200]}"
                     return
                 async for raw in resp.content:
                     if not raw:
                         continue
                     line = raw.decode("utf-8", errors="ignore").strip()
-                    if not line:
+                    if not line or not line.startswith("data: "):
                         continue
+                    payload_str = line[len("data: "):]
+                    if payload_str.strip() == "[DONE]":
+                        return
                     try:
-                        payload = json.loads(line)
+                        payload = json.loads(payload_str)
                     except json.JSONDecodeError:
                         continue
-                    msg = payload.get("message") or {}
-                    if msg.get("thinking"):
-                        continue
-                    chunk = msg.get("content") or ""
+                    delta = payload.get("choices", [{}])[0].get("delta", {})
+                    chunk = delta.get("content") or ""
                     if chunk:
                         yield chunk
-                    if payload.get("done"):
-                        return
         except Exception as e:
-            yield f"Error streaming Local Model: {e}"
+            yield f"Error calling LM Studio: {e}"
 
     async def chat(
         self,
@@ -123,26 +114,27 @@ class LocalLLM(LLMProvider):
         tools: list[dict[str, Any]] | None = None,
         response_format: dict | None = None,
     ) -> str:
-        # `format` accepts "json" (generic JSON mode) or a JSON-schema dict —
-        # Ollama ≥0.5 constrains decoding to the schema (grammar decoding).
         t0 = time.perf_counter()
         success = False
         try:
-            data = {
+            data: dict[str, Any] = {
                 "model": self.model_name,
                 "messages": messages,
                 "stream": False,
-                "think": self._ollama_enable_thinking,
-                "options": self._ollama_options_merged(temperature),
-                "keep_alive": self._keep_alive,
+                "temperature": temperature,
             }
             if format:
-                data["format"] = format
+                if isinstance(format, str):
+                    data["response_format"] = {"type": "text"}
+                elif isinstance(format, dict):
+                    data["response_format"] = {
+                        "type": "json_schema",
+                        "json_schema": {"name": "response", "schema": format},
+                    }
             if response_format:
                 data["response_format"] = response_format
             if tools:
                 data["tools"] = tools
-                data["stream"] = False
             if image_path:
 
                 def read_image():
@@ -152,33 +144,46 @@ class LocalLLM(LLMProvider):
                 base64_image = await asyncio.to_thread(read_image)
                 for i in range(len(messages) - 1, -1, -1):
                     if messages[i]["role"] == "user":
-                        messages[i]["images"] = [base64_image]
+                        original_text = messages[i].get("content", "")
+                        if isinstance(original_text, str):
+                            messages[i]["content"] = [
+                                {"type": "text", "text": original_text},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
+                                },
+                            ]
                         break
 
             try:
-                async with self._get_session().post(f"{self.base_url}/api/chat", json=data) as resp:
+                async with self._get_session().post(
+                    f"{self.base_url}/v1/chat/completions", json=data
+                ) as resp:
                     if resp.status == 404:
                         return f"Error: Model '{self.model_name}' not found."
+                    if resp.status != 200:
+                        body = await resp.text()
+                        return f"LM Studio Error ({resp.status}): {body[:300]}"
                     resp_json = await resp.json()
                     if "error" in resp_json:
-                        return f"Ollama Error: {resp_json['error']}"
-                    if "message" not in resp_json:
-                        return f"Error: Missing 'message' in Ollama response: {resp_json}"
-
-                    _msg = resp_json["message"]
-                    _msg.pop("thinking", None)
-                    self.record_token_usage(
-                        resp_json.get("prompt_eval_count", 0), resp_json.get("eval_count", 0)
-                    )
-
-                    if _msg.get("tool_calls"):
+                        return f"LM Studio Error: {resp_json['error']}"
+                    choices = resp_json.get("choices", [])
+                    if not choices:
+                        return "Error: No choices in LM Studio response."
+                    message = choices[0].get("message", {})
+                    usage = resp_json.get("usage", {})
+                    if usage:
+                        self.record_token_usage(
+                            usage.get("prompt_tokens", 0),
+                            usage.get("completion_tokens", 0),
+                        )
+                    if message.get("tool_calls"):
                         success = True
-                        return json.dumps({"tool_calls": _msg["tool_calls"]})
-
+                        return json.dumps({"tool_calls": message["tool_calls"]})
                     success = True
-                    return _msg.get("content") or ""
+                    return message.get("content") or ""
             except Exception as e:
-                return f"Error calling Local Model: {str(e)}"
+                return f"Error calling LM Studio: {str(e)}"
         finally:
             try:
                 from viki.core.usage_log import emit_llm_inference
@@ -192,38 +197,44 @@ class LocalLLM(LLMProvider):
     ) -> dict[str, Any]:
         t0 = time.perf_counter()
         success = False
-        data = {
+        data: dict[str, Any] = {
             "model": self.model_name,
             "messages": messages,
             "stream": False,
-            "think": self._ollama_enable_thinking,
-            "options": self._ollama_options_merged(temperature),
+            "temperature": temperature,
             "tools": tools,
-            "keep_alive": self._keep_alive,
         }
         try:
-            async with self._get_session().post(f"{self.base_url}/api/chat", json=data) as resp:
+            async with self._get_session().post(
+                f"{self.base_url}/v1/chat/completions", json=data
+            ) as resp:
                 if resp.status == 404:
                     raise ValueError(f"Model '{self.model_name}' not found.")
+                if resp.status != 200:
+                    body = await resp.text()
+                    raise ValueError(f"LM Studio Error ({resp.status}): {body[:300]}")
                 try:
                     resp_json = await resp.json()
                 except (aiohttp.ContentTypeError, json.JSONDecodeError) as e:
-                    viki_logger.error(f"Failed to parse Ollama response: {e}")
-                    raise ValueError(f"Invalid JSON response from Ollama: {resp.status}") from e
+                    viki_logger.error(f"Failed to parse LM Studio response: {e}")
+                    raise ValueError(f"Invalid JSON from LM Studio: {resp.status}") from e
                 if "error" in resp_json:
-                    raise ValueError(f"Ollama Error: {resp_json['error']}")
-                if "message" not in resp_json:
-                    raise ValueError(f"Missing 'message' in response: {resp_json}")
-                self.record_token_usage(
-                    resp_json.get("prompt_eval_count", 0), resp_json.get("eval_count", 0)
-                )
+                    raise ValueError(f"LM Studio Error: {resp_json['error']}")
+                choices = resp_json.get("choices", [])
+                if not choices:
+                    raise ValueError(f"No choices in response: {resp_json}")
+                usage = resp_json.get("usage", {})
+                if usage:
+                    self.record_token_usage(
+                        usage.get("prompt_tokens", 0),
+                        usage.get("completion_tokens", 0),
+                    )
                 success = True
-                msg = dict(resp_json["message"])
-                msg.pop("thinking", None)
-                return msg
+                message: dict[str, Any] = choices[0].get("message", {})
+                return message
         except Exception as e:
             viki_logger.error(f"Tool call failed: {e}")
-            return {"role": "assistant", "content": f"Ollama Error: {str(e)}"}
+            return {"role": "assistant", "content": f"LM Studio Error: {str(e)}"}
         finally:
             try:
                 from viki.core.usage_log import emit_llm_inference
@@ -268,64 +279,6 @@ class LocalLLM(LLMProvider):
             return False
         return "properties" in data and "required" in data
 
-    async def _ollama_recover_after_schema_echo(
-        self,
-        msgs_without_guide: list[dict[str, Any]],
-        response_model: type[T],
-        temperature: float,
-        image_path: str | None,
-    ) -> str:
-        recovery = [dict(m) for m in msgs_without_guide]
-        if response_model == VIKIResponse:
-            recovery.append(
-                {
-                    "role": "system",
-                    "content": (
-                        "You returned a JSON Schema. That is wrong. Return ONLY a data object "
-                        "with fields final_thought, final_response, and action as described. "
-                        "final_response must contain your actual reply to the user."
-                    ),
-                }
-            )
-        else:
-            recovery.append(
-                {
-                    "role": "system",
-                    "content": "Return only the answer JSON object, not a schema describing it.",
-                }
-            )
-        text = await self.chat(
-            recovery,
-            temperature=min(0.4, max(0.1, temperature)),
-            format="json",
-            image_path=image_path,
-            response_format={
-                "type": "json_schema",
-                "json_schema": response_model.model_json_schema(),
-            },
-        )
-        text = (text if isinstance(text, str) else str(text or "")).strip()
-        try:
-            data2 = self._parse_structured_json_heuristics(text)
-            if not self._data_is_json_schema_echo(data2):
-                return text
-        except Exception:
-            return text
-
-        plain_msgs = [dict(m) for m in msgs_without_guide]
-        plain_msgs.append(
-            {
-                "role": "system",
-                "content": "Reply in plain language only. Answer the user's last message helpfully. No JSON, no code fences, no preamble.",
-            }
-        )
-        return await self.chat(
-            plain_msgs,
-            temperature=min(0.55, max(0.15, temperature)),
-            format=None,
-            image_path=image_path,
-        )
-
     async def chat_structured(
         self,
         messages: list[dict[str, str]],
@@ -343,41 +296,48 @@ class LocalLLM(LLMProvider):
             base64_image = await asyncio.to_thread(read_image)
             for i in range(len(msgs) - 1, -1, -1):
                 if msgs[i]["role"] == "user":
-                    msgs[i]["images"] = [base64_image]
+                    msgs[i]["content"] = [
+                        {"type": "text", "text": msgs[i].get("content", "")},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
+                        },
+                    ]
                     break
 
         guide = self._compact_json_output_guide(response_model)
         msgs.append({"role": "system", "content": guide})
         json_schema = response_model.model_json_schema()
-        # Grammar-constrained decoding: pass the schema itself as `format` so
-        # the server restricts tokens to schema-valid JSON (no parse-retry).
         content = await self.chat(
             msgs,
             temperature=temperature,
-            format=json_schema,
+            response_format={"type": "json_schema", "json_schema": json_schema},
             image_path=image_path,
         )
         content = (content if isinstance(content, str) else str(content or "")).strip()
-        if content.startswith(("Ollama Error", "Error")):
-            # Older Ollama servers reject a schema-valued `format`; fall back
-            # to generic JSON mode with the schema as an advisory hint.
+        if content.startswith(("LM Studio Error", "Error")):
             content = await self.chat(
                 msgs,
                 temperature=temperature,
-                format="json",
+                response_format={"type": "text"},
                 image_path=image_path,
-                response_format={"type": "json_schema", "json_schema": json_schema},
             )
             content = (content if isinstance(content, str) else str(content or "")).strip()
 
         try:
             data = self._parse_structured_json_heuristics(content)
             if response_model == VIKIResponse and self._data_is_json_schema_echo(data):
-                content = await self._ollama_recover_after_schema_echo(
-                    msgs[:-1],
-                    response_model,
-                    temperature,
-                    image_path,
+                plain_msgs = [dict(m) for m in msgs[:-1]]
+                plain_msgs.append(
+                    {
+                        "role": "system",
+                        "content": "Reply in plain language only. Answer the user's last message helpfully. No JSON, no code fences, no preamble.",
+                    }
+                )
+                content = await self.chat(
+                    plain_msgs,
+                    temperature=min(0.55, max(0.15, temperature)),
+                    image_path=image_path,
                 )
                 content = (content if isinstance(content, str) else str(content or "")).strip()
                 if content.startswith(("{", "[")):
@@ -417,9 +377,8 @@ class LocalLLM(LLMProvider):
                 content2 = await self.chat(
                     retry_msgs,
                     temperature=min(0.5, temperature + 0.1 * retry_count),
-                    format="json",
-                    image_path=image_path,
                     response_format={"type": "json_schema", "json_schema": json_schema},
+                    image_path=image_path,
                 )
                 content2 = (content2 if isinstance(content2, str) else str(content2 or "")).strip()
                 try:
@@ -495,8 +454,8 @@ class LocalLLM(LLMProvider):
                 return extracted
         if s.startswith(("{", "[")):
             return fallback
-        if self._looks_like_ollama_connection_error(s):
-            return "I couldn't reach my local model. Make sure Ollama is running (e.g. run `ollama serve` or start the Ollama app), then try again."
+        if self._looks_like_connection_error(s):
+            return "I couldn't reach LM Studio. Make sure LM Studio is running and a model is loaded, then try again."
         return s[:2000] if len(s) > 2000 else s
 
     def _try_parse_json_object(self, content: Any) -> Any:
@@ -516,11 +475,11 @@ class LocalLLM(LLMProvider):
         return None
 
     @staticmethod
-    def _looks_like_ollama_connection_error(text: str) -> bool:
+    def _looks_like_connection_error(text: str) -> bool:
         return (
-            text.startswith("Error calling Local Model")
+            text.startswith("Error calling LM Studio")
             or "Cannot connect to host" in text
-            or "127.0.0.1:11434" in text
+            or "127.0.0.1:1234" in text
         )
 
     def _patch_viki_response(self, data: dict) -> dict:
@@ -604,3 +563,22 @@ class LocalLLM(LLMProvider):
                 else "Direct response",
                 "confidence": 0.7,
             }
+
+
+def _lmstudio_model_available(base_url: str, model_name: str) -> bool:
+    """Check if a model is loaded in LM Studio via /v1/models."""
+    try:
+        import urllib.request
+
+        req = urllib.request.Request(
+            f"{base_url}/v1/models",
+            headers={"Accept": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        for m in data.get("data", []):
+            if m.get("id") == model_name:
+                return True
+    except Exception:
+        viki_logger.warning("lmstudio_model_exists check failed")
+    return False

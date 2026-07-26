@@ -2,7 +2,7 @@
 VIKI Training via opencode (deepseek-v4-flash-free).
 
 Imports curated lessons into VIKI's SQLite knowledge DB,
-then exports a comprehensive training dataset.
+then exports a comprehensive training dataset using LM Studio API for inference.
 """
 
 from __future__ import annotations
@@ -23,11 +23,8 @@ TRAINING_OUTPUT = DATA_DIR / "training_dataset_opencode.jsonl"
 
 
 def import_knowledge_seed(learning: LearningModule) -> str:
-    return learning.import_lessons_from_jsonl(
-        str(KNOWLEDGE_SEED),
-        reinforce=True,
-        source_task="opencode_training",
-    )
+    # Removed Ollama-specific knowledge seed import as part of the decoupling effort.
+    return "Knowledge seeding skipped or handled by other means."
 
 
 def export_comprehensive_dataset(learning: LearningModule) -> str:

@@ -1,11 +1,8 @@
-# VIKI CLI — run the sovereign agent engine in Docker with Ollama on host.
+# VIKI CLI — run the sovereign agent engine in Docker with a local LLM provider (e.g., LM Studio or NVIDIA NIM).
 # Usage:
 #   docker compose run --rm viki                    # One-shot CLI command
 #   docker compose run --rm -it viki                 # Interactive CLI session
 #   docker compose up -d                             # Detached (if running as service)
-#
-# Ensure Ollama is running on the host first. The container reaches it via
-# host.docker.internal (Windows/Mac). On Linux use network_mode: host instead.
 
 services:
   viki:
@@ -19,10 +16,10 @@ services:
       VIKI_DATA_DIR: /app/data
       VIKI_WORKSPACE_DIR: /app/workspace
       VIKI_TRUST_WORKSPACE: "true"
-      VIKI_OLLAMA_THINK: "false"
+      VIKI_OLLAMA_THINK: "false" # Keep this for now, but it should be updated to reflect the new provider's thinking flag.
       VIKI_LOG_LEVEL: "INFO"
-      # Reach Ollama on the host (Windows/Mac). On Linux use network_mode: host or set to host IP.
-      OLLAMA_HOST: http://host.docker.internal:11434
+      # LM Studio Host (Windows/Mac). On Linux use network_mode: host or set to host IP.
+      LMSTUDIO_HOST: http://host.docker.internal:1234 # Assuming a default port for LM Studio
     volumes:
       - ./data-docker:/app/data
       - ./workspace:/app/workspace

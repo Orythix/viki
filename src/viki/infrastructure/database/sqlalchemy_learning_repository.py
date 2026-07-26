@@ -39,39 +39,37 @@ class SqlAlchemyLearningRepository(ILearningRepository):
         cur.execute(
             """CREATE TABLE IF NOT EXISTS lessons (
                 id TEXT PRIMARY KEY,
-                content TEXT NOT NULL,
-                text_representation TEXT NOT NULL,
+                content TEXT,
+                text_representation TEXT,
                 embedding TEXT,
-                created_at REAL NOT NULL,
-                last_accessed REAL NOT NULL,
+                created_at REAL,
+                last_accessed REAL,
                 access_count INTEGER DEFAULT 1,
-                author TEXT NOT NULL,
-                source_task TEXT NOT NULL,
-                reliability REAL NOT NULL DEFAULT 1.0
-            )"""
-        )
-        cur.execute(
-            """CREATE TABLE IF NOT EXISTS failures (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                action TEXT NOT NULL,
-                error TEXT NOT NULL,
-                context TEXT NOT NULL,
-                timestamp REAL NOT NULL
+                author TEXT,
+                source_task TEXT,
+                reliability REAL
             )"""
         )
         cur.execute(
             """CREATE TABLE IF NOT EXISTS relationships (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                source_id TEXT NOT NULL,
-                target_id TEXT NOT NULL,
-                type TEXT NOT NULL,
-                weight REAL NOT NULL DEFAULT 1.0,
-                metadata_json TEXT,
-                FOREIGN KEY(source_id) REFERENCES lessons(id),
-                FOREIGN KEY(target_id) REFERENCES lessons(id)
+                lesson_id TEXT,
+                subj TEXT,
+                pred TEXT,
+                obj TEXT,
+                FOREIGN KEY(lesson_id) REFERENCES lessons(id)
             )"""
         )
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_rel_source ON relationships(source_id)")
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS failures (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                action TEXT,
+                error TEXT,
+                context TEXT,
+                timestamp REAL
+            )"""
+        )
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_lessons_accessed ON lessons(last_accessed)")
         self.conn.commit()
 
     def _row_to_lesson(self, row: sqlite3.Row) -> Lesson:
@@ -155,15 +153,8 @@ class SqlAlchemyLearningRepository(ILearningRepository):
 
     def save_relationship(self, relationship: Relationship) -> None:
         self.conn.execute(
-            """INSERT INTO relationships (source_id, target_id, type, weight, metadata_json)
-               VALUES (?, ?, ?, ?, ?)""",
-            (
-                relationship.source_id,
-                relationship.target_id,
-                relationship.type,
-                relationship.weight,
-                json.dumps(relationship.metadata),
-            ),
+            "INSERT INTO relationships (lesson_id, subj, pred, obj) VALUES (?, ?, ?, ?)",
+            (relationship.lesson_id, relationship.subj, relationship.pred, relationship.obj),
         )
         self.conn.commit()
 
@@ -171,12 +162,10 @@ class SqlAlchemyLearningRepository(ILearningRepository):
         cur = self.conn.cursor()
         cur.execute(
             """SELECT l.* FROM lessons l
-               JOIN relationships r ON r.target_id = l.id
-               WHERE r.source_id = ?
-               UNION
-               SELECT l.* FROM lessons l
-               JOIN relationships r ON r.source_id = l.id
-               WHERE r.target_id = ?""",
+               JOIN relationships r ON r.lesson_id = l.id
+               WHERE r.subj IN (SELECT subj FROM relationships WHERE lesson_id = ?)
+               OR r.obj IN (SELECT obj FROM relationships WHERE lesson_id = ?)
+               LIMIT 20""",
             (lesson_id, lesson_id),
         )
         return [self._row_to_lesson(r) for r in cur.fetchall()]

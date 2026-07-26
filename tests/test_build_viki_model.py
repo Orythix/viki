@@ -53,11 +53,11 @@ class TestBuildVikiModel(unittest.TestCase):
         self.assertEqual(build_viki_model.resolve_base_model("custom", {}), "custom")
 
         # Env var override
-        with patch.dict(os.environ, {"VIKI_FORGE_BASE_OLLAMA_MODEL": "env-model"}):
+        with patch.dict(os.environ, {"VIKI_FORGE_BASE_MODEL": "env-model"}):
             self.assertEqual(build_viki_model.resolve_base_model(None, {}), "env-model")
 
         # Config fallback
-        settings = {"system": {"forge_base_ollama_model": "config-model"}}
+        settings = {"system": {"forge_base_model": "config-model"}}
         self.assertEqual(build_viki_model.resolve_base_model(None, settings), "config-model")
 
         # Default fallback
@@ -75,38 +75,29 @@ class TestBuildVikiModel(unittest.TestCase):
                 d = build_viki_model.resolve_data_dir(None, {})
                 self.assertTrue(d.samefile(Path(td)))
 
-    @patch("shutil.which")
-    @patch("scripts.build_viki_model._run")
-    def test_ollama_available(self, mock_run, mock_which):
-        # Not on PATH
-        mock_which.return_value = None
-        avail, msg = build_viki_model.ollama_available()
-        self.assertFalse(avail)
-        self.assertIn("not on PATH", msg)
-
-        # Daemon not reachable
-        mock_which.return_value = "ollama"
-        mock_run.return_value = SimpleNamespace(returncode=1, stderr="connection refused")
-        avail, msg = build_viki_model.ollama_available()
-        self.assertFalse(avail)
-        self.assertIn("not reachable", msg)
+    def test_lmstudio_available(self):
+        # Server unreachable
+        with patch("scripts.build_viki_model._lmstudio_model_ids", side_effect=OSError("refused")):
+            avail, msg = build_viki_model.lmstudio_available()
+            self.assertFalse(avail)
+            self.assertIn("not reachable", msg)
 
         # Success
-        mock_run.return_value = SimpleNamespace(returncode=0, stdout="models list")
-        avail, msg = build_viki_model.ollama_available()
-        self.assertTrue(avail)
+        with patch("scripts.build_viki_model._lmstudio_model_ids", return_value=["model-a"]):
+            avail, msg = build_viki_model.lmstudio_available()
+            self.assertTrue(avail)
 
-    @patch("scripts.build_viki_model._run")
-    def test_ollama_has_model(self, mock_run):
-        mock_run.return_value = SimpleNamespace(
-            returncode=0, stdout="NAME\nllama3:latest\nqwen3.6:latest\n"
-        )
-        self.assertTrue(build_viki_model.ollama_has_model("qwen3.6:latest"))
-        self.assertFalse(build_viki_model.ollama_has_model("phi3:latest"))
+    def test_lmstudio_has_model(self):
+        with patch(
+            "scripts.build_viki_model._lmstudio_model_ids",
+            return_value=["qwen3.6-latest", "llama3.2-latest"],
+        ):
+            self.assertTrue(build_viki_model.lmstudio_has_model("qwen3.6-latest"))
+            self.assertFalse(build_viki_model.lmstudio_has_model("phi3-latest"))
 
-    @patch("scripts.build_viki_model.ollama_create")
+    @patch("scripts.build_viki_model.lmstudio_available")
     @patch("viki.core.knowledge_ingestion.LearningModule")
-    def test_strategy_prompt_bake(self, mock_lm, mock_create):
+    def test_strategy_prompt_bake(self, mock_lm, mock_available):
         # Failure: no frequent lessons
         lm_instance = mock_lm.return_value
         lm_instance.get_frequent_lessons.return_value = []
@@ -118,7 +109,6 @@ class TestBuildVikiModel(unittest.TestCase):
 
         # Success
         lm_instance.get_frequent_lessons.return_value = ["lesson A", "lesson B"]
-        mock_create.return_value = (True, "success output")
         with tempfile.TemporaryDirectory() as td:
             rc = build_viki_model.strategy_prompt_bake(
                 base_model="base", tag="tag", data_dir=Path(td), min_count=2, dry_run=False

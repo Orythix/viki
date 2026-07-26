@@ -30,7 +30,7 @@ logging.getLogger("VIKI").setLevel(logging.WARNING)
 
 from viki.core.knowledge_ingestion import LearningModule  # noqa: E402
 from viki.eval.rag_eval import evaluate_rag_retrieval, load_gold_jsonl  # noqa: E402
-from viki.eval.rag_judge import enrich_report_with_ollama_judge  # noqa: E402
+from viki.eval.rag_judge import enrich_report_with_local_judge  # noqa: E402
 
 
 def main() -> int:
@@ -46,19 +46,19 @@ def main() -> int:
     p.add_argument(
         "--judge",
         action="store_true",
-        help="After retrieval, call local Ollama to score relevance (slower; needs ollama serve)",
+        help="After retrieval, call local LLM to score relevance (slower; needs LM Studio running)",
     )
     p.add_argument(
-        "--ollama-url",
-        default=os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434"),
-        help="Ollama base URL for --judge",
+        "--base-url",
+        default=os.environ.get("LMSTUDIO_URL", "http://127.0.0.1:1234"),
+        help="LM Studio base URL for --judge",
     )
     p.add_argument(
         "--judge-model",
         default=os.environ.get(
-            "OLLAMA_MODEL", os.environ.get("VIKI_FORGE_BASE_OLLAMA_MODEL", "llama3.2:latest")
+            "LMSTUDIO_MODEL", os.environ.get("VIKI_FORGE_BASE_MODEL", "google/gemma-4-e4b")
         ),
-        help="Ollama model tag for --judge",
+        help="LM Studio model id for --judge",
     )
     p.add_argument(
         "--judge-timeout",
@@ -87,10 +87,10 @@ def main() -> int:
         },
     )
     if args.judge:
-        enrich_report_with_ollama_judge(
+        enrich_report_with_local_judge(
             report,
             gold,
-            ollama_url=args.ollama_url,
+            base_url=args.base_url,
             model=args.judge_model,
             timeout_s=args.judge_timeout,
             max_context_chars=args.judge_context_chars,

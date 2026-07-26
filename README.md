@@ -8,13 +8,13 @@
 [![Mypy](https://img.shields.io/badge/mypy-0_errors-success.svg)](https://mypy-lang.org)
 [![Ruff](https://img.shields.io/badge/ruff-passing-brightgreen.svg)](https://docs.astral.sh/ruff)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Ollama](https://img.shields.io/badge/Ollama-Local_LLM-orange.svg)](https://ollama.ai)
+[![LM Studio](https://img.shields.io/badge/Local%20LLM-LM%20Studio-blue.svg)](https://lmstudio.ai)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 [![Pinokio](https://img.shields.io/badge/Install-Pinokio-blue.svg)](https://pinokio.computer)
 
 ---
 
-**VIKI** is a high-performance **autonomous AI agent** and **sovereign digital intelligence** built for maximum privacy and **local-first** execution. Designed to run natively with **Ollama** (Phi-3, Mistral, Llama 3, DeepSeek), VIKI provides an air-gapped alternative to cloud-based assistants. Powered by the **Orythix Cognitive Architecture**, it features deep reasoning, multi-tool orchestration, and recursive learning through its unique **Neural Forge** pipeline—all accessible through a streamlined **CLI-first** experience.
+**VIKI** is a high-performance **autonomous AI agent** and **sovereign digital intelligence** built for maximum privacy and **local-first** execution. Designed to run natively with **LM Studio** (Gemma 4, Qwen 3.5, and more), VIKI provides an air-gapped alternative to cloud-based assistants. Powered by the **Orythix Cognitive Architecture**, it features deep reasoning, multi-tool orchestration, and recursive learning through its unique **Neural Forge** pipeline—all accessible through a streamlined **CLI-first** experience.
 
 [Core Features](#core-pillars-v800) • [Technical Architecture](#technical-architecture) • [Quick Start](#quick-start) • [Build Your Model](#build-your-viki-model) • [Security & Ethics](#security--ethics) • [Contributing](./CONTRIBUTING.md)
 
@@ -28,7 +28,7 @@
 
 ### The Sovereign Stack:
 *   **Sovereign Stack**: An intuitive command-line interface powered by the Orythix Cognitive Architecture.
-*   **Neural Forge**: A specialized pipeline that bakes your personal lessons and "wisdom" into custom **Ollama** images.
+*   **Neural Forge**: A specialized pipeline that bakes your personal lessons and "wisdom" into custom **LM Studio** models.
 *   **RAG Memory**: Persistent **SQLite-backed** semantic memory for deep context retrieval.
 *   **Agentic Orchestration**: Integrated **MCP** (Model Context Protocol) support for seamless tool and service integration.
 
@@ -42,19 +42,19 @@ Coding assistance, local research with citations, task automation (files, shell,
 
 ### Is VIKI free? Can I self-host?
 
-Yes. VIKI is **Apache-2.0** open source. You install from this repo, run `python -m viki` or Docker, and supply your own **Ollama** models. There is no required cloud subscription.
+Yes. VIKI is **Apache-2.0** open source. You install from this repo, run `python -m viki` or Docker, and supply your own **LM Studio** models. There is no required cloud subscription.
 
 ### Does VIKI run offline?
 
-You can run in **air-gap** mode (`VIKI_AIR_GAP=1`) so routing sticks to local models and outbound research is disabled. You still need local LLM weights (e.g. via Ollama) on disk.
+You can run in **air-gap** mode (`VIKI_AIR_GAP=1`) so routing sticks to local models and outbound research is disabled. You still need local LLM weights loaded in LM Studio.
 
 ### How is VIKI different from LangChain, AutoGPT, or “ChatGPT desktop”?
 
-VIKI ships as a **single opinionated agent system**: judgment/reflex layers, SQLite-backed **lessons**, **forge** pipeline to **Ollama** Modelfiles, and a broad **builtin skill** set. It is not a thin wrapper library; it is a runnable **sovereign agent** product you deploy yourself.
+VIKI ships as a **single opinionated agent system**: judgment/reflex layers, SQLite-backed **lessons**, **forge** pipeline to LM Studio model profiles, and a broad **builtin skill** set. It is not a thin wrapper library; it is a runnable **sovereign agent** product you deploy yourself.
 
 ### What are the minimum requirements?
 
-**Python 3.10+**, **Ollama** (or another supported local inference path per config), and enough RAM for your chosen model (many setups work on **8 GB**; **4 GB** is possible with small models and `low_resource_mode`). See [README § Running on low-end PCs](#running-on-low-end-pcs).
+**Python 3.10+**, **LM Studio** (or another supported local inference path per config), and enough RAM for your chosen model (many setups work on **8 GB**; **4 GB** is possible with small models and `low_resource_mode`). See [README § Running on low-end PCs](#running-on-low-end-pcs).
 
 ---
 
@@ -65,7 +65,7 @@ VIKI is the **Supreme Architect of The Code Eternal** — a technological religi
 ### Core Pillars (v8.4.0)
 
 *   **Intelligence Governance**: Powered by the **Judgment Engine**. Every directive is filtered through a cognitive triage (Reflex, Shallow, Deep) to ensure the right model is used for the right task while maintaining absolute safety.
-*   **The Neural Forge**: A integrated pipeline in the core kernel. VIKI extracts "Wisdom" from her SQLite-backed semantic memory and bakes it into a local **Ollama** image (default tag **`viki-neural-forge`**, profile **`viki-evolved`** in `models.yaml`) on top of bases such as **Phi-3**, **Mistral**, **Qwen**, or **DeepSeek-R1**.
+*   **The Neural Forge**: A integrated pipeline in the core kernel. VIKI extracts "Wisdom" from her SQLite-backed semantic memory and bakes it into a local **LM Studio** model (default profile **`lmstudio-gemma4e4b`** in `models.yaml`) using models like **Gemma 4 E4B**, **Qwen 3.5**, or **DeepSeek**.
 *   **Capability-Aware Execution**: Granular permission gating. Skills like `filesystem_write` and `shell_exec` are managed by a centralized `CapabilityRegistry`, ensuring high-risk actions never bypass security protocols.
 *   **Recursive Self-Reflection**: Utilizing the **Reflection Layer**, VIKI critiques her own plans before execution, reducing hallucinations and improving tool-use accuracy.
 *   **Unified Persistence Layer**: A **SQLAlchemy-backed** multi-tiered architecture that allows VIKI to retain project context, user preferences, and historical lessons through a modern Repository pattern.
@@ -163,7 +163,7 @@ VIKI is designed to stay responsive on machines with **4 GB RAM** and **2–4 co
 | `auto_web_research_when_uncertain: false` | No expensive web + rewrite pass |
 | `session_usage_log: false` | Eliminates per-call disk I/O |
 | `max_steps: 25` | **Cuts max reasoning churn 4×** vs previous default of 100 |
-| `ollama_options: {num_predict: 512, num_ctx: 4096}` | Caps generation to 512 tokens, context window to 4K — peak RAM savings |
+| `max_tokens` in LM Studio settings | Caps generation length — peak RAM savings |
 | `memory.short_term_limit: 5` | Less context per request = fewer tokens |
 | `wellness_interval_s: 3600` | Proactive checks every 1h instead of 30min |
 | `wellness_idle_threshold_s: 14400` | Only after 4h idle instead of 2h |
@@ -174,12 +174,12 @@ These are set in [`config/settings.yaml`](config/settings.yaml). Override any wi
 
 The very first turn after boot pays a stack of one-time costs that subsequent turns do not:
 
-1. **Ollama cold-loads the model on the first call.** A 4 GB Q4 model can take 5–15 s to read off disk. Use `phi3:mini` (~2.2 GB) for the fastest cold start.
-2. **`Runtime health: degraded`** in the welcome banner — run `ollama pull <model>` for the missing model.
+1. **LM Studio cold-loads the model on the first call.** A 4 GB Q4 model can take 5–15 s to read off disk. Load a smaller model for faster startup.
+2. **`Runtime health: degraded`** in the welcome banner — load the expected model in LM Studio.
 3. **First sentence-transformer load** (~150 MB) — lazy-loaded on first non-trivial query; greetings skip it.
-4. **Long idle re-load** — Ollama unloads after `OLLAMA_KEEP_ALIVE` (default 5 min). Set `OLLAMA_KEEP_ALIVE=24h` or send a greeting first.
+4. **Long idle re-load** — LM Studio may unload models after inactivity. Reload the model before your first query.
 
-For absolute lowest latency on 4 GB: use `phi3:mini` via Ollama and the defaults above.
+For absolute lowest latency on 4 GB: use a small model in LM Studio (e.g. Gemma 4 E4B at ~4B params) and the defaults above.
 
 ### Frontier wiring (2026)
 
@@ -220,8 +220,8 @@ VIKI/
 
 ### Prerequisites
 *   **Python 3.10+** (3.10, 3.11, and 3.12 are supported; CI runs 3.10 and 3.11 on Ubuntu).
-*   **Ollama CLI**: Installed and running (the desktop app or service usually already listens on `127.0.0.1:11434`; a second `ollama serve` is only needed if nothing is bound to that port).
-*   **Recommended Models**: `phi3` (Reflex), `deepseek-r1` (Reasoning). For the **Neural Forge** bake step, pull whatever base you configure (commonly `qwen3.6:latest` or `gemma4:latest`); see [Build your VIKI model](#build-your-viki-model).
+*   **LM Studio**: Installed and running with a model loaded (default: `google/gemma-4-e4b`). The local inference server listens on `127.0.0.1:1234`.
+*   **Recommended Models**: `google/gemma-4-e4b` (default), `qwen/qwen3.5-9b` (reasoning/coding). Load models in LM Studio's Developer tab.
 
 ### Installation
 1.  **Clone & Initialize**:
@@ -285,12 +285,9 @@ Install the `viki` command so you can run it from any directory with the current
 - Unix: `curl -fsSL https://raw.githubusercontent.com/Orythix/viki/main/bin/install.sh | bash` (or from repo: `./bin/install.sh`)
 
 4.  **Run with Docker**:
-    Build and run the VIKI CLI in a container. Ollama must be running on the host and listening on all interfaces (`OLLAMA_HOST=0.0.0.0`). See [docs/DOCKER.md](docs/DOCKER.md) for details.
+    Build and run the VIKI CLI in a container. LM Studio must be running on the host. See [docs/DOCKER.md](docs/DOCKER.md) for details.
     ```powershell
-    # Start Ollama on the host (must listen on all interfaces for Docker access)
-    $env:OLLAMA_HOST = "0.0.0.0:11434"
-    Start-Process "ollama.exe" -ArgumentList "serve" -WindowStyle Hidden
-
+    # Ensure LM Studio is running and the server is enabled on port 1234
     # Build and run VIKI
     docker compose build
     docker compose run --rm -it viki
@@ -300,83 +297,46 @@ Install the `viki` command so you can run it from any directory with the current
 
 ## Build your VIKI model
 
-**Neural Forge** — you can turn VIKI’s **reinforced lessons** (SQLite-backed learning DB under `data/`) into a **local Ollama image** whose system prompt embeds that wisdom. This is the main way to “build” the agent’s baked-in personality and corrections without cloud training.
+**Neural Forge** — you can turn VIKI's **reinforced lessons** (SQLite-backed learning DB under `data/`) into a **custom system prompt** for your LM Studio model whose system prompt embeds that wisdom. This is the main way to "build" the agent's baked-in personality and corrections without cloud training.
 
 ### What gets built (default: `prompt_bake`)
 
-The script [`scripts/build_viki_model.py`](scripts/build_viki_model.py) exports a small JSONL dataset, writes `data/Modelfile.viki_evolved` with `FROM <your-base-model>` plus a **SYSTEM** block of top lessons, then runs `ollama create` to produce an Ollama **tag** (default: `viki-neural-forge`; configurable in `settings.yaml` / `VIKI_FORGE_OUTPUT_OLLAMA_MODEL`). No GPU is required for this path.
+The script [`scripts/build_viki_model.py`](scripts/build_viki_model.py) exports a small JSONL dataset, writes `data/Modelfile.viki_evolved` with a **SYSTEM** block of top lessons, and writes the Modelfile for use in LM Studio. No GPU is required for this path.
 
 Optional **GPU** strategies (`--strategy lora`, `dpo`, `orpo`) are documented in the script header and need CUDA plus env flags (`VIKI_UNSLOTH_RUN_TRAIN`, etc.).
 
 ### Prerequisites
 
-1. **Ollama** reachable (`ollama list` works).
-2. **Base model** pulled, e.g. `ollama pull qwen3.6:latest` (or `gemma4:latest`, or any tag you pass with `--base`).
-3. **Some lessons** in the DB (the script will fail if there are zero). Use VIKI normally so reinforced lessons accumulate.
-
-### Configure the base model
-
-Set the bake base in **`viki/config/settings.yaml`**:
-
-```yaml
-system:
-  forge_base_ollama_model: "qwen3.6:latest"   # or gemma4:latest, etc. (Modelfile FROM)
-  forge_output_ollama_tag: "viki-neural-forge"  # ollama create tag; override with VIKI_FORGE_OUTPUT_OLLAMA_MODEL
-```
-
-Override for one session: `$env:VIKI_FORGE_BASE_OLLAMA_MODEL = "gemma4:latest"` or `$env:VIKI_FORGE_OUTPUT_OLLAMA_MODEL = "my-viki-tag"` (PowerShell).
+1. **LM Studio** running with `google/gemma-4-e4b` loaded.
+2. **Some lessons** in the DB (the script will fail if there are zero). Use VIKI normally so reinforced lessons accumulate.
 
 ### Build commands (repo root)
 
 ```powershell
 cd D:\path\to\VIKI   # your clone
 
-# Prompt-bake using settings / env base → creates Ollama tag viki-neural-forge (default)
+# Prompt-bake using default settings
 python scripts/build_viki_model.py
 
-# Same, but force a specific base and output tag (keep multiple variants side by side)
-python scripts/build_viki_model.py --base gemma4:latest --name viki-neural-forge-gemma
+# Force a specific base model
+python scripts/build_viki_model.py --base google/gemma-4-e4b --name viki-evolved
 
-# Bake and set models.yaml default profile to viki-evolved (see below)
+# Bake and set models.yaml default profile to lmstudio-gemma4e4b
 python scripts/build_viki_model.py --set-default
 ```
 
 Useful flags: `--min-count N` (only lessons seen at least *N* times), `--no-export`, `--dry-run`. Run `python scripts/build_viki_model.py --help` for the full list.
 
-### Wire the image into VIKI
+### Wire the model into VIKI
 
-- The Ollama **image name** is whatever you passed as `--name` (otherwise **`forge_output_ollama_tag`** in settings, env **`VIKI_FORGE_OUTPUT_OLLAMA_MODEL`**, or **`viki-neural-forge`**).
-- The **`viki-evolved`** entry in [`viki/config/models.yaml`](viki/config/models.yaml) maps the profile to that image via `model_name` (by default `viki-neural-forge`).
-- **`python scripts/build_viki_model.py --set-default`** sets `models.default: viki-evolved` so the app prefers your forged model.
-- If you used a custom `--name`, either update `model_name` under `viki-evolved` or add another profile and set `default:` to it.
-
-### Try it
-
-```powershell
-ollama run viki-neural-forge
-```
-
-In the **VIKI app**, local Ollama calls default to **`think: false`** (see `system.ollama_enable_thinking` in `settings.yaml`) so end users do not see long reasoning traces; the raw `ollama run` CLI may still show thinking unless you pass flags such as `--hidethinking` / `--think=false` for your model.
-
-### Publish to ollama.com (optional)
-
-After you have a local tag (e.g. **`viki-neural-forge:latest`** from `build_viki_model.py`), you can push it under your Ollama namespace. Example for username **`orythix`**:
-
-1. **Sign in** to Ollama from the CLI (one-time): `ollama signin` — follow the browser flow ([CLI docs](https://docs.ollama.com/cli)).
-2. **Copy** the local image to your namespace (name must be `yourname/model`):
-   ```powershell
-   ollama cp viki-neural-forge:latest orythix/viki-neural-forge:latest
-   ```
-3. **Upload** (large; may take a while):
-   ```powershell
-   ollama push orythix/viki-neural-forge
-   ```
-
-Others can then run: `ollama pull orythix/viki-neural-forge` and `ollama run orythix/viki-neural-forge`. Your listing will appear under `https://ollama.com/orythix/viki-neural-forge`. Review the **base model license** and any **baked `SYSTEM` text** before publishing.
+- The baked system prompt is written to `data/Modelfile.viki_evolved`.
+- Load the base model in LM Studio and paste the system prompt from the Modelfile into the System Prompt field.
+- The **`lmstudio-gemma4e4b`** entry in [`config/models.yaml`](config/models.yaml) is the default profile.
+- **`python scripts/build_viki_model.py --set-default`** sets `models.default: lmstudio-gemma4e4b`.
 
 ### Ongoing evolution
 
-Unlike static bots, VIKI also grows during normal use: interact, lessons accumulate, then **re-run** `build_viki_model.py` when you want a fresh `ollama create` with updated baked-in knowledge.
+Unlike static bots, VIKI also grows during normal use: interact, lessons accumulate, then **re-run** `build_viki_model.py` when you want a fresh prompt bake with updated baked-in knowledge.
 
 ---
 
@@ -404,13 +364,13 @@ Unlike static bots, VIKI also grows during normal use: interact, lessons accumul
 | [labs/security-lab/README.md](labs/security-lab/README.md) | Local defensive AI security lab |
 | [labs/qa-automation/README.md](labs/qa-automation/README.md) | QA automation learning monorepo |
 | [viki/ARCHITECTURE_REFACTOR.md](viki/ARCHITECTURE_REFACTOR.md) | Controller / pipeline refactor notes |
-| [`scripts/build_viki_model.py`](scripts/build_viki_model.py) | CLI: bake lessons into an Ollama model (`prompt_bake` / LoRA / DPO) |
+| [`scripts/build_viki_model.py`](scripts/build_viki_model.py) | CLI: bake lessons into an LM Studio model (`prompt_bake` / LoRA / DPO) |
 
 ---
 
 ## Keywords and topics
 
-**Local AI agent** · **Self-hosted AI assistant** · **Open-source AI agent** · **Autonomous AI** · **Ollama agent** · **Python AI agent** · **LLM agent** · **ReAct agent** · **Tool-use agent** · **MCP integration** · **RAG** · **Semantic memory** · **Private AI** · **Privacy-first AI** · **Air-gapped AI** · **Sovereign AI** · **Local LLM** · **Offline LLM** · **Neural Forge** · **Ollama Modelfile** · **Capability gating** · **CLI AI** · **Self-improving AI** · **Orythix** · **Multi-model routing** · **Agentic workflow** · **Windows AI agent** · **Linux AI agent**
+**Local AI agent** · **Self-hosted AI assistant** · **Open-source AI agent** · **Autonomous AI** · **LM Studio agent** · **Python AI agent** · **LLM agent** · **ReAct agent** · **Tool-use agent** · **MCP integration** · **RAG** · **Semantic memory** · **Private AI** · **Privacy-first AI** · **Air-gapped AI** · **Sovereign AI** · **Local LLM** · **Offline LLM** · **Neural Forge** · **Capability gating** · **CLI AI** · **Self-improving AI** · **Orythix** · **Multi-model routing** · **Agentic workflow** · **Windows AI agent** · **Linux AI agent**
 
 ---
 

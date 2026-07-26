@@ -30,7 +30,8 @@ in that document.
 VIKI is built on the **Orythix Cognitive Architecture**:
 
 * **Privacy first** — no telemetry, no external calls unless the user opts in.
-* **Local execution** — primary path is Ollama and on-device LLMs.
+* **Local execution** — primary path is LM Studio and on-device LLMs.
+* **Air-gap capable** — every feature must be testable with no internet.
 * **Modular skills** — capabilities are gated by a security-first registry.
 * **Air-gap capable** — every feature must be testable with no internet.
 
@@ -42,7 +43,7 @@ VIKI is built on the **Orythix Cognitive Architecture**:
 * **Use the bug template** and include:
   * a clear title and description,
   * steps to reproduce,
-  * environment (OS, Python version, Ollama model),
+  * **Environment**: OS, Python version, Local LLM provider (e.g., LM Studio model), and required API keys.
   * relevant `logs/viki.log` excerpts (with secrets redacted).
 
 ### Suggesting Enhancements

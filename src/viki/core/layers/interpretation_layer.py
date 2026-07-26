@@ -101,7 +101,7 @@ class InterpretationLayer(CortexLayer):
         "torch",
         "pytorch",
         "tensorflow",
-        "ollama",
+        "lm studio",
         "transformers",
         "huggingface",
         "model",

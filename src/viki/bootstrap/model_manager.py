@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import asyncio
-import subprocess
+import json
+import urllib.request
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -21,7 +21,7 @@ class ModelFormat(StrEnum):
 class ModelInfo:
     id: str
     name: str
-    provider: str  # ollama, huggingface
+    provider: str  # lmstudio, huggingface
     format: ModelFormat
     parameter_count: str  # e.g. "7B", "14B", "70B"
     quantization: str  # e.g. "Q4_K_M", "Q8_0"
@@ -42,207 +42,103 @@ class ModelRecommendation:
 
 
 _AVAILABLE_MODELS: list[ModelInfo] = [
-    # Ollama models
+    # LM Studio models
     ModelInfo(
-        "gemma4:12b",
+        "google/gemma-4-e4b",
+        "Gemma 4 E4B",
+        "lmstudio",
+        ModelFormat.GGUF,
+        "4B",
+        "Q4_K_M",
+        3072,
+        3072,
+        2500,
+        description="Google Gemma 4 E4B — fast, efficient local model",
+        url="Load in LM Studio: search for google/gemma-4-e4b",
+    ),
+    ModelInfo(
+        "google/gemma-4-12b",
         "Gemma 4 12B",
-        "ollama",
+        "lmstudio",
         ModelFormat.GGUF,
         "12B",
         "Q4_K_M",
         8192,
         8192,
         7600,
-        description="Google's latest — strong reasoning + instruction following",
-        url="ollama pull gemma4:12b",
+        description="Google Gemma 4 12B — strong reasoning + instruction following",
+        url="Load in LM Studio: search for google/gemma-4-12b",
     ),
     ModelInfo(
-        "gemma4:27b",
-        "Gemma 4 27B",
-        "ollama",
+        "qwen/qwen3.5-9b",
+        "Qwen 3.5 9B",
+        "lmstudio",
         ModelFormat.GGUF,
-        "27B",
+        "9B",
         "Q4_K_M",
-        16384,
-        16384,
-        17000,
-        description="Gemma 4 large — best quality on high-end hardware",
-        url="ollama pull gemma4:27b",
+        5120,
+        5120,
+        5500,
+        description="Alibaba Qwen 3.5 9B — strong reasoning and coding",
+        url="Load in LM Studio: search for qwen3.5-9b",
     ),
     ModelInfo(
-        "phi3:mini",
-        "Phi-3 Mini 3.8B",
-        "ollama",
-        ModelFormat.GGUF,
-        "3.8B",
-        "Q4_K_M",
-        3072,
-        3072,
-        2400,
-        description="Microsoft's efficient small model — great for fast responses",
-        url="ollama pull phi3:mini",
-    ),
-    ModelInfo(
-        "phi3:medium",
-        "Phi-3 Medium 14B",
-        "ollama",
-        ModelFormat.GGUF,
-        "14B",
-        "Q4_K_M",
-        8192,
-        8192,
-        8300,
-        description="Phi-3 medium — quality / speed sweet spot",
-        url="ollama pull phi3:medium",
-    ),
-    ModelInfo(
-        "llama3.2:3b",
+        "meta-llama/llama-3.2-3b",
         "Llama 3.2 3B",
-        "ollama",
+        "lmstudio",
         ModelFormat.GGUF,
         "3B",
         "Q4_K_M",
         2048,
         2048,
         2000,
-        description="Meta's efficient lightweight",
-        url="ollama pull llama3.2:3b",
+        description="Meta Llama 3.2 3B — efficient lightweight",
+        url="Load in LM Studio: search for llama-3.2-3b",
     ),
     ModelInfo(
-        "llama3.2:1b",
-        "Llama 3.2 1B",
-        "ollama",
-        ModelFormat.GGUF,
-        "1B",
-        "Q4_K_M",
-        1024,
-        1024,
-        700,
-        description="Ultra lightweight for CPU-only systems",
-        url="ollama pull llama3.2:1b",
-    ),
-    ModelInfo(
-        "llama3.3:70b",
-        "Llama 3.3 70B",
-        "ollama",
-        ModelFormat.GGUF,
-        "70B",
-        "Q4_K_M",
-        40960,
-        40960,
-        42000,
-        description="Meta's largest — requires high-end hardware",
-        url="ollama pull llama3.3:70b",
-    ),
-    ModelInfo(
-        "qwen3:8b",
-        "Qwen 3 8B",
-        "ollama",
+        "meta-llama/llama-3.1-8b",
+        "Llama 3.1 8B",
+        "lmstudio",
         ModelFormat.GGUF,
         "8B",
         "Q4_K_M",
         5120,
         5120,
-        5000,
-        description="Alibaba's strong reasoning model",
-        url="ollama pull qwen3:8b",
+        4800,
+        description="Meta Llama 3.1 8B — solid all-rounder",
+        url="Load in LM Studio: search for llama-3.1-8b",
     ),
     ModelInfo(
-        "qwen3:14b",
-        "Qwen 3 14B",
-        "ollama",
-        ModelFormat.GGUF,
-        "14B",
-        "Q4_K_M",
-        8192,
-        8192,
-        9000,
-        description="Qwen 14B — excellent coding + reasoning",
-        url="ollama pull qwen3:14b",
-    ),
-    ModelInfo(
-        "qwen3:32b",
-        "Qwen 3 32B",
-        "ollama",
-        ModelFormat.GGUF,
-        "32B",
-        "Q4_K_M",
-        20480,
-        20480,
-        20000,
-        description="Qwen 32B — high-quality reasoning",
-        url="ollama pull qwen3:32b",
-    ),
-    ModelInfo(
-        "deepseek-r1:7b",
+        "deepseek/deepseek-r1-7b",
         "DeepSeek R1 7B",
-        "ollama",
+        "lmstudio",
         ModelFormat.GGUF,
         "7B",
         "Q4_K_M",
         4096,
         4096,
         4500,
-        description="DeepSeek distilled reasoning model",
-        url="ollama pull deepseek-r1:7b",
+        description="DeepSeek R1 distilled reasoning model",
+        url="Load in LM Studio: search for deepseek-r1-7b",
     ),
     ModelInfo(
-        "deepseek-r1:14b",
-        "DeepSeek R1 14B",
-        "ollama",
+        "microsoft/phi-3-mini",
+        "Phi-3 Mini 3.8B",
+        "lmstudio",
         ModelFormat.GGUF,
-        "14B",
+        "3.8B",
         "Q4_K_M",
-        8192,
-        8192,
-        9000,
-        description="DeepSeek 14B distilled — strong reasoning",
-        url="ollama pull deepseek-r1:14b",
-    ),
-    ModelInfo(
-        "deepseek-r1:32b",
-        "DeepSeek R1 32B",
-        "ollama",
-        ModelFormat.GGUF,
-        "32B",
-        "Q4_K_M",
-        20480,
-        20480,
-        20000,
-        description="DeepSeek 32B — near SOTA reasoning",
-        url="ollama pull deepseek-r1:32b",
-    ),
-    ModelInfo(
-        "mistral:7b",
-        "Mistral 7B",
-        "ollama",
-        ModelFormat.GGUF,
-        "7B",
-        "Q4_K_M",
-        4096,
-        4096,
-        4200,
-        description="Mistral AI's original — solid all-rounder",
-        url="ollama pull mistral:7b",
-    ),
-    ModelInfo(
-        "codellama:7b",
-        "Code Llama 7B",
-        "ollama",
-        ModelFormat.GGUF,
-        "7B",
-        "Q4_K_M",
-        4096,
-        4096,
-        3800,
-        description="Meta's code-specialized model",
-        url="ollama pull codellama:7b",
+        3072,
+        3072,
+        2400,
+        description="Microsoft Phi-3 Mini — great for fast responses",
+        url="Load in LM Studio: search for phi-3-mini",
     ),
     # Embedding models
     ModelInfo(
-        "nomic-embed-text",
-        "Nomic Embed Text",
-        "ollama",
+        "nomic-embed-text-v1.5",
+        "Nomic Embed Text v1.5",
+        "lmstudio",
         ModelFormat.GGUF,
         "137M",
         "F16",
@@ -251,21 +147,7 @@ _AVAILABLE_MODELS: list[ModelInfo] = [
         274,
         is_embedding=True,
         description="Lightweight embeddings for memory/retrieval",
-        url="ollama pull nomic-embed-text",
-    ),
-    ModelInfo(
-        "mxbai-embed-large",
-        "MXBAI Embed Large",
-        "ollama",
-        ModelFormat.GGUF,
-        "334M",
-        "F16",
-        1024,
-        1024,
-        670,
-        is_embedding=True,
-        description="High-quality embeddings",
-        url="ollama pull mxbai-embed-large",
+        url="Load in LM Studio: search for nomic-embed-text",
     ),
 ]
 
@@ -277,10 +159,8 @@ def _recommend_models(info: SystemInfo, profile: HardwareProfile) -> ModelRecomm
     ram_gb = info.ram_mb / 1024
     primary_vram = info.gpus[0].vram_mb if info.gpus else 0
 
-    # Embedding model (always recommend a small one)
-    rec.embedding = _find_model("nomic-embed-text")
+    rec.embedding = _find_model("nomic-embed-text-v1.5")
 
-    # Filter models by hardware capability
     candidates = []
     for m in _AVAILABLE_MODELS:
         if m.is_embedding:
@@ -294,22 +174,17 @@ def _recommend_models(info: SystemInfo, profile: HardwareProfile) -> ModelRecomm
     if not candidates:
         candidates = [m for m in _AVAILABLE_MODELS if not m.is_embedding]
 
-    # Score and sort candidates by quality-to-hardware match
     def score(m: ModelInfo) -> float:
         s = 0.0
-        # Prefer models that fit in VRAM
         if primary_vram > 0 and m.vram_required_mb <= primary_vram:
             s += 3.0
-        # Prefer larger models
         size_gb = m.disk_size_mb / 1024
         s += min(size_gb / 10, 2.0)
-        # Penalize if barely fits
         if m.vram_required_mb > primary_vram * 0.9 and primary_vram > 0:
             s -= 1.0
-        # Boost known-good models
-        if "gemma4" in m.id:
+        if "gemma-4" in m.id:
             s += 1.0
-        if "qwen3" in m.id:
+        if "qwen" in m.id:
             s += 0.5
         return s
 
@@ -333,33 +208,28 @@ def _find_model(model_id: str) -> ModelInfo | None:
 
 
 class ModelManager:
-    """Manage model recommendations, download, and verification."""
+    """Manage model recommendations and verification via LM Studio API."""
 
-    def __init__(self, ollama_host: str = "http://localhost:11434"):
-        self.ollama_host = ollama_host
+    def __init__(self, lmstudio_url: str = "http://localhost:1234"):
+        self.lmstudio_url = lmstudio_url.rstrip("/")
 
     def recommend(self, info: SystemInfo, profile: HardwareProfile) -> ModelRecommendation:
         return _recommend_models(info, profile)
 
     async def list_installed(self) -> list[dict[str, Any]]:
-        """List models already pulled in Ollama."""
+        """List models loaded in LM Studio via /v1/models."""
         try:
-            result = await asyncio.to_thread(
-                subprocess.run,
-                ["ollama", "list"],
-                capture_output=True,
-                text=True,
-                timeout=15,
+            req = urllib.request.Request(
+                f"{self.lmstudio_url}/v1/models",
+                headers={"Accept": "application/json"},
             )
-            if result.returncode != 0:
-                return []
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
             models = []
-            for line in result.stdout.strip().splitlines()[1:]:
-                parts = line.split()
-                if len(parts) >= 2:
-                    models.append({"name": parts[0], "size": parts[2] if len(parts) > 2 else ""})
+            for m in data.get("data", []):
+                models.append({"name": m.get("id", ""), "size": ""})
             return models
-        except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
+        except Exception:
             return []
 
     async def is_installed(self, model_id: str) -> bool:
@@ -367,59 +237,22 @@ class ModelManager:
         return any(m["name"] == model_id for m in installed)
 
     async def download(self, model: ModelInfo, progress_callback=None) -> bool:
-        """Download a model via Ollama with progress tracking."""
+        """Notify user to load model in LM Studio (no CLI download)."""
         if progress_callback:
-            progress_callback(f"Downloading {model.name} ({model.disk_size_mb // 1024} GB)...")
-
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "ollama",
-                "pull",
-                model.id,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
+            progress_callback(
+                f"Please load '{model.name}' in LM Studio manually.\n"
+                f"Open LM Studio -> Search -> {model.id} -> Download/Load."
             )
-
-            if proc.stdout:
-                while True:
-                    line = await proc.stdout.readline()
-                    if not line:
-                        break
-                    decoded = line.decode().strip()
-                    if progress_callback and decoded:
-                        progress_callback(decoded)
-
-            await proc.wait()
-            return proc.returncode == 0
-
-        except FileNotFoundError:
-            if progress_callback:
-                progress_callback("[red]Ollama not found. Install Ollama first.[/]")
-            return False
-        except Exception as e:
-            if progress_callback:
-                progress_callback(f"[red]Download failed: {e}[/]")
-            return False
+        return True
 
     async def get_disk_required(self, models: list[ModelInfo]) -> int:
         """Return total disk space required in MB."""
         return sum(m.disk_size_mb for m in models)
 
     async def verify(self, model_id: str) -> tuple[bool, str]:
-        """Verify a model is correctly installed."""
-        try:
-            result = await asyncio.to_thread(
-                subprocess.run,
-                ["ollama", "list"],
-                capture_output=True,
-                text=True,
-                timeout=15,
-            )
-            for line in result.stdout.strip().splitlines():
-                if line.startswith(model_id):
-                    parts = line.split()
-                    size_str = parts[2] if len(parts) > 2 else "unknown"
-                    return True, size_str
-            return False, ""
-        except Exception:
-            return False, ""
+        """Verify a model is loaded in LM Studio."""
+        installed = await self.list_installed()
+        for m in installed:
+            if m["name"] == model_id:
+                return True, m.get("size", "unknown")
+        return False, ""

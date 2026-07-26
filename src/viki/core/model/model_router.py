@@ -12,7 +12,6 @@ from viki.config.logger import viki_logger
 from .api_llm import APILLM
 from .fallback_llm import FallbackLLM
 from .llm_provider import LLMProvider
-from .local_llm import LocalLLM
 from .model_factory import ModelFactory
 from .utils import effective_profile_for_factory
 
@@ -113,9 +112,6 @@ class ModelRouter:
         for m in self.models.values():
             if self._model_allowed(m):
                 return cast("LLMProvider | None", m)
-        for m in self.models.values():
-            if m.available and isinstance(m, LocalLLM):
-                return m
         for m in self.models.values():
             if m.available:
                 return cast("LLMProvider | None", m)

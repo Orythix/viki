@@ -2,25 +2,22 @@
 
 Documentation index: [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md).
 
-This guide covers running the VIKI CLI in Docker with Ollama on the host.
+This guide covers running the VIKI CLI in Docker with LM Studio on the host.
 
 ## Prerequisites
 
 - Docker (and Docker Compose if you use `docker compose`)
-- Ollama installed on the host
+- LM Studio installed with a model loaded (default: `google/gemma-4-e4b`)
 - A `.env` file (copy from `.env.example`)
 
-## Step 1: Start Ollama on the host
+## Step 1: Ensure LM Studio is running
 
-Ollama must listen on all interfaces so the Docker container can reach it:
+LM Studio must have the local server enabled on port 1234:
 
-```powershell
-$env:OLLAMA_HOST = "0.0.0.0:11434"
-$env:OLLAMA_CUDA = "0"  # set to "1" if you have an NVIDIA GPU
-Start-Process "ollama.exe" -ArgumentList "serve" -WindowStyle Hidden
-```
-
-Verify: `curl http://127.0.0.1:11434/api/tags` should return a JSON list of models.
+1. Open LM Studio
+2. Go to **Developer** tab
+3. Load a model (e.g. `google/gemma-4-e4b`)
+4. Start the server on `http://127.0.0.1:1234`
 
 ## Step 2: Copy config files (one-time)
 
@@ -54,8 +51,7 @@ The `docker-compose.yml` sets these:
 | `VIKI_CONFIG_DIR` | `/app/config` | Config directory |
 | `VIKI_TRUST_WORKSPACE` | `true` | Auto-trust the workspace (skip prompt) |
 | `VIKI_LOG_LEVEL` | `INFO` | Logging level |
-| `VIKI_OLLAMA_THINK` | `false` | Disable thinking/chain-of-thought in models |
-| `OLLAMA_HOST` | `http://host.docker.internal:11434` | Ollama endpoint from inside container |
+| `LMSTUDIO_URL` | `http://host.docker.internal:1234/v1` | LM Studio endpoint from inside container |
 
 ## Volumes
 
@@ -70,18 +66,15 @@ The `docker-compose.yml` sets these:
 
 ## How networking works
 
-The Docker container accesses the host Ollama service via `host.docker.internal:11434`. This requires:
+The Docker container accesses the host LM Studio service via `host.docker.internal:1234`. This requires:
 
-1. Ollama running with `OLLAMA_HOST=0.0.0.0` (not the default `127.0.0.1`)
+1. LM Studio running with the local server enabled
 2. Docker Desktop with host networking support (Windows/Mac native)
-
-If Ollama is only bound to `127.0.0.1`, the container will get "Connection refused" errors.
 
 ## Running on low-end PCs
 
-1. Use a small Ollama model (`phi3:mini` is ~2.2 GB).
-2. Ensure `OLLAMA_CUDA=0` when starting Ollama.
-3. The image includes optimized defaults (`VIKI_LOW_RESOURCE=1` can be set in `docker-compose.yml`).
+1. Use a small model in LM Studio (e.g. `google/gemma-4-e4b` at ~4B params).
+2. The image includes optimized defaults (`VIKI_LOW_RESOURCE=1` can be set in `docker-compose.yml`).
 
 ## Using Docker from the agent
 
@@ -94,4 +87,4 @@ Then the agent can run `docker ps`, `docker images`, `docker run ...`, etc. thro
 
 ---
 
-*Runbook version: aligned with VIKI v8.3.0 (The Code Eternal). Update this file when default ports, flags, or critical architecture patterns change.*
+*Runbook version: aligned with VIKI v8.4.0 (The Code Eternal). Update this file when default ports, flags, or critical architecture patterns change.*

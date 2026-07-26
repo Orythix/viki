@@ -1,0 +1,14 @@
+# Model Drift Monitoring Thresholds for VIKI
+# These values determine when a model's output is considered statistically divergent 
+# from its established baseline performance.
+
+metrics:
+  embedding_distance:
+    max_cosine_distance: 0.15 # Max acceptable mean distance (Lower = Better)
+    consecutive_failures: 3   # Number of consecutive checks exceeding threshold to trigger
+  token_distribution:
+    max_kl_divergence: 0.05 # Max acceptable KL Divergence (Lower = Better)
+    consecutive_failures: 2   # Number of consecutive checks exceeding threshold to trigger
+  structural_consistency:
+    max_variance: 0.10 # Max acceptable variance in structural metrics (e.g., sentence length)
+    consecutive_failures: 3

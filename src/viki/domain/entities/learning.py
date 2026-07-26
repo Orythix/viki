@@ -1,5 +1,4 @@
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 
 
 @dataclass
@@ -27,8 +26,7 @@ class FailureRecord:
 
 @dataclass
 class Relationship:
-    source_id: str
-    target_id: str
-    type: str  # depends_on, extends, implements, related_to
-    weight: float = 1.0
-    metadata: dict[str, Any] = field(default_factory=dict)
+    lesson_id: str
+    subj: str
+    pred: str
+    obj: str

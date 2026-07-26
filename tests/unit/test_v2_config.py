@@ -25,8 +25,8 @@ class TestV2ConfigDefaults:
 
     def test_defaults(self):
         cfg = load_config()
-        assert cfg.model == "gemma4:12b"
-        assert cfg.ollama_host == "http://127.0.0.1:11434"
+        assert cfg.model == "google/gemma-4-e4b"
+        assert cfg.lmstudio_url == "http://127.0.0.1:1234"
         assert cfg.temperature == 0.7
         assert cfg.max_steps == 10
         assert cfg.data_dir == "./data"
@@ -41,7 +41,7 @@ class TestV2ConfigDefaults:
         """Verify section-level access."""
         cfg = load_config()
         assert cfg.llm.model == cfg.model
-        assert cfg.llm.host == cfg.ollama_host
+        assert cfg.llm.host == cfg.lmstudio_url
         assert cfg.llm.temperature == cfg.temperature
         assert cfg.llm.max_steps == cfg.max_steps
         assert cfg.tools.plugin_dirs == cfg.plugin_dirs
@@ -81,9 +81,9 @@ class TestV2ConfigValidation:
             V2Config(llm={"max_steps": 0})
 
     def test_host_strips_trailing_slash(self):
-        """Ollama host trailing slash is stripped."""
-        cfg = V2Config(ollama_host="http://localhost:8080/")
-        assert cfg.ollama_host == "http://localhost:8080"
+        """LM Studio host trailing slash is stripped."""
+        cfg = V2Config(lmstudio_url="http://localhost:8080/")
+        assert cfg.lmstudio_url == "http://localhost:8080"
 
     def test_memory_max_turns_minimum(self):
         """memory_max_turns is clamped to minimum 1."""
@@ -113,7 +113,7 @@ class TestV2ConfigJSON:
         assert cfg.tool_permissions == {"shell": "ADMIN"}
 
         # Lifted defaults still apply
-        assert cfg.ollama_host == "http://127.0.0.1:11434"
+        assert cfg.lmstudio_url == "http://127.0.0.1:1234"
         assert cfg.memory_max_turns == 50
 
     def test_json_nested_config(self, tmp_path: Path):
@@ -140,7 +140,7 @@ class TestV2ConfigJSON:
             json.dumps({"Model": "llama3", "unknown_key": "value"}), encoding="utf-8"
         )
         cfg = load_config(config_file)
-        assert cfg.model == "gemma4:12b"  # 'Model' != 'model'
+        assert cfg.model == "google/gemma-4-e4b"  # 'Model' != 'model'
 
 
 class TestV2ConfigYAML:
@@ -167,7 +167,7 @@ class TestV2ConfigYAML:
         config_file = tmp_path / "viki.yaml"
         config_file.write_text("", encoding="utf-8")
         cfg = load_config(config_file)
-        assert cfg.model == "gemma4:12b"  # defaults
+        assert cfg.model == "google/gemma-4-e4b"  # defaults
 
     def test_yaml_include(self, tmp_path: Path):
         """YAML 'include' directive loads and merges additional files."""
@@ -212,10 +212,10 @@ class TestV2ConfigEnvVars:
     @patch.dict(os.environ, {}, clear=True)
     @patch.object(Path, "home", return_value=Path("/fake/home"))
     def test_env_var_override(self, mock_home, tmp_path: Path):
-        with patch.dict(os.environ, {"VIKI_MODEL": "gpt4", "OLLAMA_HOST": "http://localhost:8080"}):
+        with patch.dict(os.environ, {"VIKI_MODEL": "gpt4", "LMSTUDIO_URL": "http://localhost:8080"}):
             cfg = load_config()
             assert cfg.model == "gpt4"
-            assert cfg.ollama_host == "http://localhost:8080"
+            assert cfg.lmstudio_url == "http://localhost:8080"
 
     @patch.dict(os.environ, {}, clear=True)
     @patch.object(Path, "home", return_value=Path("/fake/home"))
@@ -223,12 +223,12 @@ class TestV2ConfigEnvVars:
         """Environment variables override values from config file."""
         config_file = tmp_path / "viki.json"
         config_file.write_text(
-            json.dumps({"model": "llama3", "ollama_host": "http://file:11434"}), encoding="utf-8"
+            json.dumps({"model": "llama3", "lmstudio_url": "http://file:1234"}), encoding="utf-8"
         )
         with patch.dict(os.environ, {"VIKI_MODEL": "env-model"}):
             cfg = load_config(config_file)
             assert cfg.model == "env-model"
-            assert cfg.ollama_host == "http://file:11434"  # no env for this
+            assert cfg.lmstudio_url == "http://file:1234"  # no env for this
 
     @patch.dict(os.environ, {}, clear=True)
     @patch.object(Path, "home", return_value=Path("/fake/home"))
@@ -245,13 +245,13 @@ class TestV2ConfigEnvVars:
     def test_env_file_suffix_fallback(self, mock_home, tmp_path: Path):
         """_FILE env var takes precedence over regular env var."""
         secret_file = tmp_path / "host_secret.txt"
-        secret_file.write_text("http://secret:11434", encoding="utf-8")
+        secret_file.write_text("http://secret:1234", encoding="utf-8")
         with patch.dict(
             os.environ,
-            {"OLLAMA_HOST": "http://normal:11434", "OLLAMA_HOST_FILE": str(secret_file)},
+            {"LMSTUDIO_URL": "http://normal:1234", "LMSTUDIO_URL_FILE": str(secret_file)},
         ):
             cfg = load_config()
-            assert cfg.ollama_host == "http://secret:11434"
+            assert cfg.lmstudio_url == "http://secret:1234"
 
     @patch.dict(os.environ, {}, clear=True)
     @patch.object(Path, "home", return_value=Path("/fake/home"))
@@ -259,7 +259,7 @@ class TestV2ConfigEnvVars:
         """Missing _FILE paths are silently ignored."""
         with patch.dict(os.environ, {"VIKI_MODEL_FILE": "/nonexistent/path.txt"}):
             cfg = load_config()
-            assert cfg.model == "gemma4:12b"  # default
+            assert cfg.model == "google/gemma-4-e4b"  # default
 
     @patch.dict(os.environ, {}, clear=True)
     @patch.object(Path, "home", return_value=Path("/fake/home"))
@@ -269,7 +269,7 @@ class TestV2ConfigEnvVars:
             os.environ,
             {
                 "VIKI_MODEL": "deepseek",
-                "OLLAMA_HOST": "http://other:11434",
+                "LMSTUDIO_URL": "http://other:1234",
                 "VIKI_DATA_DIR": "/env/data",
                 "VIKI_LOG_LEVEL": "DEBUG",
                 "VIKI_MCP_CONFIG": "/env/mcp.yaml",
@@ -277,7 +277,7 @@ class TestV2ConfigEnvVars:
         ):
             cfg = load_config()
             assert cfg.model == "deepseek"
-            assert cfg.ollama_host == "http://other:11434"
+            assert cfg.lmstudio_url == "http://other:1234"
             assert cfg.data_dir == "/env/data"
             assert cfg.log_level == "DEBUG"
             assert cfg.mcp_config_path == "/env/mcp.yaml"

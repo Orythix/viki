@@ -45,7 +45,7 @@ class DependencyManager:
         self.results.extend(await self._check_node())
         self.results.extend(await self._check_cuda())
         self.results.extend(await self._check_vc_redist())
-        self.results.extend(await self._check_ollama())
+        self.results.extend(await self._check_lmstudio())
         self.results.extend(await self._check_pip_packages())
         return self.results
 
@@ -243,23 +243,41 @@ class DependencyManager:
             )
         ]
 
-    async def _check_ollama(self) -> list[DependencyResult]:
-        """Check if Ollama is installed."""
-        result = await self._run(["ollama", "--version"])
-        ok = result.returncode == 0
-        return [
-            DependencyResult(
-                name="Ollama",
-                status=DepStatus.OK if ok else DepStatus.MISSING,
-                version=self._version_str(result).replace("ollama version ", "") if ok else "",
-                required_version="latest",
-                install_hint="https://ollama.com/download",
-                install_command="winget install Ollama.Ollama"
-                if sys.platform == "win32"
-                else "curl -fsSL https://ollama.com/install.sh | sh",
-                size_mb=800.0,
+    async def _check_lmstudio(self) -> list[DependencyResult]:
+        """Check if LM Studio is running."""
+        try:
+            import json
+            import urllib.request
+            req = urllib.request.Request(
+                "http://127.0.0.1:1234/v1/models",
+                headers={"Accept": "application/json"},
             )
-        ]
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            models = data.get("data", [])
+            return [
+                DependencyResult(
+                    name="LM Studio",
+                    status=DepStatus.OK,
+                    version=f"{len(models)} model(s) loaded",
+                    required_version="latest",
+                    install_hint="https://lmstudio.ai",
+                    install_command="Download from https://lmstudio.ai",
+                    size_mb=500.0,
+                )
+            ]
+        except Exception:
+            return [
+                DependencyResult(
+                    name="LM Studio",
+                    status=DepStatus.MISSING,
+                    version="",
+                    required_version="latest",
+                    install_hint="https://lmstudio.ai",
+                    install_command="Download from https://lmstudio.ai",
+                    size_mb=500.0,
+                )
+            ]
 
     async def _check_pip_packages(self) -> list[DependencyResult]:
         """Check core Python packages."""
@@ -323,8 +341,9 @@ class DependencyManager:
 
         print(f"  Installing {dep.name}...")
         try:
-            if dep.name == "Ollama":
-                return await self._install_ollama()
+            if dep.name == "LM Studio":
+                print("  Please download and install LM Studio from https://lmstudio.ai")
+                return True
             elif dep.install_command.startswith("pip"):
                 result = await self._run(dep.install_command.split(), timeout=120)
                 return result.returncode == 0
@@ -343,44 +362,3 @@ class DependencyManager:
         except Exception as e:
             print(f"  [red]Failed to install {dep.name}: {e}[/]")
             return False
-
-    async def _install_ollama(self) -> bool:
-        """Install Ollama based on platform."""
-        if sys.platform == "win32":
-            try:
-                await asyncio.to_thread(
-                    subprocess.run,
-                    [
-                        "powershell",
-                        "-Command",
-                        "Invoke-WebRequest -Uri https://ollama.com/download/OllamaSetup.exe -OutFile $env:TEMP\\OllamaSetup.exe",
-                    ],
-                    capture_output=True,
-                    text=True,
-                    timeout=60,
-                )
-                result = await asyncio.to_thread(
-                    subprocess.run,
-                    ["$env:TEMP\\OllamaSetup.exe", "/S"],
-                    capture_output=True,
-                    text=True,
-                    timeout=120,
-                )
-                return result.returncode == 0
-            except Exception as e:
-                print(f"  [red]Ollama install failed: {e}[/]")
-                return False
-        else:
-            # Linux/macOS — use the official install script
-            try:
-                result = await asyncio.to_thread(
-                    subprocess.run,
-                    ["sh", "-c", "curl -fsSL https://ollama.com/install.sh | sh"],
-                    capture_output=True,
-                    text=True,
-                    timeout=120,
-                )
-                return result.returncode == 0
-            except Exception as e:
-                print(f"  [red]Ollama install failed: {e}[/]")
-                return False

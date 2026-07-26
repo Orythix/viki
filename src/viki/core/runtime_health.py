@@ -138,27 +138,16 @@ class RuntimeHealthReporter:
 
         unavailable = health.get("unavailable_models") or {}
         if unavailable:
-            # Surface the actual model names so the user can act on it. For
-            # Ollama-style names (`qwen3.6:latest`) we suggest a concrete
-            # `ollama pull` command. The list is capped at 3 to keep the
-            # summary readable.
+            # Surface the actual model names so the user can act on it.
+            # For LM Studio models, suggest loading them in the LM Studio app.
+            # The list is capped at 3 to keep the summary readable.
             names = list(unavailable.keys())
             shown = names[:3]
             extra = "" if len(names) <= 3 else f" (+{len(names) - 3} more)"
             joined = ", ".join(f"'{n}'" for n in shown) + extra
             count = len(names)
             label = "model" if count == 1 else "models"
-            hint = ""
-            try:
-                first = shown[0]
-                # Ollama tags are always `name:tag`. Strip the tag for the pull hint.
-                if ":" in first:
-                    base = first.split(":", 1)[0]
-                    hint = f" Run: ollama pull {base}"
-                else:
-                    hint = f" Run: ollama pull {first}"
-            except Exception:
-                hint = ""
+            hint = " Load in LM Studio."
             parts.append(f"{count} {label} unavailable: {joined}.{hint}")
 
         return "Runtime health: degraded — " + " | ".join(parts)

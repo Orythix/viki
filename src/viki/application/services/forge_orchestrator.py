@@ -105,7 +105,7 @@ class ForgeOrchestrator:
         for k, v in profile.parameters.items():
             modelfile_content += f"PARAMETER {k} {v}\n"
 
-        # 3. Create model via Ollama
+        # 3. Save Modelfile for LM Studio
         data_dir = self.controller.settings.get("system", {}).get("data_dir", "./data")
         modelfile_path = os.path.join(data_dir, f"Modelfile.{profile.target_tag}")
 
@@ -113,17 +113,16 @@ class ForgeOrchestrator:
             f.write(modelfile_content)
 
         try:
-            cmd = ["ollama", "create", profile.target_tag, "-f", modelfile_path]
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+            # LM Studio doesn't support programmatic model creation from Modelfiles.
+            # Save the Modelfile for the user to apply in LM Studio.
+            viki_logger.info(
+                f"Forge: Modelfile saved for '{profile.target_tag}'. "
+                f"User should apply system prompt in LM Studio."
             )
-            _, stderr = await process.communicate()
-
-            if process.returncode == 0:
-                return f"Forge Success: Specialized profile '{profile.target_tag}' created."
-            return f"Forge Failed: {stderr.decode()}"
+            return (
+                f"Forge Success: Profile '{profile.target_tag}' Modelfile saved at {modelfile_path}.\n"
+                f"To apply: Open LM Studio -> Load model -> Settings -> System Prompt -> paste from Modelfile."
+            )
         except Exception as e:
             return f"Forge Error: {str(e)}"
 
@@ -174,32 +173,16 @@ class ForgeOrchestrator:
         if result.get("status") != "trained":
             return f"Forge LoRA: training failed: {result.get('reason', 'unknown')}"
 
-        # 3. Register with Ollama via adapter Modelfile.
-        tag = base_model_tag or forge_cfg.get("lora_base_model_tag", "phi3:mini")
+        # 3. Save adapter Modelfile for LM Studio
+        tag = base_model_tag or forge_cfg.get("lora_base_model_tag", "google/gemma-4-e4b")
         modelfile_path = os.path.join(data_dir, f"Modelfile.{target_tag}")
         write_adapter_modelfile(tag, result["adapter_dir"], modelfile_path)
-        try:
-            process = await asyncio.create_subprocess_exec(
-                "ollama",
-                "create",
-                target_tag,
-                "-f",
-                modelfile_path,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            _, stderr = await process.communicate()
-            if process.returncode == 0:
-                return (
-                    f"Forge LoRA Success: trained on {n} lessons "
-                    f"({result['seconds']}s) → model '{target_tag}'."
-                )
-            return f"Forge LoRA: trained, but ollama create failed: {stderr.decode()}"
-        except FileNotFoundError:
-            return (
-                f"Forge LoRA: adapter trained at {result['adapter_dir']}; "
-                f"run manually: ollama create {target_tag} -f {modelfile_path}"
-            )
+        return (
+            f"Forge LoRA Success: trained on {n} lessons "
+            f"({result['seconds']}s). Adapter at {result['adapter_dir']}.\n"
+            f"Modelfile saved at: {modelfile_path}\n"
+            f"To use: Load the base model in LM Studio and apply the adapter."
+        )
 
     async def switch_to_profile(self, profile_name: str) -> str:
         """Switch the controller's active model to a specific profile."""
@@ -228,4 +211,4 @@ class ForgeOrchestrator:
             # For local profiles, check if the model exists first
             viki_logger.info(f"Forge: Switching to Local Model ({profile.target_tag})...")
             # If it's a baked model, we use the target_tag
-            return f"Active profile set to {profile_name}. Please ensure 'ollama run {profile.target_tag}' is available."
+            return f"Active profile set to {profile_name}. Please ensure '{profile.target_tag}' is loaded in LM Studio."

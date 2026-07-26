@@ -18,14 +18,14 @@ if [ -d "/host-config" ]; then
     fi
 fi
 
-# Check if Ollama is reachable
-OLLAMA_URL="${OLLAMA_HOST:-http://host.docker.internal:11434}"
-echo "Checking Ollama connectivity at $OLLAMA_URL..."
-if curl -sf "$OLLAMA_URL/api/tags" > /dev/null 2>&1; then
-    echo "Ollama is reachable."
+# Check if LM Studio is reachable
+LMSTUDIO_URL="${LMSTUDIO_HOST:-http://host.docker.internal:1234}"
+echo "Checking LM Studio connectivity at $LMSTUDIO_URL..."
+if curl -sf "$LMSTUDIO_URL/api/v1/models" > /dev/null 2>&1; then # Using a common API endpoint check for LLM services
+    echo "LM Studio is reachable."
 else
-    echo "WARNING: Cannot reach Ollama at $OLLAMA_URL."
-    echo "Ensure Ollama is running on the host with OLLAMA_HOST=0.0.0.0:11434"
+    echo "WARNING: Cannot reach LM Studio at $LMSTUDIO_URL."
+    echo "Ensure LM Studio is running on the host and accessible via the configured environment variable (e.g., LMSTUDIO_HOST)."
 fi
 
 # Execute the main command

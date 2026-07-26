@@ -34,7 +34,7 @@ Following the **Industrial Restructuring**, VIKI follows a **Clean Architecture 
 
 ### 4. Infrastructure Adapters (`viki/infrastructure/`)
 *   **Learning Repository**: SQLAlchemy-based implementation for managing lessons and failures in SQLite with WAL mode.
-*   **Inference Gateway**: Bridge to Ollama and cloud providers.
+*   **Inference Gateway**: Bridge to various local and cloud LLM providers (e.g., LM Studio, NVIDIA NIM, OpenAI API). It abstracts the underlying model serving mechanism, allowing VIKI to communicate with any provider that adheres to a standardized API contract (e.g., OpenAI-compatible endpoints or custom wrappers). This abstraction is key for future portability.
 *   **Event Bus**: Asynchronous message passing.
 *   **Hybrid Memory Search** (`viki/core/memory/hybrid_search.py`): Combines BM25 keyword retrieval with vector semantic recall for high-fidelity context.
 
@@ -48,7 +48,7 @@ Following the **Industrial Restructuring**, VIKI follows a **Clean Architecture 
 *   **Performance Metrics**: Tracked internally for model routing and selection.
 *   **Continuous Learner** (`viki/core/continuous_learning.py`): Optional periodic training cycles with validation.
 
-See [viki/skills/creation/forge.py](viki/skills/creation/forge.py) (Neural Forge: prompt-bake writes `data/Modelfile.viki_evolved`, then `ollama create` with default tag **`viki-neural-forge`**, overridable via `system.forge_output_ollama_tag` / `VIKI_FORGE_OUTPUT_OLLAMA_MODEL`; optional LoRA) and [viki/SECURITY_SETUP.md](../viki/SECURITY_SETUP.md) for operational details. CLI entry: [scripts/build_viki_model.py](scripts/build_viki_model.py).
+See [viki/skills/creation/forge.py](viki/skills/creation/forge.py) (Neural Forge: prompt-bake writes `data/Modelfile.viki_evolved` for use in LM Studio; optional LoRA) and [viki/SECURITY_SETUP.md](../viki/SECURITY_SETUP.md) for operational details. CLI entry: [scripts/build_viki_model.py](scripts/build_viki_model.py).
 
 ## Cognitive Data Flow
 ```mermaid

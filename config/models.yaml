@@ -1,8 +1,5 @@
 models:
   providers:
-    ollama:
-      type: local
-      base_url: http://localhost:11434
     openai:
       type: api
       api_key: ${OPENAI_API_KEY}
@@ -27,12 +24,12 @@ models:
       api_key_env: LMSTUDIO_API_KEY
     mock:
       type: mock
-  default: phi3-mini
+  default: lmstudio-gemma4e4b
   profiles:
-    gemma4:
-      provider: ollama
-      model_name: gemma4:12b
-      priority: 20
+    lmstudio-gemma4e4b:
+      provider: lmstudio
+      model_name: google/gemma-4-e4b
+      priority: 30
       timeout_seconds: 120
       max_context_tokens: 32768
       capabilities:
@@ -41,42 +38,13 @@ models:
       - coding
       - tool_use
       - general
-      supports_native_tools: false
-      supports_streaming: true
-      local_first: true
-      ollama_options:
-        num_predict: 2048
-        num_ctx: 8192
-      description: 'Local Ollama fallback (offline / air-gap only). Primary is now NVIDIA NIM.
-
-        '
-    qwen3-8b:
-      provider: ollama
-      model_name: qwen3:8b
-      priority: 25
-      timeout_seconds: 90
-      max_context_tokens: 40960
-      capabilities:
-      - chat
-      - reasoning
-      - coding
-      - tool_use
-      - general
-      - writing
-      - planning
-      - self_reflection
+      - vision
+      - multimodal
       supports_native_tools: true
       supports_streaming: true
       local_first: true
-      ollama_enable_thinking: false
-      ollama_options:
-        num_predict: 2048
-        num_ctx: 8192
-      description: 'Local Ollama — Qwen3 8B. Fits fully in 8GB VRAM (measured 100%
-        GPU, no CPU spillover) on this hardware, making it the fastest capable local
-        option. Thinking mode disabled to avoid spending tokens on chain-of-thought.
+      description: 'Local LM Studio — Google Gemma 4 E4B. Default model for all VIKI operations.'
 
-        '
     lmstudio-qwen3:
       provider: lmstudio
       model_name: qwen/qwen3.5-9b
@@ -95,67 +63,8 @@ models:
       supports_native_tools: true
       supports_streaming: true
       local_first: true
-      description: 'Local LM Studio — Qwen3.5 9B. Extra local fallback alongside
-        the Ollama profiles, in case LM Studio is running and Ollama is not (or
-        vice versa). Priority set below qwen3-8b: LM Studio''s per-request
-        thinking-mode suppression (chat_template_kwargs.enable_thinking) was
-        measured to be unreliable, so responses can occasionally run long. Only
-        used when it actually has a matching capability — never forced for tasks
-        it cannot serve (e.g. vision, which this profile does not list).
+      description: 'Local LM Studio — Qwen3.5 9B. Fallback for coding and reasoning tasks.'
 
-        '
-    viki-evolved:
-      provider: ollama
-      model_name: gemma4:12b
-      priority: 18
-      timeout_seconds: 180
-      max_context_tokens: 32768
-      capabilities:
-      - chat
-      - reasoning
-      - sovereign
-      - memory
-      - autonomous_planning
-      - general
-      supports_native_tools: false
-      supports_streaming: true
-      ollama_options:
-        num_predict: 4096
-        num_ctx: 16384
-      description: 'Local Ollama fallback for evolved VIKI persona (offline only).
-
-        '
-    phi3-mini:
-      provider: ollama
-      model_name: phi3:mini
-      priority: 10
-      timeout_seconds: 60
-      max_context_tokens: 8192
-      capabilities:
-      - chat
-      - general
-      supports_streaming: true
-      tier: local_fast
-      ollama_enable_thinking: false
-      ollama_options:
-        num_predict: 1024
-        num_ctx: 4096
-      description: 'Local Ollama lightweight fallback (offline only). NIM handles fast tasks via nim-nemotron-nano.
-
-        '
-    viki-trainer:
-      provider: ollama
-      model_name: gemma4:12b
-      training_only: true
-      priority: 10
-      timeout_seconds: 300
-      capabilities:
-      - training
-      - dataset_generation
-      - self_reflection
-      description: 'Dedicated training and evolutionary refinement model.
-
-        '
     gpt-5:
       provider: openai
       model_name: gpt-5
@@ -168,9 +77,8 @@ models:
       - tool_use
       supports_native_tools: true
       supports_streaming: true
-      description: 'Cloud reasoning fallback model for difficult tasks.
+      description: 'Cloud reasoning fallback model for difficult tasks.'
 
-        '
     claude-sonnet:
       provider: anthropic
       model_name: claude-sonnet-4
@@ -181,9 +89,7 @@ models:
       - writing
       - analysis
       supports_streaming: true
-      description: 'Long-context analysis and writing model.
-
-        '
+      description: 'Long-context analysis and writing model.'
 
     # --- NVIDIA NIM profiles -------------------------------------------
     # NOTE: Some NVIDIA-hosted models (e.g. nvidia/llama-3.1-nemotron-ultra-253b-v1)
@@ -212,10 +118,7 @@ models:
       supports_streaming: true
       cost_per_1k_in: 0.0004
       cost_per_1k_out: 0.0012
-      description: 'FALLBACK — NVIDIA NIM Nemotron Super 49B. Backup cloud model;
-        primary is OpenCode DeepSeek V4 Flash (oc-deepseek-flash).
-
-        '
+      description: 'FALLBACK — NVIDIA NIM Nemotron Super 49B. Backup cloud model.'
 
     nim-qwen-coder:
       provider: nvidia_nim
@@ -232,11 +135,7 @@ models:
       supports_streaming: true
       cost_per_1k_in: 0.0002
       cost_per_1k_out: 0.0002
-      description: 'NVIDIA NIM — Qwen2.5 Coder 32B. Heavy-tier target: the router
-        prefers this profile when the judgment engine escalates to DEEP (complex
-        coding/reasoning), while fast/standard traffic stays on Nemotron.
-
-        '
+      description: 'NVIDIA NIM — Qwen2.5 Coder 32B. Heavy-tier coding model.'
 
     nim-nemotron-nano:
       provider: nvidia_nim
@@ -253,10 +152,7 @@ models:
       supports_streaming: true
       cost_per_1k_in: 0.0001
       cost_per_1k_out: 0.0001
-      description: 'NVIDIA NIM — Nemotron Nano 8B. Primary fast-path model for reflex
-        and lightweight tasks via NVIDIA free cloud inference.
-
-        '
+      description: 'NVIDIA NIM — Nemotron Nano 8B. Primary fast-path model.'
 
     nim-llama4:
       provider: nvidia_nim
@@ -274,10 +170,7 @@ models:
       supports_streaming: true
       cost_per_1k_in: 0.0002
       cost_per_1k_out: 0.0006
-      description: 'NVIDIA NIM — Llama 4 Maverick 17B (128 experts MoE). Primary
-        multimodal / vision model via NVIDIA free cloud inference.
-
-        '
+      description: 'NVIDIA NIM — Llama 4 Maverick 17B. Primary multimodal model.'
 
     nim-llama-fast:
       provider: nvidia_nim
@@ -294,10 +187,7 @@ models:
       supports_streaming: true
       cost_per_1k_in: 0.0001
       cost_per_1k_out: 0.0001
-      description: 'NVIDIA NIM — Llama 3.1 8B Instruct. Fast NIM model for lightweight
-        tasks via NVIDIA free cloud inference.
-
-        '
+      description: 'NVIDIA NIM — Llama 3.1 8B Instruct. Fast lightweight model.'
 
     nim-deepseek-r1:
       provider: nvidia_nim
@@ -314,10 +204,7 @@ models:
       supports_streaming: true
       cost_per_1k_in: 0.0008
       cost_per_1k_out: 0.002
-      description: 'NVIDIA NIM — DeepSeek V4 Pro. Primary deep reasoning and math
-        model via NVIDIA free cloud inference.
-
-        '
+      description: 'NVIDIA NIM — DeepSeek V4 Pro. Primary deep reasoning model.'
 
     nim-mistral-large:
       provider: nvidia_nim
@@ -335,10 +222,7 @@ models:
       supports_streaming: true
       cost_per_1k_in: 0.002
       cost_per_1k_out: 0.006
-      description: 'NVIDIA NIM — Mistral Large 3 675B. Primary writing and frontier
-        reasoning model via NVIDIA free cloud inference.
-
-        '
+      description: 'NVIDIA NIM — Mistral Large 3 675B. Primary writing model.'
 
     nim-embed:
       provider: nvidia_nim
@@ -350,10 +234,7 @@ models:
       capabilities:
       - embedding
       - rag
-      description: 'NVIDIA NIM — Llama Nemotron Embed 1B v2. Multilingual text embeddings
-        for RAG memory (26 languages, 8192 token context).
-
-        '
+      description: 'NVIDIA NIM — Llama Nemotron Embed 1B v2. Multilingual embeddings.'
 
     # --- OpenCode model profiles ---------------------------------------
     oc-deepseek-flash:
@@ -377,10 +258,7 @@ models:
       supports_streaming: true
       cost_per_1k_in: 0.0
       cost_per_1k_out: 0.0
-      description: 'PRIMARY — OpenCode DeepSeek V4 Flash (free). Default model for
-        all VIKI operations via OpenCode Zen.
-
-        '
+      description: 'PRIMARY — OpenCode DeepSeek V4 Flash (free). Default model via OpenCode Zen.'
 
     oc-deepseek-flash-fast:
       provider: opencode_zen
@@ -397,10 +275,7 @@ models:
       supports_streaming: true
       cost_per_1k_in: 0.0
       cost_per_1k_out: 0.0
-      description: 'OpenCode DeepSeek V4 Flash (free) — fast-tier alias for reflex
-        and lightweight tasks (short timeout).
-
-        '
+      description: 'OpenCode DeepSeek V4 Flash (free) — fast-tier alias.'
 
     oc-gpt55:
       provider: opencode_zen
@@ -420,9 +295,7 @@ models:
       supports_streaming: true
       cost_per_1k_in: 0.0
       cost_per_1k_out: 0.0
-      description: 'OpenCode Zen — GPT-5.5. Premium coding and sovereign intelligence model.
-
-        '
+      description: 'OpenCode Zen — GPT-5.5. Premium coding model.'
 
     oc-qwen37:
       provider: opencode_go
@@ -440,9 +313,7 @@ models:
       supports_streaming: true
       cost_per_1k_in: 0.0
       cost_per_1k_out: 0.0
-      description: 'OpenCode Go — Qwen 3.7 Plus. Zero-cost coding and training engine.
-
-        '
+      description: 'OpenCode Go — Qwen 3.7 Plus. Zero-cost coding and training.'
 
     oc-deepseek:
       provider: opencode_go
@@ -460,9 +331,7 @@ models:
       supports_streaming: true
       cost_per_1k_in: 0.0
       cost_per_1k_out: 0.0
-      description: 'OpenCode Go — DeepSeek V4 Pro. Zero-cost deep reasoning model.
-
-        '
+      description: 'OpenCode Go — DeepSeek V4 Pro. Zero-cost deep reasoning.'
 
     oc-mimo:
       provider: opencode_go
@@ -478,18 +347,13 @@ models:
       supports_streaming: true
       cost_per_1k_in: 0.0
       cost_per_1k_out: 0.0
-      description: 'OpenCode Go — MiMo v2.5. Zero-cost writing and prompt reflection.
-
-        '
+      description: 'OpenCode Go — MiMo v2.5. Zero-cost writing and reflection.'
 
   routing:
     prefer_local_models: true
     fallback_order:
-    - phi3-mini
-    - qwen3-8b
+    - lmstudio-gemma4e4b
     - lmstudio-qwen3
-    - gemma4
-    - viki-evolved
     - oc-deepseek-flash
     - oc-deepseek
     - nim-nemotron
@@ -498,76 +362,61 @@ models:
     - claude-sonnet
     task_routes:
       coding:
-        primary: phi3-mini
+        primary: lmstudio-gemma4e4b
         fallback:
-        - qwen3-8b
         - lmstudio-qwen3
-        - gemma4
         - oc-deepseek-flash
         - oc-deepseek
       reasoning:
-        primary: qwen3-8b
+        primary: lmstudio-gemma4e4b
         fallback:
         - lmstudio-qwen3
-        - gemma4
-        - phi3-mini
         - oc-deepseek
         - oc-deepseek-flash
       math:
-        primary: phi3-mini
+        primary: lmstudio-gemma4e4b
         fallback:
-        - qwen3-8b
         - lmstudio-qwen3
-        - gemma4
         - oc-deepseek
       training:
-        primary: viki-trainer
+        primary: oc-qwen37
         fallback:
-        - oc-qwen37
+        - oc-deepseek
       dataset_generation:
-        primary: viki-trainer
+        primary: oc-qwen37
         fallback:
-        - oc-qwen37
+        - oc-deepseek
       self_reflection:
-        primary: qwen3-8b
+        primary: lmstudio-qwen3
         fallback:
-        - lmstudio-qwen3
-        - gemma4
-        - viki-trainer
+        - lmstudio-gemma4e4b
         - oc-mimo
       fast:
-        primary: phi3-mini
+        primary: nim-nemotron-nano
         fallback:
-        - qwen3-8b
-        - lmstudio-qwen3
-        - gemma4
+        - lmstudio-gemma4e4b
         - oc-deepseek-flash-fast
       writing:
-        primary: qwen3-8b
+        primary: lmstudio-qwen3
         fallback:
-        - lmstudio-qwen3
-        - gemma4
-        - phi3-mini
+        - lmstudio-gemma4e4b
         - oc-deepseek-flash
       vision:
-        primary: gemma4
+        primary: lmstudio-gemma4e4b
         fallback:
+        - nim-llama4
         - oc-deepseek-flash
       embedding:
         primary: nim-embed
       general:
-        primary: phi3-mini
+        primary: lmstudio-gemma4e4b
         fallback:
-        - qwen3-8b
         - lmstudio-qwen3
-        - gemma4
         - oc-deepseek-flash
       planning:
-        primary: qwen3-8b
+        primary: lmstudio-qwen3
         fallback:
-        - lmstudio-qwen3
-        - gemma4
-        - phi3-mini
+        - lmstudio-gemma4e4b
         - oc-deepseek-flash
   memory:
     enabled: true

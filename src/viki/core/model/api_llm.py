@@ -39,7 +39,7 @@ class APILLM(LLMProvider):
                 if not looks_like_anthropic_secret(api_key):
                     raise ValueError(
                         f"Anthropic API key missing or invalid ({self.config.get('api_key_env', 'ANTHROPIC_API_KEY')}). "
-                        "Expected a key starting with sk-ant-. Remove placeholder values or use local Ollama profiles."
+                        "Expected a key starting with sk-ant-. Remove placeholder values or use local LM Studio profiles."
                     )
                 self._raw_client = AsyncAnthropic(api_key=api_key)
                 self.client = instructor.from_anthropic(
@@ -55,7 +55,7 @@ class APILLM(LLMProvider):
                     raise ValueError(
                         f"OpenAI API key missing or invalid ({self.config.get('api_key_env', 'OPENAI_API_KEY')}). "
                         "Official OpenAI expects a secret starting with sk-. "
-                        "Unset OPENAI_API_KEY or set system.local_llm_only: true to use Ollama only."
+                        "Unset OPENAI_API_KEY or set system.local_llm_only: true to use LM Studio only."
                     )
                 if not api_key and not uses_official_openai:
                     api_key = "not-needed"
@@ -185,14 +185,26 @@ class APILLM(LLMProvider):
                         ]
                         break
 
-            out, completion = await self.client.chat.completions.create_with_completion(
-                model=self.model_name,
-                messages=messages,
-                response_model=response_model,
-                temperature=temperature,
-            )
             try:
-                usage = getattr(completion, "usage", None)
+                out, completion = await self.client.chat.completions.create_with_completion(
+                    model=self.model_name,
+                    messages=messages,
+                    response_model=response_model,
+                    temperature=temperature,
+                )
+            except Exception as instructor_err:
+                err_str = str(instructor_err).lower()
+                if "response_format" in err_str or "json_schema" in err_str or "json_object" in err_str:
+                    viki_logger.warning(
+                        "Instructor structured output not supported by %s, falling back to prompt-based JSON: %s",
+                        self.model_name,
+                        instructor_err,
+                    )
+                    out = await self._prompt_based_structured(messages, response_model, temperature)
+                else:
+                    raise
+            try:
+                usage = getattr(completion, "usage", None) if "completion" in dir() else None
                 if usage is not None:
                     self.record_token_usage(
                         getattr(usage, "prompt_tokens", 0) or 0,
@@ -209,6 +221,39 @@ class APILLM(LLMProvider):
                 emit_llm_inference(self, time.perf_counter() - t0, success, "chat_structured")
             except Exception:
                 viki_logger.warning("failed to emit LLM inference usage for %s", self.model_name)
+
+    async def _prompt_based_structured(
+        self, messages: list[dict[str, Any]], response_model: type[T], temperature: float
+    ) -> T:
+        """Fallback: ask the model to return JSON via prompt, then parse heuristically."""
+        import json as _json
+
+        from pydantic import TypeAdapter
+
+        schema = response_model.model_json_schema()
+        guide = (
+            f"### JSON OUTPUT (required) ###\n"
+            f"Return one JSON object matching this schema: {_json.dumps(schema)}\n"
+            "No markdown fences, no explanation — just the raw JSON object."
+        )
+        augmented = list(messages) + [{"role": "system", "content": guide}]
+        raw = await self.chat(augmented, temperature=temperature)
+        raw = (raw if isinstance(raw, str) else str(raw or "")).strip()
+        raw = raw.removeprefix("```json").removesuffix("```").strip()
+        try:
+            data = _json.loads(raw)
+        except _json.JSONDecodeError:
+            import ast
+
+            try:
+                data = ast.literal_eval(raw)
+            except Exception:
+                viki_logger.warning("Prompt-based structured parse failed for %s", response_model.__name__)
+                return TypeAdapter(response_model).validate_python(
+                    {"final_thought": {"intent_summary": "error", "primary_strategy": "parse failure", "confidence": 0.0},
+                     "final_response": raw[:4000] if len(raw) > 4000 else raw}
+                )
+        return response_model.model_validate_json(_json.dumps(data))
 
     async def chat_stream(self, messages: list[dict[str, Any]], temperature: float = 0.7):
         if not self.available or self._raw_client is None:

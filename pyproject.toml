@@ -9,7 +9,7 @@ authors = [
     { name = "VIKI Project Contributors" },
 ]
 keywords = [
-    "ai", "assistant", "agent", "ollama", "local-llm", "autonomous",
+    "ai", "assistant", "agent", "lm-studio", "local-llm", "autonomous",
     "rag", "privacy", "cli", "neural-forge", "open-source",
 ]
 classifiers = [

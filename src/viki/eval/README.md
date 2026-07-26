@@ -40,16 +40,16 @@ From repo root:
 python scripts/run_rag_eval.py --gold viki/eval/fixtures/rag_gold.example.jsonl --k 5 --out reports/rag_eval.json
 ```
 
-### Optional: LLM judge (local Ollama)
+### Optional: LLM judge (local LM Studio)
 
 After retrieval metrics, score semantic relevance with a **local** model (off by default so CI stays fast):
 
 ```bash
 python scripts/run_rag_eval.py --gold viki/eval/fixtures/rag_gold.example.jsonl --out reports/rag_eval.json --judge \
-  --ollama-url http://127.0.0.1:11434 --judge-model llama3.2:latest
+  --base-url http://127.0.0.1:1234 --judge-model google/gemma-4-e4b
 ```
 
-The judge receives the query, gold hints (`must_contain_*`), and retrieved passages; it returns `relevance` (0–1) and `covers_expected` in structured JSON. Set `OLLAMA_URL` / `OLLAMA_MODEL` if you prefer env vars.
+The judge receives the query, gold hints (`must_contain_*`), and retrieved passages; it returns `relevance` (0–1) and `covers_expected` in structured JSON. Set `LMSTUDIO_URL` / `LMSTUDIO_MODEL` if you prefer env vars.
 
 Use `VIKI_DATA_DIR` or `--data-dir` to point at the DB that holds your lessons.
 
