@@ -19,7 +19,8 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install dev dependencies
-        run: pip install ruff mypy
+        run: pip install ruff mypy pydantic types-requests types-PyYAML
+
       - name: Ruff check
         run: ruff check src/viki/
       - name: Ruff format check

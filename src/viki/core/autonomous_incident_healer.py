@@ -22,7 +22,8 @@ class AutonomousIncidentHealer:
 
     def __init__(self, controller: Any):
         self.controller = controller
-        self.worktree_runner = WorktreeRunner(controller)
+        ws_dir = getattr(controller, "workspace_dir", ".")
+        self.worktree_runner = WorktreeRunner(ws_dir)
 
     def parse_stack_trace(self, stack_trace_text: str) -> dict[str, Any]:
         """Parses a stack trace string into structured error details."""
@@ -68,7 +69,9 @@ class AutonomousIncidentHealer:
         # Run trial in Git worktree
         worktree_branch = f"incident-fix-{int(time.time())}"
         try:
-            wt_path = self.worktree_runner.create_worktree(worktree_branch)
+            wt_path = self.worktree_runner._create_worktree(worktree_branch) or getattr(
+                self.controller, "workspace_dir", "."
+            )
         except Exception as e:
             viki_logger.warning("Worktree creation fallback: %s", e)
             wt_path = getattr(self.controller, "workspace_dir", ".")

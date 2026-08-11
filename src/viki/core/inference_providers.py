@@ -280,7 +280,7 @@ class GroqLLM(LLMProvider):
         try:
             response = await self._client.chat.completions.create(
                 model=self.model_name,
-                messages=messages,  # type: ignore[arg-type]
+                messages=messages,
                 temperature=temperature,
             )
             try:
@@ -306,10 +306,10 @@ class GroqLLM(LLMProvider):
         try:
             import instructor
 
-            client = instructor.from_openai(self._client, mode=instructor.Mode.JSON)  # type: ignore[arg-type]
+            client = instructor.from_openai(self._client, mode=instructor.Mode.JSON)
             result: T = await client.chat.completions.create(
                 model=self.model_name,
-                messages=messages,  # type: ignore[arg-type]
+                messages=messages,
                 response_model=response_model,
                 temperature=temperature,
             )
@@ -326,11 +326,11 @@ class GroqLLM(LLMProvider):
         try:
             stream = await self._client.chat.completions.create(
                 model=self.model_name,
-                messages=messages,  # type: ignore[arg-type]
+                messages=messages,
                 temperature=temperature,
                 stream=True,
             )
-            async for chunk in stream:  # type: ignore[union-attr]
+            async for chunk in stream:
                 delta: str | None = None
                 try:
                     delta = chunk.choices[0].delta.content if chunk.choices else None
@@ -378,7 +378,7 @@ class MistralLLM(LLMProvider):
         try:
             response = await self._client.chat.completions.create(
                 model=self.model_name,
-                messages=messages,  # type: ignore[arg-type]
+                messages=messages,
                 temperature=temperature,
             )
             try:
@@ -404,10 +404,10 @@ class MistralLLM(LLMProvider):
         try:
             import instructor
 
-            client = instructor.from_openai(self._client, mode=instructor.Mode.JSON)  # type: ignore[arg-type]
+            client = instructor.from_openai(self._client, mode=instructor.Mode.JSON)
             result: T = await client.chat.completions.create(
                 model=self.model_name,
-                messages=messages,  # type: ignore[arg-type]
+                messages=messages,
                 response_model=response_model,
                 temperature=temperature,
             )
@@ -424,11 +424,11 @@ class MistralLLM(LLMProvider):
         try:
             stream = await self._client.chat.completions.create(
                 model=self.model_name,
-                messages=messages,  # type: ignore[arg-type]
+                messages=messages,
                 temperature=temperature,
                 stream=True,
             )
-            async for chunk in stream:  # type: ignore[union-attr]
+            async for chunk in stream:
                 try:
                     delta = chunk.choices[0].delta.content if chunk.choices else None
                 except Exception:

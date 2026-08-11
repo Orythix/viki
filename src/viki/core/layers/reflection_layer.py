@@ -48,11 +48,12 @@ class ReflectionLayer(CortexLayer):
                     "Reflection: Robotic marker detected. Violates Human Agent protocol."
                 )
                 issues.append("Robotic/Servant tone detected")
-                response.final_thought.confidence *= 0.5
+                if response.final_thought is not None:
+                    response.final_thought.confidence *= 0.5
 
         passive_markers = ["i will try to", "i think i can", "let me see if"]
         if response.final_response and any(m in resp_lower for m in passive_markers):
-            if response.final_thought.confidence > 0.8:
+            if response.final_thought is not None and response.final_thought.confidence > 0.8:
                 viki_logger.info(
                     "Reflection: High confidence but passive language. Encouraging more sovereign tone."
                 )
@@ -72,9 +73,10 @@ class ReflectionLayer(CortexLayer):
                     issues.append(f"Hallucination: {phrase}")
                     response.needs_escalation = True
 
-        if response.final_thought.confidence < 0.3 or (
-            issues and response.final_thought.confidence < 0.6
-        ):
+        thought_confidence = (
+            response.final_thought.confidence if response.final_thought is not None else 0.5
+        )
+        if thought_confidence < 0.3 or (issues and thought_confidence < 0.6):
             viki_logger.info("Reflection: Escalating to DEEP reasoning due to audit failures.")
             response.needs_escalation = True
 

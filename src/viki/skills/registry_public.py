@@ -79,8 +79,10 @@ class SkillRegistryIndex:
 
         # Try urllib fallback
         try:
-            resp = await asyncio.to_thread(urllib.request.urlopen, url, timeout=15)
-            data = json.loads(resp.read().decode())
+            raw_bytes = await asyncio.to_thread(
+                lambda: urllib.request.urlopen(url, timeout=15).read()
+            )
+            data = json.loads(raw_bytes.decode("utf-8"))
             self._index = [RegistryPackage(**pkg) for pkg in data.get("packages", [])]
             await self._save_index()
             return len(self._index)
@@ -131,8 +133,9 @@ class SkillRegistryIndex:
                         return f"Download failed: HTTP {resp.status}"
                     content = await resp.read()
         except ImportError:
-            resp = await asyncio.to_thread(urllib.request.urlopen, pkg.download_url, timeout=30)
-            content = resp.read()
+            content = await asyncio.to_thread(
+                lambda: urllib.request.urlopen(pkg.download_url, timeout=30).read()
+            )
 
         # Verify hash
         if pkg.sha256:

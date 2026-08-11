@@ -657,7 +657,9 @@ def run():
 
     if sys.platform == "win32":
         for stream in (sys.stdout, sys.stderr):
-            if getattr(stream, "encoding", "").lower() != "utf-8":
+            if getattr(stream, "encoding", "").lower() != "utf-8" and hasattr(
+                stream, "reconfigure"
+            ):
                 stream.reconfigure(encoding="utf-8")
 
     parser = argparse.ArgumentParser(description="VIKI Sovereign Intelligence")

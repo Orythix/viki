@@ -285,8 +285,9 @@ async def run_react_loop(
                 if confidence < 0.4:
                     controller.knowledge_gaps.record_low_confidence(user_input, confidence)
 
-            if on_event:
+            if on_event and hasattr(viki_resp, "final_thought") and viki_resp.final_thought:
                 on_event("thought", viki_resp.final_thought.intent_summary)
+            if on_event:
                 on_event("model", f"{task_type.capitalize()} Core")
                 on_event("budget", budget.get("time", 0))
 

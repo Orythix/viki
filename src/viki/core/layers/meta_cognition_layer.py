@@ -29,7 +29,9 @@ class MetaCognitionLayer(CortexLayer):
         viki_logger.debug("Layer 5 (Meta-Cognition) evaluating mental efficiency...")
 
         insights = []
-        confidence = response.final_thought.confidence
+        confidence = (
+            response.final_thought.confidence if response.final_thought is not None else 0.5
+        )
         has_action = response.action is not None
         has_response = bool(response.final_response and response.final_response.strip())
 
@@ -53,7 +55,8 @@ class MetaCognitionLayer(CortexLayer):
                 "FRUSTRATION SIGNAL: User provides correction or expresses frustration."
             )
             response.needs_escalation = True
-            response.final_thought.confidence *= 0.8
+            if response.final_thought is not None:
+                response.final_thought.confidence *= 0.8
 
         if self.layer_timing:
             total_time = self.layer_timing.get_total_current()
