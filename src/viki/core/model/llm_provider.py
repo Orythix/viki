@@ -31,6 +31,48 @@ class LLMProvider(ABC):
         self.output_tokens: int = 0
         self.total_cost_usd: float = 0.0
         self.provider_name: str = config.get("provider", config.get("provider_type", "unknown"))
+        self.consecutive_failures: int = 0
+        self.max_consecutive_failures: int = config.get("max_consecutive_failures", 5)
+        self.circuit_open: bool = False
+        self.circuit_open_until: float = 0.0
+        self.circuit_cooldown_s: float = float(config.get("circuit_cooldown_s", 30.0))
+
+    def is_circuit_available(self) -> bool:
+        """Check if provider is healthy or if circuit breaker cooldown has expired."""
+        if not self.available:
+            return False
+        if not self.circuit_open:
+            return True
+        import time
+
+        now = time.time()
+        if now >= self.circuit_open_until:
+            self.circuit_open = False
+            self.consecutive_failures = 0
+            return True
+        return False
+
+    def record_circuit_failure(self, error_msg: str = ""):
+        """Record an execution failure and trip circuit breaker if threshold hit."""
+        import time
+
+        self.consecutive_failures += 1
+        if self.consecutive_failures >= self.max_consecutive_failures and not self.circuit_open:
+            self.circuit_open = True
+            self.circuit_open_until = time.time() + self.circuit_cooldown_s
+            logging.getLogger(__name__).warning(
+                "Circuit Breaker TRIPPED for provider '%s' (model '%s'): %d consecutive failures. Cooling down for %.1fs. Error: %s",
+                self.provider_name,
+                self.model_name,
+                self.consecutive_failures,
+                self.circuit_cooldown_s,
+                error_msg,
+            )
+
+    def record_circuit_success(self):
+        """Record successful execution and reset failure counters."""
+        self.consecutive_failures = 0
+        self.circuit_open = False
 
     def is_cloud(self) -> bool:
         return True
@@ -42,8 +84,10 @@ class LLMProvider(ABC):
         if not success:
             self.error_count += 1
             self.trust_score = max(0.0, self.trust_score - 0.1)
+            self.record_circuit_failure()
         else:
             self.trust_score = min(1.0, self.trust_score + 0.01)
+            self.record_circuit_success()
         try:
             from viki.core.usage_log import emit_model_feedback
 

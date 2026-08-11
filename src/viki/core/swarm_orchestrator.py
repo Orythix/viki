@@ -48,9 +48,11 @@ class SwarmOrchestrator:
     Coordinates hierarchical SubAgent swarms and tracks execution state DAG.
     """
 
-    def __init__(self, controller: Any):
+    def __init__(self, controller: Any, max_concurrent_tasks: int = 5):
         self.controller = controller
         self.active_swarms: dict[str, dict[str, Any]] = {}
+        self.max_concurrent_tasks = max_concurrent_tasks
+        self._semaphore = asyncio.Semaphore(max_concurrent_tasks)
 
     def create_swarm(self, goal: str) -> str:
         """Initializes a new Swarm execution graph for a given high-level goal."""
@@ -96,28 +98,29 @@ class SwarmOrchestrator:
         agents: dict[str, SubAgent] = swarm["agents"]
 
         for _task_id, node in nodes.items():
-            # Check dependencies
-            deps_met = all(nodes[dep].status == "completed" for dep in node.dependencies)
-            if not deps_met:
-                node.status = "failed"
-                node.result = "Dependencies not met"
-                continue
+            async with self._semaphore:
+                # Check dependencies
+                deps_met = all(nodes[dep].status == "completed" for dep in node.dependencies)
+                if not deps_met:
+                    node.status = "failed"
+                    node.result = "Dependencies not met"
+                    continue
 
-            node.status = "running"
-            node.started_at = time.time()
-            agent = agents.get(node.agent_role)
+                node.status = "running"
+                node.started_at = time.time()
+                agent = agents.get(node.agent_role)
 
-            if agent:
-                agent.remember("user", f"Goal: {swarm['goal']} | Task: {node.title}")
-                # Simulate sub-agent runner task completion
-                await asyncio.sleep(0.05)
-                node.result = f"Role '{node.agent_role}' completed '{node.title}' successfully."
-                node.status = "completed"
-            else:
-                node.status = "failed"
-                node.result = f"Agent role '{node.agent_role}' missing"
+                if agent:
+                    agent.remember("user", f"Goal: {swarm['goal']} | Task: {node.title}")
+                    # Bounded sub-agent runner task completion
+                    await asyncio.sleep(0.05)
+                    node.result = f"Role '{node.agent_role}' completed '{node.title}' successfully."
+                    node.status = "completed"
+                else:
+                    node.status = "failed"
+                    node.result = f"Agent role '{node.agent_role}' missing"
 
-            node.finished_at = time.time()
+                node.finished_at = time.time()
 
         swarm["status"] = "completed"
         return self.get_swarm_dag_state(swarm_id)
