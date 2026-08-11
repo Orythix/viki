@@ -664,6 +664,12 @@ def run():
 
     parser = argparse.ArgumentParser(description="VIKI Sovereign Intelligence")
     parser.add_argument(
+        "--version",
+        "-v",
+        action="version",
+        version="VIKI 8.3.0",
+    )
+    parser.add_argument(
         "--low-resource",
         dest="low_resource",
         action="store_true",
