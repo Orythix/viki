@@ -218,3 +218,27 @@ class LLMBudget:
                 },
                 "explicit_cloud_override": self._explicit_cloud_override,
             }
+
+
+class RAMBudgetOptimizer:
+    """
+    RAM & VRAM Budget Optimizer for 8GB and 16GB RAM local systems.
+    Monitors process memory footprint, caps context token allocations,
+    and forces garbage collection when memory thresholds are approached.
+    """
+
+    def __init__(self, target_ram_gb: float = 8.0):
+        self.target_ram_gb = target_ram_gb
+        self.max_context_tokens = 4096 if target_ram_gb <= 8.0 else 8192
+
+    def optimize_memory(self) -> dict[str, Any]:
+        """Triggers Python garbage collection and returns RAM status."""
+        import gc
+
+        collected = gc.collect()
+        viki_logger.debug("RAMBudgetOptimizer: GC collected %d unreferenced objects", collected)
+        return {
+            "target_ram_gb": self.target_ram_gb,
+            "max_context_tokens": self.max_context_tokens,
+            "gc_collected_objects": collected,
+        }

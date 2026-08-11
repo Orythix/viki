@@ -22,16 +22,23 @@ models:
       type: api
       base_url: http://localhost:1234/v1
       api_key_env: LMSTUDIO_API_KEY
+    ollama:
+      type: ollama
+      base_url: http://localhost:11434/v1
+    gemini:
+      type: gemini
+      api_key_env: GEMINI_API_KEY
     mock:
       type: mock
   default: lmstudio-gemma4e4b
+
   profiles:
     lmstudio-gemma4e4b:
       provider: lmstudio
       model_name: google/gemma-4-e4b
       priority: 30
       timeout_seconds: 120
-      max_context_tokens: 32768
+      max_context_tokens: 8192
       capabilities:
       - chat
       - reasoning
@@ -43,14 +50,66 @@ models:
       supports_native_tools: true
       supports_streaming: true
       local_first: true
-      description: 'Local LM Studio — Google Gemma 4 E4B. Default model for all VIKI operations.'
+      description: 'Local LM Studio — Google Gemma 4 E4B. Optimized context window for smooth local execution.'
+
+    lmstudio-gemma4e4b-8gb:
+      provider: lmstudio
+      model_name: google/gemma-4-e4b
+      priority: 35
+      timeout_seconds: 120
+      max_context_tokens: 4096
+      capabilities:
+      - chat
+      - reasoning
+      - coding
+      - tool_use
+      - general
+      supports_native_tools: true
+      supports_streaming: true
+      local_first: true
+      description: 'Local LM Studio — Gemma 4 E4B (8GB RAM Optimized). Conservative 4k context window to save VRAM/RAM.'
+
+    lmstudio-deepseek-r1-14b-8gb:
+      provider: lmstudio
+      model_name: deepseek-r1-distill-qwen-14b
+      priority: 40
+      timeout_seconds: 180
+      max_context_tokens: 4096
+      capabilities:
+      - chat
+      - reasoning
+      - coding
+      - tool_use
+      - planning
+      supports_native_tools: true
+      supports_streaming: true
+      local_first: true
+      description: 'Local LM Studio (100% Offline 8GB RAM) — DeepSeek-R1 14B (Q3_K_M GGUF). High-tier reasoning fitting inside ~4.2GB local RAM.'
+
+    lmstudio-qwen2.5-14b-16gb:
+      provider: lmstudio
+      model_name: qwen2.5-coder-14b-instruct
+      priority: 42
+      timeout_seconds: 180
+      max_context_tokens: 8192
+      capabilities:
+      - chat
+      - reasoning
+      - coding
+      - tool_use
+      - planning
+      supports_native_tools: true
+      supports_streaming: true
+      local_first: true
+      description: 'Local LM Studio (100% Offline 16GB RAM) — Qwen 2.5 Coder 14B (Q4_K_M GGUF). Full coding intelligence fitting inside ~7.8GB local RAM.'
+
 
     lmstudio-qwen3:
       provider: lmstudio
       model_name: qwen/qwen3.5-9b
       priority: 22
       timeout_seconds: 90
-      max_context_tokens: 72192
+      max_context_tokens: 8192
       capabilities:
       - chat
       - reasoning
@@ -63,7 +122,96 @@ models:
       supports_native_tools: true
       supports_streaming: true
       local_first: true
-      description: 'Local LM Studio — Qwen3.5 9B. Fallback for coding and reasoning tasks.'
+      description: 'Local LM Studio — Qwen3.5 9B.'
+
+    remote-100gb-server:
+      provider: lmstudio
+      model_name: deepseek-r1-671b
+      priority: 45
+      timeout_seconds: 300
+      max_context_tokens: 131072
+      capabilities:
+      - chat
+      - reasoning
+      - coding
+      - tool_use
+      - general
+      - planning
+      supports_native_tools: true
+      supports_streaming: true
+      local_first: false
+      description: 'Offloaded Remote GPU Server / Cloud Inference — 100GB+ Models (DeepSeek-R1 671B / Llama 405B) with zero local RAM impact on 8GB/16GB machines.'
+
+    ollama-llama3:
+      provider: ollama
+      model_name: llama3.1:8b
+      priority: 32
+      timeout_seconds: 120
+      max_context_tokens: 8192
+      capabilities:
+      - chat
+      - reasoning
+      - coding
+      - tool_use
+      supports_streaming: true
+      local_first: true
+      description: 'Local Ollama endpoint — Llama 3.1 8B.'
+
+    gemini-2-5-flash:
+      provider: gemini
+      model_name: gemini-2.5-flash
+      priority: 48
+      fallback: true
+      capabilities:
+      - chat
+      - reasoning
+      - coding
+      - tool_use
+      - multimodal
+      supports_streaming: true
+      description: 'Google Gemini 2.5 Flash API.'
+
+    gemini-2-5-pro:
+      provider: gemini
+      model_name: gemini-2.5-pro
+      priority: 49
+      fallback: true
+      capabilities:
+      - chat
+      - reasoning
+      - coding
+      - planning
+      supports_streaming: true
+      description: 'Google Gemini 2.5 Pro API.'
+
+    claude-3-7-sonnet:
+      provider: anthropic
+      model_name: claude-3-7-sonnet-20250219
+      priority: 50
+      fallback: true
+      capabilities:
+      - reasoning
+      - coding
+      - writing
+      - planning
+      supports_streaming: true
+      description: 'Anthropic Claude 3.7 Sonnet API.'
+
+    gpt-4o:
+      provider: openai
+      model_name: gpt-4o
+      priority: 47
+      fallback: true
+      capabilities:
+      - chat
+      - reasoning
+      - coding
+      - vision
+      supports_streaming: true
+      description: 'OpenAI GPT-4o API.'
+
+
+
 
     gpt-5:
       provider: openai

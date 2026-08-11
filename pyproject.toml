@@ -173,7 +173,9 @@ addopts = "-v --tb=short -p no:cacheprovider"
 filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::PendingDeprecationWarning",
+    "ignore::UserWarning:huggingface_hub.*",
 ]
+
 markers = [
     "slow: tests that take >10s",
     "manual: tests that require manual setup",

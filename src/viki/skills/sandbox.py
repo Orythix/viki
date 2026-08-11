@@ -242,3 +242,43 @@ def get_sandbox(config: SandboxConfig | None = None) -> SkillSandbox:
     if _default_sandbox is None or config is not None:
         _default_sandbox = SkillSandbox(config)
     return _default_sandbox
+
+
+class DockerSandbox(SkillSandbox):
+    """
+    Containerized Docker Sandbox for isolated script & command execution.
+    Falls back to subprocess jail if Docker is unavailable.
+    """
+
+    def __init__(self, image: str = "python:3.11-slim", config: SandboxConfig | None = None):
+        super().__init__(config)
+        self.image = image
+        import shutil
+
+        self.docker_available = shutil.which("docker") is not None
+
+    async def run(
+        self,
+        command: str | list[str],
+        cwd: str | None = None,
+        input_data: str | None = None,
+        env: dict[str, str] | None = None,
+    ) -> SandboxResult:
+        if not self.docker_available:
+            return await super().run(command, cwd=cwd, input_data=input_data, env=env)
+
+        cwd = cwd or os.getcwd()
+        cmd_list = self._build_cmd(command)
+
+        docker_cmd = [
+            "docker",
+            "run",
+            "--rm",
+            "-v",
+            f"{os.path.abspath(cwd)}:/workspace",
+            "-w",
+            "/workspace",
+            self.image,
+        ] + cmd_list
+
+        return await super().run(docker_cmd, cwd=cwd, input_data=input_data, env=env)

@@ -366,3 +366,74 @@ class EndpointGuardService:
                 viki_logger.debug("endpoint_guard stop: %s", e)
             self._observer = None
         self._running = False
+
+
+class PrivacySanitizer:
+    """
+    Zero-Leakage Privacy Sanitizer: Redacts API keys, credentials, emails, and sensitive patterns
+    from outbound prompts before sending to cloud LLM providers, and re-hydrates responses back locally.
+    """
+
+    PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+        (
+            "API_KEY",
+            re.compile(
+                r"(?:sk-[a-zA-Z0-9_\-]{20,}|ghp_[a-zA-Z0-9]{36}|xoxb-[a-zA-Z0-9-]+|AKIA[0-9A-Z]{16})"
+            ),
+        ),
+        (
+            "CREDENTIAL",
+            re.compile(
+                r"(?i)(?:api_key|secret_key|password|access_token|auth_token)\s*[:=]\s*['\"]([^'\"]+)['\"]"
+            ),
+        ),
+        ("EMAIL", re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")),
+        (
+            "IP_ADDRESS",
+            re.compile(r"\b(?:10|172\.(?:1[6-9]|2[0-9]|3[01])|192\.168)\.\d{1,3}\.\d{1,3}\b"),
+        ),
+    ]
+
+    @classmethod
+    def sanitize(cls, text: str) -> tuple[str, dict[str, str]]:
+        """
+        Redacts sensitive tokens from prompt text.
+        Returns: (sanitized_text, redaction_map)
+        """
+        if not text:
+            return text, {}
+
+        redaction_map: dict[str, str] = {}
+        sanitized = text
+        counter = 1
+
+        for tag, pattern in cls.PATTERNS:
+            for match in pattern.finditer(sanitized):
+                matched_str = match.group(0)
+                # If pattern captured a group (like credential value), use full match string to replace
+                placeholder = f"[REDACTED_{tag}_{counter}]"
+                redaction_map[placeholder] = matched_str
+                sanitized = sanitized.replace(matched_str, placeholder, 1)
+                counter += 1
+
+        return sanitized, redaction_map
+
+    @classmethod
+    def rehydrate(cls, text: str, redaction_map: dict[str, str]) -> str:
+        """Restores redacted placeholders in LLM response back to original sensitive values."""
+        if not text or not redaction_map:
+            return text
+        rehydrated = text
+        for placeholder, original in redaction_map.items():
+            rehydrated = rehydrated.replace(placeholder, original)
+        return rehydrated
+
+
+def sanitize_outbound_prompt(prompt: str) -> tuple[str, dict[str, str]]:
+    """Convenience helper for prompt anonymization."""
+    return PrivacySanitizer.sanitize(prompt)
+
+
+def rehydrate_inbound_response(text: str, redaction_map: dict[str, str]) -> str:
+    """Convenience helper for response rehydration."""
+    return PrivacySanitizer.rehydrate(text, redaction_map)

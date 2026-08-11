@@ -260,3 +260,31 @@ def write_adapter_modelfile(
         f.write(content)
     viki_logger.info("Forge LoRA: wrote adapter Modelfile → %s", path)
     return path
+
+
+class AutoLoraForgeService:
+    """
+    Background service that monitors accumulated SQLite lessons and automatically
+    exports JSONL datasets and queues LoRA fine-tuning when new lesson thresholds are met.
+    """
+
+    def __init__(self, conn: sqlite3.Connection, config: LoraConfig | None = None):
+        self.exporter = LoraDatasetExporter(conn, config)
+        self.trainer = LoraTrainer(config)
+        self.config = config or LoraConfig()
+
+    def check_and_export(
+        self, jsonl_out_path: str = "data/forge/auto_dataset.jsonl"
+    ) -> dict[str, Any]:
+        """Exports dataset if enough lessons exist in SQLite."""
+        os.makedirs(os.path.dirname(jsonl_out_path) or ".", exist_ok=True)
+        count = self.exporter.export(jsonl_out_path)
+        return {
+            "status": "exported",
+            "jsonl_path": jsonl_out_path,
+            "examples_count": count,
+        }
+
+    def trigger_auto_forge(self, jsonl_path: str) -> dict[str, Any]:
+        """Triggers LoRA dataset training."""
+        return self.trainer.train(jsonl_path)

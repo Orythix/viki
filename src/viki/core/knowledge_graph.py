@@ -11,6 +11,7 @@ Builds on the ``relationships`` table in the lesson store to provide:
 
 from __future__ import annotations
 
+import functools
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -54,6 +55,21 @@ _ENTITY_PATTERNS: list[tuple[str, str]] = [
     # Acronyms (2-5 uppercase letters)
     (r"\b([A-Z]{2,5})\b", "acronym"),
 ]
+
+
+@functools.lru_cache(maxsize=512)
+def _cached_entity_match(text: str) -> tuple[tuple[str, str, str], ...]:
+    """LRU-cached regex entity extraction helper."""
+    entities: list[tuple[str, str, str]] = []
+    seen: set[str] = set()
+    for pattern, etype in _ENTITY_PATTERNS:
+        for match in re.finditer(pattern, text):
+            label = match.group(1)
+            entity_id = label.lower().replace(" ", "_")
+            if entity_id not in seen:
+                seen.add(entity_id)
+                entities.append((entity_id, label, etype))
+    return tuple(entities)
 
 
 class KnowledgeGraph:
@@ -145,17 +161,7 @@ class KnowledgeGraph:
 
     def _extract_entities(self, text: str) -> list[tuple[str, str, str]]:
         """Heuristic entity extraction from lesson text."""
-        entities: list[tuple[str, str, str]] = []
-        seen: set[str] = set()
-        for pattern, etype in _ENTITY_PATTERNS:
-            for match in re.finditer(pattern, text):
-                label = match.group(1)
-                # Normalize ID
-                entity_id = label.lower().replace(" ", "_")
-                if entity_id not in seen:
-                    seen.add(entity_id)
-                    entities.append((entity_id, label, etype))
-        return entities
+        return list(_cached_entity_match(text))
 
     # ---- Traversal ----
 
@@ -331,4 +337,108 @@ class KnowledgeGraph:
             return cast("list[dict[str, str]]", _json.loads(response[start : end + 1]))
         except Exception as e:
             viki_logger.debug("LLM relationship extraction failed: %s", e)
+            return []
+
+    def index_python_code(self, code: str, file_identifier: str = "snippet.py") -> list[GraphNode]:
+        """
+        Parses Python code using AST to extract functions, classes, docstrings, and import relationships
+        into the Knowledge Graph.
+        """
+        import ast
+
+        nodes_added: list[GraphNode] = []
+        try:
+            tree = ast.parse(code)
+        except SyntaxError as e:
+            viki_logger.debug("AST parse error for %s: %s", file_identifier, e)
+            return nodes_added
+
+        file_node_id = f"code_file:{file_identifier}"
+        file_node = GraphNode(
+            id=file_node_id,
+            label=file_identifier,
+            node_type="code_file",
+            metadata={"filepath": file_identifier},
+        )
+        self._nodes[file_node_id] = file_node
+        nodes_added.append(file_node)
+
+        for stmt in tree.body:
+            if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                fn_id = f"function:{stmt.name}"
+                fn_node = GraphNode(
+                    id=fn_id,
+                    label=stmt.name,
+                    node_type="function",
+                    metadata={
+                        "async": isinstance(stmt, ast.AsyncFunctionDef),
+                        "file": file_identifier,
+                    },
+                )
+                self._nodes[fn_id] = fn_node
+                nodes_added.append(fn_node)
+
+                edge = GraphEdge(
+                    source_id=file_node_id,
+                    target_id=fn_id,
+                    rel_type="defines_function",
+                )
+                self._edges.append(edge)
+                self._adjacency[file_node_id].append(edge)
+
+            elif isinstance(stmt, ast.ClassDef):
+                cls_id = f"class:{stmt.name}"
+                cls_node = GraphNode(
+                    id=cls_id,
+                    label=stmt.name,
+                    node_type="class",
+                    metadata={"file": file_identifier, "docstring": ast.get_docstring(stmt) or ""},
+                )
+                self._nodes[cls_id] = cls_node
+                nodes_added.append(cls_node)
+
+                edge = GraphEdge(
+                    source_id=file_node_id,
+                    target_id=cls_id,
+                    rel_type="defines_class",
+                )
+                self._edges.append(edge)
+                self._adjacency[file_node_id].append(edge)
+
+                # Class methods
+                for item in stmt.body:
+                    if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        method_id = f"method:{stmt.name}.{item.name}"
+                        method_node = GraphNode(
+                            id=method_id,
+                            label=f"{stmt.name}.{item.name}",
+                            node_type="method",
+                            metadata={"class": stmt.name, "file": file_identifier},
+                        )
+                        self._nodes[method_id] = method_node
+                        nodes_added.append(method_node)
+
+                        m_edge = GraphEdge(
+                            source_id=cls_id,
+                            target_id=method_id,
+                            rel_type="has_method",
+                        )
+                        self._edges.append(m_edge)
+                        self._adjacency[cls_id].append(m_edge)
+
+        self._dirty = False
+        return nodes_added
+
+    def index_python_file(self, filepath: str) -> list[GraphNode]:
+        """Reads and indexes a Python file on disk into the Knowledge Graph."""
+        import os
+
+        if not os.path.isfile(filepath):
+            return []
+        try:
+            with open(filepath, encoding="utf-8", errors="ignore") as f:
+                code = f.read()
+            return self.index_python_code(code, file_identifier=filepath)
+        except OSError as e:
+            viki_logger.debug("Failed to read file %s: %s", filepath, e)
             return []

@@ -163,3 +163,27 @@ class BudgetedContextAssembler:
     def estimate_tokens(self, text: str) -> int:
         """Rough token estimate (chars / 4)."""
         return len(text) // 4
+
+    async def assemble_parallel_sources(
+        self,
+        lessons: list[str] | None = None,
+        world_model: Any | None = None,
+        kg: Any | None = None,
+        query: str = "",
+    ) -> str:
+        """Populates context sources in parallel via asyncio.gather and assembles prompt context."""
+        import asyncio
+
+        tasks = []
+        if lessons:
+            tasks.append(asyncio.to_thread(self.add_memory_context, lessons))
+        if world_model:
+            tasks.append(asyncio.to_thread(self.add_world_context, world_model, query))
+        if kg:
+            query_terms = query.split() if query else []
+            tasks.append(asyncio.to_thread(self.add_graph_context, kg, query_terms))
+
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+        return self.assemble()

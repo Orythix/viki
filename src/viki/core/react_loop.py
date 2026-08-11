@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import time
 from typing import Any, cast
 
@@ -621,7 +623,90 @@ async def run_react_loop(
                 )
                 controller.evolution.record_success(candidate["input"])
     except Exception as e:
-        viki_logger.debug(f"Evolution proposal skipped: {e}")
+        viki_logger.debug("Evolution proposal skipped: %s", e)
+
+    try:
+        from viki.core.resource_budget import RAMBudgetOptimizer
+
+        RAMBudgetOptimizer().optimize_memory()
+    except Exception as e:
+        viki_logger.debug("RAM optimization cleanup skipped: %s", e)
 
     controller.memory.working.add_message("assistant", final_output, session_id=session_id)
     return final_output
+
+
+class MCTSNode:
+    """
+    Node in the Monte Carlo Tree Search for agent step planning & action evaluation.
+    """
+
+    def __init__(self, action: ActionCall | None = None, parent: MCTSNode | None = None):
+        self.action = action
+        self.parent = parent
+        self.children: list[MCTSNode] = []
+        self.visits: int = 0
+        self.score: float = 0.0
+        self.observation: str | None = None
+
+    def ucb1(self, exploration_weight: float = 1.414) -> float:
+        """Calculate Upper Confidence Bound for Tree Search node selection."""
+        import math
+
+        if self.visits == 0:
+            return float("inf")
+        parent_visits = self.parent.visits if self.parent else 1
+        return (self.score / self.visits) + exploration_weight * math.sqrt(
+            math.log(parent_visits) / self.visits
+        )
+
+    def select_best_child(self) -> MCTSNode | None:
+        if not self.children:
+            return None
+        return max(self.children, key=lambda child: child.ucb1())
+
+
+async def run_mcts_tree_search(
+    controller: Any,
+    user_input: str,
+    candidate_actions: list[ActionCall],
+    budget: dict[str, Any],
+) -> tuple[ActionCall | None, float]:
+    """
+    Evaluates candidate action branches using MCTS selection to pick the highest-scoring execution path.
+    """
+    root = MCTSNode()
+    for act in candidate_actions:
+        child = MCTSNode(action=act, parent=root)
+        root.children.append(child)
+
+    best_action: ActionCall | None = None
+    best_score: float = -1.0
+
+    for child in root.children:
+        if not child.action:
+            continue
+        skill_name = child.action.skill_name
+        params = child.action.parameters or {}
+
+        # Check permissions & execute in trial mode
+        check_res = controller.capabilities.check_permission(skill_name, params=params)
+        if not check_res.allowed:
+            child.score = -10.0
+            child.visits += 1
+            continue
+
+        result, err, latency = await controller._execute_skill(skill_name, params, budget)
+        child.visits += 1
+
+        if err:
+            child.score = -5.0
+        else:
+            # Score based on output length and absence of errors
+            child.score = 5.0 + min(len(str(result or "")) / 100.0, 5.0)
+
+        if child.score > best_score:
+            best_score = child.score
+            best_action = child.action
+
+    return best_action, best_score

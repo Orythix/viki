@@ -54,11 +54,9 @@ button:disabled{opacity:.5;cursor:wait}
   </div>
   <div id="side">
     <div class="card"><h2>Runtime health</h2><div id="health-body" class="dim">loading…</div></div>
-    <div class="card"><h2>Mission</h2><div id="mission-body" class="dim">none</div></div>
     <div class="card">
-      <h2>Memory search</h2>
-      <form id="mem-form"><input id="mem-q" placeholder="Search lessons…"><button type="submit">Go</button></form>
-      <ul id="mem-results"><li class="dim">no query yet</li></ul>
+      <h2>Multi-Agent Swarm DAG</h2>
+      <div id="swarm-body" class="dim">no active swarm</div>
     </div>
   </div>
 </main>
@@ -165,14 +163,21 @@ async function refresh(){
       ((h.warnings||[]).map(w=>'<div class="kv"><span>⚠</span><span>'+esc(w)+'</span></div>').join(''));
   }catch(e){ $('health-pill').textContent='offline'; $('health-pill').className=''; }
   try{
-    const m=await (await fetch('/api/mission')).json();
-    $('mission-body').textContent=m.active_mission
-      ? (m.active_mission.goal+' ['+m.active_mission.phase+']')
-      : 'no active mission';
+    const s=await (await fetch('/api/v2/swarm/dag')).json();
+    if (s.swarms && s.swarms.length) {
+      const latest = s.swarms[s.swarms.length - 1];
+      let html = '<div class="kv"><span>Swarm</span><span>'+esc(latest.swarm_id)+'</span></div>';
+      html += '<div class="kv"><span>Status</span><span>'+esc(latest.status)+'</span></div>';
+      html += (latest.nodes || []).map(n=>'<div class="kv"><span>'+esc(n.agent_role)+': '+esc(n.title)+'</span><span>['+esc(n.status)+']</span></div>').join('');
+      $('swarm-body').innerHTML = html;
+    } else {
+      $('swarm-body').textContent = 'no active swarm';
+    }
   }catch(e){ /* ignore */ }
 }
 refresh();
-setInterval(refresh, 15000);
+setInterval(refresh, 10000);
+
 </script>
 </body>
 </html>

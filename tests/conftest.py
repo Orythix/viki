@@ -1,10 +1,12 @@
-"""Pytest configuration and fixtures for VIKI tests."""
-
+import os
 import sys
 import tempfile
 from pathlib import Path
 
 import pytest
+
+# Disable huggingface symlinks warning on Windows
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -111,3 +113,16 @@ def test_security_path(temp_data_dir):
     security_path = Path(temp_data_dir) / "security_layer.md"
     security_path.write_text(security_content.strip())
     return str(security_path)
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Clean up any temporary test directories created under tests/."""
+    import shutil
+
+    tests_dir = Path(__file__).parent
+    for item in tests_dir.glob("data_*"):
+        if item.is_dir():
+            try:
+                shutil.rmtree(item)
+            except Exception:
+                pass

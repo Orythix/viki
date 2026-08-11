@@ -131,3 +131,31 @@ def register_dashboard_v2_routes(app: web.Application, controller: Any) -> None:
                 ),
             }
         )
+
+    @app.router.add_get("/api/v2/swarm/dag")  # type: ignore[call-arg, operator]
+    async def get_swarm_dag(request: web.Request) -> web.Response:
+        so = getattr(controller, "swarm_orchestrator", None)
+        if so is None:
+            return web.json_response({"swarms": []})
+        swarm_id = request.query.get("swarm_id")
+        if swarm_id:
+            return web.json_response(so.get_swarm_dag_state(swarm_id))
+        swarms = [so.get_swarm_dag_state(sid) for sid in so.active_swarms]
+        return web.json_response({"swarms": swarms})
+
+    @app.router.add_post("/api/v2/swarm/run")  # type: ignore[call-arg, operator]
+    async def run_swarm(request: web.Request) -> web.Response:
+        so = getattr(controller, "swarm_orchestrator", None)
+        if so is None:
+            from viki.core.swarm_orchestrator import SwarmOrchestrator
+
+            so = SwarmOrchestrator(controller)
+            controller.swarm_orchestrator = so
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        goal = body.get("goal", "Multi-Agent Swarm Engineering Task")
+        swarm_id = so.create_swarm(goal)
+        result = await so.execute_swarm(swarm_id)
+        return web.json_response(result)

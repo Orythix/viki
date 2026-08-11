@@ -26,9 +26,10 @@ class ModelFactory:
         if provider_type == "anthropic":
             merged_config["type"] = "api"
             return APILLM(merged_config)
-        if provider_type == "local":
+        if provider_type in ("local", "lmstudio", "ollama"):
             merged_config.setdefault("supports_native_tools", False)
             return LocalLLM(merged_config)
+
         if provider_type in ("gemini", "google", "vertex"):
             from viki.core.inference_providers import GeminiLLM
 

@@ -70,3 +70,24 @@ def test_candidate_download_directories_includes_home_downloads(monkeypatch, tmp
     monkeypatch.delenv("XDG_DOWNLOAD_DIR", raising=False)
     dirs = candidate_download_directories()
     assert any(str(dl.resolve()) == os.path.abspath(d) for d in dirs)
+
+
+def test_privacy_sanitizer_anonymization_and_rehydration():
+    from viki.core.endpoint_guard import rehydrate_inbound_response, sanitize_outbound_prompt
+
+    raw_prompt = (
+        "Please query the server at 192.168.1.50 using api_key='secret12345' "
+        "or sk-proj-1234567890abcdef1234567890abcdef12 and email admin@internal.com"
+    )
+    sanitized, redactions = sanitize_outbound_prompt(raw_prompt)
+
+    assert "secret12345" not in sanitized
+    assert "sk-proj-1234567890abcdef1234567890abcdef12" not in sanitized
+    assert "admin@internal.com" not in sanitized
+    assert "[REDACTED_" in sanitized
+
+    llm_response = f"I completed task with {list(redactions.keys())[0]}."
+    rehydrated = rehydrate_inbound_response(llm_response, redactions)
+    assert (
+        "secret12345" in rehydrated or "sk-proj" in rehydrated or "admin@internal.com" in rehydrated
+    )
