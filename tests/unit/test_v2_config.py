@@ -212,7 +212,9 @@ class TestV2ConfigEnvVars:
     @patch.dict(os.environ, {}, clear=True)
     @patch.object(Path, "home", return_value=Path("/fake/home"))
     def test_env_var_override(self, mock_home, tmp_path: Path):
-        with patch.dict(os.environ, {"VIKI_MODEL": "gpt4", "LMSTUDIO_URL": "http://localhost:8080"}):
+        with patch.dict(
+            os.environ, {"VIKI_MODEL": "gpt4", "LMSTUDIO_URL": "http://localhost:8080"}
+        ):
             cfg = load_config()
             assert cfg.model == "gpt4"
             assert cfg.lmstudio_url == "http://localhost:8080"
