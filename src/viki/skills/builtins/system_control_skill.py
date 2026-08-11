@@ -193,7 +193,10 @@ class SystemControlSkill(BaseSkill):
         if target:
             try:
                 if target.startswith("ms-settings:"):
-                    os.startfile(target)
+                    startfile_fn = getattr(os, "startfile", None)
+                    if startfile_fn is not None:
+                        startfile_fn(target)
+
                 else:
                     # Use explicit process creation without shell
                     subprocess.Popen([target], shell=False)

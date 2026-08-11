@@ -24,8 +24,9 @@ try:
     from watchdog.events import FileSystemEventHandler
     from watchdog.observers import Observer
 except ImportError:
-    Observer = None  # type: ignore
-    FileSystemEventHandler = object  # type: ignore
+    Observer = None  # type: ignore[assignment]
+    FileSystemEventHandler = object  # type: ignore[assignment, misc]
+
 
 _SEVERITY_ORDER = {"low": 0, "medium": 1, "high": 2}
 

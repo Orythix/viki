@@ -14,10 +14,11 @@ _HAS_CONTRADICTION = _il_util.find_spec("viki.core.contradiction") is not None
 try:
     import numpy as np
 except Exception as e:
-    np = None  # type: ignore[assignment]
+    np = cast(Any, None)
     viki_logger.warning(
         f"NumPy unavailable during LearningModule import ({e}). Semantic features will use list fallback."
     )
+
 
 HAS_SEMANTIC = False
 

@@ -148,4 +148,4 @@ def confirm_step(console: Console, title: str, message: str, details: str = "") 
             border_style="yellow",
         )
     )
-    return Confirm.ask("\nProceed?", default=True)
+    return bool(Confirm.ask("\nProceed?", default=True))

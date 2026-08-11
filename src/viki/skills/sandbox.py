@@ -221,7 +221,10 @@ class SkillSandbox:
         """Platform-specific kwargs for subprocess creation."""
         kwargs: dict[str, Any] = {}
         if platform.system() == "Windows":
-            kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+            create_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            if create_flags:
+                kwargs["creationflags"] = create_flags
+
         return kwargs
 
 

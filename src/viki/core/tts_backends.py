@@ -29,10 +29,12 @@ def speak_elevenlabs(text: str, api_key: str | None = None, voice_id: str | None
         try:
             import subprocess
 
-            if os.name == "nt":
-                os.startfile(path)
+            startfile_fn = getattr(os, "startfile", None)
+            if os.name == "nt" and startfile_fn is not None:
+                startfile_fn(path)
             else:
                 subprocess.run(["mpv", path, "--no-video"], capture_output=True, timeout=60)
+
         except Exception as e:
             viki_logger.debug("TTS play audio: %s", e)
         try:

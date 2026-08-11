@@ -61,7 +61,8 @@ jobs:
       - name: Install pip-audit
         run: pip install pip-audit
       - name: Audit dependencies
-        run: pip-audit --strict --requirement pyproject.toml
+        run: pip-audit --strict
+
 
   docker:
     runs-on: ubuntu-latest

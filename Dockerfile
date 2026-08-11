@@ -1,7 +1,7 @@
 # VIKI CLI — run the sovereign agent engine in Docker
 # Note: Interactive TTY is recommended for CLI usage (docker run -it viki).
 
-FROM python:3.11-slim
+FROM python:3.11-slim AS slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 
@@ -21,10 +21,8 @@ COPY playbooks/ ./playbooks/
 # Config goes where the code expects it: ../config/ relative to src/viki/
 COPY config/  ./src/viki/config/
 
-# Install dependencies and the package itself.
-# The [ml] extra (torch/transformers) keeps forge/embedding features available;
-# drop it for a much slimmer image if you only need the core agent.
-RUN pip install --no-cache-dir -e ".[ml]" 2>&1 || pip install --no-cache-dir --break-system-packages -e ".[ml]"
+# Install core dependencies and the package itself.
+RUN pip install --no-cache-dir -e "."
 
 # Copy scripts (useful for forge workflows)
 COPY scripts/  ./scripts/
@@ -37,3 +35,7 @@ ENTRYPOINT ["/docker-entrypoint.sh"]
 
 # Default: run the VIKI CLI.
 CMD ["viki"]
+
+# Full stage with ML dependencies
+FROM slim AS full
+RUN pip install --no-cache-dir -e ".[ml]"
