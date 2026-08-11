@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Documentation Sitemap — VIKI Sovereign Engine</title>
+  <meta name="description" content="Complete documentation index for VIKI autonomous AI agent, architecture, deployment, security, and labs.">
+  <meta name="theme-color" content="#08090a">
+  <link rel="canonical" href="https://orythix.github.io/viki/DOCUMENTATION.html">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg: #08090a;
+      --bg-subtle: #0d0f12;
+      --surface: #13161c;
+      --surface-hover: #181c24;
+      --border: #222733;
+      --border-bright: #333a4d;
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --emerald: #10b981;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Navbar */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 68px;
+      background: rgba(8, 9, 10, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+    }
+    .nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: var(--text-primary);
+      font-weight: 700;
+      font-size: 1.1rem;
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      list-style: none;
+    }
+    .nav-links a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover, .nav-links a.active { color: var(--text-primary); }
+
+    /* Content Area */
+    main {
+      padding-top: 130px;
+      padding-bottom: 90px;
+    }
+    .doc-header {
+      margin-bottom: 40px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 24px;
+    }
+    .doc-title {
+      font-size: 2.4rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      margin-bottom: 12px;
+    }
+    .doc-sub {
+      color: var(--text-secondary);
+      font-size: 1.1rem;
+    }
+
+    .doc-section {
+      margin-bottom: 50px;
+    }
+    .doc-section h2 {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .doc-section h2::before {
+      content: '';
+      width: 4px;
+      height: 18px;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+
+    /* Table */
+    .table-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      margin-bottom: 30px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.92rem;
+    }
+    th {
+      background: var(--bg-subtle);
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--surface-hover); }
+    td a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    td a:hover { text-decoration: underline; }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 40px 0;
+      background: var(--bg-subtle);
+      font-size: 0.88rem;
+      color: var(--text-muted);
+      text-align: center;
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <div class="container nav-inner">
+      <a href="index.html" class="brand">
+        <span>VIKI Engine</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="DOCUMENTATION.html" class="active">Docs Index</a></li>
+        <li><a href="SETUP.html">Setup</a></li>
+        <li><a href="ARCHITECTURE.html">Architecture</a></li>
+        <li><a href="DOCKER.html">Docker</a></li>
+        <li><a href="SECURITY.html">Security</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main class="container">
+    <div class="doc-header">
+      <h1 class="doc-title">Documentation Sitemap</h1>
+      <p class="doc-sub">Central sitemap of core specifications, operations guides, architecture documents, and security policies.</p>
+    </div>
+
+    <div class="doc-section">
+      <h2>Core Engine Specifications</h2>
+      <div class="table-card">
+        <table>
+          <thead>
+            <tr>
+              <th>Document</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><a href="https://github.com/Orythix/viki/blob/main/README.md">README.md</a></td>
+              <td>Product overview, local multi-model routing, and quick start guide</td>
+            </tr>
+            <tr>
+              <td><a href="SETUP.html">SETUP.html / SETUP.md</a></td>
+              <td>Installation, python venv setup, and environment variables</td>
+            </tr>
+            <tr>
+              <td><a href="ARCHITECTURE.html">ARCHITECTURE.html / ARCHITECTURE.md</a></td>
+              <td>System design, Orythix 5-layer cortex, and data flow pipeline</td>
+            </tr>
+            <tr>
+              <td><a href="DOCKER.html">DOCKER.html / DOCKER.md</a></td>
+              <td>Multi-stage Docker build (`slim` and `full` targets) and compose setup</td>
+            </tr>
+            <tr>
+              <td><a href="VIKI_RUNBOOK.html">VIKI_RUNBOOK.html / VIKI_RUNBOOK.md</a></td>
+              <td>Operations runbook, troubleshooting, RAG eval, and boot evolution</td>
+            </tr>
+            <tr>
+              <td><a href="SECURITY.html">SECURITY.html / SECURITY.md</a></td>
+              <td>Security policy, capability gating, prompt injection defense</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="doc-section">
+      <h2>Autonomous Labs & Evaluation</h2>
+      <div class="table-card">
+        <table>
+          <thead>
+            <tr>
+              <th>Lab / Track</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><a href="https://github.com/Orythix/viki/tree/main/labs/security-lab">Security Lab</a></td>
+              <td>Standalone defensive AI security lab (FastAPI + Docker)</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/Orythix/viki/tree/main/labs/qa-automation">QA Automation</a></td>
+              <td>Multi-stack QA learning monorepo (pytest, Playwright, k6)</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/Orythix/viki/tree/main/src/viki/eval">RAG Evaluation</a></td>
+              <td>RAG gold format metrics, retrieval evaluation via `run_rag_eval.py`</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="doc-section">
+      <h2>Engineering Playbooks</h2>
+      <div class="table-card">
+        <table>
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th>Available SDLC Workflows</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Define & Plan</strong></td>
+              <td>`idea_refine`, `spec_driven_development`, `planning_and_task_breakdown`, `jira_sdlc_workflow`</td>
+            </tr>
+            <tr>
+              <td><strong>Build & Refactor</strong></td>
+              <td>`incremental_implementation`, `test_driven_development`, `ast_codemod`, `openapi_schema`</td>
+            </tr>
+            <tr>
+              <td><strong>Verify & Review</strong></td>
+              <td>`browser_testing_with_devtools`, `debugging_and_error_recovery`, `code_review_and_quality`</td>
+            </tr>
+            <tr>
+              <td><strong>Ship & Recover</strong></td>
+              <td>`git_workflow_and_versioning`, `ci_cd_and_automation`, `autonomous_incident_healing`</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>VIKI Engine is released under the <a href="https://github.com/Orythix/viki/blob/main/LICENSE">Apache License 2.0</a>.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

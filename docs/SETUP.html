@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Setup & Installation — VIKI Sovereign Engine</title>
+  <meta name="description" content="Step-by-step setup and installation guide for VIKI autonomous AI engineer and local LLM agent.">
+  <meta name="theme-color" content="#08090a">
+  <link rel="canonical" href="https://orythix.github.io/viki/SETUP.html">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg: #08090a;
+      --bg-subtle: #0d0f12;
+      --surface: #13161c;
+      --border: #222733;
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent: #6366f1;
+      --emerald: #10b981;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: var(--bg); color: var(--text-primary); font-family: var(--font-sans); line-height: 1.6; }
+    .container { max-width: 900px; margin: 0 auto; padding: 0 24px; }
+    nav { position: fixed; top: 0; left: 0; right: 0; height: 68px; background: rgba(8,9,10,0.85); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); z-index: 100; display: flex; align-items: center; }
+    .nav-inner { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+    .brand { color: var(--text-primary); font-weight: 700; text-decoration: none; font-size: 1.1rem; }
+    .nav-links { display: flex; gap: 24px; list-style: none; }
+    .nav-links a { color: var(--text-secondary); text-decoration: none; font-size: 0.9rem; }
+    .nav-links a.active { color: var(--text-primary); }
+    main { padding-top: 130px; padding-bottom: 90px; }
+    h1 { font-size: 2.4rem; font-weight: 800; margin-bottom: 12px; }
+    p.sub { color: var(--text-secondary); font-size: 1.1rem; margin-bottom: 40px; }
+    .step-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 24px; }
+    .step-box h3 { font-size: 1.1rem; margin-bottom: 12px; color: var(--accent); }
+    pre { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 8px; padding: 16px; font-family: var(--font-mono); font-size: 0.88rem; color: var(--emerald); overflow-x: auto; margin-top: 10px; }
+    footer { border-top: 1px solid var(--border); padding: 40px 0; text-align: center; color: var(--text-muted); font-size: 0.88rem; }
+    footer a { color: var(--accent); text-decoration: none; }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <div class="container nav-inner">
+      <a href="index.html" class="brand">VIKI Engine</a>
+      <ul class="nav-links">
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="DOCUMENTATION.html">Docs Index</a></li>
+        <li><a href="SETUP.html" class="active">Setup</a></li>
+        <li><a href="ARCHITECTURE.html">Architecture</a></li>
+        <li><a href="DOCKER.html">Docker</a></li>
+        <li><a href="SECURITY.html">Security</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main class="container">
+    <h1>Setup & Installation Guide</h1>
+    <p class="sub">Follow these instructions to configure VIKI locally or on a server.</p>
+
+    <div class="step-box">
+      <h3>1. Prerequisites</h3>
+      <p>Ensure Python 3.10+ is installed along with your preferred local LLM server (LM Studio or Ollama).</p>
+    </div>
+
+    <div class="step-box">
+      <h3>2. Clone Repository & Install</h3>
+      <pre>git clone https://github.com/Orythix/viki.git
+cd viki
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .\.venv\Scripts\Activate.ps1
+pip install -e .</pre>
+    </div>
+
+    <div class="step-box">
+      <h3>3. Configure Environment</h3>
+      <pre>cp .env.example .env
+# Edit .env to set your LM Studio or Ollama endpoint host</pre>
+    </div>
+
+    <div class="step-box">
+      <h3>4. Launch VIKI REPL</h3>
+      <pre>viki</pre>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>VIKI Engine is released under the <a href="https://github.com/Orythix/viki/blob/main/LICENSE">Apache License 2.0</a>.</p>
+    </div>
+  </footer>
+
+</body>
+</html>
