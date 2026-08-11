@@ -192,10 +192,9 @@ class TimeTravelModule:
             rows = list(self.db["checkpoints"].rows_where(order_by="timestamp desc", limit=1))
         except Exception:
             rows = list(self.db["checkpoints"].rows)
-        if not rows:
-            return None
         if isinstance(rows, list) and rows:
-            return rows[0]
+            row_dict: dict[str, Any] = dict(rows[0])
+            return row_dict
         return None
 
     def undo_last(self) -> tuple[bool, list[str], str]:

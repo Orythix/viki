@@ -16,7 +16,7 @@ import shutil
 import subprocess
 import time
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 from viki.config.logger import viki_logger
 
@@ -24,8 +24,11 @@ try:
     from watchdog.events import FileSystemEventHandler
     from watchdog.observers import Observer
 except ImportError:
-    Observer = None  # type: ignore[assignment]
-    FileSystemEventHandler = object  # type: ignore[assignment, misc]
+
+    class FileSystemEventHandler:  # type: ignore[no-redef]
+        pass
+
+    Observer = cast(Any, None)
 
 
 _SEVERITY_ORDER = {"low": 0, "medium": 1, "high": 2}
