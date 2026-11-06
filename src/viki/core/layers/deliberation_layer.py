@@ -492,6 +492,21 @@ class DeliberationLayer(CortexLayer):
                                 func_args = {}
 
                         action_obj = ActionCall(skill_name=func_name, parameters=func_args)
+                        # Extra native tool_calls become MCTS alternate branches.
+                        alternates: list[ActionCall] = []
+                        for extra_tc in tool_calls[1:3]:
+                            try:
+                                ename = extra_tc["function"]["name"]
+                                eargs = extra_tc["function"]["arguments"]
+                                if isinstance(eargs, str):
+                                    eargs = json.loads(eargs)
+                                if not isinstance(eargs, dict):
+                                    eargs = {}
+                                alternates.append(
+                                    ActionCall(skill_name=ename, parameters=eargs)
+                                )
+                            except Exception as e:
+                                viki_logger.debug("alternate tool_call skipped: %s", e)
                         if not final_text.strip():
                             final_text = f"I'll use {func_name} to help with that."
 
@@ -501,6 +516,8 @@ class DeliberationLayer(CortexLayer):
                             confidence=0.9,
                         )
                         viki_resp = viki_resp_lite.to_full_response()
+                        if alternates:
+                            viki_resp.alternate_actions = alternates
 
             elif use_lite:
                 llm_start = time.time()
@@ -525,6 +542,29 @@ class DeliberationLayer(CortexLayer):
 
             if ensemble_trace and isinstance(ensemble_trace, dict):
                 viki_resp.ensemble_trace = ensemble_trace
+                # Parse explorer/critic hints that look like skill names into alternates.
+                if not getattr(viki_resp, "alternate_actions", None):
+                    alts: list[ActionCall] = []
+                    for role in ("explorer", "critic", "aligner"):
+                        text = str(ensemble_trace.get(role) or "")
+                        for skill in (
+                            "research",
+                            "plan_edit",
+                            "shell",
+                            "code_search",
+                            "filesystem_skill",
+                            "browser",
+                        ):
+                            if skill in text.lower() and (
+                                viki_resp.action is None
+                                or skill != (viki_resp.action.skill_name or "")
+                            ):
+                                alts.append(ActionCall(skill_name=skill, parameters={}))
+                                break
+                        if len(alts) >= 2:
+                            break
+                    if alts:
+                        viki_resp.alternate_actions = alts
 
             viki_resp.sentiment = context.get("sentiment")
             viki_resp.intent_type = context.get("intent_type")

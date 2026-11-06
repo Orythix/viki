@@ -234,11 +234,10 @@ are roughly value-to-effort sorted.
 - [x] **Speculative reflex** — `ReflexBrain` answers instantly while the
   deliberation path verifies in the background and interrupts with a
   correction only when it disagrees (`_process_reflex_outcome` hook).
-- [~] **Context engineering pass** — semantic cache, token optimizer, and
-  knowledge-graph subgraph summarizer exist
-  (`src/viki/core/knowledge_graph.py:summarize_for_context`); a budgeted
-  context assembler that ranks memory, world-model state, and skill schemas
-  per request is still in design.
+- [x] **Context engineering pass** — token-true budgets via `count_tokens`
+  (tiktoken/transformers/heuristic), reserved skill/plan/memory/world slices,
+  edge placement for plan+tools, extractive keep with citation preservation
+  (`src/viki/core/utils/token_optimizer.py`, `context_assembler.py`).
 - [~] **Structured-output hardening** — `chat_structured` with parse-and-retry
   exists; grammar-constrained decoding for `VIKIResponse` (Ollama JSON-schema
   mode) is the next step.
@@ -280,11 +279,10 @@ are roughly value-to-effort sorted.
 ### Wave 2 — Autonomy & self-improvement (the differentiators)
 
 **Self-training loop (close it fully)**
-- [~] **Forge auto-evaluation gate** — `ModelABTest` and
-  `IntelligenceScorecard` exist; the automated A/B-and-promote pipeline
-  after `viki-forge` bakes a candidate is the remaining work.
-  *This makes self-improvement safe and measurable — the whole thesis rests
-  on this loop being closed.*
+- [x] **Forge auto-evaluation gate** — CapabilityIndex-backed A/B (pinned
+  ExecutionEvaluator subset when index absent); promote only on positive
+  delta; nightly scorecard artifact in `.github/workflows/nightly.yml`
+  (`forge_eval_gate.py`, `variant_optimizer.py`).
 - [x] **Preference capture in the loop** — every `/confirm`-`/reject`,
   regeneration, and correction becomes a DPO pair automatically via
   `PreferenceForge` (`src/viki/core/preference_forge.py`).
@@ -294,9 +292,9 @@ are roughly value-to-effort sorted.
 - [~] **Skill synthesis with tests** — dynamic-skill creator exists
   (`src/viki/skills/creation/forge.py`); test generation and sandbox
   verification before registration is the next step.
-- [~] **Nightly self-eval** — eval harness exists and scorecard persists
-  trends; scheduled CI runs and regression-triggered missions are the
-  remaining work.
+- [x] **Nightly self-eval** — harness + CapabilityIndex artifact +
+  `data/scorecard_nightly.json` in nightly CI; regression-triggered
+  missions remain optional follow-up.
 
 **Autonomy**
 - [~] **Missions v2** — `MissionControl` persists missions with status and
@@ -321,9 +319,10 @@ are roughly value-to-effort sorted.
 - [~] **Workspace world-model v2** — `WorldModel` + `SemanticFS` exist with
   project landmarks and safety zones; the live map and ambient context
   resolution ("my thesis" → path) for every skill is the remaining work.
-- [~] **Screen understanding loop** — vision skill + `computer_use_grounding`
-  + perceive-act-verify loop exist with the overlay skill drawing click
-  targets; a global abort hotkey is the next step.
+- [x] **Screen understanding loop** — VLM description when vision profile
+  available (honest stub otherwise); computer_use observe→ground→act→
+  re-screenshot with mismatch abort when `expect_change`; OmniParser docs
+  in `docs/SETUP.md`. Global abort hotkey remains optional polish.
 - [~] **Repo-native engineering mode** — `code_search` (persistent index),
   `git_context`, LSP bridge, `plan_edit_skill`, and `worktree_runner` all
   exist; integration into a coherent "work on this repo" mode with

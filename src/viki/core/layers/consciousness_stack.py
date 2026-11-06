@@ -68,10 +68,70 @@ class ConsciousnessStack:
         execution_started: bool = False,
         on_think=None,
     ) -> VIKIResponse:
+        from viki.core.telemetry_service import start_span
+
         start_time = time.time()
         data: str | dict[str, Any] | VIKIResponse = user_input
 
         self.layer_timing.reset_cycle()
+
+        with start_span(
+            "reason.cortex",
+            attributes={
+                "use_lite_schema": use_lite_schema,
+                "use_ensemble": use_ensemble,
+                "model_tier": model_tier,
+                "input_chars": len(user_input or ""),
+            },
+        ) as cortex_span:
+            return await self._process_layers(
+                data,
+                user_input=user_input,
+                memory_context=memory_context,
+                url_context=url_context,
+                use_lite_schema=use_lite_schema,
+                world_context=world_context,
+                signals_context=signals_context,
+                evolution_log=evolution_log,
+                action_results=action_results,
+                use_ensemble=use_ensemble,
+                on_event=on_event,
+                model_tier=model_tier,
+                is_agent_mode=is_agent_mode,
+                is_plan_mode=is_plan_mode,
+                is_debug_mode=is_debug_mode,
+                is_singularity_mode=is_singularity_mode,
+                execution_started=execution_started,
+                on_think=on_think,
+                start_time=start_time,
+                cortex_span=cortex_span,
+            )
+
+    async def _process_layers(
+        self,
+        data: str | dict[str, Any] | VIKIResponse,
+        *,
+        user_input: str,
+        memory_context: dict[str, Any] | None,
+        url_context: str,
+        use_lite_schema: bool,
+        world_context: str,
+        signals_context: str,
+        evolution_log: str,
+        action_results: list | None,
+        use_ensemble: bool,
+        on_event,
+        model_tier: str,
+        is_agent_mode: bool,
+        is_plan_mode: bool,
+        is_debug_mode: bool,
+        is_singularity_mode: bool,
+        execution_started: bool,
+        on_think,
+        start_time: float,
+        cortex_span: dict[str, Any],
+    ) -> VIKIResponse:
+        from viki.core.telemetry_service import start_span
 
         for layer in self.layers:
             layer_start = time.time()
@@ -128,7 +188,11 @@ class ConsciousnessStack:
                         "execution_started": execution_started,
                     }
 
-            data = await layer.process(data)
+            with start_span(
+                f"reason.layer.{getattr(layer.state, 'name', 'layer')}",
+                attributes={"layer": getattr(layer.state, "name", "")},
+            ):
+                data = await layer.process(data)
 
             if on_think:
                 try:
@@ -175,6 +239,11 @@ class ConsciousnessStack:
 
         elapsed = time.time() - start_time
         viki_logger.info(f"Consciousness Cycle Complete in {elapsed:.2f}s")
+        cortex_span["attributes"]["elapsed_s"] = round(elapsed, 3)
+        if isinstance(data, VIKIResponse):
+            cortex_span["attributes"]["has_action"] = bool(data.action)
+            if data.action:
+                cortex_span["attributes"]["skill"] = data.action.skill_name
 
         for name, duration in self.layer_timing.current_cycle.items():
             viki_logger.debug(f"  Layer '{name}': {duration:.3f}s")

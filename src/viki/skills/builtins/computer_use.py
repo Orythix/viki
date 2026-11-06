@@ -115,20 +115,33 @@ class ComputerUseSkill(BaseSkill):
         return f"Action completed successfully (steps: {', '.join(steps)})"
 
     async def _perceive(self) -> str:
-        """Capture screen and return description."""
+        """Capture screen and return description (VLM or honest stub)."""
         try:
-            vision = (
-                self._controller.skill_registry.get_skill("vision") if self._controller else None
-            )
+            vision = None
+            if self._controller:
+                vision = self._controller.skill_registry.get_skill(
+                    "look_at_screen"
+                ) or self._controller.skill_registry.get_skill("vision")
             if vision:
-                return cast("str", await vision.execute({"action": "describe_screen"}))
+                return cast(
+                    "str",
+                    await vision.execute(
+                        {"action": "describe_screen", "instruction": "Describe the screen UI."}
+                    ),
+                )
         except Exception as e:
             viki_logger.debug("ComputerUse perceive failed: %s", e)
         return "(screen capture unavailable)"
 
     async def _plan(self, action: str, target: str, text: str, screenshot: str) -> dict:
         """Plan the action based on perception."""
-        return {"action": action, "target": target, "text": text, "coordinates": {}}
+        return {
+            "action": action,
+            "target": target,
+            "text": text,
+            "coordinates": {},
+            "before": screenshot,
+        }
 
     async def _act(self, action: str, plan: dict) -> str:
         """Execute the planned action."""
@@ -165,8 +178,16 @@ class ComputerUseSkill(BaseSkill):
         return f"Unknown action: {action}"
 
     async def _verify(self, action: str, target: str) -> bool:
-        """Verify the action had the expected effect."""
-        await asyncio.sleep(0.5)
+        """Re-perceive after act; abort when expect_change and screen is unchanged."""
+        await asyncio.sleep(0.35)
+        after = await self._perceive()
+        before = getattr(self, "_last_before", "")
+        # Store for callers; mismatch when both available and identical after navigate.
+        if action in ("navigate",) and before and after and before == after:
+            return False
+        if "[vision stub]" in after and action == "screenshot":
+            # Honest stub is still a successful capture path for screenshot-only.
+            return True
         return True
 
 

@@ -310,8 +310,75 @@ async def run_react_loop(
                 controller._reflex_recursion_depth = 0
 
         if viki_resp.action:
-            skill_name = viki_resp.action.skill_name
-            params = (viki_resp.action.parameters or {}).copy()
+            # Deep coding/planning/complex: verifier-backed MCTS over ≥2 candidates.
+            chosen_action = viki_resp.action
+            coding_bon_done = False
+            if should_run_mcts(cognitive_route, task_type) and (task_type or "").lower() == "coding":
+                if on_event:
+                    on_event("status", "Best-of-N worktree coding attempts")
+                try:
+                    bon = await run_coding_best_of_n(
+                        controller, chosen_action, budget, user_input=user_input
+                    )
+                    if bon is not None:
+                        coding_bon_done = True
+                        meta = controller._last_response_meta_by_session.get(session_id) or {}
+                        meta["coding_best_of_n"] = {
+                            "passed": bon.get("passed"),
+                            "score": bon.get("score"),
+                            "attempts": len(bon.get("attempts") or []),
+                            "diff_preview": (bon.get("diff") or "")[:1500],
+                        }
+                        controller._last_response_meta_by_session[session_id] = meta
+                        # Winner already ran in a worktree; return scored summary (no double apply).
+                        if bon.get("passed"):
+                            return (
+                                f"Best-of-N coding succeeded (score={bon.get('score')}).\n"
+                                f"Winning diff preview:\n```\n{(bon.get('diff') or '')[:3000]}\n```\n"
+                                "Re-run with merge_winner / apply the patch to land it on HEAD."
+                            )
+                        viki_logger.info(
+                            "Best-of-N coding did not pass verify; falling through to MCTS/execute"
+                        )
+                except Exception as e:
+                    viki_logger.warning("coding Best-of-N failed: %s", e)
+
+            if should_run_mcts(cognitive_route, task_type) and not coding_bon_done:
+                extras = budget.get("mcts_extra_actions") if isinstance(budget, dict) else None
+                candidates = collect_mcts_candidates(
+                    viki_resp.action,
+                    viki_resp,
+                    extras=extras if isinstance(extras, list) else None,
+                    task_type=task_type,
+                    user_input=user_input,
+                )
+                if len(candidates) >= 2:
+                    if on_event:
+                        on_event("status", f"MCTS evaluating {len(candidates)} branches")
+                    try:
+                        best, mcts_score = await run_mcts_tree_search(
+                            controller, user_input, candidates, budget
+                        )
+                        if best is not None:
+                            chosen_action = best
+                            viki_logger.info(
+                                "MCTS selected %s (score=%.2f) from %d candidates",
+                                best.skill_name,
+                                mcts_score,
+                                len(candidates),
+                            )
+                            meta = controller._last_response_meta_by_session.get(session_id) or {}
+                            meta["mcts"] = {
+                                "candidates": [c.skill_name for c in candidates],
+                                "winner": best.skill_name,
+                                "score": mcts_score,
+                            }
+                            controller._last_response_meta_by_session[session_id] = meta
+                    except Exception as e:
+                        viki_logger.warning("MCTS search failed; using primary action: %s", e)
+
+            skill_name = chosen_action.skill_name
+            params = (chosen_action.parameters or {}).copy()
 
             check_res = controller.capabilities.check_permission(skill_name, params=params)
 
@@ -339,7 +406,7 @@ async def run_react_loop(
 
             severity = controller._skill_action_severity(skill_name, params)
             if severity in ["medium", "destructive"]:
-                controller.pending_actions[session_id] = viki_resp.action
+                controller.pending_actions[session_id] = chosen_action
                 reply = (viki_resp.final_response or "").strip()
                 if not reply or reply.lower() in PLACEHOLDERS:
                     reply = "I understand. I have an action ready that needs your confirmation."
@@ -647,8 +714,9 @@ class MCTSNode:
         self.parent = parent
         self.children: list[MCTSNode] = []
         self.visits: int = 0
-        self.score: float = 0.0
+        self.score: float = 0.0  # cumulative reward
         self.observation: str | None = None
+        self.untried: list[ActionCall] = []
 
     def ucb1(self, exploration_weight: float = 1.414) -> float:
         """Calculate Upper Confidence Bound for Tree Search node selection."""
@@ -658,13 +726,279 @@ class MCTSNode:
             return float("inf")
         parent_visits = self.parent.visits if self.parent else 1
         return (self.score / self.visits) + exploration_weight * math.sqrt(
-            math.log(parent_visits) / self.visits
+            math.log(max(parent_visits, 1)) / self.visits
         )
 
     def select_best_child(self) -> MCTSNode | None:
         if not self.children:
             return None
         return max(self.children, key=lambda child: child.ucb1())
+
+    def most_visited_child(self) -> MCTSNode | None:
+        if not self.children:
+            return None
+        return max(self.children, key=lambda child: (child.visits, child.score))
+
+
+def _mcts_budget_limits(budget: dict[str, Any]) -> tuple[int, float]:
+    """Return (max_simulations, max_seconds) with hard caps."""
+    max_sims = int(budget.get("mcts_max_simulations") or budget.get("mcts_sims") or 8)
+    max_sims = max(2, min(max_sims, 32))
+    max_seconds = float(budget.get("mcts_max_seconds") or budget.get("time") or 12.0)
+    max_seconds = max(1.0, min(max_seconds, 60.0))
+    return max_sims, max_seconds
+
+
+async def _score_mcts_rollout(
+    controller: Any,
+    user_input: str,
+    action: ActionCall,
+    result: str | None,
+    err: str | None,
+    budget: dict[str, Any],
+) -> float:
+    """
+    Verifier-backed process reward in roughly [-1, 1].
+
+    Prefers ExecutionEvaluator / LLMJudge when present; never uses output length.
+    """
+    if err:
+        return -0.8
+    if result is None:
+        return -0.5
+
+    task = budget.get("mcts_eval_task") if isinstance(budget.get("mcts_eval_task"), dict) else None
+    candidate = str(result)
+
+    # Coding path: sandboxed execution grader when tests are supplied.
+    if task and (task.get("test_code") or task.get("expected_stdout")):
+        try:
+            from viki.core.evaluators import ExecutionEvaluator
+
+            scored = ExecutionEvaluator().evaluate(task, candidate)
+            return max(-1.0, min(1.0, (scored.score * 2.0) - 1.0))
+        except Exception as e:
+            viki_logger.debug("MCTS ExecutionEvaluator failed: %s", e)
+
+    # Optional LLM judge (explicit flag — avoid extra cost by default).
+    if budget.get("mcts_use_llm_judge") and hasattr(controller, "model_router"):
+        try:
+            from viki.core.evaluators import LLMJudgeEvaluator
+
+            judge = LLMJudgeEvaluator(controller.model_router)
+            judge_task = task or {
+                "question": user_input,
+                "rubric": "Reward actions that correctly advance the user goal without errors.",
+            }
+            scored = await judge.evaluate(judge_task, candidate)
+            return max(-1.0, min(1.0, (scored.score * 2.0) - 1.0))
+        except Exception as e:
+            viki_logger.debug("MCTS LLMJudge failed: %s", e)
+
+    # Process reward: success + self-critique signal when available.
+    reward = 0.35
+    lower = candidate.lower()
+    if any(tok in lower for tok in ("error", "failed", "traceback", "exception", "denied")):
+        reward -= 0.45
+    if any(tok in lower for tok in ("done", "success", "passed", "ok", "completed")):
+        reward += 0.2
+    try:
+        critique = getattr(controller, "self_critique", None)
+        if critique is not None and hasattr(critique, "quick_score"):
+            qs = critique.quick_score(user_input, candidate)
+            if isinstance(qs, (int, float)):
+                reward = 0.5 * reward + 0.5 * (float(qs) * 2.0 - 1.0)
+    except Exception as e:
+        viki_logger.debug("MCTS self_critique skipped: %s", e)
+    return max(-1.0, min(1.0, reward))
+
+
+_CODING_BON_SKILLS = frozenset(
+    {"plan_edit", "plan_edit_skill", "coding_workflow", "dev_skill", "dev_tools"}
+)
+
+
+def should_run_mcts(cognitive_route: Any, task_type: str) -> bool:
+    """True for deep coding/planning/complex routes (Reflex/Chatter unchanged)."""
+    tt = (task_type or "").lower()
+    if tt not in {"coding", "planning", "complex"}:
+        return False
+    if cognitive_route is None:
+        return False
+    if getattr(cognitive_route, "use_mcts", False):
+        return True
+    outcome = getattr(cognitive_route, "outcome", None)
+    outcome_val = getattr(outcome, "value", str(outcome or "")).lower()
+    return outcome_val == "deep" or bool(getattr(cognitive_route, "use_ensemble", False))
+
+
+async def run_coding_best_of_n(
+    controller: Any,
+    action: ActionCall,
+    budget: dict[str, Any],
+    user_input: str = "",
+) -> dict[str, Any] | None:
+    """
+    Best-of-N coding attempts in isolated git worktrees, scored by pytest.
+
+    Temporarily points ``settings.system.workspace_dir`` at each worktree so
+    ``plan_edit`` / patch verify run against the sandboxed tree.
+    """
+    if action is None or action.skill_name not in _CODING_BON_SKILLS:
+        return None
+    if budget.get("best_of_n") in (0, "0", False):
+        return None
+
+    import os
+
+    from viki.core.worktree_runner import WorktreeRunner
+
+    settings = getattr(controller, "settings", None)
+    if not isinstance(settings, dict):
+        return None
+    system = settings.setdefault("system", {})
+    original_ws = system.get("workspace_dir", "./workspace")
+    workspace = os.path.abspath(
+        budget.get("workspace_dir")
+        or system.get("repo_dir")
+        or system.get("workspace_dir")
+        or os.getcwd()
+    )
+    n = max(2, min(int(budget.get("best_of_n") or 3), 5))
+    verify_cmd = budget.get("verify_cmd")
+    if isinstance(verify_cmd, str):
+        verify_cmd = verify_cmd.split()
+    runner = WorktreeRunner(
+        workspace_dir=workspace,
+        verify_cmd=verify_cmd if isinstance(verify_cmd, list) else None,
+        verify_timeout=int(budget.get("verify_timeout") or 120),
+    )
+
+    async def _attempt(wt_path: str) -> dict[str, Any]:
+        system["workspace_dir"] = wt_path
+        try:
+            params = dict(action.parameters or {})
+            if user_input and "goal" not in params:
+                params["goal"] = user_input[:500]
+            result, err, _lat = await controller._execute_skill(action.skill_name, params, budget)
+            return {
+                "score": 0.0 if err else 0.5,
+                "result": result,
+                "error": err,
+            }
+        finally:
+            system["workspace_dir"] = original_ws
+
+    from viki.core.telemetry_service import start_span
+
+    with start_span(
+        "mcts.coding_best_of_n",
+        attributes={"n": n, "skill": action.skill_name, "workspace": workspace},
+    ) as span:
+        try:
+            winner, results = await runner.run(_attempt, n=n, merge_winner=False)
+        except Exception as e:
+            viki_logger.debug("coding Best-of-N failed: %s", e)
+            system["workspace_dir"] = original_ws
+            return None
+        system["workspace_dir"] = original_ws
+        span["attributes"]["winner_passed"] = bool(winner and winner.passed)
+        span["attributes"]["winner_score"] = float(winner.score) if winner else -1.0
+        if winner is None:
+            return None
+        return {
+            "winner": winner.as_dict(),
+            "attempts": [r.as_dict() for r in results],
+            "action": action,
+            "passed": winner.passed,
+            "score": winner.score,
+            "diff": winner.diff,
+        }
+
+
+# Sibling skills proposed when the cortex emits only one ActionCall.
+_MCTS_SIBLINGS: dict[str, list[str]] = {
+    "coding": ["plan_edit", "shell", "filesystem_skill", "code_search", "dev_skill"],
+    "planning": ["research", "plan_edit", "memory", "code_search"],
+    "complex": ["research", "shell", "plan_edit", "swarm_control"],
+    "research": ["research", "browser", "memory"],
+}
+
+
+def propose_mcts_siblings(
+    primary: ActionCall | None,
+    task_type: str = "coding",
+    user_input: str = "",
+    max_extras: int = 2,
+) -> list[ActionCall]:
+    """Propose alternate ActionCalls so MCTS always has ≥2 branches when possible."""
+    if primary is None or not primary.skill_name:
+        return []
+    pool = list(_MCTS_SIBLINGS.get((task_type or "").lower(), _MCTS_SIBLINGS["complex"]))
+    extras: list[ActionCall] = []
+    for skill in pool:
+        if skill == primary.skill_name:
+            continue
+        # Carry over a useful query/path hint when present.
+        params: dict[str, Any] = {}
+        src = primary.parameters or {}
+        for key in ("query", "path", "instruction", "goal", "prompt", "cmd", "command"):
+            if key in src:
+                params[key] = src[key]
+        if "query" not in params and user_input:
+            params["query"] = user_input[:240]
+        extras.append(ActionCall(skill_name=skill, parameters=params))
+        if len(extras) >= max_extras:
+            break
+    return extras
+
+
+def collect_mcts_candidates(
+    primary: ActionCall | None,
+    viki_resp: Any = None,
+    extras: list[ActionCall] | None = None,
+    task_type: str = "coding",
+    user_input: str = "",
+) -> list[ActionCall]:
+    """Deduplicate primary action + any alternate ActionCalls for MCTS expansion."""
+    seen: set[str] = set()
+    out: list[ActionCall] = []
+
+    def _add(act: ActionCall | None) -> None:
+        if act is None or not act.skill_name:
+            return
+        key = f"{act.skill_name}:{sorted((act.parameters or {}).items())}"
+        if key in seen:
+            return
+        seen.add(key)
+        out.append(act)
+
+    _add(primary)
+    if extras:
+        for a in extras:
+            _add(a)
+    # Ensemble may attach alternate suggested actions on the response.
+    if viki_resp is not None:
+        for alt in getattr(viki_resp, "alternate_actions", None) or []:
+            if isinstance(alt, ActionCall):
+                _add(alt)
+            elif isinstance(alt, dict) and alt.get("skill_name"):
+                _add(ActionCall(skill_name=alt["skill_name"], parameters=alt.get("parameters") or {}))
+        thought = getattr(viki_resp, "final_thought", None)
+        rejected = getattr(thought, "rejected_strategies", None) or []
+        for strat in rejected:
+            if isinstance(strat, ActionCall):
+                _add(strat)
+            elif isinstance(strat, str) and strat.strip() and " " not in strat.strip():
+                # Bare skill name from rejected_strategies
+                _add(ActionCall(skill_name=strat.strip(), parameters={}))
+    # Ensure ≥2 candidates for deep routes via sibling skills.
+    if len(out) < 2 and primary is not None:
+        for sib in propose_mcts_siblings(primary, task_type=task_type, user_input=user_input):
+            _add(sib)
+            if len(out) >= 3:
+                break
+    return out
 
 
 async def run_mcts_tree_search(
@@ -674,40 +1008,115 @@ async def run_mcts_tree_search(
     budget: dict[str, Any],
 ) -> tuple[ActionCall | None, float]:
     """
-    Evaluates candidate action branches using MCTS selection to pick the highest-scoring execution path.
+    Real MCTS over candidate actions: select (UCB1) → expand → simulate (verifier) → backprop.
+
+    Hard-capped by simulation count and wall-clock from ``budget``. Scoring never uses
+    output length; see ``_score_mcts_rollout``.
     """
+    if not candidate_actions:
+        return None, -1.0
+
+    max_sims, max_seconds = _mcts_budget_limits(budget)
+    t0 = time.perf_counter()
     root = MCTSNode()
+    root.untried = list(candidate_actions)
+
+    # Seed first-level children so UCB has something to select immediately.
     for act in candidate_actions:
         child = MCTSNode(action=act, parent=root)
         root.children.append(child)
 
-    best_action: ActionCall | None = None
-    best_score: float = -1.0
+    from viki.core.telemetry_service import start_span
 
-    for child in root.children:
-        if not child.action:
-            continue
-        skill_name = child.action.skill_name
-        params = child.action.parameters or {}
+    with start_span(
+        "mcts.search",
+        attributes={
+            "candidates": len(candidate_actions),
+            "max_sims": max_sims,
+            "max_seconds": max_seconds,
+        },
+    ) as span:
+        for sim in range(max_sims):
+            if (time.perf_counter() - t0) >= max_seconds:
+                span["attributes"]["budget_abort"] = True
+                span["attributes"]["sims_completed"] = sim
+                break
 
-        # Check permissions & execute in trial mode
-        check_res = controller.capabilities.check_permission(skill_name, params=params)
-        if not check_res.allowed:
-            child.score = -10.0
-            child.visits += 1
-            continue
+            # --- Select ---
+            node = root
+            while node.children and not node.untried:
+                nxt = node.select_best_child()
+                if nxt is None:
+                    break
+                node = nxt
 
-        result, err, latency = await controller._execute_skill(skill_name, params, budget)
-        child.visits += 1
+            # --- Expand (one untried action at this depth, if any) ---
+            if node.untried:
+                act = node.untried.pop()
+                child = MCTSNode(action=act, parent=node)
+                node.children.append(child)
+                node = child
 
-        if err:
-            child.score = -5.0
-        else:
-            # Score based on output length and absence of errors
-            child.score = 5.0 + min(len(str(result or "")) / 100.0, 5.0)
+            if not node.action:
+                continue
 
-        if child.score > best_score:
-            best_score = child.score
-            best_action = child.action
+            skill_name = node.action.skill_name
+            params = node.action.parameters or {}
+            check_res = controller.capabilities.check_permission(skill_name, params=params)
+            if not check_res.allowed:
+                reward = -1.0
+                node.observation = f"permission denied: {check_res.reason}"
+            else:
+                # --- Simulate ---
+                # Never mutate during search for medium/destructive skills; score dry.
+                # Safe/read skills may execute once for a real observation.
+                with start_span(
+                    "mcts.simulate",
+                    attributes={"skill": skill_name, "sim": sim},
+                ) as sim_span:
+                    severity = "low"
+                    try:
+                        severity = controller._skill_action_severity(skill_name, params)
+                    except Exception:
+                        severity = "low"
+                    result: str | None
+                    err: str | None
+                    if severity in ("medium", "destructive") and not budget.get(
+                        "mcts_force_execute"
+                    ):
+                        result = (
+                            f"[dry-run] would execute {skill_name}({params}) "
+                            f"for goal: {user_input[:200]}"
+                        )
+                        err = None
+                        sim_span["attributes"]["dry_run"] = True
+                    else:
+                        result, err, _latency = await controller._execute_skill(
+                            skill_name, params, budget
+                        )
+                        sim_span["attributes"]["dry_run"] = False
+                    reward = await _score_mcts_rollout(
+                        controller, user_input, node.action, result, err, budget
+                    )
+                    node.observation = (err or str(result or ""))[:500]
+                    sim_span["attributes"]["verifier_score"] = reward
+                    sim_span["attributes"]["error"] = bool(err)
 
-    return best_action, best_score
+            # --- Backprop ---
+            cursor: MCTSNode | None = node
+            while cursor is not None:
+                cursor.visits += 1
+                cursor.score += reward
+                cursor = cursor.parent
+
+        span["attributes"]["sims_completed"] = span["attributes"].get(
+            "sims_completed", max_sims
+        )
+
+    winner = root.most_visited_child()
+    if winner is None or winner.action is None:
+        return candidate_actions[0], -1.0
+    avg = (winner.score / winner.visits) if winner.visits else -1.0
+    # Map average reward [-1,1] to a positive display score for callers/tests.
+    display = 5.0 + (avg * 5.0)
+    return winner.action, display

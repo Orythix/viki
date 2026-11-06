@@ -128,6 +128,13 @@ class LazySkillProxy(BaseSkill):
                 if self._ctor_args is not None:
                     args = self._ctor_args(self._controller) or ()
                 self._real = cls(*args)
+                # Wire controller when the skill exposes a `controller` attribute
+                # (e.g. VisionSkill VLM routing, computer_use grounding).
+                if self._controller is not None and hasattr(self._real, "controller"):
+                    try:
+                        self._real.controller = self._controller
+                    except Exception:
+                        pass
                 viki_logger.debug("LazySkillProxy: loaded '%s' on first use.", self._name)
                 return self._real
             except Exception as e:

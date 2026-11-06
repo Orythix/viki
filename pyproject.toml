@@ -109,7 +109,11 @@ dev = [
 
 
 [tool.setuptools.package-data]
-viki = ["api/static/*.html", "data/sovereign_library.json"]
+viki = [
+    "api/static/*.html",
+    "data/sovereign_library.json",
+    "assets/tokenizers/*.json",
+]
 
 [tool.setuptools.dynamic]
 version = { attr = "viki._version.__version__" }

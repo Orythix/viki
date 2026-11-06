@@ -3,9 +3,7 @@ QMD-style hybrid memory search: BM25 (keyword) + vector (episodic) + optional LL
 Used by recall_skill and can be wired into get_full_context for richer retrieval.
 """
 
-import hashlib
 import re
-from collections import OrderedDict
 from typing import Any
 
 try:
@@ -39,14 +37,6 @@ class _BM25Cache:
 
 _bm25_cache = _BM25Cache()
 
-_LRU_CACHE: "OrderedDict[str, list[str]]" = OrderedDict()
-_LRU_MAX = 128
-
-
-def _cache_key(query: str, limit: int, rerank: bool) -> str:
-    return hashlib.md5(f"{query}|{limit}|{rerank}".encode()).hexdigest()
-
-
 async def search_memory(
     controller: Any,  # VIKIController
     query: str,
@@ -61,15 +51,28 @@ async def search_memory(
     Args:
         alpha: BM25 vs semantic weight (0 = pure semantic, 1 = pure BM25). Default 0.5 balanced.
     """
+    from viki.core.telemetry_service import start_span
+
+    with start_span(
+        "retrieve.hybrid_search",
+        attributes={"limit": limit, "rerank": rerank, "alpha": alpha, "query_chars": len(query or "")},
+    ) as span:
+        results = await _search_memory_impl(controller, query, limit, rerank, alpha)
+        span["attributes"]["hit_count"] = len(results)
+        span["attributes"]["cache_hit"] = False
+        return results
+
+
+async def _search_memory_impl(
+    controller: Any,
+    query: str,
+    limit: int = 10,
+    rerank: bool = False,
+    alpha: float = 0.5,
+) -> list[str]:
     if not controller:
         return []
 
-    ck = _cache_key(query, limit, rerank)
-    if ck in _LRU_CACHE:
-        _LRU_CACHE.move_to_end(ck)
-        return list(_LRU_CACHE[ck])
-
-    (query or "").lower()
     # 1) Lessons (keyword/semantic from learning)
     lessons = controller.learning.get_relevant_lessons(query, limit=limit * 2)
     if not isinstance(lessons, list):
@@ -126,10 +129,6 @@ async def search_memory(
     results = [c.strip() for c in combined if c.strip()][:limit]
 
     # 4) Optional LLM rerank: ask model to return indices in relevance order
-    if len(_LRU_CACHE) >= _LRU_MAX:
-        _LRU_CACHE.popitem(last=False)
-    _LRU_CACHE[ck] = list(results)
-
     if rerank and results and hasattr(controller, "model_router") and len(results) > 1:
         try:
             prompt = (

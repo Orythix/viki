@@ -236,6 +236,28 @@ class HierarchicalMemory:
 
         self.semantic = learning_module
 
+    def pin(self, lesson_id: str, pinned: bool = True) -> bool:
+        """Pin/unpin a semantic lesson (user-editable memory)."""
+        if self.semantic is None or not hasattr(self.semantic, "pin_lesson"):
+            return False
+        return bool(self.semantic.pin_lesson(lesson_id, pinned=pinned))
+
+    def correct(self, lesson_id: str, fact: str) -> bool:
+        """Correct a semantic lesson's text and pin it."""
+        if self.semantic is None or not hasattr(self.semantic, "correct_lesson"):
+            return False
+        return bool(self.semantic.correct_lesson(lesson_id, fact))
+
+    def forget(self, lesson_id: str) -> bool:
+        """Forget (delete) a semantic lesson."""
+        if self.semantic is None:
+            return False
+        if hasattr(self.semantic, "forget_lesson"):
+            return bool(self.semantic.forget_lesson(lesson_id))
+        if hasattr(self.semantic, "delete_lesson"):
+            return bool(self.semantic.delete_lesson(lesson_id))
+        return False
+
     def get_context(
         self, current_input: str = "", limit: int = 20, session_id: str | None = None
     ) -> dict[str, Any]:

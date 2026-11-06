@@ -64,6 +64,10 @@ class VIKIResponse(BaseModel):
         None, description="The final thought process leading to the response."
     )
     action: ActionCall | None = Field(None)
+    alternate_actions: list[ActionCall] = Field(
+        default_factory=list,
+        description="Alternate ActionCalls for MCTS / Best-of-N branch search",
+    )
     final_response: str | None = Field(None)
     internal_metacognition: str | None = Field(None)
     ensemble_trace: dict[str, str] | None = Field(None)

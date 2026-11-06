@@ -39,6 +39,7 @@ class CognitiveRoute:
     refusal_reason: str | None = None
     use_lite_schema: bool = False
     use_ensemble: bool = True
+    use_mcts: bool = False  # verifier-backed branch search for deep coding/planning/complex
     model_tier: str = "standard"  # "fast" | "standard" | "heavy"
     source: str = "judgment"  # "reflex" | "judgment" | "fallback"
     elapsed_ms: float = 0.0
@@ -59,6 +60,7 @@ class CognitiveRoute:
             "source": self.source,
             "use_lite_schema": self.use_lite_schema,
             "use_ensemble": self.use_ensemble,
+            "use_mcts": self.use_mcts,
             "model_tier": self.model_tier,
             "elapsed_ms": round(self.elapsed_ms, 2),
             "judgment": self.judgment.as_dict(),
@@ -234,12 +236,13 @@ class CognitiveRouter:
             )
 
         if complexity <= 0.8:
-            # Standard Lane: Typical coding/reasoning.
+            # Standard Lane: Typical coding/reasoning — MCTS when task is hard enough.
             return CognitiveRoute(
                 outcome=JudgmentOutcome.DEEP,
                 judgment=judgment,
                 use_lite_schema=False,
                 use_ensemble=False,
+                use_mcts=True,
                 model_tier="standard",
                 source="judgment",
             )
@@ -250,6 +253,7 @@ class CognitiveRouter:
             judgment=judgment,
             use_lite_schema=False,
             use_ensemble=True,
+            use_mcts=True,
             model_tier="heavy",
             source="judgment",
         )

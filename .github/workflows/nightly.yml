@@ -33,6 +33,31 @@ jobs:
         run: uv run viki-eval --no-llm-judge --limit 10 --concurrency 2 --timeout 120
         continue-on-error: true
 
+      # Scorecard + promotion gate artifact: refuse forge promotion when CI delta <= 0.
+      - name: Write scorecard trends artifact
+        if: always()
+        run: |
+          uv run python - <<'PY'
+          import json, os, time
+          from pathlib import Path
+          roots = ["data/eval_results", "data/eval_results_smoke"]
+          artifact = {
+              "computed_at": time.time(),
+              "indexes": {},
+              "promotion_rule": "refuse_when_capability_delta_le_0",
+          }
+          try:
+              from viki.core.capability_index import CapabilityIndex
+              for root in roots:
+                  if os.path.isdir(root):
+                      artifact["indexes"][root] = CapabilityIndex(root).compute()
+          except Exception as e:
+              artifact["error"] = str(e)
+          Path("data").mkdir(exist_ok=True)
+          Path("data/scorecard_nightly.json").write_text(json.dumps(artifact, indent=2))
+          print(json.dumps(artifact.get("indexes", {}), indent=2)[:2000])
+          PY
+
       - name: Upload capability index and results
         if: always()
         uses: actions/upload-artifact@v4
@@ -42,5 +67,6 @@ jobs:
             data/eval_results/capability_index.json
             data/eval_results/**/*.jsonl
             data/eval_results_smoke/capability_index.json
+            data/scorecard_nightly.json
           retention-days: 90
           if-no-files-found: warn

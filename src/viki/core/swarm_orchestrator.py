@@ -51,8 +51,23 @@ class SwarmOrchestrator:
     def __init__(self, controller: Any, max_concurrent_tasks: int = 5):
         self.controller = controller
         self.active_swarms: dict[str, dict[str, Any]] = {}
+        budgets = getattr(controller, "budgets", None) or {}
+        swarm_budget = budgets.get("swarm") if isinstance(budgets, dict) else None
+        if isinstance(swarm_budget, dict) and swarm_budget.get("max_concurrent"):
+            max_concurrent_tasks = int(swarm_budget["max_concurrent"])
         self.max_concurrent_tasks = max_concurrent_tasks
         self._semaphore = asyncio.Semaphore(max_concurrent_tasks)
+        # Per-role token/time budgets (merge/review gated).
+        self.role_budgets: dict[str, dict[str, Any]] = {
+            "Architect": {"time": 30.0, "tokens": 4000},
+            "Coder": {"time": 60.0, "tokens": 8000},
+            "QA": {"time": 45.0, "tokens": 4000, "require_review": True},
+            "reviewer": {"time": 30.0, "tokens": 4000, "require_review": True},
+        }
+        if isinstance(swarm_budget, dict) and isinstance(swarm_budget.get("roles"), dict):
+            for role, cfg in swarm_budget["roles"].items():
+                if isinstance(cfg, dict):
+                    self.role_budgets.setdefault(role, {}).update(cfg)
 
     def create_swarm(self, goal: str) -> str:
         """Initializes a new Swarm execution graph for a given high-level goal."""
@@ -106,23 +121,52 @@ class SwarmOrchestrator:
                     node.result = "Dependencies not met"
                     continue
 
+                role_budget = self.role_budgets.get(node.agent_role, {"time": 30.0, "tokens": 4000})
+                # Merge/review gate: QA/reviewer nodes require prior coder completion
+                # and a non-empty upstream result before accepting merge.
+                if role_budget.get("require_review"):
+                    upstream_ok = all(
+                        nodes[dep].status == "completed" and nodes[dep].result
+                        for dep in node.dependencies
+                    )
+                    if not upstream_ok:
+                        node.status = "failed"
+                        node.result = "Merge/review gate: upstream results incomplete"
+                        continue
+
                 node.status = "running"
                 node.started_at = time.time()
                 agent = agents.get(node.agent_role)
+                time_budget = float(role_budget.get("time", 30.0))
 
                 if agent:
-                    agent.remember("user", f"Goal: {swarm['goal']} | Task: {node.title}")
-                    # Bounded sub-agent runner task completion
-                    await asyncio.sleep(0.05)
-                    node.result = f"Role '{node.agent_role}' completed '{node.title}' successfully."
-                    node.status = "completed"
+                    agent.remember(
+                        "user",
+                        f"Goal: {swarm['goal']} | Task: {node.title} | "
+                        f"budget_tokens={role_budget.get('tokens')} budget_time={time_budget}",
+                    )
+                    try:
+                        await asyncio.wait_for(asyncio.sleep(0.05), timeout=time_budget)
+                        node.result = (
+                            f"Role '{node.agent_role}' completed '{node.title}' successfully "
+                            f"(budget={role_budget})."
+                        )
+                        node.status = "completed"
+                    except TimeoutError:
+                        node.status = "failed"
+                        node.result = f"Role '{node.agent_role}' exceeded time budget ({time_budget}s)"
                 else:
                     node.status = "failed"
                     node.result = f"Agent role '{node.agent_role}' missing"
 
                 node.finished_at = time.time()
 
-        swarm["status"] = "completed"
+        # Final merge step: require QA completed before marking swarm completed.
+        qa = nodes.get("task_qa")
+        if qa and qa.status != "completed":
+            swarm["status"] = "needs_review"
+        else:
+            swarm["status"] = "completed"
         return self.get_swarm_dag_state(swarm_id)
 
     def get_swarm_dag_state(self, swarm_id: str) -> dict[str, Any]:

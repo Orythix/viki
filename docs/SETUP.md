@@ -56,6 +56,15 @@ python -m viki
 
 VIKI will initialize her **Nexus** and begin listening on all channels.
 
+### Computer-use stack (recommended)
+
+For grounded screen control (`computer_use` / `look_at_screen`):
+
+1. Load a **vision-capable** model profile in `config/models.yaml` (capabilities include `vision` or `multimodal`).
+2. Optionally set `VIKI_OMNIPARSER_ONNX` to a local OmniParser-V2 ONNX detector for UI element boxes.
+3. Tune `VIKI_COMPUTER_USE_MIN_CONF` (default `0.5`) to reject low-confidence clicks.
+4. Without a VLM, `look_at_screen` returns an **honest stub** (screenshot path only — not a fake description).
+
 ### Troubleshooting (Windows)
 
 - **`videoio(MSMF): can't grab frame` after each message**: The BioModule webcam sensor is **off by default** (`system.bio_webcam_enabled: false` in `config/settings.yaml`). If you still see this on an older build, upgrade to the current tree or set `VIKI_BIO_WEBCAM=0` in `.env`. Enable only with a working camera: `VIKI_BIO_WEBCAM=1` or `bio_webcam_enabled: true`.

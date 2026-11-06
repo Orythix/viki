@@ -86,66 +86,93 @@ class ContinuousLearner:
 
     async def _execute_training_cycle(self):
         """Full training cycle: prepare, train, validate, deploy."""
+        from viki.core.telemetry_service import start_span
+
         viki_logger.info("=" * 60)
         viki_logger.info("ContinuousLearner: Starting automated training cycle")
         viki_logger.info("=" * 60)
 
-        try:
-            # 1. Export dataset
-            dataset_path = "./data/training_dataset.jsonl"
-            viki_logger.info("ContinuousLearner: Exporting training dataset...")
-            export_result = self.controller.learning.export_training_dataset(
-                dataset_path,
-                format="jsonl",
-                settings=self.controller.settings,
-            )
-            viki_logger.info(f"ContinuousLearner: {export_result}")
+        with start_span("forge.continuous_train") as span:
+            try:
+                # 1. Export dataset
+                dataset_path = "./data/training_dataset.jsonl"
+                viki_logger.info("ContinuousLearner: Exporting training dataset...")
+                export_result = self.controller.learning.export_training_dataset(
+                    dataset_path,
+                    format="jsonl",
+                    settings=self.controller.settings,
+                )
+                viki_logger.info(f"ContinuousLearner: {export_result}")
 
-            # 2. Trigger forge
-            viki_logger.info("ContinuousLearner: Triggering model forge...")
-            forge = self.controller.skill_registry.get_skill("internal_forge")
-            if not forge:
-                viki_logger.error("ContinuousLearner: Forge skill not found")
-                return
+                # 2. Trigger forge
+                viki_logger.info("ContinuousLearner: Triggering model forge...")
+                forge = self.controller.skill_registry.get_skill("internal_forge")
+                if not forge:
+                    viki_logger.error("ContinuousLearner: Forge skill not found")
+                    return
 
-            # Use auto strategy (will choose LoRA if available, otherwise Ollama)
-            result = await forge.execute({"strategy": "auto", "steps": 50})
-            viki_logger.info(f"ContinuousLearner: Forge result: {result}")
+                # Use auto strategy (will choose LoRA if available, otherwise Ollama)
+                result = await forge.execute({"strategy": "auto", "steps": 50})
+                viki_logger.info(f"ContinuousLearner: Forge result: {result}")
+                span["attributes"]["forge_result_preview"] = str(result)[:200]
 
-            # 3. Validate new model (if successfully created)
-            if "SUCCESS" in result.upper() or "COMPLETE" in result.upper():
-                new_model_name = resolve_forge_output_tag(self.controller.settings)
-                viki_logger.info(f"ContinuousLearner: Validating {new_model_name}...")
+                # 3. Validate new model (if successfully created)
+                if "SUCCESS" in result.upper() or "COMPLETE" in result.upper():
+                    new_model_name = resolve_forge_output_tag(self.controller.settings)
+                    viki_logger.info(f"ContinuousLearner: Validating {new_model_name}...")
 
-                is_valid = await self._validate_model(new_model_name)
+                    is_valid = await self._validate_model(new_model_name)
 
-                if is_valid:
-                    viki_logger.info(f"ContinuousLearner: Validation passed for {new_model_name}")
-                    self.last_training_time = time.time()
-                    # Phase 5: eval-gated auto-promotion.
-                    promoted = await self.maybe_promote(new_model_name)
-                    self.controller.learning.save_lesson(
-                        trigger="Model training completed",
-                        fact=(
-                            f"Trained {new_model_name} with {self.controller.learning.get_total_lesson_count()} lessons; "
-                            f"promotion={'yes' if promoted else 'pending eval gate'}"
-                        ),
-                        source="continuous_learning",
-                    )
+                    if is_valid:
+                        viki_logger.info(
+                            f"ContinuousLearner: Validation passed for {new_model_name}"
+                        )
+                        self.last_training_time = time.time()
+                        # Prefer ForgeEvalGate (pinned A/B + CapabilityIndex); fall back to maybe_promote.
+                        promoted = False
+                        try:
+                            if (
+                                getattr(self.controller, "model_ab_test", None) is None
+                                and getattr(self.controller, "ab_tester", None) is not None
+                            ):
+                                self.controller.model_ab_test = self.controller.ab_tester
+                            from viki.core.forge_eval_gate import ForgeEvalGate
+
+                            gate_result = await ForgeEvalGate(self.controller).evaluate_candidate(
+                                new_model_name, min_improvement_pct=5.0
+                            )
+                            promoted = bool(gate_result.promoted)
+                            span["attributes"]["gate_promoted"] = promoted
+                            span["attributes"]["trace_id"] = gate_result.trace_id
+                        except Exception as e:
+                            viki_logger.debug(
+                                "ContinuousLearner: ForgeEvalGate failed, maybe_promote: %s", e
+                            )
+                            promoted = await self.maybe_promote(new_model_name)
+                        self.controller.learning.save_lesson(
+                            trigger="Model training completed",
+                            fact=(
+                                f"Trained {new_model_name} with "
+                                f"{self.controller.learning.get_total_lesson_count()} lessons; "
+                                f"promotion={'yes' if promoted else 'pending eval gate'}"
+                            ),
+                            source="continuous_learning",
+                        )
+                    else:
+                        viki_logger.warning(
+                            f"ContinuousLearner: Validation failed for {new_model_name}"
+                        )
                 else:
-                    viki_logger.warning(
-                        f"ContinuousLearner: Validation failed for {new_model_name}"
-                    )
-            else:
-                viki_logger.warning("ContinuousLearner: Forge did not complete successfully")
+                    viki_logger.warning("ContinuousLearner: Forge did not complete successfully")
 
-        except Exception as e:
-            viki_logger.error(f"ContinuousLearner: Training cycle failed: {e}", exc_info=True)
+            except Exception as e:
+                viki_logger.error(f"ContinuousLearner: Training cycle failed: {e}", exc_info=True)
+                span["attributes"]["error"] = str(e)
 
-        finally:
-            viki_logger.info("=" * 60)
-            viki_logger.info("ContinuousLearner: Training cycle complete")
-            viki_logger.info("=" * 60)
+            finally:
+                viki_logger.info("=" * 60)
+                viki_logger.info("ContinuousLearner: Training cycle complete")
+                viki_logger.info("=" * 60)
 
     async def _validate_model(self, model_name: str) -> bool:
         """Validate model with quick tests."""

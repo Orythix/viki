@@ -21,7 +21,10 @@ class MemorySkill(BaseSkill):
 
     @property
     def description(self) -> str:
-        return "Advanced memory management. Actions: save, search, list, delete, update, stats, wipe, consolidate, sessions."
+        return (
+            "Advanced memory management. Actions: save, search, list, delete, update, "
+            "pin, correct, forget, stats, wipe, consolidate, sessions."
+        )
 
     @property
     def schema(self) -> dict:
@@ -36,6 +39,9 @@ class MemorySkill(BaseSkill):
                         "list",
                         "delete",
                         "update",
+                        "pin",
+                        "correct",
+                        "forget",
                         "stats",
                         "wipe",
                         "consolidate",
@@ -43,15 +49,16 @@ class MemorySkill(BaseSkill):
                     ],
                     "description": "The memory action to perform",
                 },
-                "text": {"type": "string", "description": "Memory content (for save/update)"},
+                "text": {"type": "string", "description": "Memory content (for save/update/correct)"},
                 "query": {"type": "string", "description": "Search query"},
-                "id": {"type": "string", "description": "Memory ID (for delete/update)"},
+                "id": {"type": "string", "description": "Memory ID (for delete/update/pin/correct/forget)"},
                 "category": {
                     "type": "string",
                     "description": "Category or source (e.g., 'coding', 'user_pref')",
                 },
                 "limit": {"type": "integer", "default": 5},
                 "reliability": {"type": "number", "description": "Confidence level (0.0 to 1.0)"},
+                "pinned": {"type": "boolean", "description": "Pin state for pin action (default true)"},
             },
             "required": ["action"],
         }
@@ -70,6 +77,12 @@ class MemorySkill(BaseSkill):
                 return await self._handle_delete(params)
             elif action == "update":
                 return await self._handle_update(params)
+            elif action == "pin":
+                return await self._handle_pin(params)
+            elif action == "correct":
+                return await self._handle_correct(params)
+            elif action == "forget":
+                return await self._handle_forget(params)
             elif action == "stats":
                 return await self._handle_stats()
             elif action == "wipe":
@@ -154,6 +167,49 @@ class MemorySkill(BaseSkill):
         if success:
             return f"SUCCESS: Memory '{mem_id}' updated."
         return f"FAILED: Memory '{mem_id}' not found or no changes provided."
+
+    async def _handle_pin(self, params: dict[str, Any]) -> str:
+        mem_id = params.get("id")
+        if not mem_id:
+            return "Error: 'id' is required for pin action."
+        pinned = params.get("pinned", True)
+        memory = getattr(self.controller, "memory", None)
+        if memory is not None and hasattr(memory, "pin"):
+            ok = memory.pin(mem_id, pinned=bool(pinned))
+        else:
+            ok = self.controller.learning.pin_lesson(mem_id, pinned=bool(pinned))
+        if ok:
+            return f"SUCCESS: Memory '{mem_id}' {'pinned' if pinned else 'unpinned'}."
+        return f"FAILED: Memory '{mem_id}' not found."
+
+    async def _handle_correct(self, params: dict[str, Any]) -> str:
+        mem_id = params.get("id")
+        text = params.get("text")
+        if not mem_id:
+            return "Error: 'id' is required for correct action."
+        if not text:
+            return "Error: 'text' is required for correct action."
+        memory = getattr(self.controller, "memory", None)
+        if memory is not None and hasattr(memory, "correct"):
+            ok = memory.correct(mem_id, text)
+        else:
+            ok = self.controller.learning.correct_lesson(mem_id, text)
+        if ok:
+            return f"SUCCESS: Memory '{mem_id}' corrected and pinned."
+        return f"FAILED: Memory '{mem_id}' not found."
+
+    async def _handle_forget(self, params: dict[str, Any]) -> str:
+        mem_id = params.get("id")
+        if not mem_id:
+            return "Error: 'id' is required for forget action."
+        memory = getattr(self.controller, "memory", None)
+        if memory is not None and hasattr(memory, "forget"):
+            ok = memory.forget(mem_id)
+        else:
+            ok = self.controller.learning.forget_lesson(mem_id)
+        if ok:
+            return f"SUCCESS: Memory '{mem_id}' forgotten."
+        return f"FAILED: Memory '{mem_id}' not found."
 
     async def _handle_stats(self) -> str:
         learning = self.controller.learning

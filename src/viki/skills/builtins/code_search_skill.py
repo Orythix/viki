@@ -388,6 +388,12 @@ class CodeSearchSkill(BaseSkill):
                     st = os.stat(path)
                 except Exception:
                     continue
+                prev = existing.get(path)
+                # Avoid opening and hashing the contents of every file on an
+                # incremental scan. The stored digest is only needed after the
+                # cheap filesystem metadata check detects a possible change.
+                if prev and prev[0] == st.st_mtime and prev[1] == st.st_size:
+                    continue
                 try:
                     with open(path, encoding="utf-8", errors="ignore") as f:
                         source = f.read()
@@ -397,7 +403,6 @@ class CodeSearchSkill(BaseSkill):
                     continue
                 lang = self.EXTENSIONS[ext]
                 sha = hashlib.sha256(source.encode("utf-8", errors="ignore")).hexdigest()
-                prev = existing.get(path)
                 if prev and prev == (st.st_mtime, st.st_size, sha):
                     # Reuse cached chunks/symbols already loaded into memory.
                     continue

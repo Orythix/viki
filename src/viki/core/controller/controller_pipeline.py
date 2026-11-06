@@ -21,24 +21,50 @@ class PipelineMixin:
         attachment_paths: list[str] | None = None,
         session_id: str | None = None,
     ) -> str:
+        from viki.core.telemetry_service import start_span
+
         norm_session = self._normalize_session_id(session_id)
         baseline = self._router_usage_snapshot()
-        try:
-            result = await self._process_request_impl(
-                user_input,
-                on_event=on_event,
-                on_think=on_think,
-                attachment_paths=attachment_paths,
-                session_id=norm_session,
-            )
-        finally:
-            self._accumulate_session_usage_from_delta(norm_session, baseline)
+        with start_span(
+            "turn.process_request",
+            attributes={
+                "session_id": norm_session,
+                "input_chars": len(user_input or ""),
+                "has_attachments": bool(attachment_paths),
+            },
+        ) as span:
+            try:
+                result = await self._process_request_impl(
+                    user_input,
+                    on_event=on_event,
+                    on_think=on_think,
+                    attachment_paths=attachment_paths,
+                    session_id=norm_session,
+                )
+            finally:
+                self._accumulate_session_usage_from_delta(norm_session, baseline)
 
-        if result:
-            from viki.core.security_guard import redact_secrets
+            meta = self._last_response_meta_by_session.get(norm_session) or {}
+            meta["trace_id"] = span.get("trace_id")
+            self._last_response_meta_by_session[norm_session] = meta
+            span["attributes"]["trace_id"] = span.get("trace_id")
+            if isinstance(meta.get("mcts"), dict):
+                span["attributes"]["verifier_score"] = meta["mcts"].get("score")
+            scorecard = getattr(self, "scorecard", None)
+            if scorecard is not None and hasattr(scorecard, "record_event"):
+                try:
+                    scorecard.record_event(
+                        "turn",
+                        {"trace_id": span.get("trace_id"), "session_id": norm_session},
+                    )
+                except Exception:
+                    pass
 
-            return redact_secrets(result)
-        return result or ""
+            if result:
+                from viki.core.security_guard import redact_secrets
+
+                return redact_secrets(result)
+            return result or ""
 
     async def _process_request_impl(
         self,
@@ -64,6 +90,9 @@ class PipelineMixin:
                 user_input = validated
         except ImportError:
             pass
+
+        if not user_input.strip() and not attachment_paths:
+            return "Please enter a message or attach a file so I know what to help with."
 
         pre_ctx = RequestContext(
             user_input=user_input,

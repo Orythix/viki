@@ -1,4 +1,5 @@
 import time
+import math
 
 from pydantic import BaseModel, Field
 
@@ -334,13 +335,13 @@ class ControlledBenchmark:
 
         for task in tasks:
             viki_logger.info(f"Task {task.id}: {task.name}")
-            start = time.time()
+            start = time.perf_counter()
 
             # Execute through the controller to test judgment and scorecard integration
             try:
                 # Note: In a real benchmark, we'd mock a clean state
                 response = await self.controller.process_request(task.prompt)
-                latency = time.time() - start
+                latency = time.perf_counter() - start
                 success, restraint_score = self._evaluate_response(task, response)
 
                 # Best-effort recovery estimation: count errorful subtasks recorded by the controller.
@@ -386,17 +387,24 @@ class ControlledBenchmark:
         success_rate = sum(1 for r in results if r.success) / len(results)
         avg_restraint = sum(r.restraint_score for r in results) / len(results)
         avg_latency = sum(r.latency for r in results) / len(results)
+        latencies = sorted(r.latency for r in results)
+        median_latency = latencies[(len(latencies) - 1) // 2]
+        p95_latency = latencies[max(0, math.ceil(0.95 * len(latencies)) - 1)]
         avg_recovery_count = sum(getattr(r, "recovery_count", 0) for r in results) / len(results)
 
         viki_logger.info(f"BENCHMARK SUMMARY ({results[0].model_name}):")
         viki_logger.info(f"- Success Rate: {success_rate * 100:.1f}%")
         viki_logger.info(f"- Restraint Score: {avg_restraint:.2f}")
         viki_logger.info(f"- Avg Latency: {avg_latency:.2f}s")
+        viki_logger.info(f"- Median Latency: {median_latency:.2f}s")
+        viki_logger.info(f"- P95 Latency: {p95_latency:.2f}s")
         viki_logger.info(f"- Avg Recovery Count: {avg_recovery_count:.2f}")
         return {
             "success_rate": success_rate,
             "avg_restraint": avg_restraint,
             "avg_latency": avg_latency,
+            "median_latency": median_latency,
+            "p95_latency": p95_latency,
             "avg_recovery_count": avg_recovery_count,
             "task_count": len(results),
         }

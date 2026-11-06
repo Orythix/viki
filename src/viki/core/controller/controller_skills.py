@@ -186,50 +186,68 @@ class SkillsMixin:
     async def _execute_skill(
         self, skill_name: str, params: dict[str, Any], budget: dict[str, Any]
     ) -> tuple:
-        skill = self.skill_registry.get_skill(skill_name)
-        if not skill:
-            return None, f"Skill '{skill_name}' not found.", 0.0
+        from viki.core.telemetry_service import start_span
 
-        if hasattr(self.skill_registry, "is_skill_available"):
-            if not self.skill_registry.is_skill_available(skill_name):
-                return None, f"Skill '{skill_name}' is temporarily unavailable (circuit open).", 0.0
+        with start_span(
+            "skill.execute",
+            attributes={"skill": skill_name, "param_keys": sorted((params or {}).keys())},
+        ) as span:
+            skill = self.skill_registry.get_skill(skill_name)
+            if not skill:
+                span["attributes"]["error"] = "not_found"
+                return None, f"Skill '{skill_name}' not found.", 0.0
 
-        if self._should_checkpoint(skill_name):
-            self.history.create_checkpoint(self, skill_name, params)
-        budget_time = budget.get("time") or self.SKILL_TIMEOUT_BUDGET_DEFAULT
-        skill_timeout = min(
-            self.SKILL_TIMEOUT_MAX,
-            max(self.SKILL_TIMEOUT_MIN, budget_time * self.SKILL_TIMEOUT_BUDGET_MULTIPLIER),
-        )
-        start_exec = time.time()
-        try:
-            result = await asyncio.wait_for(skill.execute(params), timeout=skill_timeout)
-            latency = time.time() - start_exec
+            if hasattr(self.skill_registry, "is_skill_available"):
+                if not self.skill_registry.is_skill_available(skill_name):
+                    span["attributes"]["error"] = "circuit_open"
+                    return (
+                        None,
+                        f"Skill '{skill_name}' is temporarily unavailable (circuit open).",
+                        0.0,
+                    )
+
+            if self._should_checkpoint(skill_name):
+                self.history.create_checkpoint(self, skill_name, params)
+            budget_time = budget.get("time") or self.SKILL_TIMEOUT_BUDGET_DEFAULT
+            skill_timeout = min(
+                self.SKILL_TIMEOUT_MAX,
+                max(self.SKILL_TIMEOUT_MIN, budget_time * self.SKILL_TIMEOUT_BUDGET_MULTIPLIER),
+            )
+            start_exec = time.time()
             try:
-                from viki.core.usage_log import emit_skill_execution
+                result = await asyncio.wait_for(skill.execute(params), timeout=skill_timeout)
+                latency = time.time() - start_exec
+                span["attributes"]["latency_s"] = round(latency, 4)
+                span["attributes"]["ok"] = True
+                try:
+                    from viki.core.usage_log import emit_skill_execution
 
-                emit_skill_execution(skill_name, latency, True, None)
-            except Exception:
-                viki_logger.warning("failed to emit skill execution telemetry")
-            return (str(result), None, latency)
-        except TimeoutError:
-            err_msg = f"Action timed out (limit {skill_timeout}s)."
-            try:
-                from viki.core.usage_log import emit_skill_execution
+                    emit_skill_execution(skill_name, latency, True, None)
+                except Exception:
+                    viki_logger.warning("failed to emit skill execution telemetry")
+                return (str(result), None, latency)
+            except TimeoutError:
+                err_msg = f"Action timed out (limit {skill_timeout}s)."
+                span["attributes"]["ok"] = False
+                span["attributes"]["error"] = "timeout"
+                try:
+                    from viki.core.usage_log import emit_skill_execution
 
-                emit_skill_execution(skill_name, time.time() - start_exec, False, err_msg)
-            except Exception:
-                viki_logger.warning("failed to emit skill execution telemetry")
-            return None, err_msg, 0.0
-        except Exception as e:
-            err_msg = f"Action failed: {e}"
-            try:
-                from viki.core.usage_log import emit_skill_execution
+                    emit_skill_execution(skill_name, time.time() - start_exec, False, err_msg)
+                except Exception:
+                    viki_logger.warning("failed to emit skill execution telemetry")
+                return None, err_msg, 0.0
+            except Exception as e:
+                err_msg = f"Action failed: {e}"
+                span["attributes"]["ok"] = False
+                span["attributes"]["error"] = type(e).__name__
+                try:
+                    from viki.core.usage_log import emit_skill_execution
 
-                emit_skill_execution(skill_name, time.time() - start_exec, False, err_msg)
-            except Exception:
-                viki_logger.warning("failed to emit skill execution telemetry")
-            return None, err_msg, 0.0
+                    emit_skill_execution(skill_name, time.time() - start_exec, False, err_msg)
+                except Exception:
+                    viki_logger.warning("failed to emit skill execution telemetry")
+                return None, err_msg, 0.0
 
     def _apply_skill_aliases(self) -> None:
         alias_pairs = [

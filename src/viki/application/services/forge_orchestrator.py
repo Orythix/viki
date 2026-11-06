@@ -119,12 +119,69 @@ class ForgeOrchestrator:
                 f"Forge: Modelfile saved for '{profile.target_tag}'. "
                 f"User should apply system prompt in LM Studio."
             )
-            return (
+            msg = (
                 f"Forge Success: Profile '{profile.target_tag}' Modelfile saved at {modelfile_path}.\n"
                 f"To apply: Open LM Studio -> Load model -> Settings -> System Prompt -> paste from Modelfile."
             )
+            gate_msg = await self._run_post_bake_eval(profile.target_tag)
+            return f"{msg}\n{gate_msg}" if gate_msg else msg
         except Exception as e:
             return f"Forge Error: {str(e)}"
+
+    async def _run_post_bake_eval(self, candidate_tag: str) -> str:
+        """Seed CapabilityIndex results, then ForgeEvalGate. Never promote on delta ≤ 0."""
+        from viki.core.telemetry_service import start_span
+
+        with start_span("forge.post_bake_eval", attributes={"candidate": candidate_tag}) as span:
+            try:
+                if (
+                    getattr(self.controller, "model_ab_test", None) is None
+                    and getattr(self.controller, "ab_tester", None) is not None
+                ):
+                    self.controller.model_ab_test = self.controller.ab_tester
+
+                incumbent = "unknown"
+                router = getattr(self.controller, "model_router", None)
+                if router is not None and getattr(router, "primary_model", None):
+                    incumbent = str(router.primary_model)
+                else:
+                    try:
+                        cfg = getattr(self.controller, "models_config", None) or {}
+                        incumbent = str((cfg.get("models") or {}).get("default") or "unknown")
+                    except Exception:
+                        incumbent = "unknown"
+
+                from viki.core.forge_eval_seed import seed_pinned_eval_results
+
+                seed = await seed_pinned_eval_results(
+                    self.controller,
+                    candidate_model=candidate_tag,
+                    incumbent_model=incumbent if incumbent != "unknown" else None,
+                )
+                span["attributes"]["seed_path"] = seed.get("path")
+                span["attributes"]["seed_scores"] = seed.get("scores")
+
+                from viki.core.forge_eval_gate import ForgeEvalGate
+
+                gate = ForgeEvalGate(self.controller)
+                result = await gate.evaluate_candidate(candidate_tag, min_improvement_pct=5.0)
+                span["attributes"]["promoted"] = result.promoted
+                span["attributes"]["delta"] = result.candidate_score - result.incumbent_score
+                seed_note = f"seeded {seed.get('path')}"
+                if result.promoted:
+                    return (
+                        f"Eval gate: PROMOTED '{candidate_tag}' "
+                        f"(+{result.improvement:.1f}%, trace={result.trace_id}; {seed_note})."
+                    )
+                return (
+                    f"Eval gate: NOT promoted "
+                    f"(incumbent={result.incumbent_score:.3f} candidate={result.candidate_score:.3f}; "
+                    f"reason={result.metrics.get('refuse_reason') or 'below threshold'}; {seed_note})."
+                )
+            except Exception as e:
+                viki_logger.warning("Forge post-bake eval failed: %s", e)
+                span["attributes"]["error"] = str(e)
+                return f"Eval gate skipped: {e}"
 
     async def bake_lora(
         self,
@@ -168,8 +225,16 @@ class ForgeOrchestrator:
                 f"Forge LoRA: dataset with {n} examples exported to {dataset_path}, "
                 f"but training is unavailable. {reason}"
             )
-        trainer = LoraTrainer(lora_cfg)
-        result = await asyncio.to_thread(trainer.train, dataset_path)
+        from viki.core.telemetry_service import start_span
+
+        with start_span(
+            "forge.lora_train",
+            attributes={"dataset_examples": n, "target_tag": target_tag},
+        ) as span:
+            trainer = LoraTrainer(lora_cfg)
+            result = await asyncio.to_thread(trainer.train, dataset_path)
+            span["attributes"]["status"] = result.get("status")
+            span["attributes"]["seconds"] = result.get("seconds")
         if result.get("status") != "trained":
             return f"Forge LoRA: training failed: {result.get('reason', 'unknown')}"
 
@@ -177,12 +242,14 @@ class ForgeOrchestrator:
         tag = base_model_tag or forge_cfg.get("lora_base_model_tag", "google/gemma-4-e4b")
         modelfile_path = os.path.join(data_dir, f"Modelfile.{target_tag}")
         write_adapter_modelfile(tag, result["adapter_dir"], modelfile_path)
-        return (
+        msg = (
             f"Forge LoRA Success: trained on {n} lessons "
             f"({result['seconds']}s). Adapter at {result['adapter_dir']}.\n"
             f"Modelfile saved at: {modelfile_path}\n"
             f"To use: Load the base model in LM Studio and apply the adapter."
         )
+        gate_msg = await self._run_post_bake_eval(target_tag)
+        return f"{msg}\n{gate_msg}" if gate_msg else msg
 
     async def switch_to_profile(self, profile_name: str) -> str:
         """Switch the controller's active model to a specific profile."""

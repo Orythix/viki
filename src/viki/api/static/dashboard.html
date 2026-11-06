@@ -3,181 +3,54 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>VIKI Dashboard</title>
+<meta name="theme-color" content="#0b1118">
+<title>VIKI — Control room</title>
 <style>
-:root{--bg:#0d1117;--panel:#161b22;--border:#30363d;--text:#e6edf3;--dim:#8b949e;--accent:#58a6ff;--ok:#3fb950;--warn:#d29922}
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,"Segoe UI",Roboto,sans-serif;height:100vh;display:flex;flex-direction:column}
-header{padding:10px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px}
-header h1{font-size:16px;color:var(--accent)}
-#health-pill{font-size:12px;padding:2px 10px;border-radius:12px;border:1px solid var(--border);color:var(--dim)}
-#health-pill.ok{color:var(--ok);border-color:var(--ok)}
-#health-pill.degraded{color:var(--warn);border-color:var(--warn)}
-main{flex:1;display:flex;min-height:0}
-#chat-col{flex:2;display:flex;flex-direction:column;border-right:1px solid var(--border)}
-#log{flex:1;overflow-y:auto;padding:16px}
-.msg{margin-bottom:12px;max-width:85%;padding:8px 12px;border-radius:8px;white-space:pre-wrap;word-break:break-word}
-.msg.user{background:#1f3a5f;margin-left:auto}
-.msg.viki{background:var(--panel);border:1px solid var(--border)}
-.msg.err{border:1px solid var(--warn);color:var(--warn)}
-#composer{display:flex;gap:8px;padding:12px;border-top:1px solid var(--border)}
-#composer input{flex:1;background:var(--panel);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:8px 12px;outline:none}
-#composer input:focus{border-color:var(--accent)}
-button{background:var(--accent);border:0;border-radius:6px;color:#0d1117;font-weight:600;padding:8px 16px;cursor:pointer}
-button:disabled{opacity:.5;cursor:wait}
-#side{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:16px;min-width:280px}
-.card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:12px}
-.card h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin-bottom:8px}
-.card ul{list-style:none;font-size:13px}
-.card li{padding:3px 0;border-bottom:1px solid var(--border)}
-.card li:last-child{border:0}
-.kv{display:flex;justify-content:space-between;font-size:13px;padding:2px 0}
-.kv span:last-child{color:var(--dim);text-align:right;max-width:60%}
-#mem-form{display:flex;gap:6px;margin-bottom:8px}
-#mem-form input{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;outline:none}
-.dim{color:var(--dim);font-size:12px}
+:root{color-scheme:dark;--bg:#0b1118;--surface:#111a23;--surface-2:#17232e;--line:#263642;--ink:#e7f0f3;--muted:#8da0aa;--mint:#83e2c0;--blue:#95c7ff;--amber:#f0c477;--red:#ff8a84;--radius:17px}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 50% -20%,#1b3542 0,transparent 55%),var(--bg);color:var(--ink);font:14px/1.55 'DM Sans',sans-serif;min-height:100vh}button,input{font:inherit}button{cursor:pointer}button:focus-visible,input:focus-visible{outline:2px solid var(--mint);outline-offset:3px}.shell{max-width:1480px;margin:auto;padding:28px 34px 32px}.topbar{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:23px}.brand{display:flex;align-items:center;gap:13px}.mark{width:40px;height:40px;border-radius:13px;background:var(--mint);color:#09201a;display:grid;place-items:center;font:700 18px 'Space Grotesk';letter-spacing:-1px}.brand-name{font:700 19px 'Space Grotesk';letter-spacing:.01em}.brand-sub{color:var(--muted);font-size:12px;margin-top:1px}.top-right{display:flex;align-items:center;gap:18px}.model{color:var(--muted);font-size:12px}.health{display:inline-flex;align-items:center;gap:8px;border:1px solid #315447;color:var(--mint);border-radius:99px;padding:7px 12px;font-size:12px}.health:before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor;box-shadow:0 0 12px currentColor}.health.degraded{color:var(--amber);border-color:#655238}.health.offline{color:var(--red);border-color:#633e40}.intro{display:flex;justify-content:space-between;align-items:end;padding:36px 0 24px}.intro h1{font:600 clamp(26px,3.4vw,38px)/1.12 'Space Grotesk';letter-spacing:-.04em;margin:0 0 8px}.intro p{margin:0;color:var(--muted);font-size:14px}.clock{color:var(--muted);font-variant-numeric:tabular-nums;font-size:12px}.layout{display:grid;grid-template-columns:minmax(0,1.75fr) minmax(300px,.85fr);gap:18px;align-items:stretch}.panel{border:1px solid var(--line);background:linear-gradient(145deg,rgba(21,32,42,.96),rgba(14,22,30,.96));border-radius:var(--radius);overflow:hidden}.chat{min-height:600px;display:flex;flex-direction:column}.panel-head{padding:18px 21px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}.panel-title{font:600 14px 'Space Grotesk'}.panel-note{color:var(--muted);font-size:12px}.live{display:flex;align-items:center;gap:7px;color:var(--mint);font-size:11px}.live:before{content:'';width:6px;height:6px;border-radius:9px;background:currentColor}.log{flex:1;overflow:auto;padding:24px;display:flex;flex-direction:column;gap:15px;max-height:calc(100vh - 330px);min-height:310px}.welcome{margin:auto;max-width:380px;text-align:center;color:var(--muted)}.welcome-icon{width:48px;height:48px;border:1px solid #315447;border-radius:16px;color:var(--mint);display:grid;place-items:center;margin:0 auto 14px;font:700 20px 'Space Grotesk'}.welcome strong{display:block;color:var(--ink);font:600 17px 'Space Grotesk';margin-bottom:5px}.msg{max-width:82%;padding:12px 15px;border-radius:15px;white-space:pre-wrap;overflow-wrap:anywhere}.msg.user{align-self:flex-end;background:#203a49;border:1px solid #31566a;border-bottom-right-radius:5px}.msg.viki{align-self:flex-start;background:#141f29;border:1px solid #263945;border-bottom-left-radius:5px}.msg.err{color:var(--red);border-color:#633e40}.msg.pending:empty:after{content:'VIKI is thinking…';color:var(--muted);font-style:italic}.composer{padding:17px 20px;border-top:1px solid var(--line)}.input-wrap{display:flex;gap:10px;background:#0c151d;border:1px solid #2a3a46;border-radius:13px;padding:7px 8px 7px 15px}.input-wrap:focus-within{border-color:#52776e}.input-wrap input{min-width:0;flex:1;color:var(--ink);background:transparent;border:0;outline:none;padding:8px 0}.input-wrap input::placeholder{color:#70828d}.send{border:0;border-radius:9px;padding:8px 17px;background:var(--mint);color:#0b211b;font-weight:700;transition:filter .15s}.send:hover{filter:brightness(1.08)}.send:disabled{opacity:.5;cursor:wait}.hint{font-size:11px;color:#70828d;margin:8px 4px 0}.side{display:flex;flex-direction:column;gap:18px}.section{padding:19px 20px}.section-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}.section-heading h2{font:600 14px 'Space Grotesk';margin:0}.subtle{font-size:11px;color:var(--muted)}.metric-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.metric{background:rgba(8,15,21,.55);border:1px solid #23333e;border-radius:12px;padding:12px}.metric-label{color:var(--muted);font-size:11px}.metric-value{font:600 21px 'Space Grotesk';margin-top:4px}.metric-value.good{color:var(--mint)}.warning-list{margin-top:12px;color:var(--amber);font-size:12px;display:grid;gap:6px}.swarm-empty{padding:16px 13px;border-radius:12px;background:rgba(8,15,21,.45);border:1px dashed #344651;color:var(--muted);font-size:12px}.swarm-meta{display:grid;gap:10px;margin-bottom:13px}.kv{display:flex;justify-content:space-between;gap:12px;color:var(--muted);font-size:12px}.kv span:last-child{color:var(--ink);text-align:right;overflow-wrap:anywhere}.nodes{display:grid;gap:7px}.node{display:flex;justify-content:space-between;gap:12px;padding:9px 10px;background:rgba(8,15,21,.45);border-radius:9px;color:#bdcbd0;font-size:11px}.node-status{color:var(--mint);white-space:nowrap}.memory-form{display:flex;gap:8px}.memory-form input{width:100%;min-width:0;background:#0c151d;border:1px solid #2a3a46;border-radius:10px;color:var(--ink);padding:9px 11px;outline:none}.memory-form button{background:var(--surface-2);border:1px solid #354652;color:var(--ink);border-radius:10px;padding:0 13px}.memory-results{list-style:none;padding:0;margin:10px 0 0;max-height:220px;overflow:auto;color:#bdcbd0;font-size:12px}.memory-results li{padding:10px 0;border-bottom:1px solid #22313b;overflow-wrap:anywhere}.memory-results li:last-child{border:0}.mem-row{display:grid;gap:8px}.mem-text{color:var(--ink)}.mem-meta{color:var(--muted);font-size:11px}.mem-actions{display:flex;flex-wrap:wrap;gap:6px}.mem-actions button{background:#0c151d;border:1px solid #354652;color:var(--ink);border-radius:8px;padding:4px 9px;font-size:11px}.mem-actions button:hover{border-color:var(--mint);color:var(--mint)}.mem-actions button.danger:hover{border-color:var(--red);color:var(--red)}.mem-edit{width:100%;min-height:52px;background:#0c151d;border:1px solid #2a3a46;border-radius:8px;color:var(--ink);padding:8px;resize:vertical}.foot{margin-top:17px;color:#637780;font-size:11px;display:flex;justify-content:space-between}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@media(max-width:850px){.shell{padding:20px}.layout{grid-template-columns:1fr}.chat{min-height:520px}.log{max-height:55vh}.side{display:grid;grid-template-columns:1fr 1fr}.side>.panel:first-child{grid-column:1/-1}}
+@media(max-width:560px){.shell{padding:15px}.topbar{padding-bottom:16px}.brand-sub,.model,.clock{display:none}.intro{padding:27px 0 19px}.intro h1{font-size:28px}.side{display:flex}.chat{min-height:500px}.log{padding:17px;max-height:56vh}.msg{max-width:94%}.panel-head{padding:15px 16px}.section{padding:17px}.foot{display:block}.foot span{display:block;margin-top:4px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important}}
 </style>
 </head>
 <body>
-<header>
-  <h1>VIKI</h1>
-  <span id="health-pill">loading…</span>
-  <span class="dim" id="model-label"></span>
-</header>
-<main>
-  <div id="chat-col">
-    <div id="log"><div class="msg viki">Dashboard online. Ask me anything.</div></div>
-    <form id="composer">
-      <input id="box" autocomplete="off" placeholder="Message VIKI…" autofocus>
-      <button id="send" type="submit">Send</button>
-    </form>
-  </div>
-  <div id="side">
-    <div class="card"><h2>Runtime health</h2><div id="health-body" class="dim">loading…</div></div>
-    <div class="card">
-      <h2>Multi-Agent Swarm DAG</h2>
-      <div id="swarm-body" class="dim">no active swarm</div>
-    </div>
-  </div>
-</main>
+<div class="shell">
+  <header class="topbar">
+    <div class="brand"><div class="mark" aria-hidden="true">V</div><div><div class="brand-name">VIKI</div><div class="brand-sub">Your local intelligence workspace</div></div></div>
+    <div class="top-right"><span id="model-label" class="model">Checking model…</span><span id="health-pill" class="health">Connecting</span></div>
+  </header>
+  <section class="intro"><div><h1>Good to have you here.</h1><p>Your private workspace is ready when you are.</p></div><div class="clock" id="clock"></div></section>
+  <main class="layout">
+    <section class="panel chat" aria-label="Chat with VIKI">
+      <div class="panel-head"><div><div class="panel-title">Conversation</div><div class="panel-note">Private by design · Runs on your VIKI setup</div></div><span class="live">Ready</span></div>
+      <div id="log" class="log" aria-live="polite"><div class="welcome"><div class="welcome-icon" aria-hidden="true">V</div><strong>What would you like to work on?</strong><span>Ask a question, explore an idea, or get help with a task.</span></div></div>
+      <form id="composer" class="composer"><label for="box" class="sr-only">Message VIKI</label><div class="input-wrap"><input id="box" autocomplete="off" placeholder="Message VIKI…" autofocus><button class="send" id="send" type="submit">Send</button></div><div class="hint">Enter to send · Your conversation stays in this session</div></form>
+    </section>
+    <aside class="side">
+      <section class="panel section"><div class="section-heading"><h2>System health</h2><span class="subtle" id="health-updated">Updating</span></div><div class="metric-grid"><div class="metric"><div class="metric-label">Skills available</div><div class="metric-value" id="skills-count">—</div></div><div class="metric"><div class="metric-label">Models online</div><div class="metric-value good" id="models-up">—</div></div><div class="metric"><div class="metric-label">Models offline</div><div class="metric-value" id="models-down">—</div></div><div class="metric"><div class="metric-label">Workspace</div><div class="metric-value good" id="workspace-state">Local</div></div></div><div id="health-warnings" class="warning-list"></div></section>
+      <section class="panel section"><div class="section-heading"><h2>Agent activity</h2><span class="subtle">Latest swarm</span></div><div id="swarm-body" class="swarm-empty">No active swarm right now. Start a multi-step task to see agents at work.</div></section>
+      <section class="panel section"><div class="section-heading"><h2>Memory</h2><span class="subtle" id="mem-stats">Pin · Correct · Forget</span></div><form id="mem-form" class="memory-form"><label for="mem-q" class="sr-only">Search memory</label><input id="mem-q" placeholder="Search or leave blank to browse" autocomplete="off"><button type="submit">Search</button></form><ul id="mem-results" class="memory-results" aria-live="polite"></ul></section>
+    </aside>
+  </main>
+  <footer class="foot"><span>VIKI · Local AI workspace</span><span id="refresh-label">Health refreshes automatically</span></footer>
+</div>
 <script>
 const $=id=>document.getElementById(id);
-const esc=s=>{const d=document.createElement('div');d.textContent=s;return d.innerHTML};
-
-function addMsg(text, cls){
-  const div=document.createElement('div');
-  div.className='msg '+cls;
-  div.textContent=text;
-  $('log').appendChild(div);
-  $('log').scrollTop=$('log').scrollHeight;
-  return div;
-}
-
-let ws=null;
-let chatPending=null;
-
-function connectWs(){
-  const proto=location.protocol==='https:'?'wss:':'ws:';
-  ws=new WebSocket(proto+'//'+location.host+'/api/ws/chat');
-  ws.onopen=()=>console.log('WS chat connected');
-  ws.onclose=()=>{console.log('WS chat disconnected');setTimeout(connectWs,3000)};
-  ws.onerror=()=>{};
-  ws.onmessage=e=>{
-    try{
-      const m=JSON.parse(e.data);
-      if(m.type==='partial'){
-        if(chatPending) chatPending.textContent+=m.data;
-      }else if(m.type==='thought'||m.type==='status'){
-        // silently consume status updates
-      }else if(m.type==='done'){
-        if(chatPending) chatPending.className='msg viki';
-        chatPending=null;
-        $('send').disabled=false;
-        $('box').focus();
-      }else if(m.type==='error'){
-        if(chatPending){chatPending.textContent+='\nError: '+m.data;chatPending.className='msg err'}
-        chatPending=null;
-        $('send').disabled=false;
-      }
-    }catch(e){/*ignore*/}
-  };
-}
+const esc=s=>{const d=document.createElement('div');d.textContent=String(s??'');return d.innerHTML};
+function addMsg(text,cls){const el=document.createElement('div');el.className='msg '+cls;el.textContent=text;$('log').appendChild(el);$('log').scrollTop=$('log').scrollHeight;return el}
+let ws=null,chatPending=null;
+function connectWs(){const proto=location.protocol==='https:'?'wss:':'ws:';ws=new WebSocket(proto+'//'+location.host+'/api/ws/chat');ws.onclose=()=>setTimeout(connectWs,3000);ws.onmessage=e=>{try{const m=JSON.parse(e.data);if(m.type==='partial'&&chatPending){chatPending.classList.remove('pending');chatPending.textContent+=m.data}else if(m.type==='done'){if(chatPending)chatPending.className='msg viki';chatPending=null;$('send').disabled=false;$('box').focus()}else if(m.type==='error'){if(chatPending){chatPending.textContent+='\n'+m.data;chatPending.className='msg err'}chatPending=null;$('send').disabled=false}}catch(_){}}}
 connectWs();
-
-$('composer').addEventListener('submit', async e=>{
-  e.preventDefault();
-  const text=$('box').value.trim();
-  if(!text) return;
-  $('box').value='';
-  addMsg(text,'user');
-  $('send').disabled=true;
-  chatPending=addMsg('','viki');
-  if(ws&&ws.readyState===WebSocket.OPEN){
-    ws.send(JSON.stringify({text}));
-  }else{
-    // fallback to REST
-    try{
-      const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
-      const data=await r.json();
-      chatPending.textContent = data.reply ?? ('Error: '+(data.error||r.status));
-      if(!data.reply) chatPending.className='msg err';
-    }catch(err){
-      chatPending.textContent='Request failed: '+err;
-      chatPending.className='msg err';
-    }finally{
-      chatPending=null;
-      $('send').disabled=false;
-      $('box').focus();
-    }
-  }
-});
-
-$('mem-form').addEventListener('submit', async e=>{
-  e.preventDefault();
-  const q=$('mem-q').value.trim();
-  if(!q) return;
-  const ul=$('mem-results');
-  ul.innerHTML='<li class="dim">searching…</li>';
-  try{
-    const r=await fetch('/api/memory?q='+encodeURIComponent(q));
-    const data=await r.json();
-    ul.innerHTML=(data.lessons&&data.lessons.length)
-      ? data.lessons.map(l=>'<li>'+esc(l)+'</li>').join('')
-      : '<li class="dim">no matches</li>';
-  }catch(err){
-    ul.innerHTML='<li class="dim">error: '+esc(String(err))+'</li>';
-  }
-});
-
-async function refresh(){
-  try{
-    const h=await (await fetch('/api/health')).json();
-    const pill=$('health-pill');
-    pill.textContent=h.degraded?'degraded':'healthy';
-    pill.className=h.degraded?'degraded':'ok';
-    $('model-label').textContent=h.default_model?('model: '+h.default_model):'';
-    $('health-body').innerHTML=
-      '<div class="kv"><span>Skills</span><span>'+h.registered_skill_count+'</span></div>'+
-      '<div class="kv"><span>Models up</span><span>'+(h.available_models||[]).length+'</span></div>'+
-      '<div class="kv"><span>Models down</span><span>'+Object.keys(h.unavailable_models||{}).length+'</span></div>'+
-      ((h.warnings||[]).map(w=>'<div class="kv"><span>⚠</span><span>'+esc(w)+'</span></div>').join(''));
-  }catch(e){ $('health-pill').textContent='offline'; $('health-pill').className=''; }
-  try{
-    const s=await (await fetch('/api/v2/swarm/dag')).json();
-    if (s.swarms && s.swarms.length) {
-      const latest = s.swarms[s.swarms.length - 1];
-      let html = '<div class="kv"><span>Swarm</span><span>'+esc(latest.swarm_id)+'</span></div>';
-      html += '<div class="kv"><span>Status</span><span>'+esc(latest.status)+'</span></div>';
-      html += (latest.nodes || []).map(n=>'<div class="kv"><span>'+esc(n.agent_role)+': '+esc(n.title)+'</span><span>['+esc(n.status)+']</span></div>').join('');
-      $('swarm-body').innerHTML = html;
-    } else {
-      $('swarm-body').textContent = 'no active swarm';
-    }
-  }catch(e){ /* ignore */ }
-}
-refresh();
-setInterval(refresh, 10000);
-
+$('composer').addEventListener('submit',async e=>{e.preventDefault();const text=$('box').value.trim();if(!text)return;$('log').querySelector('.welcome')?.remove();$('box').value='';addMsg(text,'user');$('send').disabled=true;chatPending=addMsg('','msg viki pending');if(ws&&ws.readyState===WebSocket.OPEN){ws.send(JSON.stringify({text}));return}try{const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});const data=await r.json();chatPending.textContent=data.reply??('Error: '+(data.error||r.status));if(!data.reply)chatPending.className='msg err'}catch(err){chatPending.textContent='Request failed: '+err;chatPending.className='msg err'}finally{chatPending=null;$('send').disabled=false;$('box').focus()}});
+function renderMemoryItems(items){const list=$('mem-results');if(!items?.length){list.innerHTML='<li class="subtle">No matching memories yet.</li>';return}list.innerHTML=items.map((it,idx)=>{const id=esc(it.id||'');const text=esc(it.text_representation||it.fact||it.content||'');const src=esc(it.source_task||it.source||'');const pinned=it.pinned?1:0;return '<li class="mem-row" data-id="'+id+'"><div class="mem-text" id="mem-text-'+idx+'">'+text+'</div><div class="mem-meta">'+(pinned?'📌 pinned · ':'')+src+' · '+id+'</div><div class="mem-actions"><button type="button" data-act="pin" data-id="'+id+'">Pin</button><button type="button" data-act="edit" data-idx="'+idx+'" data-id="'+id+'">Correct</button><button type="button" class="danger" data-act="forget" data-id="'+id+'">Forget</button></div><textarea class="mem-edit" id="mem-edit-'+idx+'" hidden>'+text+'</textarea></li>'}).join('')}
+async function loadMemories(q){const list=$('mem-results');list.innerHTML='<li class="subtle">Loading memory…</li>';try{const url=q?'/api/memories?q='+encodeURIComponent(q)+'&limit=30':'/api/memories?limit=30';const r=await fetch(url);const data=await r.json();renderMemoryItems(data.items||[]);const st=await fetch('/api/memories/stats');if(st.ok){const s=await st.json();$('mem-stats').textContent=(s.total??0)+' total · pin · correct · forget'}}catch(err){list.innerHTML='<li>'+esc('Search failed: '+err)+'</li>'}}
+$('mem-form').addEventListener('submit',async e=>{e.preventDefault();await loadMemories($('mem-q').value.trim())});
+$('mem-results').addEventListener('click',async e=>{const btn=e.target.closest('button[data-act]');if(!btn)return;const act=btn.dataset.act;const id=btn.dataset.id;const idx=btn.dataset.idx;try{if(act==='pin'){const r=await fetch('/api/memories/'+encodeURIComponent(id)+'/pin',{method:'POST'});if(!r.ok)throw Error(await r.text());btn.textContent='Pinned';await loadMemories($('mem-q').value.trim());return}if(act==='edit'){const ta=$('mem-edit-'+idx);if(!ta)return;if(ta.hidden){ta.hidden=false;btn.textContent='Save';return}const fact=ta.value.trim();if(!fact)return;const r=await fetch('/api/memories/'+encodeURIComponent(id)+'/correct',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fact})});if(!r.ok)throw Error(await r.text());await loadMemories($('mem-q').value.trim());return}if(act==='forget'){if(!confirm('Forget this memory permanently?'))return;const r=await fetch('/api/memories/'+encodeURIComponent(id)+'/forget',{method:'POST'});if(!r.ok)throw Error(await r.text());await loadMemories($('mem-q').value.trim())}}catch(err){alert('Memory action failed: '+err)}});
+loadMemories('');
+async function refresh(){try{const r=await fetch('/api/health');if(!r.ok)throw Error(r.status);const h=await r.json();$('health-pill').textContent=h.degraded?'Needs attention':'All systems ready';$('health-pill').className='health'+(h.degraded?' degraded':'');$('model-label').textContent=h.default_model||'No default model selected';$('skills-count').textContent=h.registered_skill_count??'—';$('models-up').textContent=(h.available_models||[]).length;$('models-down').textContent=Object.keys(h.unavailable_models||{}).length;$('health-updated').textContent='Updated just now';$('health-warnings').innerHTML=(h.warnings||[]).map(w=>'<div>• '+esc(w)+'</div>').join('')}catch(_){$('health-pill').textContent='Offline';$('health-pill').className='health offline';$('model-label').textContent='Dashboard cannot reach VIKI'}}
+async function refreshSwarm(){try{const r=await fetch('/api/v2/swarm/dag');const data=await r.json();if(!data.swarms?.length){$('swarm-body').className='swarm-empty';$('swarm-body').textContent='No active swarm right now. Start a multi-step task to see agents at work.';return}const s=data.swarms[data.swarms.length-1];$('swarm-body').className='';$('swarm-body').innerHTML='<div class="swarm-meta"><div class="kv"><span>Swarm</span><span>'+esc(s.swarm_id)+'</span></div><div class="kv"><span>Status</span><span>'+esc(s.status)+'</span></div></div><div class="nodes">'+(s.nodes||[]).map(n=>'<div class="node"><span>'+esc(n.agent_role)+': '+esc(n.title)+'</span><span class="node-status">'+esc(n.status)+'</span></div>').join('')+'</div>'}catch(_){}}
+function tick(){const d=new Date();$('clock').textContent=d.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})+' · '+d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'})}
+refresh();refreshSwarm();tick();setInterval(()=>{refresh();refreshSwarm()},10000);setInterval(tick,30000);
 </script>
 </body>
 </html>

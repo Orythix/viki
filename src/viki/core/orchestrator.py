@@ -225,6 +225,8 @@ class VIKIController(
 
         # v25: A/B Testing and Continuous Learning
         self.ab_tester = ModelABTest(self)
+        # Alias for ForgeEvalGate / continuous_learning (they look up model_ab_test).
+        self.model_ab_test = self.ab_tester
         self.continuous_learner = ContinuousLearner(self)
 
         # v23: Hierarchical Memory Stack (Orythix Standard)

@@ -122,6 +122,9 @@ class ComputerUseSkill(BaseSkill):
     def safety_tier(self) -> str:
         return "destructive"
 
+    # Actions that mutate UI state and must run observe → act → verify.
+    _MUTATING = frozenset({"click", "click_element", "type", "key", "scroll", "drag", "navigate_url"})
+
     async def execute(self, params: dict[str, Any]) -> str:
         action = (params.get("action") or "").strip()
         if action not in self.SUPPORTED_ACTIONS:
@@ -132,27 +135,191 @@ class ComputerUseSkill(BaseSkill):
                 return await self._do_screenshot(params)
             if action == "find_element":
                 return await self._do_find_element(params)
-            if action == "click":
-                return await self._do_click(params)
-            if action == "click_element":
-                return await self._do_click_element(params)
-            if action == "type":
-                return await self._do_type(params)
-            if action == "key":
-                return await self._do_key(params)
-            if action == "scroll":
-                return await self._do_scroll(params)
-            if action == "hover":
-                return await self._do_hover(params)
-            if action == "drag":
-                return await self._do_drag(params)
-            if action == "navigate_url":
-                return await self._do_navigate(params)
+
+            if action in self._MUTATING and params.get("verify", True):
+                return await self._observe_act_verify(action, params)
+
+            return await self._dispatch(action, params)
         except Exception as e:
             viki_logger.warning("ComputerUseSkill: %s failed: %s", action, e)
             return f"computer_use error ({action}): {e}"
 
+    async def _dispatch(self, action: str, params: dict[str, Any]) -> str:
+        if action == "click":
+            return await self._do_click(params)
+        if action == "click_element":
+            return await self._do_click_element(params)
+        if action == "type":
+            return await self._do_type(params)
+        if action == "key":
+            return await self._do_key(params)
+        if action == "scroll":
+            return await self._do_scroll(params)
+        if action == "hover":
+            return await self._do_hover(params)
+        if action == "drag":
+            return await self._do_drag(params)
+        if action == "navigate_url":
+            return await self._do_navigate(params)
         return "computer_use: unhandled branch"
+
+    async def _observe_act_verify(self, action: str, params: dict[str, Any]) -> str:
+        """
+        Closed loop: observe (screenshot+ground) → act → re-screenshot → stop on mismatch.
+
+        Recommended stack: vision-capable model profile + ``VIKI_OMNIPARSER_ONNX`` for grounding.
+        """
+        before_path = self._capture_screenshot()
+        before_elements = await self._ground_elements(before_path, params.get("instruction"))
+        # Grounding required for click_element; reject low-confidence up front.
+        if action == "click_element":
+            label = (params.get("label") or "").lower().strip()
+            match = self._find_by_label(before_elements, label) if label else None
+            if match is None:
+                return json.dumps(
+                    {
+                        "status": "aborted",
+                        "reason": "observe_no_match",
+                        "label": label,
+                        "screenshot": before_path,
+                        "hint": "Set VIKI_OMNIPARSER_ONNX to a local OmniParser-V2 ONNX model for grounding.",
+                    }
+                )
+            if match.confidence < self._min_action_confidence:
+                return json.dumps(
+                    {
+                        "status": "rejected",
+                        "reason": "low_confidence",
+                        "label": match.label,
+                        "confidence": match.confidence,
+                        "min_confidence": self._min_action_confidence,
+                        "hint": (
+                            "Install OmniParser-V2 ONNX (set VIKI_OMNIPARSER_ONNX) "
+                            "or set VIKI_COMPUTER_USE_MIN_CONF=0.0 to override at your own risk."
+                        ),
+                    }
+                )
+
+        act_result = await self._dispatch(action, params)
+        if isinstance(act_result, str) and (
+            act_result.startswith("Error:")
+            or '"status": "rejected"' in act_result
+            or '"status": "aborted"' in act_result
+        ):
+            return act_result
+
+        time.sleep(0.35)
+        after_path = self._capture_screenshot()
+        after_elements = await self._ground_elements(after_path, params.get("instruction"))
+        expect_change = bool(params.get("expect_change")) or action == "navigate_url"
+        expect_label = (params.get("expect_label") or params.get("label") or "").strip()
+        expect_gone = bool(params.get("expect_gone"))
+        mismatch = self._verify_ui_change(
+            before_path,
+            after_path,
+            before_elements,
+            after_elements,
+            action,
+            expect_change=expect_change,
+            expect_label=expect_label,
+            expect_gone=expect_gone,
+        )
+        if mismatch:
+            return json.dumps(
+                {
+                    "status": "aborted",
+                    "reason": "verify_mismatch",
+                    "action": action,
+                    "detail": mismatch,
+                    "before": before_path,
+                    "after": after_path,
+                    "act_result": act_result,
+                }
+            )
+        return json.dumps(
+            {
+                "status": "ok",
+                "action": action,
+                "act_result": act_result,
+                "before": before_path,
+                "after": after_path,
+                "elements_seen": len(before_elements),
+                "elements_after": len(after_elements),
+            }
+        )
+
+    def _verify_ui_change(
+        self,
+        before: str,
+        after: str,
+        before_elements: list[UIElement],
+        after_elements: list[UIElement],
+        action: str,
+        *,
+        expect_change: bool = False,
+        expect_label: str = "",
+        expect_gone: bool = False,
+    ) -> str | None:
+        """
+        Prefer grounding/label expectations over raw pixels.
+
+        - expect_label + expect_gone: abort if label still grounded after act
+        - expect_label (appear): abort if label missing after act
+        - expect_change: abort if before/after screenshots are identical
+        """
+        if expect_label:
+            found_after = self._find_by_label(after_elements, expect_label.lower())
+            if expect_gone:
+                if found_after is not None and found_after.confidence >= self._min_action_confidence:
+                    return f"expected label {expect_label!r} to disappear; still present"
+            else:
+                # Appearance / persistence: if we clicked it, it may remain; only
+                # enforce appearance when explicitly requested via expect_change
+                # without expect_gone and label was absent before.
+                found_before = self._find_by_label(before_elements, expect_label.lower())
+                if (
+                    expect_change
+                    and found_before is None
+                    and (found_after is None or found_after.confidence < self._min_action_confidence)
+                ):
+                    return f"expected label {expect_label!r} to appear; not grounded after act"
+
+        if not expect_change:
+            return None
+        return self._screens_mismatch(before, after, action, expect_change=True)
+
+    def _screens_mismatch(
+        self,
+        before: str,
+        after: str,
+        action: str,
+        *,
+        expect_change: bool = False,
+    ) -> str | None:
+        """Pixel/file-hash fallback when ``expect_change`` is set."""
+        if not expect_change:
+            return None
+        if not before or not after or not os.path.isfile(before) or not os.path.isfile(after):
+            return None
+        try:
+            import hashlib
+
+            def _sig(path: str) -> str:
+                try:
+                    from PIL import Image
+
+                    with Image.open(path) as im:
+                        im = im.convert("RGB").resize((64, 36))
+                        return hashlib.md5(im.tobytes()).hexdigest()
+                except Exception:
+                    with open(path, "rb") as f:
+                        return hashlib.md5(f.read()).hexdigest()
+
+            if _sig(before) == _sig(after):
+                return "screen unchanged after mutating action (expect_change=true)"
+        except Exception as e:
+            viki_logger.debug("ComputerUseSkill verify skipped: %s", e)
+        return None
 
     def _ensure_pyautogui(self):
         if self._pyautogui is not None:

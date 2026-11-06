@@ -162,6 +162,14 @@ class LearningModule:
         cur.execute("CREATE INDEX IF NOT EXISTS idx_lessons_accessed ON lessons(last_accessed)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_narratives_time ON narratives(timestamp)")
 
+        # Editable-memory: pinned flag (user-owned, never decayed by dream).
+        try:
+            cols = {r[1] for r in cur.execute("PRAGMA table_info(lessons)").fetchall()}
+            if "pinned" not in cols:
+                cur.execute("ALTER TABLE lessons ADD COLUMN pinned INTEGER DEFAULT 0")
+        except Exception:
+            pass
+
         self.conn.commit()
 
     def save_macro(self, trigger_condition: str, action_sequence: list[dict[str, Any]]):
@@ -377,7 +385,14 @@ class LearningModule:
     ) -> list[dict[str, Any]]:
         """Returns detailed lesson records with optional filtering."""
         cur = self.conn.cursor()
-        sql = "SELECT id, text_representation, content, author, source_task, reliability, access_count, created_at FROM lessons WHERE 1=1"
+        cols = {r[1] for r in cur.execute("PRAGMA table_info(lessons)").fetchall()}
+        select_cols = (
+            "id, text_representation, content, author, source_task, reliability, "
+            "access_count, created_at"
+        )
+        if "pinned" in cols:
+            select_cols += ", pinned"
+        sql = f"SELECT {select_cols} FROM lessons WHERE 1=1"
         params: list[Any] = []
         if query:
             sql += " AND text_representation LIKE ?"
@@ -405,9 +420,13 @@ class LearningModule:
         return cur.rowcount > 0
 
     def update_lesson(
-        self, lesson_id: str, fact: str | None = None, reliability: float | None = None
+        self,
+        lesson_id: str,
+        fact: str | None = None,
+        reliability: float | None = None,
+        pinned: bool | None = None,
     ) -> bool:
-        """Updates an existing lesson's fact content or reliability."""
+        """Updates an existing lesson's fact content, reliability, or pin flag."""
         cur = self.conn.cursor()
         updates = []
         params: list[Any] = []
@@ -417,6 +436,9 @@ class LearningModule:
         if reliability is not None:
             updates.append("reliability = ?")
             params.append(reliability)
+        if pinned is not None:
+            updates.append("pinned = ?")
+            params.append(1 if pinned else 0)
 
         if not updates:
             return False
@@ -427,6 +449,20 @@ class LearningModule:
         self.conn.commit()
         self.mark_vector_dirty()
         return cur.rowcount > 0
+
+    def pin_lesson(self, lesson_id: str, pinned: bool = True) -> bool:
+        """Pin (or unpin) a lesson so dream decay will not erode it."""
+        return self.update_lesson(lesson_id, reliability=1.0 if pinned else None, pinned=pinned)
+
+    def correct_lesson(self, lesson_id: str, fact: str) -> bool:
+        """User correction of memory text — sets high reliability + pin."""
+        if not fact or not str(fact).strip():
+            return False
+        return self.update_lesson(lesson_id, fact=str(fact).strip(), reliability=1.0, pinned=True)
+
+    def forget_lesson(self, lesson_id: str) -> bool:
+        """User-initiated forget (same as delete, explicit trust API)."""
+        return self.delete_lesson(lesson_id)
 
     def get_total_lesson_count(self) -> int:
         """Returns the total number of unique lessons in the DB."""

@@ -73,6 +73,27 @@ class IntelligenceScorecard:
                 self.metrics[name].pop(0)
             self.save()
 
+    def record_event(self, name: str, payload: dict[str, Any] | None = None) -> None:
+        """
+        Lightweight event log linked to traces (forge eval, turns, promotions).
+        Stored under ``events`` as JSON strings in MetricEntry.context.
+        """
+        if "events" not in self.metrics:
+            self.metrics["events"] = []
+        ctx = json.dumps({"event": name, **(payload or {})}, default=str)[:2000]
+        self.metrics["events"].append(MetricEntry(value=1.0, context=ctx))
+        if len(self.metrics["events"]) > 1000:
+            self.metrics["events"].pop(0)
+        self.save()
+
+    def record_promotion(self, candidate: str, incumbent: str, trace_id: str | None = None) -> None:
+        """Record a forge model promotion with optional trace linkage."""
+        self.record_event(
+            "promotion",
+            {"candidate": candidate, "incumbent": incumbent, "trace_id": trace_id},
+        )
+        self.record_metric("reliability_rate", 1.0, context=f"promoted:{candidate}", model=candidate)
+
     def get_summary(self, model: str | None = None) -> dict[str, float]:
         """Calculates current intelligence stability scores, optionally per-model."""
         summary = {}

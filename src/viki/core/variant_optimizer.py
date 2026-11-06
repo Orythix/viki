@@ -1,244 +1,286 @@
 """
-A/B Testing Framework for Model Comparison
-Enables data-driven model selection and validation.
+A/B Testing Framework for Model Comparison.
+
+Primary signal: CapabilityIndex over eval harness results (HumanEval+ / SWE /
+GAIA adapters under ``scripts/evals`` / ``viki.eval``).
+
+Fallback: a small pinned coding/reasoning subset scored by ExecutionEvaluator
+(or structured checks) — never toy keyword quizzes like "2+2".
 """
 
+from __future__ import annotations
+
 import asyncio
+import os
 import time
 from typing import Any
 
 from viki.config.logger import viki_logger
 
 
+# Pinned local-friendly subset used when no CapabilityIndex results exist yet.
+_PINNED_EVAL_PROMPTS: list[dict[str, Any]] = [
+    {
+        "id": "factorial",
+        "prompt": (
+            "Write a Python function `factorial(n)` that returns n!. "
+            "Include only the function in a ```python``` block."
+        ),
+        "category": "coding",
+        "test_code": (
+            "def check(candidate):\n"
+            "    assert candidate(0) == 1\n"
+            "    assert candidate(5) == 120\n"
+            "    assert candidate(1) == 1\n"
+            "check(factorial)\n"
+        ),
+    },
+    {
+        "id": "is_palindrome",
+        "prompt": (
+            "Write a Python function `is_palindrome(s: str) -> bool` that returns True "
+            "iff s reads the same forwards and backwards (case-sensitive). "
+            "Include only the function in a ```python``` block."
+        ),
+        "category": "coding",
+        "test_code": (
+            "def check(candidate):\n"
+            "    assert candidate('aba') is True\n"
+            "    assert candidate('ab') is False\n"
+            "    assert candidate('') is True\n"
+            "check(is_palindrome)\n"
+        ),
+    },
+    {
+        "id": "sum_list",
+        "prompt": (
+            "Write a Python function `sum_list(xs)` that returns the sum of numbers in xs. "
+            "Include only the function in a ```python``` block."
+        ),
+        "category": "coding",
+        "test_code": (
+            "def check(candidate):\n"
+            "    assert candidate([1, 2, 3]) == 6\n"
+            "    assert candidate([]) == 0\n"
+            "check(sum_list)\n"
+        ),
+    },
+    {
+        "id": "fizzbuzz_spec",
+        "prompt": (
+            "In one short paragraph, explain the FizzBuzz problem and the correct "
+            "rules for multiples of 3, 5, and 15."
+        ),
+        "category": "reasoning",
+        "must_contain_any": ["3", "5", "fizz", "buzz"],
+    },
+]
+
+
 class ModelABTest:
-    """A/B test new models against current model."""
+    """A/B test new models against current model via CapabilityIndex + pinned evals."""
 
     def __init__(self, controller):
         self.controller = controller
-        self.test_prompts = self._load_default_test_prompts()
+        self.test_prompts = list(_PINNED_EVAL_PROMPTS)
 
-    def _load_default_test_prompts(self) -> list[dict[str, Any]]:
-        """Load default test prompts for model comparison."""
-        return [
-            {
-                "prompt": "What is 2 + 2?",
-                "expected_keywords": ["4", "four"],
-                "category": "basic_math",
-            },
-            {
-                "prompt": "Write a Python function to calculate factorial.",
-                "expected_keywords": ["def", "factorial", "return"],
-                "category": "coding",
-            },
-            {
-                "prompt": "Explain what machine learning is in one sentence.",
-                "expected_keywords": ["algorithm", "data", "learn"],
-                "category": "explanation",
-            },
-            {
-                "prompt": "What are three benefits of exercise?",
-                "expected_keywords": ["health", "fitness", "benefit"],
-                "category": "reasoning",
-            },
-            {
-                "prompt": 'Translate "hello world" to Spanish.',
-                "expected_keywords": ["hola", "mundo"],
-                "category": "translation",
-            },
-            {
-                "prompt": "What is the capital of France?",
-                "expected_keywords": ["Paris"],
-                "category": "factual",
-            },
-            {
-                "prompt": "List three programming languages.",
-                "expected_keywords": ["Python", "Java", "JavaScript", "C++", "Ruby"],
-                "category": "listing",
-            },
-            {
-                "prompt": "Summarize the importance of clean code.",
-                "expected_keywords": ["maintainable", "readable", "quality"],
-                "category": "summarization",
-            },
-        ]
+    def _results_root(self) -> str:
+        settings = getattr(self.controller, "settings", None) or {}
+        data_dir = (settings.get("system") or {}).get("data_dir", "./data")
+        return os.path.join(data_dir, "eval_results")
+
+    def _capability_score(self, model_name: str) -> float | None:
+        try:
+            from viki.core.capability_index import CapabilityIndex
+
+            root = self._results_root()
+            if not os.path.isdir(root):
+                return None
+            snap = CapabilityIndex(root, model_filter=model_name).compute()
+            if not snap or not snap.get("suites"):
+                return None
+            return float(snap.get("capability_index", 0.0))
+        except Exception as e:
+            viki_logger.debug("ModelABTest: capability index failed for %s: %s", model_name, e)
+            return None
 
     async def compare_models(self, model_a_name: str, model_b_name: str) -> dict[str, Any]:
-        """Compare two models on test prompts."""
-        viki_logger.info(f"A/B Test: Comparing {model_a_name} vs {model_b_name}")
+        """Compare two models; prefer CapabilityIndex, else pinned ExecutionEvaluator suite."""
+        viki_logger.info("A/B Test: Comparing %s vs %s", model_a_name, model_b_name)
 
+        score_a = self._capability_score(model_a_name)
+        score_b = self._capability_score(model_b_name)
+        if score_a is not None and score_b is not None:
+            delta = score_b - score_a
+            significant = abs(delta) >= 0.01  # meaningful index movement
+            winner = model_a_name if score_a >= score_b else model_b_name
+            return {
+                "model_a": {"name": model_a_name, "avg_score": score_a, "source": "capability_index"},
+                "model_b": {"name": model_b_name, "avg_score": score_b, "source": "capability_index"},
+                "model_a_score": score_a,
+                "model_b_score": score_b,
+                "winner": winner,
+                "score_difference": abs(delta),
+                "significant": significant,
+                "source": "capability_index",
+                "test_count": 0,
+            }
+
+        return await self._compare_pinned(model_a_name, model_b_name)
+
+    async def compare(
+        self,
+        model_a: str,
+        model_b: str,
+        test_suite: str = "default",
+    ) -> dict[str, Any]:
+        """Alias used by ForgeEvalGate."""
+        _ = test_suite
+        return await self.compare_models(model_a, model_b)
+
+    async def _compare_pinned(self, model_a_name: str, model_b_name: str) -> dict[str, Any]:
         model_a = self.controller.model_router.models.get(model_a_name)
         model_b = self.controller.model_router.models.get(model_b_name)
-
         if not model_a:
             return {"error": f"Model {model_a_name} not found"}
         if not model_b:
             return {"error": f"Model {model_b_name} not found"}
 
         test_count = len(self.test_prompts)
-        if test_count == 0:
-            return {"error": "No test prompts loaded"}
-
         results: dict[str, Any] = {
             "model_a": {"name": model_a_name, "scores": [], "latencies": [], "errors": 0},
             "model_b": {"name": model_b_name, "scores": [], "latencies": [], "errors": 0},
             "test_count": test_count,
+            "source": "pinned_eval",
         }
 
-        # Test each prompt on both models
         for i, test_case in enumerate(self.test_prompts):
-            viki_logger.debug(f"A/B Test: Running test {i + 1}/{test_count}")
-
-            # Run models in parallel for this test case
-            task_a = self._test_model(model_a, test_case)
-            task_b = self._test_model(model_b, test_case)
-
-            (
-                (response_a, latency_a, error_a),
-                (response_b, latency_b, error_b),
-            ) = await asyncio.gather(task_a, task_b)
-
-            # Score model A
+            viki_logger.debug("A/B Test: pinned case %s (%d/%d)", test_case.get("id"), i + 1, test_count)
+            (response_a, latency_a, error_a), (response_b, latency_b, error_b) = await asyncio.gather(
+                self._test_model(model_a, test_case),
+                self._test_model(model_b, test_case),
+            )
             score_a = self._score_response(test_case, response_a)
+            score_b = self._score_response(test_case, response_b)
             results["model_a"]["scores"].append(score_a)
             results["model_a"]["latencies"].append(latency_a)
             if error_a:
                 results["model_a"]["errors"] += 1
-
-            # Score model B
-            score_b = self._score_response(test_case, response_b)
             results["model_b"]["scores"].append(score_b)
             results["model_b"]["latencies"].append(latency_b)
             if error_b:
                 results["model_b"]["errors"] += 1
+            await asyncio.sleep(0.05)
 
-            # Small delay between tests to avoid overloading local model server
-            await asyncio.sleep(0.2)
-
-        # Calculate aggregates (safe because test_count > 0)
         results["model_a"]["avg_score"] = sum(results["model_a"]["scores"]) / test_count
         results["model_a"]["avg_latency"] = sum(results["model_a"]["latencies"]) / test_count
-
         results["model_b"]["avg_score"] = sum(results["model_b"]["scores"]) / test_count
         results["model_b"]["avg_latency"] = sum(results["model_b"]["latencies"]) / test_count
 
-        # Determine winner (weighted: 70% score, 30% speed)
-        # Latency is normalized (10s = 1.0) for the weighted score
         score_a_weighted = (
-            results["model_a"]["avg_score"] * 0.7 - (results["model_a"]["avg_latency"] / 10.0) * 0.3
+            results["model_a"]["avg_score"] * 0.7
+            - (results["model_a"]["avg_latency"] / 10.0) * 0.3
         )
         score_b_weighted = (
-            results["model_b"]["avg_score"] * 0.7 - (results["model_b"]["avg_latency"] / 10.0) * 0.3
+            results["model_b"]["avg_score"] * 0.7
+            - (results["model_b"]["avg_latency"] / 10.0) * 0.3
         )
-
         results["winner"] = model_a_name if score_a_weighted >= score_b_weighted else model_b_name
         results["score_difference"] = abs(score_a_weighted - score_b_weighted)
+        results["model_a_score"] = results["model_a"]["avg_score"]
+        results["model_b_score"] = results["model_b"]["avg_score"]
+        results["significant"] = results["score_difference"] >= 0.05
 
         viki_logger.info(
-            f"A/B Test Complete: Winner is {results['winner']} "
-            f"(Scores: A={results['model_a']['avg_score']:.2f}, B={results['model_b']['avg_score']:.2f})"
+            "A/B Test Complete (pinned): Winner=%s A=%.2f B=%.2f",
+            results["winner"],
+            results["model_a"]["avg_score"],
+            results["model_b"]["avg_score"],
         )
-
         return results
 
-    async def _test_model(self, model, test_case: dict) -> tuple:
-        """Test a model with a single prompt. Returns (response, latency, error)."""
+    async def _test_model(self, model: Any, test_case: dict) -> tuple:
         prompt = test_case["prompt"]
         messages = [
             {"role": "system", "content": "You are VIKI, a helpful AI assistant."},
             {"role": "user", "content": prompt},
         ]
-
         try:
             start_time = time.perf_counter()
-            # Standard project model interface is chat_structured or chat
             if hasattr(model, "chat"):
-                response = await model.chat(messages, temperature=0.7)
+                response = await model.chat(messages, temperature=0.2)
             else:
-                # Fallback if it's a raw provider
-                viki_logger.warning(f"Model {model} missing 'chat' method, trying alternative.")
                 return "", 0.0, True
-
-            latency = time.perf_counter() - start_time
-            return response, latency, False
-
+            return response, time.perf_counter() - start_time, False
         except Exception as e:
-            viki_logger.warning(f"Model test failed: {e}")
+            viki_logger.warning("Model test failed: %s", e)
             return "", 0.0, True
 
     def _score_response(self, test_case: dict, response: str) -> float:
-        """Score response quality (0-1)."""
         if not response:
             return 0.0
+        if test_case.get("test_code"):
+            try:
+                from viki.core.evaluators import ExecutionEvaluator
 
-        score = 0.5  # Baseline
-
-        # 1. Length check (reasonable response)
-        if 10 < len(response) < 500:
-            score += 0.15
-        elif len(response) >= 500:
-            score += 0.05  # Too long is less preferred
-
-        # 2. Contains expected keywords
-        expected = test_case.get("expected_keywords", [])
-        if expected:
-            response_lower = response.lower()
-            matches = sum(1 for kw in expected if kw.lower() in response_lower)
-            keyword_score = min(0.3, (matches / len(expected)) * 0.3)
-            score += keyword_score
-
-        # 3. Not a placeholder response
-        placeholders = ["processing", "thinking", "one moment", "working on it", "please wait"]
-        if not any(p in response.lower() for p in placeholders):
-            score += 0.1
-
-        # 4. Contains proper formatting (for code)
-        if test_case.get("category") == "coding":
-            if "def " in response or "function" in response or "```" in response:
-                score += 0.1
-
-        # 5. Not an error message
-        error_indicators = ["error", "failed", "cannot", "unable", "sorry"]
-        if not any(err in response.lower() for err in error_indicators):
-            score += 0.05
-
-        return min(1.0, score)
+                scored = ExecutionEvaluator().evaluate(
+                    {
+                        "test_code": test_case["test_code"],
+                        "language": "python",
+                        "timeout": 5,
+                    },
+                    response,
+                )
+                return float(scored.score)
+            except Exception as e:
+                viki_logger.debug("pinned ExecutionEvaluator failed: %s", e)
+                return 0.0
+        must_any = test_case.get("must_contain_any") or []
+        if must_any:
+            lower = response.lower()
+            hits = sum(1 for tok in must_any if tok.lower() in lower)
+            return hits / len(must_any)
+        return 0.0
 
     def load_custom_test_prompts(self, prompts: list[dict[str, Any]]):
-        """Load custom test prompts for specialized testing."""
         self.test_prompts = prompts
-        viki_logger.info(f"Loaded {len(prompts)} custom test prompts")
+        viki_logger.info("Loaded %d custom test prompts", len(prompts))
 
     async def quick_validation(self, model_name: str) -> dict[str, Any]:
-        """Quick validation of a single model."""
-        model = self.controller.model_router.models.get(model_name)
+        ci = self._capability_score(model_name)
+        if ci is not None:
+            return {
+                "model": model_name,
+                "avg_score": ci,
+                "source": "capability_index",
+                "passed": ci > 0.0,
+                "scores": [ci],
+                "latencies": [],
+                "errors": 0,
+            }
 
+        model = self.controller.model_router.models.get(model_name)
         if not model:
             return {"error": f"Model {model_name} not found"}
 
-        test_subset = self.test_prompts[:5]
-        test_count = len(test_subset)
-        if test_count == 0:
-            return {"error": "No test prompts available for validation"}
-
-        results: dict[str, Any] = {"model": model_name, "scores": [], "latencies": [], "errors": 0}
-
-        # Test on subset of prompts (faster)
-        for test_case in test_subset:
+        subset = self.test_prompts[:3]
+        scores: list[float] = []
+        latencies: list[float] = []
+        errors = 0
+        for test_case in subset:
             response, latency, error = await self._test_model(model, test_case)
-            score = self._score_response(test_case, response)
-
-            results["scores"].append(score)
-            results["latencies"].append(latency)
+            scores.append(self._score_response(test_case, response))
+            latencies.append(latency)
             if error:
-                results["errors"] += 1
-
-        results["avg_score"] = sum(results["scores"]) / test_count
-        results["avg_latency"] = sum(results["latencies"]) / test_count
-        results["passed"] = results["avg_score"] > 0.6 and results["errors"] == 0
-
-        viki_logger.info(
-            f"Validation: {model_name} - Score: {results['avg_score']:.2f}, "
-            f"Latency: {results['avg_latency']:.2f}s, Passed: {results['passed']}"
-        )
-
-        return results
+                errors += 1
+        avg = sum(scores) / len(scores) if scores else 0.0
+        return {
+            "model": model_name,
+            "scores": scores,
+            "latencies": latencies,
+            "errors": errors,
+            "avg_score": avg,
+            "avg_latency": sum(latencies) / len(latencies) if latencies else 0.0,
+            "passed": avg > 0.5 and errors == 0,
+            "source": "pinned_eval",
+        }

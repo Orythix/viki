@@ -90,6 +90,8 @@ class EnsembleEngine:
         context: dict[str, Any],
         selected_agents: list[str] | None = None,
     ) -> dict[str, str]:
+        from viki.core.telemetry_service import start_span
+
         if not selected_agents:
             selected_agents = ["critic", "explorer", "aligner"]
 
@@ -117,7 +119,13 @@ class EnsembleEngine:
                 "provider": provider,
             }
 
-        await asyncio.gather(*(_run_one(a) for a in selected_agents))
+        with start_span(
+            "reason.ensemble",
+            attributes={"agents": ",".join(selected_agents)},
+        ) as span:
+            await asyncio.gather(*(_run_one(a) for a in selected_agents))
+            span["attributes"]["providers"] = ",".join(used_providers)
+            span["attributes"]["agent_count"] = len(selected_agents)
 
         # Run synthesizer if not already in the selection — collapses the three perspectives.
         if "synthesizer" in self.agents and "synthesizer" not in selected_agents:

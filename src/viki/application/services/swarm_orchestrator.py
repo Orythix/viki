@@ -63,10 +63,23 @@ def plan_dag(objective: str) -> list[DAGNode]:
 
 
 class SwarmOrchestrator:
-    def __init__(self, agent_pool: IAgentPool):
+    def __init__(
+        self,
+        agent_pool: IAgentPool,
+        budgets: dict[str, Any] | None = None,
+        max_concurrent: int = 4,
+    ):
         self.agent_pool = agent_pool
         self.tasks: list[SwarmTask] = []
         self._message_bus = None
+        self.budgets = budgets or {
+            "research": {"time": 30.0, "tokens": 4000},
+            "coder": {"time": 60.0, "tokens": 8000},
+            "reviewer": {"time": 30.0, "tokens": 4000, "require_review": True},
+            "general": {"time": 45.0, "tokens": 6000, "require_merge": True},
+        }
+        self.max_concurrent = max_concurrent
+        self._semaphore = asyncio.Semaphore(max_concurrent)
 
     def set_message_bus(self, bus: Any) -> None:
         self._message_bus = bus
@@ -112,9 +125,13 @@ class SwarmOrchestrator:
                 viki_logger.warning("DAG stalled — possible circular dependency")
                 break
 
-            # Execute ready nodes in parallel
+            # Execute ready nodes in parallel (capped by max_concurrent + role budgets)
+            async def _bounded(n: DAGNode):
+                async with self._semaphore:
+                    return await self._run_node(n, worker_fn, objective)
+
             batch_results = await asyncio.gather(
-                *[self._run_node(n, worker_fn, objective) for n in ready],
+                *[_bounded(n) for n in ready],
                 return_exceptions=True,
             )
 
@@ -133,12 +150,30 @@ class SwarmOrchestrator:
     async def _run_node(self, node: DAGNode, worker_fn: Any, objective: str) -> str:
         node.status = "running"
         task: SwarmTask | None = None
+        role_budget = self.budgets.get(node.specialty) or self.budgets.get("general") or {}
+        time_budget = float(role_budget.get("time", 60.0))
+
+        # Merge/review gate: synthesis/reviewer waits for upstream results.
+        if role_budget.get("require_review") or role_budget.get("require_merge"):
+            if not node.depends_on:
+                viki_logger.warning(
+                    "DAG node %s marked require_merge/review but has no dependencies",
+                    node.task_id,
+                )
+
         try:
             task = await self.delegate_task(node.description, node.specialty)
-            result = await worker_fn(task, node.specialty, objective, self._message_bus)
+            result = await asyncio.wait_for(
+                worker_fn(task, node.specialty, objective, self._message_bus),
+                timeout=time_budget,
+            )
             node.result = str(result)
             node.status = "completed"
             return str(result)
+        except TimeoutError as e:
+            node.status = "failed"
+            node.result = f"exceeded role budget ({time_budget}s)"
+            raise TimeoutError(node.result) from e
         except Exception:
             node.status = "failed"
             raise
